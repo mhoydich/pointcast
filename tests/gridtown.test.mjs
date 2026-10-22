@@ -301,7 +301,7 @@ test('prototype keys are not tile ids', () => {
 });
 
 /** v1.1 (2026-10-22): demand from real jobs, the tile inspector, city links and town titles. */
-import { explainTile, encodeCity, decodeCity, cityTitle, CITY_TITLES, computeDemand, generateTerrain } from '../src/lib/gridtown.mjs';
+import { explainTile, encodeCity, decodeCity, cityTitle, CITY_TITLES, computeDemand, generateTerrain, mulberry32, TILES, SMOKE, cleanName } from '../src/lib/gridtown.mjs';
 
 test('demand counts jobs that exist, so painting a long row of shops never freezes a town', () => {
   assert.deepEqual(computeDemand(0, 0, 0), { res: 30, com: 20, ind: 20 });
@@ -315,14 +315,23 @@ test('demand counts jobs that exist, so painting a long row of shops never freez
   for (let i = 0; i < 12; i += 1) city = tick(city);
   assert.ok(city.stats.population >= 96, `homes keep filling: ${city.stats.population}`);
   assert.ok(city.stats.comJobs > 0, 'shops open once there are customers');
-  // Homes and shops never point at each other: a stalled tile names something the player can actually do.
-  const home = explainTile(city, 0, 7);
-  const shop = explainTile(city, 15, 9);
-  assert.ok(!(/zone shops or workshops/.test(home.blocker ?? '') && /zone more homes/.test(shop.blocker ?? '')) || city.stats.indJobs === 0);
+  // A stalled shop names the real unblocker. Homes are waiting on jobs and only workshops are hiring,
+  // so the shop must point at workshops, never back at homes.
+  for (let i = 0; i < 12; i += 1) city = tick({ ...city, funds: 1e6 });
+  assert.ok(city.stats.demand.res <= 0 && city.stats.demand.ind > 0, JSON.stringify(city.stats.demand));
+  const stalled = city.tiles.findIndex((t, i) => t.id === 'com' && t.level < 3 && explainTile(city, i % GRID_SIZE, Math.floor(i / GRID_SIZE)).blocker);
+  assert.notEqual(stalled, -1);
+  const advice = explainTile(city, stalled % GRID_SIZE, Math.floor(stalled / GRID_SIZE)).blocker;
+  assert.match(advice, /workshops/i);
+  assert.doesNotMatch(advice, /zone more homes/i);
 });
 
-test('a dense planned town can reach every title, Metropolis included', () => {
-  let city = { ...createCity(0), funds: 1e7 };
+test('a dense planned town can reach every title, Metropolis included, on several maps', () => {
+  for (const seed of [0, 7, 20261022]) metropolis(seed);
+});
+
+function metropolis(seed) {
+  let city = { ...createCity(seed), funds: 1e7 };
   const place = (tool, x, y) => { const r = build(city, tool, x, y); if (r.ok) city = r.city; return r.ok; };
   for (let y = 1; y < GRID_SIZE; y += 3) for (let x = 0; x < GRID_SIZE; x += 1) place('road', x, y);
   for (let y = 0; y < GRID_SIZE; y += 1) for (let x = 0; x < GRID_SIZE; x += 1) {
@@ -335,12 +344,13 @@ test('a dense planned town can reach every title, Metropolis included', () => {
   for (let y = GRID_SIZE - 1; y >= 0 && plants < Math.ceil(zones / 24) + 1; y -= 1) for (let x = GRID_SIZE - 1; x >= 12 && plants < Math.ceil(zones / 24) + 1; x -= 1) {
     if (['ind', 'com'].includes(city.tiles[index(x, y)].id)) { city = build(city, 'bulldoze', x, y).city; if (place('power', x, y)) plants += 1; }
   }
-  for (let i = 0; i < 80; i += 1) city = tick({ ...city, funds: 1e7 });
-  assert.equal(cityTitle(city.stats.population), 'Metropolis', `final ${city.stats.population}`);
-  assert.ok(city.stats.population >= CITY_TITLES.at(-1).min);
+  // Ten million is a sandbox budget set once; the town is not topped up month by month.
+  for (let i = 0; i < 80; i += 1) city = tick(city);
+  assert.equal(cityTitle(city.stats.population), 'Metropolis', `seed ${seed}: final ${city.stats.population}`);
+  assert.ok(city.ledger.net > 0, `seed ${seed}: a Metropolis pays its way (${city.ledger.net})`);
   assert.equal(city.stats.unpowered, 0);
   assert.equal(city.stats.pollutedHomes, 0);
-});
+}
 
 test('town titles step up at fixed populations', () => {
   assert.deepEqual(CITY_TITLES.map((t) => t.min), [0, 1, 50, 200, 500, 1000]);
@@ -436,4 +446,96 @@ test('damaged, oversized or impossible city links are refused', () => {
   assert.equal(decodeCity(swap(6, encodeURIComponent('  A\u0001B  '))).name, 'AB');
   assert.equal(decodeCity(swap(6, '')).name, 'Gridtown');
   assert.equal(decodeCity(swap(6, encodeURIComponent('x'.repeat(90)))).name.length, 40);
+});
+
+/** 1.1.1 (2026-10-22): fixes from the second adversarial review. */
+
+function randomTown(seed, salt, mix = [0.45, 0.6, 0.75, 0.82, 0.85]) {
+  const r = mulberry32(seed * 7 + salt);
+  let city = { ...createCity(seed), funds: 1e8 };
+  for (let y = 0; y < GRID_SIZE; y += 1) for (let x = 0; x < GRID_SIZE; x += 1) {
+    if (city.tiles[index(x, y)].id === 'water') continue;
+    const p = r();
+    const tool = y % 3 === 1 ? 'road' : p < mix[0] ? 'res' : p < mix[1] ? 'com' : p < mix[2] ? 'ind' : p < mix[3] ? 'park' : p < mix[4] ? 'power' : null;
+    if (tool) { const b = build(city, tool, x, y); if (b.ok) city = b.city; }
+  }
+  return city;
+}
+
+test('the inspector never promises growth the month will not deliver', () => {
+  let promised = 0;
+  for (const seed of [0, 7, 20261022]) for (let n = 0; n < 6; n += 1) {
+    let city = randomTown(seed, 100 + n, [0.4, 0.55, 0.7, 0.75, 0.78]);
+    for (let m = 0; m < 15; m += 1) {
+      const next = tick(city);
+      for (let i = 0; i < city.tiles.length; i += 1) {
+        const t = city.tiles[i];
+        if (!TILES[t.id].zone) continue;
+        const e = explainTile(city, i % GRID_SIZE, Math.floor(i / GRID_SIZE));
+        const grows = next.tiles[i].level > t.level;
+        if (e.tip === 'It will grow next month.') { promised += 1; assert.ok(grows, `seed ${seed} town ${n} month ${m} tile ${i}`); }
+        if (grows) assert.equal(e.tip, 'It will grow next month.', `seed ${seed} town ${n} month ${m} tile ${i}: ${e.blocker}`);
+        if (next.tiles[i].level < t.level) assert.match(e.blocker, /lose a level/);
+      }
+      city = { ...next, funds: 1e8 };
+    }
+  }
+  assert.ok(promised > 500, `exercised ${promised} promises`);
+});
+
+test('towns settle: no layout cycles once it has grown', () => {
+  for (const seed of [0, 7, 20261022]) for (let n = 0; n < 40; n += 1) {
+    let city = randomTown(seed, n);
+    const series = [];
+    for (let i = 0; i < 120; i += 1) { city = tick({ ...city, funds: 1e8 }); series.push(city.stats.population); }
+    const tail = series.slice(-24);
+    assert.equal(new Set(tail).size, 1, `seed ${seed} layout ${n} cycles: ${[...new Set(tail)].join(',')}`);
+  }
+  // The review's own cycling city, from its share link.
+  let shared = decodeCity('g1.7.3w.mg4l.7.jwwaibbiophhhdjdrrrwrrrrrrrrrrrrqbowiobbbbobbidioowwioommbbbnbbirrrwrrrrrrrrrrrriwwmbnnbbpckhbbibiawqbnhbcobinhbrrwrrrrrrrrrrrrrnwabnnmmbihdkwhbbwdbbibbbdidwwwqrwrrrrrrrrrrwwwrwwbqkibibhbbmambwwbbibiobbinbbbbrwrrrrrrrrrrrrrrjwobhbbbboiobgnbeweeeeeeehaaahaa.Cycle');
+  assert.ok(shared);
+  const s = [];
+  for (let i = 0; i < 200; i += 1) { shared = tick(shared); s.push(shared.stats.population); }
+  assert.equal(new Set(s.slice(-24)).size, 1, [...new Set(s.slice(-24))].join(','));
+});
+
+test('one park cancels one workshop, whatever the workshop\'s level', () => {
+  assert.deepEqual({ ...SMOKE }, { ind: 2, power: 3, park: -2 });
+  let city = createCity(7);
+  const spot = city.tiles.findIndex((t, i) => {
+    const x = i % GRID_SIZE; const y = Math.floor(i / GRID_SIZE);
+    return x < GRID_SIZE - 2 && [0, 1, 2].every((dx) => city.tiles[index(x + dx, y)].id === 'grass');
+  });
+  const x = spot % GRID_SIZE; const y = Math.floor(spot / GRID_SIZE);
+  city = build(city, 'ind', x, y).city;
+  assert.equal(analyze(city).pollution[index(x + 2, y)], 2);
+  city = build(city, 'park', x + 1, y).city;
+  for (const level of [0, 1, 2, 3]) {
+    const tiles = city.tiles.slice(); tiles[index(x, y)] = { id: 'ind', level };
+    assert.equal(analyze({ ...city, tiles }).pollution[index(x + 2, y)], 0, `level ${level}`);
+  }
+});
+
+test('names are cut on whole characters, so long emoji names still share', () => {
+  const long = 'x'.repeat(39) + '🏙️🏙️🏙️';
+  const named = renameCity(scriptedTown(), long);
+  assert.equal(Array.from(named.name).length <= 40, true);
+  assert.doesNotMatch(named.name, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  const code = encodeCity(named);
+  assert.equal(decodeCity(code).name, named.name);
+  const viaLink = decodeCity(encodeCity({ ...named, name: 'y'.repeat(39) + '🌉' }));
+  assert.doesNotThrow(() => encodeCity(viaLink));
+  assert.equal(cleanName('  \u0001  '), 'Gridtown');
+});
+
+test('a tree tile does not count its own value as a reason to build homes there', () => {
+  const city = createCity(7);
+  const lone = city.tiles.findIndex((t, i) => {
+    if (t.id !== 'trees') return false;
+    const x = i % GRID_SIZE; const y = Math.floor(i / GRID_SIZE);
+    return [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy]) => !inBounds(x + dx, y + dy) || ['grass', 'road'].includes(city.tiles[index(x + dx, y + dy)].id));
+  });
+  if (lone === -1) return;
+  const e = explainTile(city, lone % GRID_SIZE, Math.floor(lone / GRID_SIZE));
+  assert.ok(!e.facts.some((f) => /good spot for homes/.test(f.text)), JSON.stringify(e.facts));
 });

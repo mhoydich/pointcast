@@ -23,7 +23,7 @@ export const GET: APIRoute = () => {
         city: 'https://pointcast.xyz/gridtown/#city={code} opens a whole town read-only; the visitor can inspect it and keep a copy, which replaces their saved city.',
         code: 'g1.{seed}.{month}.{funds}.{tax}.{256 tile letters}.{url-encoded name}: numbers in base 36, funds may start with -. Tiles: g grass, w water, t trees, r road, p park, e power plant; homes a-d, shops h-k, workshops m,n,o,q for levels 0-3. Water must match the seed.',
       },
-      inspect: 'Inspect any tile (I) for its road, power, demand, air and land value, and the one next step that would let it grow.',
+      inspect: 'Inspect any tile (I) for its road, power, demand, air and land value, and the one next step that would let it grow. The verdict comes from running the next month, so "It will grow next month" is always true.',
       price: 'free',
       account: 'none',
     },
@@ -33,7 +33,7 @@ export const GET: APIRoute = () => {
       growth: 'Zone tiles are visited in reading order from the top left. A zone gains one level a month when it touches a road on one of four sides, is powered, and demand for it is positive at that moment; demand is recomputed after every tile that changes, so growth stops once the town has what it asked for. A zone loses a level when dark or cut off, or when demand is below -40. A home in smoke stops at level one and loses a level a month until it gets there.',
       people: { residentsPerHomeLevel: RESIDENTS_PER_LEVEL, jobsPerShopLevel: JOBS.com, jobsPerWorkshopLevel: JOBS.ind },
       power: { zoneTilesPerPlant: POWER_CAPACITY, order: 'reading order from the top left; zones beyond capacity are dark' },
-      pollution: 'Workshops and power plants add smoke to every tile within two steps (Manhattan distance, inclusive), so a clear home is three steps away. Parks remove two units within two steps and add land value; water and trees add value to neighbors. Only a park within two steps counts for the park lesson.',
+      pollution: 'A workshop adds 2 units of smoke and a power plant 3 to every tile within two steps (Manhattan distance, inclusive), whatever its level, so a clear home is three steps away. A park removes 2 units within two steps, so one park cancels one workshop, and adds land value; water and trees add value to neighbors. Only a park within two steps counts for the park lesson.',
       demand: {
         basis: 'Every term counts people and jobs that exist, never tiles that are only zoned, so extra empty zoning waits instead of freezing the town.',
         homes: '30 + (jobs - people) / 2, clamped to -100..100',

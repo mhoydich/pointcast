@@ -10,6 +10,9 @@ export const POWER_CAPACITY: number;
 export const RESIDENTS_PER_LEVEL: number;
 export const UPKEEP: Readonly<{ road: number; park: number; power: number }>;
 export const JOBS: Readonly<{ com: number; ind: number }>;
+export const SMOKE: Readonly<{ ind: number; power: number; park: number }>;
+export function cleanName(value: unknown): string;
+export function stepMonth(city: City, before?: ReturnType<typeof analyze>): { tiles: Tile[]; demandSeen: (number | null)[] };
 
 export type TileId = 'grass' | 'water' | 'trees' | 'road' | 'res' | 'com' | 'ind' | 'park' | 'power';
 export type ToolId = 'road' | 'res' | 'com' | 'ind' | 'park' | 'power' | 'bulldoze';

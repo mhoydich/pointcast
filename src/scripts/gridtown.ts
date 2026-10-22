@@ -219,7 +219,11 @@ function boot() {
   const undoButton = get<HTMLButtonElement>('[data-undo]');
   const nextButton = get<HTMLButtonElement>('[data-next]');
   const inspectButton = get<HTMLButtonElement>('[data-inspect-toggle]');
+  const inspectBox = get('[data-inspect]');
   const inspectPanel = get('[data-inspect-panel]');
+  /** The tile the inspector is showing, so it can follow the city as it changes. */
+  let inspected: { x: number; y: number } | null = null;
+  const closeInspector = () => { inspectBox.hidden = true; inspected = null; };
   const visitBanner = get('[data-visit]');
   const titleOut = get('[data-title]');
   const lessonCount = get('[data-lesson-count]');
@@ -229,10 +233,12 @@ function boot() {
     if (!city) return;
     if (document.activeElement !== nameInput) nameInput.value = city.name;
     get('[data-date]').textContent = monthLabel(city.month);
-    get('[data-funds]').textContent = String(city.funds);
+    const compact = (n: number) => (Math.abs(n) >= 10000 ? new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n) : String(n));
+    for (const [sel, n] of [['[data-funds]', city.funds], ['[data-pop]', city.stats.population], ['[data-jobs]', city.stats.jobs]] as const) {
+      const el = get(sel); el.textContent = compact(n); el.title = String(n);
+    }
     get('[data-funds]').classList.toggle('is-broke', city.funds < 0);
-    get('[data-pop]').textContent = String(city.stats.population);
-    get('[data-jobs]').textContent = String(city.stats.jobs);
+
     get('[data-happy]').textContent = `${city.stats.happiness}%`;
     get('[data-power]').textContent = `${city.stats.powered} / ${city.stats.capacity}`;
     get('[data-ledger]').textContent = city.month === 0 ? 'no months yet' : `last month ${city.ledger.net >= 0 ? '+' : ''}${city.ledger.net} (in ${city.ledger.income}, out ${city.ledger.upkeep})`;
@@ -267,7 +273,7 @@ function boot() {
       })));
     for (const button of root.querySelectorAll<HTMLButtonElement>('[data-tool]')) {
       const t = TOOLS.find((x) => x.id === button.dataset.tool)!;
-      button.setAttribute('aria-pressed', t.id === tool ? 'true' : 'false');
+      button.setAttribute('aria-pressed', t.id === tool && !inspecting ? 'true' : 'false');
       button.classList.toggle('is-unaffordable', t.id !== 'bulldoze' && city.funds < t.cost);
     }
     undoButton.disabled = !undoCity || visiting;
@@ -281,12 +287,14 @@ function boot() {
     if (visiting) get('[data-visit-text]').textContent = `You are visiting ${city.name}: ${monthLabel(city.month)}, ${city.stats.population} people, ${cityTitle(city.stats.population).toLowerCase()}. Look around or inspect any tile; nothing here is saved until you keep it.`;
     root.classList.toggle('is-visiting', visiting);
     root.classList.toggle('is-inspecting', inspecting);
+    if (inspected && !inspectBox.hidden) fillInspector(inspected.x, inspected.y);
     draw();
   }
 
   function selectTool(id: ToolId) {
     tool = id;
     inspecting = false;
+    closeInspector();
     hint.textContent = TOOLS.find((t) => t.id === id)!.hint;
     render();
   }
@@ -294,14 +302,14 @@ function boot() {
   function setInspecting(on: boolean) {
     inspecting = on;
     hint.textContent = on ? 'Inspect: tap any tile to see what it needs and what stands in its way.' : TOOLS.find((t) => t.id === tool)!.hint;
-    if (!on) inspectPanel.hidden = true;
+    if (!on) closeInspector();
     render();
   }
 
-  /** Fill the inspector from the pure explanation; text only, never HTML. */
-  function inspect(x: number, y: number) {
+  /** Fill the inspector from the pure explanation; text only, never HTML. Returns the explanation. */
+  function fillInspector(x: number, y: number) {
     const info = explainTile(city!, x, y);
-    if (!info) return;
+    if (!info) return null;
     const heading = document.createElement('p');
     heading.className = 'gt-inspect-head';
     heading.textContent = `${info.headline} · ${x + 1}, ${y + 1}`;
@@ -318,8 +326,14 @@ function boot() {
     if (info.blocker) { const b = document.createElement('p'); b.className = 'gt-inspect-blocker'; b.textContent = `Next step: ${info.blocker}`; parts.push(b); }
     else if (info.tip) { const t = document.createElement('p'); t.className = 'gt-inspect-tip'; t.textContent = info.tip; parts.push(t); }
     inspectPanel.replaceChildren(...parts);
-    inspectPanel.hidden = false;
-    say(`${info.headline} at ${x + 1}, ${y + 1}. ${info.blocker ? `Next step: ${info.blocker}` : info.tip}`.trim());
+    inspectBox.hidden = false;
+    inspected = { x, y };
+    return info;
+  }
+
+  function inspect(x: number, y: number) {
+    const info = fillInspector(x, y);
+    if (info) say(`${info.headline} at ${x + 1}, ${y + 1}. ${info.blocker ? `Next step: ${info.blocker}` : info.tip}`.trim());
   }
 
   /* ----------------------------- input ----------------------------- */
@@ -425,6 +439,7 @@ function boot() {
     button.addEventListener('click', () => selectTool(button.dataset.tool as ToolId), { signal });
   }
   inspectButton.addEventListener('click', () => setInspecting(!inspecting), { signal });
+  get('[data-inspect-close]').addEventListener('click', () => { closeInspector(); canvas.focus({ preventScroll: true }); }, { signal });
 
   function undo() {
     if (!undoCity) { say('Nothing to undo.'); return; }
@@ -457,8 +472,10 @@ function boot() {
 
   /* ----------------------------- ship ----------------------------- */
   const shareFallback = get('[data-share-fallback]');
-  const shareUrl = () => `${location.origin}/gridtown/?seed=${city!.seed}`;
-  const cityUrl = () => `${location.origin}/gridtown/#city=${encodeCity(city!)}`;
+  /** Links from a local download or a dev server would point at 127.0.0.1; share the public site instead. */
+  const shareOrigin = () => (/^(pointcast\.xyz|[\w-]+\.pointcast\.pages\.dev)$/.test(location.hostname) ? location.origin : 'https://pointcast.xyz');
+  const shareUrl = () => `${shareOrigin()}/gridtown/?seed=${city!.seed}`;
+  const cityUrl = () => `${shareOrigin()}/gridtown/#city=${encodeCity(city!)}`;
   /** Phones get the system share sheet; everything else copies; the last resort is a selectable field. */
   async function offer(url: string, text: string, copied: string) {
     const coarse = window.matchMedia?.('(pointer: coarse)').matches;
@@ -500,6 +517,7 @@ function boot() {
     undoCity = null;
     pendingSeed = undefined;
     visiting = false; homeCity = null;
+    closeInspector();
     setUrlSeed(loaded.seed);
     commit(loaded, `Loaded ${loaded.name}, ${monthLabel(loaded.month)}.`, { announce: false });
   }, { signal });
@@ -527,9 +545,16 @@ function boot() {
   /* ----------------------------- visit ----------------------------- */
   function openFromHash() {
     const match = /^#city=(.+)$/.exec(location.hash);
-    if (!match) return false;
+    if (!match) {
+      // Browser Back out of a visit lands on a plain address: go home rather than stay read-only.
+      if (visiting) leaveVisit(`Back to ${homeCity?.name ?? 'your city'}.`, false);
+      return false;
+    }
     const shared = decodeCity(match[1]);
-    if (!shared) { say('That city link is damaged or from another version of Gridtown. Your own city is loaded.'); return false; }
+    if (!shared) {
+      say(visiting ? `That city link is damaged or from another version of Gridtown. Still visiting ${city!.name}.` : 'That city link is damaged or from another version of Gridtown. Your own city is loaded.');
+      return false;
+    }
     stopAuto();
     if (!visiting) homeCity = city;
     visiting = true;
@@ -541,15 +566,22 @@ function boot() {
   const clearHash = (seed: number) => { try { history.replaceState(null, '', `${location.pathname}?seed=${seed}`); } catch { /* ignore */ } };
   get('[data-visit-keep]').addEventListener('click', () => {
     if (!city) return;
-    visiting = false; homeCity = null; undoCity = null;
+    visiting = false; homeCity = null; undoCity = null; pendingSeed = undefined;
+    closeInspector();
     clearHash(city.seed);
     commit(city, `${city.name} is your city now. It replaced the one saved in this browser.`, { announce: false });
+    canvas.focus({ preventScroll: true });
   }, { signal });
-  get('[data-visit-leave]').addEventListener('click', () => {
+  function leaveVisit(message: string, rewriteUrl = true) {
     const mine = homeCity ?? createCity(Math.floor(Math.random() * 4294967296));
     visiting = false; homeCity = null; undoCity = null;
-    clearHash(mine.seed);
-    commit(mine, `Back to ${mine.name}.`, { announce: false });
+    closeInspector();
+    if (rewriteUrl) clearHash(mine.seed);
+    commit(mine, message, { announce: false });
+  }
+  get('[data-visit-leave]').addEventListener('click', () => {
+    leaveVisit(`Back to ${homeCity?.name ?? 'a new city'}.`);
+    canvas.focus({ preventScroll: true });
   }, { signal });
   window.addEventListener('hashchange', () => { openFromHash(); }, { signal });
 

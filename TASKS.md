@@ -13,6 +13,9 @@
 - [x] (CC) v1.1: tile inspector, town titles, `#city=` whole-city links with a read-only visit mode, phone share sheet, one-row phone tool strip, game-library entry with offline download — `done`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-gridtown-qa.md` (swipe vs hold-to-paint, inspector, city links, keyboard-only play); results to `docs/manus-logs/2026-10-22-gridtown-qa.md` — `queued`
 - [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
+- [x] (CC) Merged to main on Mike's go, no further review: mhoydich/pointcast#1477, merge commit `df8ab42b` — `done`
+- [x] (CC) 1.1.1: the 12 findings a second adversarial review confirmed on 1.1 (inspector off-screen on desktop, "will grow" promises that were wrong most of the time, shop/home advice loops, stale inspector, hidden phone tools, header overflow, local-download links, name truncation, browser Back out of a visit) plus constant workshop smoke so no town cycles — `done`
+- [ ] (MH) Publish: merged is not live. The "Deploy PointCast to Cloudflare Pages" run skipped its deploy step on 2026-10-22 (no `CLOUDFLARE_API_TOKEN` secret). Run `scripts/deploy.sh` on the iMac, or add the repo secret, then check https://pointcast.xyz/gridtown/ and /b/0742 — `waiting-on-mh`
 - [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
 
 ---
