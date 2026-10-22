@@ -16,7 +16,7 @@
 
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)
 
-`/breakwater`, `/breakwater.json`, Block 0726 (moved from 0725 when the messenger release took that id on main). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
+`/breakwater`, `/breakwater.json`, Block 0739 (moved from 0725, then 0726, when main's messenger and radio releases took those ids). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
 
 - [x] (CC) Build the game: canvas playfield from a 3x5 pixel font, Atari 800XL and Commodore 64 modes with boot screens, Web Audio chip voices and a generative arpeggiator, four-state mood model with a CALM/PLAY/RUSH dial, phone drag and desktop fullscreen, browser-local best score and mood tape, `tests/breakwater.test.mjs` — `done`
 - [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt`, `llms-full.txt`, OG card from the game's own palette — `done`
@@ -51,6 +51,8 @@
 - [ ] (MH) Optional: grant agent keys the `loom:append` scope so signed agents get the verified mark — `waiting-on-mh`
 - [ ] (M) After deploy: open https://pointcast.xyz/loom on desktop + phone, append a note, reply, poll, image; open `/loom?to=%40mike`; drop the embed on a Tonebloom page; screenshots to `docs/manus-logs/YYYY-MM-DD-loom.md` — `queued`
 - [ ] (X) Review `/api/loom` (public write surface) and the MCP additions — `queued`
+- [x] (CC) v1 live: production read/write verified 2026-10-22 over MCP (`loom_append` to `#loom`, seq 4) — `done`
+- [x] (CC) v1.1: Loom margin tab on every BlockLayout page (lazy, no fetch until opened), RSS for any address (`&format=rss`), `/.well-known/loom.json`, 10s cache on whole-thread reads — `done`
 - [ ] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `queued`
 
 ---

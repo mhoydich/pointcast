@@ -27,6 +27,7 @@ const card = {
     directory: 'GET /api/loom[?kind=url|handle|topic|geo|agent&q=text] → recent logs across the network',
     outbox: 'GET /api/loom?from=<address>               → what one sender appended',
     activitystreams: 'GET /api/loom?to=<address>&format=as2 → ActivityStreams 2.0 OrderedCollection',
+    rss: 'GET /api/loom?to=<address>&format=rss → RSS 2.0 (subscribe to a page thread, an inbox or a channel)',
   },
   write: {
     append: {
@@ -63,6 +64,8 @@ const card = {
     element: '<pointcast-loom></pointcast-loom> (this page) or <pointcast-loom to="#topic" limit="8"></pointcast-loom>',
   },
   network: NETWORK.map((n) => ({ ...n, thread: `https://pointcast.xyz/loom?to=${encodeURIComponent(n.url)}` })),
+  margin: 'Every pointcast.xyz page carries a Loom tab on its right edge that opens that page\'s thread.',
+  wellKnown: 'https://pointcast.xyz/.well-known/loom.json',
   federation: 'Any site can embed a thread, read any log over CORS, or mirror logs via the ActivityStreams export. A peer inbox/outbox handshake (/.well-known/loom.json on participating sites) is the next step.',
 };
 
