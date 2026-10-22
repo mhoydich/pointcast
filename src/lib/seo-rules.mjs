@@ -21,6 +21,12 @@ export const NOINDEX_PATHS = new Set([
   '/case-studies/launchpad/',
   // /battle-log reads one browser's localStorage; the indexable archive is /battle.
   '/battle-log/',
+  // These pages already send <meta name="robots" content="noindex">; listing
+  // them here keeps the auto sitemap from submitting a URL that says noindex.
+  '/art/v2/commerce/',
+  '/nouns/drum-club/bandmates/launch/',
+  '/rewards/start/',
+  '/station/party/',
 ]);
 
 // Sources with permanent redirects in public/_redirects or Pages middleware.
