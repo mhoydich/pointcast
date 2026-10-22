@@ -1,7 +1,7 @@
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Breakwater, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Breakwater, Tideline, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -14,6 +14,13 @@ export const PLAY_SURFACES = [
     title: 'Breakwater',
     route: '/breakwater',
     summary: 'A breakout for the 8-bit heart: Atari 800XL or Commodore 64 blue, synthesized chip sound, and a mood the game and you keep together. Phone or full screen.',
+  },
+  {
+    id: 'tideline',
+    code: 'TIDE',
+    title: 'Tideline',
+    route: '/tideline',
+    summary: 'Pong stood on its end: your paddle below, the house above, rally to 11. The house gets sharper or softer with the mood you keep together. Phone or full screen.',
   },
   {
     id: 'baseball',

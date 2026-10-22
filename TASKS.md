@@ -16,6 +16,19 @@
 - [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
 
 ---
+## Tideline — Pong stood on its end (2026-10-22)
+
+`/tideline`, `/tideline.json`, Block 0726. Thread 1 of 5 after Breakwater, from Michael Hoydich's same brief (80s innocence, the joy of the compute and flow, mood-state symbiosis, mobile and full screen, Atari and Commodore inspired, rendered modern). Portrait Pong: your paddle below, the house above, rally to 11, a house whose skill follows the shared mood. Research note: `docs/notes/2026-10-22-tideline-notes.md`.
+
+- [x] (CC) Build the game: shared 3x5 font, palettes and mood model from `src/lib/breakwater`, new pure physics and rules in `src/lib/tideline` (eight-segment return angle, per-volley speed, alternating serve, predictive house paddle), Web Audio square-wave pok, CALM/PLAY/RUSH dial, 2UP second paddle by touch, browser-local longest rally and wins, `tests/tideline.test.mjs` with a simulated rally — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (games line, no new line), `llms-full.txt`, OG card from the game's own palette — `done`
+- [ ] (X) Review the house skill curve (`houseSkill`, `houseTraits`) for fairness on PLAY, and the two-ball point rule — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-tideline-qa.md`, log to `docs/manus-logs/2026-10-22-tideline.md` — `queued`
+- [ ] (MH) Decide whether Tideline joins Breakwater in the home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/tideline`, `/tideline.json` and `tideline` in `/agents.json` — `handoff`
+
+---
+
 
 ## The Loom — append to anything (2026-10-20)
 
