@@ -141,25 +141,43 @@
     let day = '';
     t.messages.forEach((m, i) => {
       const d = fmtDay(m.ts);
-      if (d !== day) { day = d; const li = document.createElement('li'); li.className = 'day'; li.textContent = d; msgsEl.append(li); }
-      const li = document.createElement('li');
+      if (d !== day) { day = d; msgsEl.append(dayRow(d)); }
       const next = t.messages[i + 1];
-      const lastInRun = !next || next.from !== m.from || next.ts - m.ts > 120000;
-      li.className = `msg ${m.from}${isBig(m.text) ? ' big' : ''}${m.reaction ? ' has-react' : ''}`;
-      li.dataset.id = m.id;
-      const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = m.text;
-      if (reduced) bubble.style.animation = 'none';
-      li.append(bubble);
-      if (m.reaction) { const r = document.createElement('span'); r.className = 'react'; r.textContent = m.reaction; li.append(r); }
-      if (lastInRun) {
-        const meta = document.createElement('div'); meta.className = 'meta';
-        meta.innerHTML = `<span>${fmtTime(m.ts)}</span>${m.from === 'me' && t.kind !== 'self' ? `<span class="ticks ${m.status === 'read' ? 'read' : ''}" aria-label="${m.status}">${m.status === 'read' ? '✓✓' : '✓'}</span>` : ''}`;
-        li.append(meta);
-      }
-      attachPress(li, m);
-      msgsEl.append(li);
+      msgsEl.append(buildMessage(t, m, !next || !sameRun(m, next)));
     });
     scrollBottom(true);
+  }
+  // Two messages in a row from the same side within two minutes share one time stamp, on the last of them.
+  const sameRun = (a, b) => b.from === a.from && b.ts - a.ts <= 120000;
+  function dayRow(d) { const li = document.createElement('li'); li.className = 'day'; li.textContent = d; return li; }
+  function buildMessage(t, m, lastInRun) {
+    const li = document.createElement('li');
+    li.className = `msg ${m.from}${isBig(m.text) ? ' big' : ''}${m.reaction ? ' has-react' : ''}`;
+    li.dataset.id = m.id;
+    const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = m.text;
+    if (reduced) bubble.style.animation = 'none';
+    li.append(bubble);
+    if (m.reaction) { const r = document.createElement('span'); r.className = 'react'; r.textContent = m.reaction; li.append(r); }
+    if (lastInRun) {
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.innerHTML = `<span>${fmtTime(m.ts)}</span>${m.from === 'me' && t.kind !== 'self' ? `<span class="ticks ${m.status === 'read' ? 'read' : ''}" aria-label="${m.status}">${m.status === 'read' ? '✓✓' : '✓'}</span>` : ''}`;
+      li.append(meta);
+    }
+    attachPress(li, m);
+    return li;
+  }
+  // One new message at the end of the open thread: add its node only, so the bubbles already on
+  // screen keep still and do not replay their pop. open() still rebuilds the whole thread.
+  function appendMessage(t, m) {
+    const prev = t.messages[t.messages.length - 2];
+    if (prev && sameRun(prev, m)) { const meta = msgsEl.querySelector(`li[data-id="${prev.id}"] .meta`); if (meta) meta.remove(); }
+    if (!prev || fmtDay(prev.ts) !== fmtDay(m.ts)) msgsEl.append(dayRow(fmtDay(m.ts)));
+    msgsEl.append(buildMessage(t, m, true));
+    scrollBottom();
+  }
+  function markRead(m) {
+    const tick = msgsEl.querySelector(`li[data-id="${m.id}"] .ticks`);
+    if (tick) { tick.classList.add('read'); tick.setAttribute('aria-label', 'read'); tick.textContent = '✓✓'; }
   }
   function scrollBottom(instant) { requestAnimationFrame(() => scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: instant || reduced ? 'auto' : 'smooth' })); }
 
@@ -193,7 +211,7 @@
   $('btn-emoji').addEventListener('click', () => { if (!current) return; send(NOG); });
   function send(text) {
     const t = current; const m = msg('me', text); t.messages.push(m); save(); buzz();
-    renderThread(); renderList();
+    appendMessage(t, m); renderList();
     if (t.kind === 'bot') reply(t, m);
   }
 
@@ -207,12 +225,12 @@
     clearTimeout(timers.get(t.id));
     const readAt = 500 + Math.random() * 600, typeAt = readAt + 400, doneAt = typeAt + Math.min(2600, 500 + text.length * 25);
     timers.set(t.id, setTimeout(() => {
-      m.status = 'read'; save(); if (current === t) renderThread();
+      m.status = 'read'; save(); if (current === t) markRead(m);
       setTimeout(() => { if (current === t) { typingEl.hidden = false; scrollBottom(); } }, typeAt - readAt);
       setTimeout(() => {
         typingEl.hidden = true;
-        t.messages.push(msg('them', text)); if (current !== t) t.unread = (t.unread || 0) + 1; save(); $('announce').textContent = `${t.name}: ${text}`;
-        if (current === t) { renderThread(); buzz(12); } renderList();
+        const r = msg('them', text); t.messages.push(r); if (current !== t) t.unread = (t.unread || 0) + 1; save(); $('announce').textContent = `${t.name}: ${text}`;
+        if (current === t) { appendMessage(t, r); buzz(12); } renderList();
       }, doneAt - readAt);
     }, readAt));
   }
