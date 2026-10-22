@@ -17,6 +17,19 @@
 
 ---
 
+## Kelp — a snake for the 8-bit heart (2026-10-22)
+
+`/kelp`, `/kelp.json`, Block 0727. Thread 2 of 5 on Michael Hoydich's games brief after Breakwater (siblings: Tideline, Soft Landing, Crosswalk, Driftwood). Snake the way Nibbler (1982) and the home-computer listings did it: a 24 x 32 portrait grid, the frame is the wall, rocks spelled from the 3x5 font, a stage cleared at a target length. Shares Breakwater's font, palettes and mood model; new logic in `src/lib/kelp`. Research note: `docs/notes/2026-10-22-kelp-notes.md`. Stacks on #1478.
+
+- [x] (CC) Build the game: grid, strand, growth, collision and seven stage patterns in `src/lib/kelp/{grid,strand}.mjs` with `tests/kelp.test.mjs` (including a seeded autopilot run), canvas playfield from the 3x5 font, 800XL and C64 modes with boot screens, one pentatonic note per plankton and a thud on collision, a slow swell arpeggiator, mood driving tick rate, plankton value, rock density, start length, tempo, scale, palette and a golden plankton in RUSH, CALM with no lives, swipe and arrows, fullscreen, browser-local best score and mood tape under `kelp:v1` — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause on the games line), `llms-full.txt`, OG card from the game's own palette (`scripts/generate-kelp-og.mjs`) — `done`
+- [ ] (X) Review the swipe handler (continuous drag turns) and the fixed tick clock on a slow phone; check the glyph-rock doorway rule reads as intended on the `64` nameplate — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-kelp-qa.md`, log to `docs/manus-logs/2026-10-22-kelp.md` — `queued`
+- [ ] (MH) Decide whether the games-brief cabinets (Breakwater, Kelp and the three siblings) get a row of their own on `/games` — `waiting-on-mh`
+- [ ] (MH/CC) Merge #1478, then this PR, then `scripts/deploy.sh`, then verify `/kelp`, `/kelp.json` and `kelp` in `/agents.json` — `handoff`
+
+---
+
 ## The Loom — append to anything (2026-10-20)
 
 `/loom`, `/api/loom`, `/loom.json`, `/loom/embed.js`, MCP `loom_read` / `loom_append`. Public federated message system: one verb, append(to, message), any address.
