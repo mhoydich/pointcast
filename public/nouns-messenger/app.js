@@ -158,13 +158,40 @@
     if (reduced) bubble.style.animation = 'none';
     li.append(bubble);
     if (m.reaction) { const r = document.createElement('span'); r.className = 'react'; r.textContent = m.reaction; li.append(r); }
-    if (lastInRun) {
-      const meta = document.createElement('div'); meta.className = 'meta';
-      meta.innerHTML = `<span>${fmtTime(m.ts)}</span>${m.from === 'me' && t.kind !== 'self' ? `<span class="ticks ${m.status === 'read' ? 'read' : ''}" aria-label="${m.status}">${m.status === 'read' ? '✓✓' : '✓'}</span>` : ''}`;
-      li.append(meta);
-    }
+    if (lastInRun) li.append(metaFor(t, m));
     attachPress(li, m);
     return li;
+  }
+  function metaFor(t, m) {
+    const meta = document.createElement('div'); meta.className = 'meta';
+    meta.innerHTML = `<span>${fmtTime(m.ts)}</span>${m.from === 'me' && t.kind !== 'self' ? `<span class="ticks ${m.status === 'read' ? 'read' : ''}" aria-label="${m.status}">${m.status === 'read' ? '✓✓' : '✓'}</span>` : ''}`;
+    return meta;
+  }
+  const nodeFor = (m) => msgsEl.querySelector(`li[data-id="${m.id}"]`);
+  // A reaction changed on one bubble: patch that bubble's badge only.
+  function patchReaction(m) {
+    const li = nodeFor(m); if (!li) return;
+    li.classList.toggle('has-react', Boolean(m.reaction));
+    let r = li.querySelector('.react');
+    if (!m.reaction) { if (r) r.remove(); return; }
+    if (!r) { r = document.createElement('span'); r.className = 'react'; li.querySelector('.bubble').after(r); }
+    r.textContent = m.reaction;
+  }
+  // One message left the open thread: take its node out, drop a day row it leaves empty, and give the
+  // message before it the time stamp back if that message now ends its run. Nothing else is touched.
+  function removeMessage(t, m, index) {
+    const li = nodeFor(m); if (!li) return;
+    const before = li.previousElementSibling, after = li.nextElementSibling;
+    li.remove();
+    if (before && before.classList.contains('day') && (!after || after.classList.contains('day'))) before.remove();
+    const prev = t.messages[index - 1]; if (!prev) return;
+    const next = t.messages[index];
+    // Notes imported by link keep their sender's time, so days can interleave: [Today P][Yesterday M]
+    // [Today N]. With M gone, P and N share a day and the full build draws one row for them, not two.
+    if (next && fmtDay(prev.ts) === fmtDay(next.ts)) { const row = nodeFor(next)?.previousElementSibling; if (row && row.classList.contains('day')) row.remove(); }
+    const pli = nodeFor(prev); if (!pli) return;
+    const meta = pli.querySelector('.meta'), wants = !next || !sameRun(prev, next);
+    if (wants && !meta) pli.append(metaFor(t, prev)); else if (!wants && meta) meta.remove();
   }
   // One new message at the end of the open thread: add its node only, so the bubbles already on
   // screen keep still and do not replay their pop. open() still rebuilds the whole thread.
@@ -256,9 +283,10 @@
   function hideTray() { tray.hidden = true; trayTarget = null; }
   tray.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b || !trayTarget || !current) return;
-    if (b.dataset.act === 'delete') current.messages = current.messages.filter((x) => x.id !== trayTarget.id);
-    else trayTarget.reaction = trayTarget.reaction === b.dataset.r ? '' : b.dataset.r;
-    save(); hideTray(); renderThread(); renderList(); buzz();
+    const t = current, m = trayTarget;
+    if (b.dataset.act === 'delete') { const i = t.messages.indexOf(m); if (i < 0) { hideTray(); return; } t.messages.splice(i, 1); removeMessage(t, m, i); }
+    else { m.reaction = m.reaction === b.dataset.r ? '' : b.dataset.r; patchReaction(m); }
+    save(); hideTray(); renderList(); buzz();
   });
   document.addEventListener('pointerdown', (e) => { if (!tray.hidden && !tray.contains(e.target)) hideTray(); }, true);
   scrollEl.addEventListener('scroll', hideTray, { passive: true });
