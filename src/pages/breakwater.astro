@@ -148,10 +148,10 @@ const dials = Object.values(DIALS);
 </style>
 
 <style>
-  .bw { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100dvh; }
+  .bw { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
   .bw[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
-  .bw-stage { display: flex; flex-direction: column; height: 100dvh; min-height: 320px; background: var(--border); }
-  .bw-stage:fullscreen { height: 100%; min-height: 0; }
+  .bw-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .bw-stage:fullscreen, .bw-stage:-webkit-full-screen { height: 100%; min-height: 0; }
   .bw-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
   .bw-home { color: var(--text); text-decoration: none; font-weight: 700; }
   .bw-home:hover { color: #fff; }
@@ -167,11 +167,11 @@ const dials = Object.values(DIALS);
   .bw[data-crt='off'] .bw-scan { display: none; }
   .bw-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
   .bw-noscript a { color: var(--paddle); }
-  .bw-readout { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding: 6px 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .bw-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
   .bw-readout span { white-space: nowrap; }
   .bw-readout a { margin-left: auto; color: var(--text); text-decoration: none; }
   .bw-readout a:hover { color: #fff; }
-  .bw-stage:fullscreen .bw-readout a { display: none; }
+  .bw-stage:fullscreen .bw-readout a, .bw-stage:-webkit-full-screen .bw-readout a { display: none; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .bw-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
   .bw-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
@@ -196,7 +196,7 @@ const dials = Object.values(DIALS);
     .bw-name { display: none; }
     .bw-controls { gap: 4px; }
     .bw-controls button { padding: 7px 7px; min-width: 40px; font-size: 9px; }
-    .bw-readout { gap: 10px; font-size: 9px; }
+    .bw-readout { gap: 10px; font-size: 9px; height: 26px; }
     .bw-readout [data-r-vec], .bw-readout [data-r-fps] { display: none; }
     .bw-grid { grid-template-columns: 1fr; gap: 20px; }
     .bw-notes { padding: 40px 16px 56px; }
@@ -272,7 +272,7 @@ const dials = Object.values(DIALS);
     // ---------- audio ----------
     const audio = (() => {
       let ac = null, master, sfx, music;
-      let tempo = 110, scale = 'major', density = 0.5, musicOn = false;
+      let tempo = 110, scale = 'major', density = 0.5, musicOn = false, wantMusic = false;
       let nextNote = 0, step = 0, timer = 0;
       const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
       const PROG = {
@@ -347,19 +347,29 @@ const dials = Object.values(DIALS);
       }
       function schedule() {
         if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed step as one burst.
+        if (nextNote < ac.currentTime - 0.1) { nextNote = ac.currentTime + 0.05; step += 1; }
         while (nextNote < ac.currentTime + 0.14) {
           playStep(step, nextNote);
           nextNote += 60 / tempo / 4;
           step += 1;
         }
       }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+      }
       return {
-        unlock() { ensure(); if (ac && ac.state === 'suspended') ac.resume().catch(() => {}); },
-        setMusic(on) {
-          if (!ac) return;
-          if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
-          else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
         },
+        setMusic,
+        wantsMusic: () => wantMusic,
         set(t, sc, d) { tempo = t; scale = sc; density = d; },
         mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
         brick(c, r) {
@@ -387,7 +397,7 @@ const dials = Object.values(DIALS);
       score: 0, balls: 3, nextExtra: EXTRA_EVERY, paddleX: W / 2, paddleW: PADDLE_W, paddleTarget: PADDLE_W,
       ballList: [], hits: 0, orange: false, red: false, particles: [], flash: 0, msg: '', msgT: 0, msgScale: 3,
       pointerX: null, keys: {}, attract: true, loading: 0, multiballUsed: false, fps: 60, fpsAcc: 0, fpsN: 0,
-      sinceLoss: 0, shake: 0, paused: false, lastTouch: 0, over: false,
+      sinceLoss: 0, shake: 0, paused: false, lastTouch: 0, over: false, pendingOver: false, pendingH: 0, musicResume: false,
     };
 
     function bootScript() {
@@ -404,6 +414,7 @@ const dials = Object.values(DIALS);
       return { x, y, vx, vy, speed: BASE_SPEED, stuck: !!stuck, trail: [] };
     }
     function serveBall() {
+      if (G.pendingH) { applyHeight(G.pendingH); G.pendingH = 0; }
       G.ballList = [newBall(G.paddleX - BALL / 2, PADDLE_Y - BALL - 1, 0, 0, true)];
     }
     function startWave(index) {
@@ -416,7 +427,7 @@ const dials = Object.values(DIALS);
       readout.wave.textContent = `WAVE ${index + 1} ${G.wave.pattern.toUpperCase()}`;
     }
     function newGame() {
-      G.score = 0; G.balls = 3; G.nextExtra = EXTRA_EVERY; G.attract = false; G.over = false; G.particles = [];
+      G.score = 0; G.balls = 3; G.nextExtra = EXTRA_EVERY; G.attract = false; G.over = false; G.pendingOver = false; G.particles = [];
       G.paddleX = W / 2;
       startWave(0);
       audio.setMusic(true);
@@ -509,6 +520,9 @@ const dials = Object.values(DIALS);
       if (b.trail.length > 7) b.trail.shift();
     }
     function launch(b) {
+      // The tap that serves may also have moved the paddle this frame: seat the ball on it first.
+      G.paddleX = clamp(G.paddleX, WALL + G.paddleW / 2, W - WALL - G.paddleW / 2);
+      b.x = G.paddleX - BALL / 2; b.y = PADDLE_Y - BALL - 1; b.trail = [];
       b.stuck = false;
       const dir = G.pointerDir || (Math.random() < 0.5 ? -1 : 1);
       b.speed = targetSpeed();
@@ -521,7 +535,7 @@ const dials = Object.values(DIALS);
       G.phase = 'lost'; G.t = 0;
       if (response.unlimitedBalls || DIALS[mood.dial].unlimitedBalls) { showMsg('AGAIN', 3, 0.9); announce('Ball lost. Serve again.'); return; }
       G.balls -= 1;
-      if (G.balls <= 0) { showMsg('', 3, 0); announce(`Game over. Score ${G.score}.`); }
+      if (G.balls <= 0) { G.pendingOver = true; showMsg('', 3, 0); announce(`Game over. Score ${G.score}.`); }
       else { showMsg('BALL LOST', 3, 0.9); announce(`Ball lost. ${G.balls} left.`); }
     }
     function gameOver() {
@@ -576,7 +590,7 @@ const dials = Object.values(DIALS);
       if (G.phase === 'serve') { for (const b of G.ballList) stepBall(b, dt); return; }
       if (G.phase === 'lost') {
         if (G.t > 0.9) {
-          if (G.balls <= 0 && !response.unlimitedBalls) gameOver();
+          if (G.pendingOver) { G.pendingOver = false; gameOver(); }
           else { serveBall(); G.phase = 'serve'; }
         }
         return;
@@ -614,11 +628,14 @@ const dials = Object.values(DIALS);
       // A tall phone gets a taller field (more room under the wall), never a shorter one.
       const nextH = clamp(Math.floor(cssH / scale), H_MIN, H_MAX);
       if (nextH !== H) {
-        const shift = nextH - H;
-        H = nextH; PADDLE_Y = H - 32;
-        for (const b of G.ballList) { if (b.stuck) b.y = PADDLE_Y - BALL - 1; else if (shift < 0 && b.y > PADDLE_Y - 20) b.y = PADDLE_Y - 20; }
+        // Never move the paddle under a ball in flight; the change lands at the next serve.
+        if (G.phase === 'play') G.pendingH = nextH; else { G.pendingH = 0; applyHeight(nextH); }
       }
       offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function applyHeight(nextH) {
+      H = nextH; PADDLE_Y = H - 32;
+      for (const b of G.ballList) { if (b.stuck) b.y = PADDLE_Y - BALL - 1; }
     }
     function text(str, x, y, s, color, align = 'left') {
       if (!str) return;
@@ -651,8 +668,12 @@ const dials = Object.values(DIALS);
       const label = G.attract ? 'DAWN' : response.label;
       const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.62 : label === 'FLOW' ? 0.34 : label === 'DAWN' ? 0.12 : 0;
       if (bars === 'load') {
-        ctx.globalAlpha = 0.9;
-        for (let y = 0; y < cssH; y += 3) { ctx.fillStyle = m.raster[Math.floor(Math.random() * m.raster.length)]; ctx.fillRect(0, y, cssW, 3); }
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
         ctx.globalAlpha = 1;
       } else if (bars > 0) {
         const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
@@ -672,7 +693,7 @@ const dials = Object.values(DIALS);
       const m = M();
       ctx.fillStyle = m.field;
       ctx.fillRect(0, 0, W, H);
-      if (G.flash > 0) { ctx.globalAlpha = Math.min(0.5, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+      if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.12 : 0.5, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
     }
     function drawHud() {
       const m = M();
@@ -777,7 +798,7 @@ const dials = Object.values(DIALS);
       drawHud(); drawWall(1); drawPaddleAndBalls(1);
       const m = M();
       if (G.phase === 'serve' && Math.floor(G.t * 2) % 2 === 0 && G.msgT <= 0) text(COARSE ? 'TAP TO SERVE' : 'TAP OR SPACE TO SERVE', W / 2, 220, 2, m.text, 'center');
-      if (G.phase === 'paused') { text('PAUSED', W / 2, 200, 4, m.bright, 'center'); text('P TO RESUME', W / 2, 232, 2, m.text, 'center'); }
+      if (G.phase === 'paused') { text('PAUSED', W / 2, 200, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 232, 2, m.text, 'center'); }
       if (G.msgT > 0 && G.msg) text(G.msg, W / 2, 196, G.msgScale, m.bright, 'center');
     }
 
@@ -830,7 +851,9 @@ const dials = Object.values(DIALS);
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('keydown', (e) => {
-      if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      if (t && typeof t.closest === 'function' && t.closest('a, button, input, textarea, select, [contenteditable]')) return;
       const k = e.code;
       if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'KeyA' || k === 'KeyD') { G.keys[k] = true; e.preventDefault(); audio.unlock(); return; }
       if (k === 'Space' || k === 'Enter') { e.preventDefault(); action(); return; }
@@ -848,9 +871,18 @@ const dials = Object.values(DIALS);
       else if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); }
     }
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { if (G.phase === 'play' || G.phase === 'serve') { G.resume = G.phase; G.phase = 'paused'; audio.setMusic(false); } save(); handMoodToTown(); }
-      else last = performance.now();
+      if (document.hidden) {
+        G.keys = {};
+        if (G.phase === 'play' || G.phase === 'serve') { G.resume = G.phase; G.phase = 'paused'; }
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
     });
+    window.addEventListener('blur', () => { G.keys = {}; });
     window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
 
     // ---------- settings UI ----------
@@ -861,7 +893,7 @@ const dials = Object.values(DIALS);
       btn.crt.setAttribute('aria-pressed', String(crtOn));
       root.dataset.machine = machineId;
       root.dataset.crt = crtOn ? 'on' : 'off';
-      btn.full.textContent = document.fullscreenElement ? 'EXIT' : 'FULL';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
     }
     function setMachine(id) {
       if (!MACHINES[id] || id === machineId) return;
@@ -881,8 +913,9 @@ const dials = Object.values(DIALS);
     }
     function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); syncButtons(); save(); }
     function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
     function toggleFull() {
-      if (document.fullscreenElement) { document.exitFullscreen?.(); return; }
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
       const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
       if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
     }
