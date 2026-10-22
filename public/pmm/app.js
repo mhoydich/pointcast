@@ -101,6 +101,7 @@
 
   /* ---------- state ---------- */
   let state = load();
+  if (!Array.isArray(state.rooms)) state.rooms = [];
   function load() {
     try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.me && Array.isArray(s.friends)) return s; } catch (_) {}
     return { me: { name: '', place: '', tz: '', mood: 'calm', live: true, sound: true }, friends: [], si: [] };
@@ -133,7 +134,7 @@
   function toast(text) { toastEl.textContent = text; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toastEl.hidden = true), 2400); }
   function show(view) {
     app.dataset.view = view;
-    for (const p of ['lobby', 'load', 'chat', 'si']) $('pane-' + p).hidden = wide.matches ? false : p !== view;
+    for (const p of ['lobby', 'load', 'chat', 'si', 'room']) $('pane-' + p).hidden = wide.matches ? false : p !== view;
   }
   function openSheet(id) { $('sheet-wrap').hidden = false; for (const s of document.querySelectorAll('.sheet')) s.hidden = s.id !== id; }
   function closeSheets() { $('sheet-wrap').hidden = true; }
@@ -178,7 +179,7 @@
     for (const [k, c] of MOODS) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'mood'; b.role = 'radio'; b.style.setProperty('--m', c); b.textContent = k.toUpperCase();
       b.setAttribute('aria-checked', state.me.mood === k ? 'true' : 'false');
-      b.addEventListener('click', () => { state.me.mood = k; save(); renderMe(); renderAtmo(); send({ t: 'mood', mood: k }); closeSheets(); blip(true); });
+      b.addEventListener('click', () => { state.me.mood = k; save(); renderMe(); renderAtmo(); send({ t: 'mood', mood: k }); roomMood(k); closeSheets(); blip(true); });
       el.append(b);
     }
     openSheet('sheet-mood');
@@ -212,7 +213,7 @@
       const pub = { kty: 'EC', crv: 'P-256', x: j.me.priv.x, y: j.me.priv.y, ext: true };
       const id = await fingerprint(pub);
       const swapped = id !== state.me.id;
-      if (swapped) { hangup(); cancelPending(); }
+      if (swapped) { hangup(); cancelPending(); dropRoomLines(); }
       state.me = { ...state.me, name: str(j.me.name, 24), place: str(j.me.place, 32), tzAddr: str(j.me.tzAddr, 40), pub, priv: j.me.priv, id }; signKey = priv;
       if (swapped) {
         for (const fr of state.friends) for (const m of fr.messages) {
@@ -261,15 +262,16 @@
   const linkFor = (hash) => location.origin + location.pathname + '#' + hash;
 
   // HOST: make an offer. Code flow when the signal store is bound, paste mode otherwise.
-  async function host() {
-    cancelPending(); hangup(); const mine = ++attempt;
-    show('load'); $('load-prompt').textContent = 'SEARCHING FOR FRIEND'; $('load-code').hidden = true; $('form-join').hidden = true; $('form-answer').hidden = true;
+  // With a room, the same handshake opens a 'pmm-room' channel: the guest's app sees the label and joins the room.
+  async function host(room) {
+    cancelPending(); if (!room) hangup(); const mine = ++attempt;
+    show('load'); $('load-prompt').textContent = room ? 'INVITE TO ROOM' : 'SEARCHING FOR FRIEND'; $('load-code').hidden = true; $('form-join').hidden = true; $('form-answer').hidden = true;
     $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true; $('load-hint').textContent = '';
     screen('LOAD "FRIEND",8,1', 'PRESS PLAY ON TAPE', '');
     await iceWithTimeout(1500); if (mine !== attempt) return;
-    const pc = freshPc(); const dc = pc.createDataChannel('pmm', { ordered: true });
-    const p = { pc, dc, role: 'host', startedAt: now() }; pending = p;
-    wire(pc, dc);
+    const pc = freshPc(); const dc = pc.createDataChannel(room ? 'pmm-room' : 'pmm', { ordered: true });
+    const p = { pc, dc, role: 'host', startedAt: now(), room: room ? room.id : null }; pending = p;
+    if (room) wireRoom(newLine(pc, room.id, null), dc); else wire(pc, dc);
     await pc.setLocalDescription(await pc.createOffer()); await gathered(pc);
     if (pending !== p) return;
     const sdp = pc.localDescription.sdp;
@@ -322,7 +324,7 @@
     screen('LOAD "FRIEND",8,1', 'SEARCHING FOR FRIEND', 'asking the desk for the handshake…');
     const mine = ++attempt; await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); pending = { pc, role: 'guest', code, startedAt: now() };
-    pc.addEventListener('datachannel', (e) => { pending && (pending.dc = e.channel); wire(pc, e.channel); });
+    pc.addEventListener('datachannel', (e) => { pending && (pending.dc = e.channel); channel(pc, e.channel); });
     if (!(await signalBound())) { screen(null, '?DEVICE NOT PRESENT ERROR', 'the signal store is not bound on this site. ask your friend for a paste-mode link.'); return; }
     for (let i = 0; i < 80 && pending?.pc === pc; i++) {
       try {
@@ -339,7 +341,7 @@
     screen('LOAD "FRIEND",8,1', 'PASTE MODE', 'reading their handshake…');
     const mine = ++attempt; await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); pending = { pc, role: 'guest', startedAt: now() };
-    pc.addEventListener('datachannel', (e) => { pending && (pending.dc = e.channel); wire(pc, e.channel); });
+    pc.addEventListener('datachannel', (e) => { pending && (pending.dc = e.channel); channel(pc, e.channel); });
     let sdp; try { sdp = await unpack(packed); } catch (_) { return screen(null, '?SYNTAX ERROR', 'that link is not a PMM handshake'); }
     await answerOffer(pc, sdp, async (answer) => {
       pending.link = linkFor('answer=' + await pack(answer));
@@ -532,15 +534,15 @@
 
   /* ---------- chat view ---------- */
   function openChat(id) {
-    const f = friendById(id); if (!f) return; current = f; f.unread = 0; save();
+    const f = friendById(id); if (!f) return; current = f; currentRoom = null; f.unread = 0; save();
     show('chat'); renderChat(); renderChatHead(); renderAtmo(); renderFriends();
     history.replaceState(null, '', '#f=' + id.slice(0, 16));
     if (wide.matches) $('composer-input').focus({ preventScroll: true });
   }
-  function back() { current = null; show('lobby'); history.replaceState(null, '', location.pathname); renderFriends(); }
+  function back() { current = null; currentRoom = null; show('lobby'); history.replaceState(null, '', location.pathname); renderFriends(); }
   $('btn-back').addEventListener('click', back);
   $('btn-si-back').addEventListener('click', back);
-  $('btn-load-back').addEventListener('click', () => { cancelPending(); back(); });
+  $('btn-load-back').addEventListener('click', () => { const r = pending?.room && roomById(pending.room); cancelPending(); if (r) openRoom(r.id); else back(); });
   function renderChatHead() {
     if (!current) return;
     const online = peer && peer.friend === current && peer.dc.readyState === 'open';
@@ -652,6 +654,312 @@
   });
   $('peer-head').addEventListener('click', () => $('btn-link').click());
 
+  /* ---------- ROOM: three to five friends, full mesh ----------
+     The host makes a room and invites each friend with the same handshake as a two-person line (code or
+     paste link), on a channel labelled 'pmm-room'. Every line, invite or mesh, opens with the same hello
+     signed over that line's DTLS fingerprint. The host then sends a roster it signs; for each pair of
+     members without a line, the one with the lower sigil id writes a fresh offer signed to the other and
+     the host carries it across its open lines, and the answer back. Texts are signed by their author over
+     the room id, mood and hour, verified by every member, and each member passes a new one on once to its
+     other lines, so a message still arrives when a mesh line cannot form. A relay that changes a byte
+     breaks the signature and the copy is dropped. */
+  const ROOM_MAX = 5;
+  const rlines = new Set();  // { pc, dc, roomId, expect, member, localFp, remoteFp, nonce, ready }
+  let currentRoom = null;
+  const roomById = (id) => state.rooms.find((r) => r.id === id);
+  const cleanName = (n) => str(n, 24).replace(/[✓✔☑✅]/g, '').trim() || 'FRIEND';
+  const memberOf = (room, id) => room.members.find((x) => x.id === id);
+  const live = (l) => Boolean(l.member) && l.dc && l.dc.readyState === 'open' && !l.closed;
+  const roomLines = (room) => [...rlines].filter((l) => l.roomId === room.id && live(l));
+  const lineTo = (room, id) => roomLines(room).find((l) => l.member.id === id);
+  const pubOf = (p) => ({ kty: 'EC', crv: 'P-256', x: p.x, y: p.y });
+  function lsend(l, obj) { if (!live(l) && !(obj.t === 'hello' && l.dc?.readyState === 'open')) return false; try { l.dc.send(typeof obj === 'string' ? obj : JSON.stringify(obj)); return true; } catch (_) { return false; } }
+  function newLine(pc, roomId, expect) {
+    const l = { pc, dc: null, roomId, expect, member: null, localFp: '', remoteFp: '', closed: false };
+    l.ready = new Promise((r) => { l.readyNow = r; }); rlines.add(l); return l;
+  }
+  function closeLine(l) { if (l.closed) return; l.closed = true; rlines.delete(l); clearTimeout(l.watchdog); try { l.dc && l.dc.close(); l.pc.close(); } catch (_) {} }
+  function dropRoomLines() { for (const l of [...rlines]) closeLine(l); } // a reload is not a goodbye: the host keeps the seat
+  // The guest side of any handshake: the channel label says whether it is a two-person line or a room.
+  function channel(pc, dc) { if (dc.label === 'pmm-room') wireRoom(newLine(pc, null, null), dc); else wire(pc, dc); }
+  function wireRoom(l, dc) {
+    l.dc = dc; dc.binaryType = 'arraybuffer'; const { pc } = l;
+    dc.addEventListener('open', async () => {
+      if (pending && pending.pc === pc) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending = null; }
+      clearTimeout(l.watchdog); l.watchdog = setTimeout(() => { if (!l.member) closeLine(l); }, 20000);
+      l.localFp = dtlsFp(pc.localDescription); l.remoteFp = dtlsFp(pc.remoteDescription);
+      const h = { t: 'hello', ...helloBody(), fp: l.remoteFp };
+      h.sig = await sign({ t: 'hello', id: state.me.id, ts: h.ts, text: l.remoteFp });
+      lsend(l, h); l.readyNow();
+    });
+    let inbox = Promise.resolve();
+    dc.addEventListener('message', (e) => { if (typeof e.data !== 'string' || e.data.length > 60000) return; const raw = e.data; inbox = inbox.then(() => onRoomData(l, raw)).catch(() => {}); });
+    const closed = () => {
+      if (l.closed) return; const had = l.member; closeLine(l);
+      const room = l.roomId && roomById(l.roomId); if (!room || !had) return;
+      if (memberOf(room, had.id)) pushRoomSys(room, `${had.name.toUpperCase()} · LINE DROPPED`);
+      renderRoomAll(room);
+      if (had.id !== room.host) setTimeout(() => { if (roomById(room.id) && hostLine(room)) meshUp(room); }, 3000); // texts go round through the host meanwhile
+    };
+    dc.addEventListener('close', closed);
+    pc.addEventListener('connectionstatechange', () => { if (['failed', 'closed'].includes(pc.connectionState)) closed(); });
+  }
+  // A hello proves the key only when it is signed over this side's DTLS fingerprint for this one line.
+  async function provenHello(m, localFp) {
+    if (!m.pub || typeof m.pub.x !== 'string' || typeof m.pub.y !== 'string' || typeof m.id !== 'string') return null;
+    const id = await fingerprint(m.pub); if (id !== m.id || id === state.me.id) return null;
+    const ok = Boolean(localFp) && m.fp === localFp && await verify({ id, pub: pubOf(m.pub) }, { t: 'hello', id, ts: m.ts, text: localFp, sig: m.sig });
+    return ok ? id : null;
+  }
+  async function onRoomData(l, raw) {
+    await l.ready; if (l.closed) return;
+    let m; try { m = JSON.parse(raw); } catch (_) { return; }
+    if (!m || typeof m !== 'object') return;
+    if (m.t === 'hello') {
+      const id = await provenHello(m, l.localFp); if (l.closed) return;
+      if (!id) { toast('HELLO NOT SIGNED. LINE CLOSED.'); return closeLine(l); }
+      if ((l.expect && id !== l.expect) || (l.member && l.member.id !== id)) { toast('THE LINE CHANGED HANDS. CLOSED.'); return closeLine(l); }
+      const info = { id, pub: pubOf(m.pub), name: cleanName(m.name), mood: validMood(m.mood), tz: str(m.tz, 64), place: str(m.place, 32) };
+      const again = Boolean(l.member); l.member = info; clearTimeout(l.watchdog);
+      const room = l.roomId && roomById(l.roomId);
+      if (!room) { if (l.roomId) closeLine(l); return; } // a guest's invite line learns its room from the roster
+      if (again) { const x = memberOf(room, id); if (x) Object.assign(x, { name: info.name, mood: info.mood, tz: info.tz, place: info.place }); save(); renderRoomAll(room); return; }
+      if (room.host === state.me.id && !l.expect) {
+        if (!memberOf(room, id) && room.members.length >= ROOM_MAX) { lsend(l, { t: 'room-full' }); toast('ROOM FULL. FIVE IS THE CAP.'); setTimeout(() => closeLine(l), 400); return; }
+      } else if (!memberOf(room, id)) return closeLine(l);
+      adopt(room, l, info);
+      if (room.host === state.me.id) { await sendRoster(room); if (!l.expect && (currentRoom !== room || app.dataset.view !== 'room')) openRoom(room.id); }
+      return;
+    }
+    if (!l.member) return;
+    switch (m.t) {
+      case 'roster': return onRoster(l, m);
+      case 'rsig': return onRsig(l, m);
+      case 'rmsg': return onRmsg(l, m, raw);
+      case 'mood': {
+        const room = roomById(l.roomId); const x = room && memberOf(room, l.member.id); if (!x) return;
+        x.mood = validMood(m.mood); save(); renderRoomAll(room); if (room.host === state.me.id) rosterSoon(room); return;
+      }
+      case 'bye': {
+        const room = roomById(l.roomId); if (!room) return closeLine(l);
+        if (room.host === state.me.id) { room.members = room.members.filter((x) => x.id !== l.member.id); pushRoomSys(room, `${l.member.name.toUpperCase()} LEFT THE ROOM`); closeLine(l); await sendRoster(room); renderRoomAll(room); }
+        else closeLine(l);
+        return;
+      }
+      case 'room-full': toast('ROOM FULL. FIVE IS THE CAP.'); return closeLine(l);
+    }
+  }
+  function adopt(room, l, info) {
+    l.roomId = room.id;
+    for (const o of [...rlines]) if (o !== l && o.roomId === room.id && (o.member?.id === info.id || o.expect === info.id) && !o.closed) closeLine(o);
+    const x = memberOf(room, info.id);
+    if (!x) { room.members.push(info); pushRoomSys(room, `${info.name.toUpperCase()} IN · ${sigilOf(info.id)}`); blip(true); buzz(20); }
+    else Object.assign(x, info);
+    flushRoom(room); save(); renderRoomAll(room);
+  }
+  // HOST: the roster is signed, carries every member's key, and only ever moves forward in time.
+  const rosterBody = (room) => JSON.stringify({ name: room.name, members: room.members.map((x) => ({ id: x.id, pub: pubOf(x.pub), name: x.name, mood: x.mood, tz: x.tz, place: x.place })) });
+  async function sendRoster(room) {
+    if (room.host !== state.me.id) return;
+    const ts = Math.max(now(), (room.rosterTs || 0) + 1); room.rosterTs = ts; const body = rosterBody(room);
+    const msg = { t: 'roster', room: room.id, ts, body }; msg.sig = await sign({ t: 'roster', id: room.id, ts, text: body });
+    const raw = JSON.stringify(msg); for (const l of roomLines(room)) lsend(l, raw);
+  }
+  function rosterSoon(room) { clearTimeout(room._rt); Object.defineProperty(room, '_rt', { value: setTimeout(() => sendRoster(room), 400), configurable: true, enumerable: false, writable: true }); }
+  // MEMBER: take the roster from the host who invited this line, then dial the members it has no line to.
+  async function onRoster(l, m) {
+    const roomId = str(m.room, 12); if (!/^[A-Za-z0-9_-]{12}$/.test(roomId) || typeof m.body !== 'string' || m.body.length > 20000) return;
+    if (l.roomId && l.roomId !== roomId) return;
+    let room = roomById(roomId); if (room && room.host !== l.member.id) return;
+    if (!(await verify(l.member, { t: 'roster', id: roomId, ts: m.ts, text: m.body, sig: m.sig }))) return;
+    if (l.closed) return;
+    room = roomById(roomId); if (room && (room.host !== l.member.id || Number(m.ts) <= (room.rosterTs || 0))) return;
+    let b; try { b = JSON.parse(m.body); } catch (_) { return; }
+    const members = [];
+    for (const x of Array.isArray(b.members) ? b.members.slice(0, ROOM_MAX) : []) {
+      if (!x || typeof x.pub?.x !== 'string' || typeof x.pub?.y !== 'string' || members.some((y) => y.id === x.id)) continue;
+      if ((await fingerprint(x.pub)) !== x.id) continue;
+      members.push({ id: x.id, pub: pubOf(x.pub), name: cleanName(x.name), mood: validMood(x.mood), tz: str(x.tz, 64), place: str(x.place, 32) });
+    }
+    if (!members.some((x) => x.id === state.me.id) || !members.some((x) => x.id === l.member.id)) return;
+    const first = !room;
+    if (first) { room = { id: roomId, name: str(b.name, 32) || 'ROOM', host: l.member.id, members: [], messages: [], created: now(), unread: 0 }; state.rooms.push(room); }
+    room.rosterTs = Number(m.ts); room.name = str(b.name, 32) || room.name;
+    const before = new Set(room.members.map((x) => x.id));
+    room.members = members.map((x) => { const had = lineTo(room, x.id); const old = memberOf(room, x.id); return had && old ? old : x; });
+    for (const x of room.members) if (!before.has(x.id) && !first && x.id !== state.me.id) pushRoomSys(room, `${x.name.toUpperCase()} IN · ${sigilOf(x.id)}`);
+    for (const o of [...rlines]) if (o.roomId === room.id && o.member && !memberOf(room, o.member.id)) closeLine(o);
+    if (!l.roomId) adopt(room, l, l.member); else { save(); renderRoomAll(room); }
+    if (first) { pushRoomSys(room, `RUN · in ${room.name.toUpperCase()} · ${room.members.length} OF ${ROOM_MAX}`); openRoom(room.id); }
+    meshUp(room);
+  }
+  function meshUp(room) {
+    if (room.host === state.me.id) return;
+    for (const x of room.members) {
+      if (x.id === state.me.id || x.id === room.host || state.me.id > x.id) continue;
+      if ([...rlines].some((o) => o.roomId === room.id && !o.closed && (o.member?.id === x.id || o.expect === x.id))) continue;
+      dial(room, x).catch(() => {});
+    }
+  }
+  const hostLine = (room) => lineTo(room, room.host);
+  // A dial that never opened (ICE gave up, the host was busy) is tried again: every fifteen seconds each member checks for missing pairs.
+  setInterval(() => { for (const r of state.rooms) if (r.host !== state.me.id && hostLine(r)) meshUp(r); }, 15000);
+  async function signedSig(to, nonce, kind, sdp) { const m = { t: 'rsig', id: nonce, to, ts: now(), text: kind + '\n' + sdp }; m.sig = await sign(m); return m; }
+  async function dial(room, x) {
+    const via = hostLine(room); if (!via) return;
+    await iceWithTimeout(1500);
+    const pc = freshPc(); const l = newLine(pc, room.id, x.id); l.nonce = uid();
+    wireRoom(l, pc.createDataChannel('pmm-room', { ordered: true }));
+    l.watchdog = setTimeout(() => { if (!l.member) closeLine(l); }, 30000);
+    await pc.setLocalDescription(await pc.createOffer()); await gathered(pc); if (l.closed) return;
+    const m = await signedSig(x.id, l.nonce, 'offer', pc.localDescription.sdp);
+    if (!lsend(hostLine(room) || via, { ...m, room: room.id, from: state.me.id })) closeLine(l);
+  }
+  async function onRsig(l, m) {
+    const room = roomById(l.roomId); if (!room || typeof m.text !== 'string' || m.text.length > 34000) return;
+    if (m.to !== state.me.id) { // the host carries a member's own offer or answer to the member it names, unchanged
+      if (room.host !== state.me.id || m.from !== l.member.id || !memberOf(room, m.to)) return;
+      const out = lineTo(room, m.to); if (out) lsend(out, m); return;
+    }
+    const from = memberOf(room, m.from); if (!from || from.id === state.me.id || l.member.id !== room.host) return;
+    if (!(Math.abs(now() - Number(m.ts)) < 600000) || !(await verify(from, { t: 'rsig', id: m.id, to: m.to, ts: m.ts, text: m.text, sig: m.sig }))) return;
+    const cut = m.text.indexOf('\n'); const kind = m.text.slice(0, cut), sdp = m.text.slice(cut + 1);
+    if (kind === 'offer') {
+      if (lineTo(room, from.id)) return;
+      for (const o of [...rlines]) if (o.roomId === room.id && o.expect === from.id && !o.member) closeLine(o);
+      const pc = freshPc(); const nl = newLine(pc, room.id, from.id);
+      nl.watchdog = setTimeout(() => { if (!nl.member) closeLine(nl); }, 30000);
+      pc.addEventListener('datachannel', (e) => wireRoom(nl, e.channel));
+      try {
+        await pc.setRemoteDescription({ type: 'offer', sdp }); await pc.setLocalDescription(await pc.createAnswer()); await gathered(pc);
+        if (nl.closed) return;
+        const a = await signedSig(from.id, m.id, 'answer', pc.localDescription.sdp);
+        const via = hostLine(room); if (!via || !lsend(via, { ...a, room: room.id, from: state.me.id })) closeLine(nl);
+      } catch (_) { closeLine(nl); }
+    } else if (kind === 'answer') {
+      const o = [...rlines].find((x) => x.roomId === room.id && x.expect === from.id && x.nonce === m.id && !x.answered && !x.closed); if (!o) return;
+      o.answered = true; try { await o.pc.setRemoteDescription({ type: 'answer', sdp }); } catch (_) { closeLine(o); }
+    }
+  }
+  // Texts: signed by the author over the room id, the text, the mood and the hour. Verified, kept, passed on once.
+  const rcanon = (m) => ({ t: 'rmsg', id: m.id, to: m.room, ts: m.ts, text: m.text, note: `${m.mood}|${m.lt}`, sig: m.sig });
+  async function onRmsg(l, m, raw) {
+    const room = roomById(l.roomId); if (!room) return;
+    const id = str(m.id, 40); if (!id || m.room !== room.id || room.messages.some((x) => x.id === id)) return;
+    const author = memberOf(room, m.from); if (!author || author.id === state.me.id) return;
+    if (typeof m.text !== 'string' || !m.text || m.text.length > 4000 || typeof m.mood !== 'string' || typeof m.lt !== 'string') return;
+    if (!(await verify(author, rcanon(m)))) return; // altered on the way: dropped, never shown, never passed on
+    if (room.messages.some((x) => x.id === id)) return;
+    room.messages.push({ id, from: author.id, text: m.text, ts: Number(m.ts) || now(), mood: validMood(m.mood), lt: str(m.lt, 16), verified: true, via: l.member.id === author.id ? '' : l.member.id });
+    if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+    for (const o of roomLines(room)) if (o !== l && o.member.id !== author.id) lsend(o, raw);
+    if (currentRoom !== room) room.unread = (room.unread || 0) + 1;
+    save(); renderRoomAll(room); blip(false); buzz(12);
+    if (currentRoom === room) $('announce').textContent = `${author.name}: ${m.text}`;
+  }
+  function flushRoom(room) {
+    const lines = roomLines(room); if (!lines.length) return;
+    for (const m of room.messages) {
+      if (m.from !== state.me.id || m.status !== 'queued') continue;
+      const raw = JSON.stringify({ t: 'rmsg', room: room.id, id: m.id, from: m.from, ts: m.ts, text: m.text, mood: m.mood, lt: m.lt, sig: m.sig });
+      if (lines.map((o) => lsend(o, raw)).some(Boolean)) m.status = 'sent';
+    }
+  }
+  function roomMood(k) { for (const l of [...rlines]) if (live(l)) lsend(l, { t: 'mood', mood: k }); if (currentRoom) renderRoomAtmo(); }
+  function pushRoomSys(room, text) { room.messages.push({ id: uid(), kind: 'sys', text, ts: now() }); save(); }
+
+  /* room views */
+  function renderRooms() {
+    const ul = $('rooms'); ul.replaceChildren(); $('rooms-label').hidden = !state.rooms.length;
+    for (const r of state.rooms) {
+      const li = document.createElement('li'); const b = document.createElement('button'); b.className = 'friend'; b.type = 'button';
+      b.setAttribute('aria-current', currentRoom === r ? 'true' : 'false');
+      const on = roomLines(r).length; const l = [...r.messages].reverse().find((m) => m.kind !== 'sys');
+      b.innerHTML = `<span class="sigil" aria-hidden="true"></span><span class="friend-main"><strong></strong><span></span></span><span class="friend-meta"><span class="dot ${on ? '' : 'off'}" title="${on ? 'online' : 'offline'}"></span>${r.unread ? `<span class="badge">${r.unread}</span>` : ''}</span>`;
+      b.querySelector('.sigil').textContent = r.members.map((x) => sigilOf(x.id)[0]).join('') || '····';
+      b.querySelector('strong').textContent = `${r.name.toUpperCase()} · ${r.members.length}/${ROOM_MAX}`;
+      b.querySelector('.friend-main span').textContent = l ? `${l.from === state.me.id ? 'YOU' : (memberOf(r, l.from)?.name || '?').toUpperCase()}: ${l.text.replace(/\s+/g, ' ')}` : r.members.map((x) => x.name.toUpperCase()).join(' · ');
+      b.addEventListener('click', () => openRoom(r.id));
+      li.append(b); ul.append(li);
+    }
+  }
+  function openRoom(id) {
+    const r = roomById(id); if (!r) return; currentRoom = r; current = null; r.unread = 0; save();
+    show('room'); renderRoom(); renderRoomHead(); renderRoomAtmo(); renderRooms(); renderFriends();
+    history.replaceState(null, '', '#r=' + r.id);
+    if (wide.matches) $('room-input').focus({ preventScroll: true });
+  }
+  function renderRoomAll(room) { renderRooms(); if (currentRoom === room) { renderRoom(); renderRoomHead(); renderRoomAtmo(); } }
+  function renderRoomHead() {
+    const r = currentRoom; if (!r) return; const on = new Set(roomLines(r).map((l) => l.member.id));
+    $('room-name').textContent = `${r.name.toUpperCase()} · ${r.members.length}/${ROOM_MAX}`;
+    const el = $('room-sigils'); el.replaceChildren();
+    for (const x of r.members) {
+      const s = document.createElement('span'); const me = x.id === state.me.id;
+      s.className = `sigil sm${me || on.has(x.id) ? ' on' : ''}${x.id === r.host ? ' host' : ''}`; s.textContent = sigilOf(x.id);
+      s.title = `${x.name}${x.id === r.host ? ' · host' : ''}${me ? ' · you' : on.has(x.id) ? ' · direct line' : ' · via the room'}`; el.append(s);
+    }
+    $('room-status').textContent = on.size ? `RUN · ${on.size} LINE${on.size === 1 ? '' : 'S'} OPEN` : 'OFFLINE · NOTES WAIT HERE';
+  }
+  function renderRoomAtmo() {
+    const r = currentRoom; if (!r) return; const el = $('room-atmo');
+    const others = r.members.filter((x) => x.id !== state.me.id);
+    el.textContent = [`YOU: ${state.me.mood} · ${localTime()} ${state.me.place || ''}`.trim(), ...others.map((x) => `${x.name}: ${x.mood || 'calm'} · ${x.tz ? localTime(x.tz) + ' ' + (x.place || x.tz.split('/').pop().replace(/_/g, ' ')) : 'somewhere'}`)].join('   ·   ');
+    const cols = [state.me.mood, ...others.map((x) => x.mood || 'calm')].map((k) => `color-mix(in srgb, ${moodColor(k)} 40%, transparent)`);
+    el.style.background = `linear-gradient(90deg, ${cols.length > 1 ? cols.join(', ') : cols[0] + ', ' + cols[0]})`;
+  }
+  function renderRoom() {
+    const r = currentRoom; if (!r) return; const ol = $('room-messages'); ol.replaceChildren(); let day = '';
+    for (const m of r.messages) {
+      const d = fmtDay(m.ts); if (d !== day) { day = d; const li = document.createElement('li'); li.className = 'day'; li.textContent = d; ol.append(li); }
+      const li = document.createElement('li'); li.dataset.id = m.id;
+      if (m.kind === 'sys') { li.className = 'msg sys'; li.innerHTML = '<div class="bubble"></div>'; li.querySelector('.bubble').textContent = m.text; ol.append(li); continue; }
+      const mine = m.from === state.me.id; li.className = `msg ${mine ? 'me' : 'them'}`;
+      if (!mine) { const who = document.createElement('div'); who.className = 'who'; who.textContent = `${sigilOf(m.from)} ${(memberOf(r, m.from)?.name || 'GONE').toUpperCase()}`; li.append(who); }
+      const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = m.text; if (reduced) bubble.style.animation = 'none'; li.append(bubble);
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.innerHTML = `<span>${fmtTime(m.ts)}</span><span class="mood" style="--m:${moodColor(m.mood)}">${esc(m.mood)}</span>${mine ? `<span>${m.status === 'queued' ? 'WAITING' : '✓'}</span>` : `<span class="ok">SIGNED${m.via ? ' · PASSED ON' : ''}</span>`}`;
+      li.append(meta); ol.append(li);
+    }
+    requestAnimationFrame(() => $('room-scroll').scrollTo({ top: $('room-scroll').scrollHeight }));
+  }
+  const roomInput = $('room-input');
+  roomInput.addEventListener('input', () => { autosize(roomInput); $('btn-room-send').disabled = !roomInput.value.trim(); });
+  roomInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('room-composer').requestSubmit(); } });
+  $('room-composer').addEventListener('submit', async (e) => {
+    e.preventDefault(); const text = roomInput.value.trim().slice(0, 4000); const r = currentRoom; if (!text || !r) return;
+    roomInput.value = ''; autosize(roomInput); $('btn-room-send').disabled = true; roomInput.focus({ preventScroll: true });
+    const m = { id: uid(), from: state.me.id, room: r.id, text, ts: now(), mood: state.me.mood, lt: localTime(), status: 'queued' };
+    m.sig = await sign(rcanon(m)); delete m.room;
+    r.messages.push(m); flushRoom(r); save(); renderRoomAll(r); blip(true); buzz();
+  });
+  $('btn-room').addEventListener('click', () => {
+    const r = { id: b64u(crypto.getRandomValues(new Uint8Array(9))), name: `${myName()}'S ROOM`.slice(0, 32), host: state.me.id, members: [{ id: state.me.id, pub: pubOf(state.me.pub), name: myName(), mood: state.me.mood, tz: tzName(), place: state.me.place || '' }], messages: [], created: now(), unread: 0 };
+    state.rooms.push(r); pushRoomSys(r, `ROOM MADE · YOU HOST · UP TO ${ROOM_MAX}`); renderRooms(); currentFriendTarget = null; host(r);
+  });
+  $('btn-room-back').addEventListener('click', back);
+  function roomSheet() {
+    const r = currentRoom; if (!r) return; const dl = $('room-stats'); dl.replaceChildren(); const on = new Set(roomLines(r).map((l) => l.member.id));
+    for (const x of r.members) {
+      const dt = document.createElement('dt'); dt.textContent = `${sigilOf(x.id)} ${x.id.slice(0, 8).toUpperCase()}`;
+      const dd = document.createElement('dd'); dd.textContent = `${x.name.toUpperCase()}${x.id === r.host ? ' · HOST' : ''} · ${x.id === state.me.id ? 'YOU' : on.has(x.id) ? 'DIRECT LINE' : 'VIA THE ROOM'} · ${(x.mood || 'calm').toUpperCase()}`;
+      dl.append(dt, dd);
+    }
+    const isHost = r.host === state.me.id;
+    $('btn-room-invite').hidden = !isHost; $('btn-room-invite').disabled = r.members.length >= ROOM_MAX && r.members.every((x) => x.id === state.me.id || on.has(x.id));
+    $('room-hint').textContent = isHost ? `You host. INVITE makes a code for one more friend; the room holds ${ROOM_MAX}. New members meet the others through you, then talk to each of them directly.` : 'The host invites. Every text is signed by whoever wrote it; a copy passed on by another member shows PASSED ON and still checks against the author.';
+    openSheet('sheet-room');
+  }
+  $('btn-room-menu').addEventListener('click', roomSheet);
+  $('room-head').addEventListener('click', roomSheet);
+  $('btn-room-done').addEventListener('click', closeSheets);
+  $('btn-room-invite').addEventListener('click', () => { const r = currentRoom; closeSheets(); if (r) host(r); });
+  $('btn-room-leave').addEventListener('click', () => {
+    const r = currentRoom; if (!r || !confirm(`Leave ${r.name}? Its notes on this phone go too.`)) return;
+    for (const l of [...rlines]) if (l.roomId === r.id) { lsend(l, { t: 'bye' }); setTimeout(() => closeLine(l), 200); }
+    state.rooms = state.rooms.filter((x) => x !== r); save(); closeSheets(); back(); renderRooms();
+  });
+
   /* ---------- SI line ---------- */
   const siInput = $('si-input');
   function renderSi() {
@@ -684,25 +992,26 @@
   /* ---------- boot ---------- */
   async function boot() {
     if (!state.me.tz) state.me.tz = tzName();
-    renderMe(); renderFriends(); ticker(); refreshIce(true);
+    renderMe(); renderFriends(); renderRooms(); ticker(); refreshIce(true);
     await ensureIdentity(); renderMe();
     setInterval(() => { if (ice.relay) refreshIce(false); }, 240000);
     if (wide.matches) show('lobby');
     route();
-    setInterval(() => { if (current) renderAtmo(); if (app.dataset.view === 'si') renderSi(); }, 30000);
+    setInterval(() => { if (current) renderAtmo(); if (currentRoom) renderRoomAtmo(); if (app.dataset.view === 'si') renderSi(); }, 30000);
   }
   function route() {
     const h = location.hash.slice(1);
-    const o = /offer=([A-Za-z0-9_-]+)/.exec(h), a = /answer=([A-Za-z0-9_-]+)/.exec(h), j = /join=([A-Z2-9]{6})/i.exec(h), f = /f=([0-9a-f]{16})/.exec(h);
+    const o = /offer=([A-Za-z0-9_-]+)/.exec(h), a = /answer=([A-Za-z0-9_-]+)/.exec(h), j = /join=([A-Z2-9]{6})/i.exec(h), f = /f=([0-9a-f]{16})/.exec(h), r = /r=([A-Za-z0-9_-]{12})/.exec(h);
     if (o) { history.replaceState(null, '', location.pathname); joinOffer(o[1]); }
     else if (a) { history.replaceState(null, '', location.pathname); if (pending?.role === 'host') { $('answer-input').value = a[1]; $('form-answer').requestSubmit(); } else { joinView(); $('load-line2').textContent = 'THAT IS AN ANSWER LINK'; $('load-line3').textContent = 'open it on the phone that pressed LOAD, or paste it there.'; } }
     else if (j) { history.replaceState(null, '', location.pathname); joinCode(j[1].toUpperCase()); }
     else if (f) { const fr = state.friends.find((x) => x.id.startsWith(f[1])); if (fr) openChat(fr.id); }
+    else if (r) { const room = state.rooms.find((x) => x.id === r[1]); if (room) openRoom(room.id); }
     else if (h === 'si') { show('si'); renderSi(); }
   }
   if (window.visualViewport) { const vv = window.visualViewport; let lastH = vv.height; vv.addEventListener('resize', () => { if (vv.height < lastH - 80 && current) scrollBottom(true); lastH = vv.height; }); }
   wide.addEventListener('change', () => show(app.dataset.view));
   window.addEventListener('hashchange', route);
-  window.addEventListener('beforeunload', () => { if (peer) try { peer.dc.close(); } catch (_) {} });
+  window.addEventListener('beforeunload', () => { if (peer) try { peer.dc.close(); } catch (_) {} dropRoomLines(); });
   boot();
 })();
