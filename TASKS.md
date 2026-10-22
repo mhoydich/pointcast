@@ -6,7 +6,7 @@
 
 ## Gridtown — a browser-first city builder (2026-10-22)
 
-`/gridtown`, `/gridtown.json`, Block 0747 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
+`/gridtown`, `/gridtown.json`, Block 0742 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
 
 - [x] (CC) Build v1: pure engine `src/lib/gridtown.mjs` (seeded terrain, seven tools, RCI demand, power capacity, smoke and land value, monthly ledger, happiness, twelve lessons, save repair), canvas page with touch, drag and keyboard, browser-local save, JSON export/import, `?seed=` map links, JSON twin, `tests/gridtown.test.mjs` — `done`
 - [x] (CC) Wire Apps shelf, Play layer, `agents.json`, sitemap-discovery, `llms.txt`, `llms-full.txt` — `done`
