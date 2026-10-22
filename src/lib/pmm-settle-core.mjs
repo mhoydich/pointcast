@@ -1,0 +1,71 @@
+// PMM v0.4: settle a TAB in tez. Pure helpers shared by the /pmm/settle page and PMM itself,
+// kept free of DOM and wallet code so node tests can cover them.
+//
+// The payer's PMM opens /pmm/settle with the payee's address and an amount in the URL
+// fragment (never sent to a server). The page sends one plain tez transfer through the
+// PointCast Beacon wallet and hands the operation hash back to PMM, which tells the friend.
+// The friend's phone checks that operation on chain before it marks the tab settled.
+
+// tz1/tz2/tz3/tz4 implicit accounts: a base58 body of 33 characters. The page also runs the
+// wallet library's checksum validation; this regex is the cheap first gate.
+export const TZ_RE = /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/;
+// Tezos operation hashes: 'o' plus 50 base58 characters.
+export const OP_RE = /^o[1-9A-HJ-NP-Za-km-z]{50}$/;
+// A friend id prefix PMM uses in its own links (#f=...): 16 hex.
+const FRIEND_RE = /^[0-9a-f]{16}$/;
+export const MAX_TEZ = 1000;
+
+/** Parse "1.5" or "1,5" into whole mutez, or null. Up to 6 decimals, more than 0, at most MAX_TEZ. */
+export function toMutez(input) {
+  const s = String(input ?? '').trim().replace(',', '.');
+  if (!/^\d{1,4}(\.\d{1,6})?$/.test(s)) return null;
+  const [whole, frac = ''] = s.split('.');
+  const mutez = Number(whole) * 1_000_000 + Number(frac.padEnd(6, '0'));
+  if (!Number.isSafeInteger(mutez) || mutez <= 0 || mutez > MAX_TEZ * 1_000_000) return null;
+  return mutez;
+}
+
+export function formatTez(mutez) {
+  const whole = Math.floor(mutez / 1_000_000), frac = String(mutez % 1_000_000).padStart(6, '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : String(whole);
+}
+
+/** Read the settle page fragment: #to=tz1...&tez=1.5&note=tacos&f=<friend id prefix>. */
+export function parseSettleHash(hash) {
+  const p = new URLSearchParams(String(hash || '').replace(/^#/, ''));
+  const to = (p.get('to') || '').trim();
+  const out = {
+    to: TZ_RE.test(to) ? to : null,
+    mutez: p.has('tez') ? toMutez(p.get('tez')) : null,
+    note: (p.get('note') || '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 60),
+    friend: FRIEND_RE.test(p.get('f') || '') ? p.get('f') : null,
+  };
+  out.errors = [];
+  if (!out.to) out.errors.push('no-payee');
+  if (p.has('tez') && out.mutez === null) out.errors.push('bad-amount');
+  return out;
+}
+
+/** The link back into PMM after a send: PMM reads #settled=<op>&f=<friend>&mutez=<n>&to=<tz>. */
+export function returnLink({ opHash, friend, mutez, to }) {
+  if (!OP_RE.test(opHash || '')) throw new Error('bad-op');
+  const p = new URLSearchParams({ settled: opHash, mutez: String(mutez), to });
+  if (friend) p.set('f', friend);
+  return '/pmm/#' + p.toString();
+}
+
+/**
+ * Judge a TzKT /v1/operations/transactions/{hash} answer against what was claimed.
+ * Returns { ok: true, from, mutez, level } or { ok: false, reason }.
+ * A batch can hold several transactions; any applied one that pays `to` at least `mutez` counts.
+ */
+export function judgeTransfer(tzktRows, { to, mutez }) {
+  if (!Array.isArray(tzktRows) || !tzktRows.length) return { ok: false, reason: 'not-found' };
+  const hits = tzktRows.filter((r) => r && r.target && r.target.address === to);
+  if (!hits.length) return { ok: false, reason: 'wrong-payee' };
+  const applied = hits.filter((r) => r.status === 'applied');
+  if (!applied.length) return { ok: false, reason: 'not-applied' };
+  const paid = applied.reduce((n, r) => n + (Number.isSafeInteger(r.amount) ? r.amount : 0), 0);
+  if (paid < mutez) return { ok: false, reason: 'short', paid };
+  return { ok: true, from: applied[0].sender?.address || null, mutez: paid, level: applied[0].level ?? null };
+}
