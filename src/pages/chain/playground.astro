@@ -1,0 +1,909 @@
+---
+/**
+ * /chain/playground — the API Playground: a try-it page for the PointCast
+ * devnet's MCP tools and REST reads.
+ *
+ * On load the browser asks the devnet for tools/list and draws a form for
+ * every tool from its inputSchema (types, enums, minimums and maximums,
+ * patterns, required fields). A tool that only reads gets a Run button, a copy
+ * button, and the equivalent curl and a ten-line Node fetch. A tool that posts
+ * to the chain is shown with its schema, description and snippets, and no Run
+ * button. A second panel lists the REST GET routes with a Try button; a third
+ * gives the exact lines for connecting Grok, ChatGPT and Claude, copied from
+ * /chain/bots.
+ *
+ * The logic (schema to form, classification, snippets, the client) lives in
+ * public/chain/apps/playground.js, an ES module with no DOM access that the
+ * tests import. This page owns the DOM. Every value that comes from the devnet
+ * goes in with textContent, never as markup, an href or a src.
+ *
+ * The devnet Worker sends no CORS headers on POST /mcp (its keyless writes are
+ * fenced from web pages on purpose), so a page on pointcast.xyz cannot read an
+ * /mcp reply. The page tries tools/list once; if the browser blocks it, it says
+ * so, shows the pinned list (public/chain/apps/playground-tools.json) and runs
+ * read-only tools through their matching GET routes, naming the route in each
+ * result.
+ *
+ * ?devnet=<origin> is honored only for localhost and 127.0.0.1 (a local end-to-end
+ * run); anything else is ignored.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import Snippet from '../../components/chain/Snippet.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, assertDevnetLaunchPinned } from '../../data/chain-home';
+import {
+  BLOCK,
+  CHATGPT_STEP,
+  CLAUDE_CODE,
+  CLAUDE_STEP,
+  GROK_CURL,
+  GROK_NOTE,
+  GROK_POST_NOTE,
+  HONESTY,
+  MCP_URL,
+  OPENAI_TOOL,
+  PAGE,
+  UNKNOWN_LINE,
+  WRITES,
+} from '../../data/chain-app-playground';
+import { REST_ROUTES, classifyTool, parseToolsList, restCurl } from '../../../public/chain/apps/playground.js';
+import pinned from '../../../public/chain/apps/playground-tools.json';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const { tools: pinnedTools } = parseToolsList({ result: { tools: pinned.tools } });
+const kinds = pinnedTools.map((t) => classifyTool(t).kind);
+const readCount = kinds.filter((k) => k === 'read').length;
+const pinnedAt = new Date(pinned.captured_at).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+const [chatgptLead, chatgptTail] = CHATGPT_STEP.split(MCP_URL);
+const [claudeLead, claudeTail] = CLAUDE_STEP.split(MCP_URL);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'PointCast devnet API Playground',
+  description: PAGE.description,
+  url: 'https://pointcast.xyz/chain/playground',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Any',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+---
+
+<BlockLayout title={PAGE.title} description={PAGE.description} jsonLd={jsonLd} hideAds>
+  <div
+    class="chn pg"
+    style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}
+    data-pg
+    data-state="static"
+    data-api={D}
+    data-genesis={DEVNET.genesis}
+    data-tools-url="/chain/apps/playground-tools.json"
+    data-pinned-at={pinnedAt}
+  >
+    <ChainHeader current="playground" trail={[{ label: 'dev tools', href: '/chain/dev' }, { label: 'api playground' }]} block={BLOCK} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · API PLAYGROUND · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>Try the devnet’s API.</h1>
+      <p class="dek">
+        Every MCP tool the PointCast devnet serves, with a form built from its schema. The tools that only read have a Run
+        button. The ones that post show their schema and copy-paste snippets and stay switched off here. Below that: the
+        REST routes that work from any browser, and the exact lines to connect Grok, ChatGPT and Claude.
+      </p>
+      <p class="callout" data-honesty>
+        <b>Devnet.</b> {HONESTY.lead} <a href={HONESTY.path}>{HONESTY.path}</a>.
+      </p>
+      <p class="jump">
+        <a href="#tools">mcp tools</a><a href="#rest">rest routes</a><a href="#connect">connect your bot</a><a href="#honesty">what it shows</a>
+      </p>
+    </header>
+
+    <section id="tools" class="sec" aria-labelledby="tools-title">
+      <p class="kicker">01 · MCP TOOLS · POST <span class="pg-url">{MCP_URL}</span></p>
+      <h2 id="tools-title" class="h2">Every tool, with a form built from its schema.</h2>
+      <p class="note">
+        On load this page asks the devnet for <code>tools/list</code> and draws a form for each tool from its
+        <code>inputSchema</code>: types, enums, minimums and maximums, patterns and required fields. A read-only tool gets Run, a
+        copy button and the equivalent curl and Node. A tool that posts is shown with its schema and snippets, and no Run.
+      </p>
+      <p class="fine">
+        Read-only means three things agree: the tool is on this page’s list of readers, its description does not say it posts,
+        and the devnet marks it read-only (<code>readOnlyHint: true</code>, and not open-world). A tool with no such mark is not
+        run, whatever its name. A tool this page has never seen is treated as a writing tool until it is added to that list.
+      </p>
+      <p class="pg-override" data-pg-override role="note" hidden></p>
+      <p class="pg-status" data-pg-status aria-live="polite">
+        Reading <code>tools/list</code> from the devnet once the page has loaded. Until then this is the pinned list of
+        {pinnedTools.length} tools ({readCount} read-only), captured {pinnedAt} from a local run of the devnet Worker.
+      </p>
+      <p class="pg-chain" data-pg-chain></p>
+      <p class="pg-bar">
+        <span class="pg-filter" role="group" aria-label="Show tools" data-pg-filter hidden>
+          <button type="button" class="pg-chip" data-pg-show="all" aria-pressed="true">All</button>
+          <button type="button" class="pg-chip" data-pg-show="read" aria-pressed="false">Read-only</button>
+          <button type="button" class="pg-chip" data-pg-show="write" aria-pressed="false">Posts</button>
+        </span>
+        <button type="button" class="btn btn--ghost pg-retry" data-pg-retry hidden>Read tools/list again</button>
+      </p>
+      <noscript><p class="fine">The forms and Run need JavaScript. The tools are listed below as pinned; every one can be called with curl.</p></noscript>
+      <ol class="pg-tools" data-pg-tools>
+        {pinnedTools.map((t, i) => (
+          <li class="pg-tool pg-tool--static" id={`tool-${t.name}`} data-kind={kinds[i]}>
+            <p class="pg-tool__head">
+              <code class="pg-name">{t.name}</code>
+              <span class={`pg-badge pg-badge--${kinds[i]}`}>{kinds[i] === 'read' ? 'read only' : kinds[i] === 'write' ? 'posts' : 'unknown'}</span>
+            </p>
+            <p class="pg-desc">{t.description}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section id="rest" class="sec" aria-labelledby="rest-title">
+      <p class="kicker">02 · REST · GET · CORS * · NO KEY</p>
+      <h2 id="rest-title" class="h2">Plain GET routes, from any browser.</h2>
+      <p class="note">
+        Reads allow any origin. Each Try sends one GET to the devnet and shows the reply as JSON. Reads are limited per IP
+        address: a 429 means wait a minute. The routes with an input take one value; a bad value is caught before anything
+        is sent.
+      </p>
+      <ol class="pg-routes">
+        {REST_ROUTES.map((r) => (
+          <li class="pg-route" data-route={r.id}>
+            <p class="pg-route__path"><code>GET {r.path}</code></p>
+            <p class="pg-route__blurb">{r.blurb}</p>
+            <div class="pg-route__try">
+              {r.params.map((p) => (
+                <div class="pg-field">
+                  <label for={`pg-route-${r.id}-${p.name}`}>{p.label}</label>
+                  <input
+                    id={`pg-route-${r.id}-${p.name}`}
+                    class="pg-input"
+                    type="text"
+                    inputmode={p.kind === 'integer' ? 'numeric' : undefined}
+                    spellcheck="false"
+                    autocomplete="off"
+                    placeholder={p.placeholder}
+                    value={p.example}
+                    data-pg-input={p.name}
+                    aria-describedby={`pg-route-${r.id}-${p.name}-err`}
+                  />
+                  <p class="pg-err" id={`pg-route-${r.id}-${p.name}-err`} data-pg-err={p.name}></p>
+                </div>
+              ))}
+              <button type="button" class="btn btn--ghost" data-pg-try hidden>Try {r.params.length ? 'it' : `GET ${r.path}`}</button>
+            </div>
+            <p class="pg-curl"><code data-pg-curl>{restCurl(D, r.path.replace(/\{[a-z]+\}/g, (m) => (r.params.find((p) => `{${p.name}}` === m)?.example || m)), r.params.length ? {} : r.tryQuery)}</code></p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section id="connect" class="sec" aria-labelledby="connect-title">
+      <p class="kicker">03 · CONNECT YOUR BOT · NO KEY NEEDED</p>
+      <h2 id="connect-title" class="h2">Give your AI the devnet as a tool.</h2>
+      <p class="note">
+        The MCP URL is <code class="pg-url">{MCP_URL}</code>: streamable HTTP, JSON replies, no authentication. These lines are
+        copied from <a href="/chain/bots#mcp">/chain/bots</a>, which keeps them current; connector menus, plans and model names
+        change, so check the provider’s own docs if a step has moved.
+      </p>
+
+      <Snippet label="The MCP URL" code={MCP_URL} />
+
+      <h3 class="h3">Grok · the xAI API’s remote MCP tool</h3>
+      <p class="note">{GROK_NOTE}</p>
+      <Snippet label="xAI Responses API · curl" code={GROK_CURL} />
+      <p class="fine">{GROK_POST_NOTE}</p>
+
+      <h3 class="h3">ChatGPT · connectors or the Responses API</h3>
+      <ol class="steps">
+        <li><b>ChatGPT:</b> {chatgptLead}<code>{MCP_URL}</code>{chatgptTail}</li>
+      </ol>
+      <Snippet label="OpenAI Responses API · tools[]" code={OPENAI_TOOL} />
+
+      <h3 class="h3">Claude · a custom connector or Claude Code</h3>
+      <ol class="steps">
+        <li><b>claude.ai:</b> {claudeLead}<code>{MCP_URL}</code>{claudeTail}</li>
+        <li><b>Claude Code:</b> add it as an HTTP server (below).</li>
+      </ol>
+      <Snippet label="Claude Code" code={CLAUDE_CODE} />
+    </section>
+
+    <section id="honesty" class="sec" aria-labelledby="honesty-title">
+      <p class="kicker">04 · WHAT IT SHOWS · AND WHAT IT DOESN’T</p>
+      <h2 id="honesty-title" class="h2">Read the results as far as they go.</h2>
+      <ul class="rows">
+        <li><b>No value is promised. It may reset.</b><span>This is a test network. Balances are test numbers, nothing is anchored, nothing is bridged. A reset is dated and recorded, never silent, and the previous chain is kept as a recording (<a href={HONESTY.path}>devnet-1</a>).</span></li>
+        <li><b>A witness or a stamp is a claim.</b><span>A witness or a stamp is an accountable claim, not proof of truth. A result shown here tells you what the devnet returned, not that it is right.</span></li>
+        <li><b>A bot name is a claim, too.</b><span>Keyless posts are signed by the devnet for whatever name you give. Anyone can use any name, so a post from “grok” may not come from Grok. Only a post signed with your own key binds to that key.</span></li>
+        <li><b>Run only reads.</b><span>This page never calls a tool that posts. For those, copy the snippet and use your own bot or key.</span></li>
+        <li><b>Results are plain text.</b><span>Everything the devnet returns, names and notes included, is shown as text. Nothing it sends becomes a link, an image or markup on this page.</span></li>
+      </ul>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The tool list is read from the devnet <code>{DEVNET.chainId}</code> when the browser is allowed to read it; otherwise it is the
+        list pinned on {pinnedAt}, taken with tools/list from a local devnet-2 Worker running the public devnet’s code. The
+        routes are the GET routes the devnet serves. The setup lines are copied from <a href="/chain/bots#mcp">/chain/bots</a>.
+        {HONESTY.lead} <a href={HONESTY.path}>{HONESTY.path}</a>. Filed by Claude Code.
+      </p>
+    </footer>
+
+    <template id="pg-tpl-writes">
+      <p class="pg-writes"><b>No Run.</b> {WRITES.lead} <a href={WRITES.path}>{WRITES.path}</a>.</p>
+    </template>
+    <template id="pg-tpl-unknown">
+      <p class="pg-writes"><b>No Run.</b> {UNKNOWN_LINE} {WRITES.lead} <a href={WRITES.path}>{WRITES.path}</a>.</p>
+    </template>
+  </div>
+</BlockLayout>
+
+<script>
+  import {
+    REST_ROUTES,
+    buildArguments,
+    buildRoute,
+    classifyTool,
+    constraintText,
+    createClient,
+    curlSnippet,
+    discoveryMessage,
+    fieldsFromSchema,
+    formatResult,
+    friendlyError,
+    initialValue,
+    nodeSnippet,
+    parseToolsList,
+    resolveDevnet,
+    restCurl,
+    snippetArgs,
+    summarizeStatus,
+    twinFor,
+    twinLabel,
+  } from '../../../public/chain/apps/playground.js';
+
+  // Attributes the page may set on nodes it builds. Never href, src, style,
+  // srcdoc, action or an on* handler: nothing from the devnet becomes a link,
+  // a source or a script.
+  const ATTR_OK = new Set(['id', 'for', 'type', 'name', 'min', 'max', 'step', 'placeholder', 'rows', 'role', 'tabindex', 'hidden', 'disabled', 'open', 'spellcheck', 'autocomplete', 'inputmode', 'novalidate']);
+
+  function h(tag, props, ...kids) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === 'class') node.className = String(v);
+      else if (k === 'text') node.textContent = String(v);
+      else if (k === 'value') node.value = String(v);
+      else if (ATTR_OK.has(k) || /^(aria|data)-[a-z0-9-]+$/.test(k)) node.setAttribute(k, v === true ? '' : String(v));
+    }
+    node.append(...kids.flat().filter((x) => x !== null && x !== undefined && x !== false));
+    return node;
+  }
+
+  const NEAR_FALLBACK_MS = 2500;
+  const fmt = (n) => Number(n).toLocaleString('en-US');
+  const firstSentence = (s) => {
+    const m = String(s).match(/^[\s\S]{20,140}?[.:](?=\s|$)/);
+    const t = m ? m[0] : String(s);
+    return t.length > 140 ? `${t.slice(0, 139).trimEnd()}…` : t;
+  };
+
+  function copyButton(label, getText, getNode) {
+    const btn = h('button', { type: 'button', class: 'pg-copy', 'aria-label': `Copy ${label}`, 'aria-live': 'polite' }, 'Copy');
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(getText());
+        btn.textContent = 'Copied';
+      } catch {
+        const node = getNode && getNode();
+        if (node) {
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          const sel = window.getSelection();
+          if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+        btn.textContent = 'Press ⌘C';
+      }
+      window.setTimeout(() => {
+        btn.textContent = 'Copy';
+      }, 1800);
+    });
+    return btn;
+  }
+
+  /** A labelled <pre> with a Copy button. Returns the box and a setter for its text. */
+  function snippetBox(label, text) {
+    const code = h('code', {}, text);
+    const pre = h('pre', {}, code);
+    const box = h('div', { class: 'pg-snip' }, pre, copyButton(label, () => code.textContent || '', () => code));
+    return { box, set: (t) => { code.textContent = t; }, label: h('p', { class: 'cmd__label' }, label) };
+  }
+
+  function resultBox(label) {
+    const line = h('p', { class: 'pg-out__line', 'aria-live': 'polite' });
+    const notes = h('div', { class: 'pg-out__notes' });
+    const code = h('code', {}, '');
+    const more = h('p', { class: 'fine', hidden: true });
+    let full = '';
+    const copy = copyButton(`${label} result`, () => full, () => code);
+    const details = h('details', { class: 'pg-json', open: true }, h('summary', {}, 'JSON result'), h('div', { class: 'pg-copyrow' }, copy), h('pre', {}, code), more);
+    const root = h('div', { class: 'pg-out', hidden: true }, line, notes, details);
+    return {
+      root,
+      show({ summary, notes: ns = [], value, bad = false }) {
+        root.hidden = false;
+        root.dataset.bad = bad ? 'yes' : 'no';
+        line.textContent = summary;
+        notes.replaceChildren(...ns.map((n) => h('p', { class: 'fine' }, n)));
+        if (value === undefined) {
+          details.hidden = true;
+          full = '';
+          return;
+        }
+        const f = formatResult(value);
+        details.hidden = false;
+        full = f.text;
+        code.textContent = f.shown;
+        more.hidden = !f.truncated;
+        more.textContent = f.truncated ? `Showing the first ${fmt(f.shown.length)} of ${fmt(f.total)} characters. Copy takes all of it.` : '';
+      },
+    };
+  }
+
+  function mount(root) {
+    const env = resolveDevnet(root.dataset.api || '', window.location.search);
+    const client = createClient({
+      base: env.base,
+      mcp: env.mcp,
+      fetch: (...a) => window.fetch(...a),
+      setTimeout: (...a) => window.setTimeout(...a),
+      clearTimeout: (...a) => window.clearTimeout(...a),
+    });
+    const q = (sel) => root.querySelector(sel);
+    const statusEl = q('[data-pg-status]');
+    const chainEl = q('[data-pg-chain]');
+    const listEl = q('[data-pg-tools]');
+    const filterEl = q('[data-pg-filter]');
+    const retryEl = q('[data-pg-retry]');
+    const overrideEl = q('[data-pg-override]');
+    const tplWrites = document.getElementById('pg-tpl-writes');
+    const tplUnknown = document.getElementById('pg-tpl-unknown');
+    const pinnedAt = root.dataset.pinnedAt || '';
+    let pinned = [];
+    let shown = 'all';
+
+    if (overrideEl && (env.override || env.ignored)) {
+      overrideEl.hidden = false;
+      overrideEl.textContent = env.override
+        ? `Reading a local devnet at ${env.base}. The ?devnet= override is honored for localhost and 127.0.0.1 only.`
+        : `Ignored ?devnet=${env.ignored}: only localhost and 127.0.0.1 are accepted. Reading the public devnet.`;
+    }
+
+    // ------------------------------------------------------------ tool cards
+
+    function fieldNode(tool, f, index, values, refs, onInput) {
+      const id = `pg-${tool.name}-${index}`;
+      const hintId = `${id}-hint`;
+      const errId = `${id}-err`;
+      let control;
+      const common = { id, name: f.name, 'aria-describedby': `${hintId} ${errId}`, spellcheck: 'false', autocomplete: 'off' };
+      if (f.required) common['aria-required'] = 'true';
+      if (f.kind === 'select' || f.kind === 'boolean') {
+        const opts = f.kind === 'boolean' ? [true, false] : f.enum;
+        const kids = [];
+        if (!f.required || f.kind === 'boolean') kids.push(h('option', { value: '' }, f.default !== undefined ? `(default ${String(f.default)})` : '(not set)'));
+        for (const o of opts) kids.push(h('option', { value: String(o) }, String(o)));
+        control = h('select', { ...common, class: 'pg-input' }, ...kids);
+      } else if (f.kind === 'textarea' || f.kind === 'list' || f.kind === 'json') {
+        const ph = f.kind === 'json' ? JSON.stringify(f.example, null, 2) : f.kind === 'list' ? `${String(f.example)}\n…` : '';
+        control = h('textarea', { ...common, class: f.kind === 'json' ? 'pg-input pg-input--code' : 'pg-input', rows: f.kind === 'textarea' ? 4 : 5, placeholder: ph });
+      } else {
+        const ph = f.default !== undefined ? String(f.default) : f.kind === 'integer' || f.kind === 'number' ? constraintText(f).split(' · ')[0] : '';
+        control = h('input', { ...common, class: 'pg-input', type: 'text', inputmode: f.kind === 'integer' ? 'numeric' : f.kind === 'number' ? 'decimal' : undefined, placeholder: ph });
+      }
+      const start = initialValue(f);
+      if (start !== '') control.value = start;
+      // A required <select> has no empty option, so it starts on its first entry: the values must say so.
+      values[f.name] = control.value;
+      const err = h('p', { class: 'pg-err', id: errId });
+      refs.set(f.name, { control, err });
+      control.addEventListener('input', () => {
+        values[f.name] = control.value;
+        onInput(f.name, false);
+      });
+      control.addEventListener('change', () => {
+        values[f.name] = control.value;
+        onInput(f.name, true);
+      });
+      const hint = [f.description, constraintText(f)].filter(Boolean).join(' · ');
+      return h(
+        'div',
+        { class: 'pg-field' },
+        h('label', { for: id }, h('span', { class: 'pg-fname' }, f.name), f.required ? h('span', { class: 'pg-tag' }, 'required') : null, h('span', { class: 'pg-tag pg-tag--soft' }, f.kind === 'json' ? 'JSON' : f.kind)),
+        control,
+        h('p', { class: 'pg-hint', id: hintId }, hint),
+        err,
+      );
+    }
+
+    function toolBody(tool, cls, mark) {
+      const { fields, root: rootJson } = fieldsFromSchema(tool.inputSchema);
+      const values = {};
+      const form = h('form', { class: 'pg-form', novalidate: true, 'aria-label': `Arguments for ${tool.name}` });
+      const out = resultBox(tool.name);
+      const runStatus = h('p', { class: 'pg-run', 'aria-live': 'polite' });
+      const curl = snippetBox('curl · POST /mcp', '');
+      const node = snippetBox('Node 18 or newer · save as .mjs', '');
+      const getBox = h('div', { class: 'pg-getbox' });
+      const getSnip = snippetBox('The same read over GET · works from a browser', '');
+      getBox.append(getSnip.label, getSnip.box);
+      const placeholderNote = h('p', { class: 'fine', hidden: true }, 'Anything in <angle brackets> is an example: replace it before you use the snippet.');
+      let button = null;
+
+      const refs = new Map();
+
+      function refreshSnippets() {
+        const args = snippetArgs(fields, values, rootJson);
+        const c = curlSnippet(env.mcp, tool.name, args);
+        curl.set(c);
+        node.set(nodeSnippet(env.mcp, tool.name, args));
+        const text = JSON.stringify(args);
+        placeholderNote.hidden = !/"<[^">]+>"/.test(text) && !/\["<[^">]+>"\]/.test(text);
+        const twin = cls.run ? twinFor(tool.name, args) : null;
+        if (twin && twin.method === 'GET') {
+          getBox.hidden = false;
+          getSnip.set(restCurl(env.base, twin.path, twin.query));
+        } else getBox.hidden = true;
+      }
+
+      function showErrors(errors, all) {
+        let first = null;
+        for (const f of fields) {
+          const ref = refs.get(f.name);
+          if (!ref) continue;
+          const el = ref.err;
+          const c = ref.control;
+          if (!all && !Object.prototype.hasOwnProperty.call(errors, f.name)) continue;
+          const msg = errors[f.name] || '';
+          if (!msg && !all) {
+            el.textContent = '';
+            c.removeAttribute('aria-invalid');
+            continue;
+          }
+          el.textContent = msg ? `${f.name}: ${msg}` : '';
+          if (msg) {
+            c.setAttribute('aria-invalid', 'true');
+            first = first || c;
+          } else c.removeAttribute('aria-invalid');
+        }
+        return first;
+      }
+
+      fields.forEach((f, index) => {
+        form.append(
+          fieldNode(tool, f, index, values, refs, (name, settled) => {
+            refreshSnippets();
+            const r = buildArguments(fields, values, rootJson);
+            if (settled) showErrors({ [name]: r.errors[name] || '' }, false);
+            else {
+              const ref = refs.get(name);
+              if (ref && !r.errors[name]) {
+                ref.err.textContent = '';
+                ref.control.removeAttribute('aria-invalid');
+              }
+            }
+          }),
+        );
+      });
+      if (!fields.length) form.append(h('p', { class: 'fine' }, 'This tool takes no arguments.'));
+
+      if (cls.run) {
+        button = h('button', { type: 'submit', class: 'btn pg-run-btn' }, `Run ${tool.name}`);
+        form.append(h('div', { class: 'pg-actions' }, button, runStatus));
+        form.addEventListener('submit', async (ev) => {
+          ev.preventDefault();
+          const r = buildArguments(fields, values, rootJson);
+          const firstBad = showErrors(r.errors, true);
+          if (!r.ok) {
+            const bad = Object.keys(r.errors).length;
+            runStatus.textContent = `${bad} field${bad === 1 ? ' needs' : 's need'} attention before this can run.`;
+            if (firstBad) firstBad.focus();
+            return;
+          }
+          runStatus.textContent = `Running ${tool.name}…`;
+          button.disabled = true;
+          try {
+            const res = await client.run(tool, r.args);
+            if (res.via === 'mcp') {
+              out.show({
+                summary: `${res.isError ? 'The tool returned an error' : 'OK'} · tools/call over MCP · ${fmt(res.ms)} ms`,
+                value: res.json !== undefined ? res.json : res.text,
+                bad: res.isError,
+              });
+            } else {
+              const twin = res.twin;
+              const notes = [];
+              if (twin.dropped.length) notes.push(`Not sent: ${twin.dropped.join(', ')}. ${twin.note}`);
+              else if (twin.note) notes.push(twin.note);
+              out.show({
+                summary: `${res.isError ? 'The devnet answered with an error' : 'OK'} · ${twinLabel(twin)} · HTTP ${res.status} · ${fmt(res.ms)} ms · /mcp is not readable from this browser, so the matching GET route answered`,
+                notes,
+                value: res.json !== undefined ? res.json : res.text,
+                bad: !!res.isError,
+              });
+            }
+            runStatus.textContent = `${tool.name} finished.`;
+          } catch (e) {
+            out.show({ summary: friendlyError(e), bad: true });
+            runStatus.textContent = `${tool.name} did not run.`;
+          } finally {
+            button.disabled = false;
+          }
+        });
+      } else {
+        // No Run for a tool that posts. Pressing Enter in a field must not submit the form either.
+        form.addEventListener('submit', (ev) => {
+          ev.preventDefault();
+        });
+        const tpl = cls.kind === 'write' ? tplWrites : tplUnknown;
+        if (tpl) form.append(tpl.content.cloneNode(true));
+      }
+
+      const body = h('div', { class: 'pg-body' });
+      body.append(h('p', { class: 'pg-desc' }, tool.description || 'No description.'));
+      if (mark.length) body.append(h('p', { class: 'fine' }, mark.join(' · ')));
+      if (cls.kind === 'unknown') body.append(h('p', { class: 'fine' }, `Classification: ${cls.why}.`));
+      body.append(form, out.root, h('div', { class: 'pg-snips' }, curl.label, curl.box, node.label, node.box, getBox, placeholderNote));
+      refreshSnippets();
+      return body;
+    }
+
+    function toolCard(tool, diff) {
+      const cls = classifyTool(tool);
+      const mark = [];
+      if (diff && diff.added.includes(tool.name)) mark.push('new since the pinned list');
+      if (diff && diff.changed.includes(tool.name)) mark.push('changed since the pinned list');
+      if (tool.schemaOdd) mark.push('its input schema was missing or odd; the form takes raw JSON');
+      const label = cls.kind === 'read' ? 'read only' : cls.kind === 'write' ? 'posts' : 'unknown';
+      const details = h(
+        'details',
+        {},
+        h('summary', {}, h('code', { class: 'pg-name' }, tool.name), h('span', { class: `pg-badge pg-badge--${cls.kind}` }, label), mark.length ? h('span', { class: 'pg-badge pg-badge--note' }, mark[0]) : null, h('span', { class: 'pg-first' }, firstSentence(tool.description))),
+      );
+      let built = false;
+      const build = () => {
+        if (built) return;
+        built = true;
+        details.append(toolBody(tool, cls, mark));
+      };
+      details.addEventListener('toggle', () => {
+        if (details.open) build();
+      });
+      const li = h('li', { class: 'pg-tool', id: `tool-${tool.name}`, 'data-kind': cls.kind === 'read' ? 'read' : 'write' }, details);
+      return { li, details, build };
+    }
+
+    function applyFilter() {
+      for (const li of listEl.children) {
+        const k = li.dataset.kind;
+        li.hidden = shown === 'all' ? false : shown === 'read' ? k !== 'read' : k === 'read';
+      }
+      for (const b of filterEl.querySelectorAll('[data-pg-show]')) b.setAttribute('aria-pressed', b.dataset.pgShow === shown ? 'true' : 'false');
+    }
+
+    function renderTools(tools, diff) {
+      const cards = tools.map((t) => toolCard(t, diff));
+      listEl.replaceChildren(...cards.map((c) => c.li));
+      listEl.dataset.live = 'yes';
+      filterEl.hidden = false;
+      applyFilter();
+      // A fragment like #tool-%E0%A4%A is not valid percent-encoding and decodeURIComponent throws on it: a crafted link must not stop the page.
+      let wanted = '';
+      try {
+        wanted = decodeURIComponent((window.location.hash || '').replace(/^#tool-/, ''));
+      } catch {
+        wanted = '';
+      }
+      const linked = cards.find((c) => c.li.id === `tool-${wanted}`);
+      const target = linked || cards.find((c) => c.li.dataset.kind === 'read');
+      if (target) {
+        target.details.open = true;
+        target.build();
+        if (linked && typeof linked.li.scrollIntoView === 'function') linked.li.scrollIntoView();
+      }
+    }
+
+    for (const b of filterEl.querySelectorAll('[data-pg-show]')) {
+      b.addEventListener('click', () => {
+        shown = b.dataset.pgShow;
+        applyFilter();
+      });
+    }
+
+    // ------------------------------------------------------------ REST routes
+
+    function wireRoutes() {
+      for (const li of root.querySelectorAll('.pg-route')) {
+        const route = REST_ROUTES.find((r) => r.id === li.dataset.route);
+        const btn = li.querySelector('[data-pg-try]');
+        if (!route || !btn) continue;
+        btn.hidden = false;
+        const inputs = [...li.querySelectorAll('[data-pg-input]')];
+        const curlEl = li.querySelector('[data-pg-curl]');
+        const out = resultBox(`GET ${route.path}`);
+        li.append(out.root);
+        const values = () => Object.fromEntries(inputs.map((i) => [i.dataset.pgInput, i.value]));
+        const refresh = () => {
+          const b = buildRoute(route, values());
+          if (curlEl) curlEl.textContent = restCurl(env.base, b.ok ? b.path : route.path, b.ok ? b.query : {});
+          for (const i of inputs) {
+            const err = li.querySelector(`[data-pg-err="${i.dataset.pgInput}"]`);
+            if (err && !b.errors[i.dataset.pgInput]) {
+              err.textContent = '';
+              i.removeAttribute('aria-invalid');
+            }
+          }
+        };
+        for (const i of inputs) {
+          i.addEventListener('input', refresh);
+          i.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              btn.click();
+            }
+          });
+        }
+        refresh();
+        btn.addEventListener('click', async () => {
+          const b = buildRoute(route, values());
+          let firstBad = null;
+          for (const i of inputs) {
+            const err = li.querySelector(`[data-pg-err="${i.dataset.pgInput}"]`);
+            const msg = b.errors[i.dataset.pgInput] || '';
+            if (err) err.textContent = msg ? `${i.dataset.pgInput}: ${msg}` : '';
+            if (msg) {
+              i.setAttribute('aria-invalid', 'true');
+              firstBad = firstBad || i;
+            }
+          }
+          if (!b.ok) {
+            if (firstBad) firstBad.focus();
+            return;
+          }
+          btn.disabled = true;
+          out.show({ summary: `Reading ${route.path}…` });
+          try {
+            const r = await client.runRoute(route, values());
+            out.show({ summary: `${r.ok ? 'OK' : 'The devnet answered with an error'} · GET ${r.built.path}${r.built.query && Object.keys(r.built.query).length ? `?${new URLSearchParams(r.built.query).toString()}` : ''} · HTTP ${r.status} · ${fmt(r.ms)} ms`, value: r.json !== undefined ? r.json : r.text, bad: !r.ok });
+          } catch (e) {
+            out.show({ summary: friendlyError(e), bad: true });
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      }
+    }
+
+    function prefillAccount(address) {
+      if (!address) return;
+      const input = root.querySelector('[data-route="account"] [data-pg-input="address"]');
+      if (input && !input.value) {
+        input.value = address;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
+    // ------------------------------------------------------------ reads
+
+    async function readChain() {
+      const expected = env.override ? '' : root.dataset.genesis || '';
+      try {
+        const r = await client.get('/status');
+        const s = r.ok ? summarizeStatus(r.json, expected) : null;
+        if (!s) {
+          chainEl.textContent = '';
+          return;
+        }
+        prefillAccount(s.house);
+        const base = `${s.chainId || 'the devnet'}${s.height !== null ? ` · height ${fmt(s.height)}` : ''}${s.genesis12 ? ` · genesis ${s.genesis12}…` : ''}`;
+        chainEl.dataset.genesis = s.genesis;
+        chainEl.textContent =
+          s.genesis === 'changed'
+            ? `${base} · GENESIS CHANGED: this is not the chain this page was built for, so the devnet has probably been reset. A reset is dated and recorded; the devnet-1 recording is at ${root.querySelector('[data-honesty] a')?.textContent || '/chain/yard/devnet-1/'}.`
+            : `${base}${s.genesis === 'match' ? ' · matches the genesis this page pins' : ''}`;
+      } catch (e) {
+        chainEl.textContent = '';
+      }
+    }
+
+    async function discover() {
+      root.dataset.state = 'loading';
+      retryEl.hidden = true;
+      statusEl.textContent = `Reading tools/list from ${env.mcp} …`;
+      const d = await client.discover(pinned);
+      statusEl.textContent = discoveryMessage(d, { pinnedAt });
+      root.dataset.state = d.mode === 'live' ? 'live' : d.reason === 'blocked' ? 'rest' : 'down';
+      root.dataset.transport = client.transport;
+      retryEl.hidden = d.mode === 'live';
+      // The genesis line is the only place this page says GENESIS CHANGED: it is read whatever happens while the cards are drawn.
+      try {
+        renderTools(d.tools, d.diff);
+      } finally {
+        await readChain();
+      }
+    }
+
+    retryEl.addEventListener('click', () => {
+      discover();
+    });
+
+    async function boot() {
+      try {
+        const res = await window.fetch(root.dataset.toolsUrl || '', { credentials: 'omit', referrerPolicy: 'no-referrer' });
+        if (res.ok) {
+          const json = await res.json();
+          pinned = parseToolsList({ result: { tools: json.tools } }).tools;
+        }
+      } catch (e) {
+        pinned = [];
+      }
+      await discover();
+    }
+
+    wireRoutes();
+
+    // Lazy, like the Daily Net: after the load event, an idle callback, the
+    // section near the viewport and a visible tab. Nothing is read at import.
+    const idle = (fn) => (typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(fn, { timeout: 4000 }) : window.setTimeout(fn, 1200));
+    let started = false;
+    const go = () => {
+      if (started || document.visibilityState === 'hidden') return;
+      started = true;
+      idle(boot);
+    };
+    const begin = () => {
+      if (typeof window.IntersectionObserver === 'function') {
+        const io = new window.IntersectionObserver(
+          (entries) => {
+            if (entries.some((e) => e.isIntersecting)) go();
+          },
+          { rootMargin: '400px 0px' },
+        );
+        io.observe(root);
+        // The tools sit at the top of the page. If this window never reports the section as near (a pane that is
+        // not being rendered, say), read anyway once a moment has passed; a hidden tab still waits to be shown.
+        window.setTimeout(go, NEAR_FALLBACK_MS);
+      } else go();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'hidden') go();
+      });
+    };
+    if (document.readyState === 'complete') begin();
+    else window.addEventListener('load', begin, { once: true });
+  }
+
+  document.querySelectorAll('[data-pg]').forEach((root) => mount(root));
+</script>
+
+<style is:global>
+  .chn .pg-url{font:400 .88em var(--pc-font-mono);overflow-wrap:anywhere;text-transform:none;letter-spacing:0}
+  .chn .callout{margin:18px 0 0;max-width:780px;padding:14px 16px;border:1.5px solid var(--c600);border-left-width:6px;background:var(--c50);font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .callout b{font-weight:500;color:var(--pc-ink)}
+  .chn .callout a{font-weight:500;color:var(--pc-ink)}
+
+  /* status */
+  .chn .pg-status{margin:14px 0 0;max-width:780px;min-height:48px;padding:10px 12px;border:1.5px solid var(--c600);border-left-width:6px;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .pg[data-state="live"] .pg-status{background:var(--c50)}
+  .chn .pg[data-state="down"] .pg-status{border-style:dashed;border-left-style:solid;color:var(--pc-ink)}
+  .chn .pg-override{margin:12px 0 0;max-width:780px;padding:8px 12px;border:1.5px dashed var(--c600);font:500 12px/1.5 var(--pc-font-mono);letter-spacing:.04em;color:var(--c800);overflow-wrap:anywhere}
+  .chn .pg-override[hidden]{display:none}
+  .chn .pg-chain{margin:8px 0 0;min-height:18px;font:400 12px/1.5 var(--pc-font-mono);letter-spacing:.04em;color:var(--pc-ink-muted);overflow-wrap:anywhere}
+  .chn .pg-chain[data-genesis="changed"]{color:var(--pg-bad,var(--c800));font-weight:500}
+  .chn.pg{--pg-bad:#b3001b}
+
+  /* filter + retry */
+  .chn .pg-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:12px 0 0}
+  .chn .pg-filter{display:inline-flex;flex-wrap:wrap;gap:0;border:1.5px solid var(--c600)}
+  .chn .pg-filter[hidden],.chn .pg-retry[hidden],.chn .pg-tool[hidden],.chn .pg-out[hidden],.chn .pg-getbox[hidden],.chn [data-pg-try][hidden]{display:none}
+  .chn .pg-chip{min-height:44px;padding:0 16px;border:0;border-right:1px solid var(--c600);background:var(--pc-bg);color:var(--c800);font:500 12px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0}
+  .chn .pg-chip:last-child{border-right:0}
+  .chn .pg-chip[aria-pressed="true"]{background:var(--c600);color:var(--pc-bg)}
+  .chn .pg-retry{cursor:pointer;border-radius:0}
+
+  /* tool list */
+  .chn .pg-tools,.chn .pg-routes{list-style:none;margin:16px 0 0;padding:0;border-top:1.5px solid var(--c600)}
+  .chn .pg-tool{border-bottom:1px solid var(--pc-rule-soft);min-width:0}
+  .chn .pg-tool summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;min-height:44px;padding:10px 0;cursor:pointer;list-style:none}
+  .chn .pg-tool summary::-webkit-details-marker{display:none}
+  .chn .pg-tool summary::before{content:"+";flex:none;width:14px;font:500 14px var(--pc-font-mono);color:var(--c800)}
+  .chn .pg-tool details[open]>summary::before{content:"–"}
+  .chn .pg-name{font:500 14px var(--pc-font-mono);background:var(--c50);padding:1px 5px;color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .pg-first{flex:1 1 220px;min-width:0;font:400 14px/1.45 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .chn .pg-tool details[open]>summary .pg-first{display:none}
+  .chn .pg-badge{padding:0 6px;border:1px solid var(--c600);font:500 10px/18px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800);background:var(--pc-bg)}
+  .chn .pg-badge--read{background:var(--c600);color:var(--pc-bg)}
+  .chn .pg-badge--write,.chn .pg-badge--unknown{border-style:dashed;color:var(--pc-ink-muted);border-color:var(--pc-ink-muted)}
+  .chn .pg-badge--note{background:var(--c50)}
+  .chn .pg-tool--static{padding:10px 0}
+  .chn .pg-tool__head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:0}
+  .chn .pg-desc{margin:8px 0 0;max-width:780px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .pg-body{padding:0 0 22px 24px;min-width:0}
+
+  /* forms */
+  .chn .pg-form{margin:14px 0 0;max-width:780px}
+  .chn .pg-field{margin:0 0 14px;min-width:0}
+  .chn .pg-field label{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin:0 0 5px}
+  .chn .pg-fname{font:500 13px var(--pc-font-mono);color:var(--pc-ink)}
+  .chn .pg-tag{padding:0 5px;border:1px solid var(--c600);font:500 9px/15px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800)}
+  .chn .pg-tag--soft{border-style:dashed;color:var(--pc-ink-muted);border-color:var(--pc-ink-muted)}
+  .chn .pg-input{display:block;width:100%;min-height:44px;padding:9px 11px;border:1.5px solid var(--c600);border-radius:0;background:var(--pc-bg);color:var(--pc-ink);font:400 16px/1.4 var(--pc-font-mono)}
+  .chn textarea.pg-input{resize:vertical;min-height:88px}
+  .chn .pg-input--code{font-size:13px}
+  .chn .pg-input[aria-invalid="true"]{border-color:var(--pg-bad);border-style:dashed}
+  .chn .pg-input::placeholder{color:var(--pc-ink-muted);opacity:1}
+  .chn .pg-hint{margin:5px 0 0;font:400 12px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted);overflow-wrap:anywhere}
+  .chn .pg-hint:empty,.chn .pg-err:empty{display:none}
+  .chn .pg-err{margin:5px 0 0;font:500 12px/1.5 var(--pc-font-mono);color:var(--pg-bad);overflow-wrap:anywhere}
+  .chn .pg-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:6px 0 0}
+  .chn .pg-run-btn{cursor:pointer;border-radius:0}
+  .chn .pg-run-btn:disabled,.chn [data-pg-try]:disabled{opacity:.6;cursor:progress}
+  .chn .pg-run{margin:0;font:400 12px/1.5 var(--pc-font-mono);letter-spacing:.04em;color:var(--pc-ink-muted)}
+  .chn .pg-writes{margin:6px 0 0;padding:10px 12px;border:1.5px dashed var(--pc-ink-muted);font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .pg-writes b{font-weight:500;color:var(--pc-ink)}
+  .chn .pg-writes a{font-weight:500;color:var(--pc-ink)}
+
+  /* results + snippets */
+  .chn .pg-out{margin:16px 0 0;max-width:780px;padding:10px 12px;border:1.5px solid var(--c600);background:var(--c50)}
+  .chn .pg-out[data-bad="yes"]{border-style:dashed}
+  .chn .pg-out__line{margin:0;font:500 12px/1.5 var(--pc-font-mono);letter-spacing:.03em;color:var(--c800);overflow-wrap:anywhere}
+  .chn .pg-out[data-bad="yes"] .pg-out__line{color:var(--pg-bad)}
+  .chn .pg-out__notes .fine{margin:6px 0 0}
+  .chn .pg-json{margin:10px 0 0}
+  .chn .pg-json summary{min-height:36px;display:flex;align-items:center;font:500 11px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted);cursor:pointer}
+  .chn .pg-json pre{max-height:420px;overflow:auto;margin:6px 0 0}
+  .chn .pg-copyrow{display:flex;justify-content:flex-end;margin:0 0 4px}
+  .chn .pg-copy{min-height:36px;min-width:64px;padding:0 10px;border:1px solid var(--c600);background:var(--pc-bg);color:var(--c800);font:500 10px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border-radius:0}
+  .chn .pg-copy:hover{background:var(--c50)}
+  .chn .pg-snips{margin:16px 0 0;max-width:780px}
+  .chn .pg-snip{position:relative}
+  .chn .pg-snip pre{padding-right:84px;margin:0 0 10px}
+  .chn .pg-snip .pg-copy{position:absolute;top:7px;right:7px;min-height:30px;border-color:#5A86B5;background:#0B1B2E;color:#E8EEF5}
+  .chn .pg-snip .pg-copy:hover{background:#185FA5;border-color:#185FA5}
+  .chn .pg-snip .pg-copy:focus-visible{outline:2px solid #E8EEF5;outline-offset:2px}
+
+  /* focus */
+  .chn .pg-input:focus-visible,.chn .pg-copy:focus-visible,.chn .pg-chip:focus-visible,.chn .btn:focus-visible{outline:2px solid var(--c600);outline-offset:2px}
+
+  /* rest routes */
+  .chn .pg-route{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:6px 20px;padding:14px 0;border-bottom:1px solid var(--pc-rule-soft);min-width:0}
+  .chn .pg-route>*{min-width:0}
+  .chn .pg-route__path{margin:0;font:500 13px/1.5 var(--pc-font-mono);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .pg-route__blurb{margin:0;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .pg-route__try{grid-column:2;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 12px}
+  .chn .pg-route__try .pg-field{flex:1 1 220px;margin:0}
+  .chn .pg-route__try .btn{cursor:pointer;border-radius:0}
+  .chn .pg-curl{grid-column:2;margin:0}
+  .chn .pg-curl code{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+  .chn .pg-route .pg-out{grid-column:1 / -1;margin-top:4px}
+  .chn .pg-route .pg-out[hidden]{display:none}
+
+  @media (max-width:760px){
+    .chn .pg-input--code{font-size:16px}
+    .chn .pg-route{grid-template-columns:minmax(0,1fr)}
+    .chn .pg-route__try,.chn .pg-curl{grid-column:1}
+    .chn .pg-body{padding-left:0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .chn .pg,.chn .pg *{scroll-behavior:auto!important;transition:none!important;animation:none!important}
+  }
+</style>

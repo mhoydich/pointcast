@@ -12,6 +12,17 @@ export const GET: APIRoute = async () => {
     updatedAt: new Date().toISOString(),
     source: absoluteUrl('/unfurls.json'),
     builder: absoluteUrl('/unfurls#builder'),
+    meditationRooms: [
+      {
+        title: 'Small Shrines',
+        url: absoluteUrl('/small-shrines/'),
+        json: absoluteUrl('/small-shrines.json'),
+        description: 'Four secular art-led pauses with original short meditations and optional browser-synthesized sound.',
+        image: absoluteImage('/images/small-shrines/ocean.webp'),
+      },
+      { title: 'Elemental Shrine', url: absoluteUrl('/elemental-shrine') },
+      { title: 'Shrine of the Open Road', url: absoluteUrl('/open-road') },
+    ],
     backgrounds: {
       sheet: absoluteImage('/images/shrines/shrine-background-sheet.png'),
       elementSheet: absoluteImage('/images/shrines/element-shrine-background-sheet.png'),

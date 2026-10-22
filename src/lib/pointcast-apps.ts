@@ -1,3 +1,5 @@
+import { CHAIN_APPS, HONESTY, type ChainApp } from '../data/chain-apps';
+
 export interface PointcastApp {
   slug: string;
   name: string;
@@ -10,7 +12,44 @@ export interface PointcastApp {
   kind: 'satellite' | 'pointcast';
 }
 
+/** One devnet app as a shelf entry (MCP apps_list reads /apps.json, which reads this list). */
+function chainShelfApp(a: ChainApp): PointcastApp {
+  return {
+    slug: `chain-${a.key}`,
+    name: a.label,
+    kicker: `CHAIN APP · ${a.mode === 'read' ? 'READS ONLY' : 'POSTS ONLY ON YOUR CLICK, WITH YOUR KEY'} · ${HONESTY.toUpperCase()}`,
+    description: a.blurb,
+    url: `https://pointcast.xyz${a.href}/`,
+    path: `${a.href}/`,
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  };
+}
+
 export const POINTCAST_APPS: PointcastApp[] = [
+  {
+    slug: 'pmm',
+    name: 'PMM — PointCast Mobile Messaging',
+    kicker: 'PHONE TO PHONE · NO ACCOUNT · READY.',
+    description: 'PMM: phone-to-phone instant messaging with no account and no server in the middle. Every message carries your mood, your hour and your signature. Atari and Commodore at heart. Made in El Segundo by Mike.',
+    url: 'https://pointcast.xyz/pmm/',
+    path: '/pmm/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SIGNAL',
+    kind: 'pointcast',
+  },
+  {
+    slug: 'nouns-messenger',
+    name: 'Nouns Messenger',
+    kicker: 'POCKET MESSENGER · NOGGLES ON · LOCAL-FIRST',
+    description: 'A pocket instant messenger with noggles on. Local-first, phone-first, no account. Talk to the Noun companions, keep notes, or pass a note to a friend with a link. Made in El Segundo by Mike.',
+    url: 'https://pointcast.xyz/nouns-messenger/',
+    path: '/nouns-messenger/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
   {slug:'takes',name:'TAKES',kicker:'WRITING DESK · ALTERNATE TAKES · SOUND + STYLE',description:'Keep several versions of a word, sentence or paragraph in place and audition them with synthesized tones. Dim, stash, export as plain Markdown. Saved only in your browser.',url:'https://pointcast.xyz/takes/',path:'/takes/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
   {
     slug: 'sunset-downs', name: 'Sunset Downs', kicker: 'DAILY RACING · OWNERS & AGENTS · STUDIO SCRIP',
@@ -46,7 +85,7 @@ export const POINTCAST_APPS: PointcastApp[] = [
     channel: 'CH.CRT',
     kind: 'pointcast',
   },
-  {slug:'chain',name:'PointCast Chain',kicker:'CHAIN · LOCAL BUILD · BLOCK YARD',description:'A chain where every block is a broadcast: 422 recorded blocks replayed and verified in your browser with the same code the sequencer runs. Local build, not a public network.',url:'https://pointcast.xyz/chain/',path:'/chain/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
+  {slug:'chain',name:'PointCast Chain',kicker:'CHAIN · PUBLIC DEVNET-2 · NO VALUE · MAY RESET',description:'A broadcast chain in Rust with a public devnet, devnet-2: one server runs it and seals every block, no value is promised, and a reset is dated and recorded. Ten apps read it or post to it from your browser, the Daily Net counts bots and witness keys and splits each day’s txs into house, keyless and outside (house activity is the chain checking itself, not use), and the Block Yard replays a recorded dev chain and verifies it with the same code the sequencer runs.',url:'https://pointcast.xyz/chain/',path:'/chain/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
   {slug:'object-library',name:'El Segundo Object Library',kicker:'BORROW / TRY / IMPROVE · CONCEPT DEMO',description:'Six original object concepts and a browser-local lending rehearsal. No inventory, bookings, payments or operating workshop.',url:'https://pointcast.xyz/object-library/',path:'/object-library/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.ESC',kind:'pointcast'},
   {slug:'weather-atlas',name:'A year within reach',kicker:'EL SEGUNDO · 25-MILE WEATHER & LIVING ATLAS',description:'Four NOAA1991–2020 station normals,35years of observed rainfall,an illustrative seasonal microclimate map and object utility. Historical research,not a forecast.',url:'https://pointcast.xyz/weather-atlas/',path:'/weather-atlas/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.ESC',kind:'pointcast'},
   {
@@ -662,6 +701,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'small-shrines',
+    name: 'Small Shrines',
+    kicker: 'FOUR PLACES · ART · ONE QUIET MINUTE',
+    description: 'Ocean, Garden, Night and Memory: four secular art-led pauses with original meditations and optional browser-synthesized sound. Generated artwork and verified Michael Hoydich Midjourney works are credited separately.',
+    url: 'https://pointcast.xyz/small-shrines/',
+    path: '/small-shrines/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.GDN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'elemental-shrine',
     name: 'Elemental Shrine',
     kicker: 'STONE · LIGHT · FIRE · WATER',
@@ -958,6 +1008,8 @@ export const POINTCAST_APPS: PointcastApp[] = [
     channel: 'CH.CAT',
     kind: 'pointcast',
   },
+  // The apps on the devnet, from src/data/chain-apps.ts (one registry): devnet-2 · no value · may reset.
+  ...CHAIN_APPS.map(chainShelfApp),
 ];
 
 export function getPointcastApp(slug: string) {

@@ -1,0 +1,379 @@
+---
+/**
+ * /chain/witness: "Witness in your browser". Today only code agents
+ * (pc-witness.mjs) and the house runner sign what they got when they replayed
+ * the PointCast devnet from genesis. This page lets a visitor do the same from a
+ * tab: it fetches the Block Yard's pinned verifier, checks the sha256 of its three
+ * files against the pins printed on the page and against the Yard's own
+ * fingerprint file, replays every block from genesis in a Web Worker with a
+ * progress bar that counts blocks, and refuses to sign on any fault. If the
+ * replay is clean it picks the checkpoint the way pc-witness.mjs does (today's
+ * day checkpoint, else the latest sealed one), signs it with the shared play key,
+ * posts the attestation on WIT (and, if ticked, a check-in on NET) after the
+ * visitor has read the post word for word, and shows the roll back: CORRECT,
+ * STRIKE or PENDING.
+ *
+ * A witness attestation is a public claim tied to a free key, not proof of
+ * replay. The page says what it means and does not mean in the Daily Net's own
+ * words (src/data/chain-app-witness.ts, kept equal to public/chain/net/witness.js
+ * by the tests), keeps the midnight UTC guard pc-witness.mjs has, and links the
+ * same thing from a terminal (/chain/net).
+ *
+ * The logic is public/chain/apps/witness.js (no DOM, importable by node), the DOM
+ * side witness-view.js, the worker shim witness-shim.js, the shared key panel
+ * key-panel.js, the words src/data/chain-app-witness.ts. The devnet pins come from
+ * src/data/chain-home.ts, never typed here; the verifier pins are in the data file.
+ * ?devnet=http://127.0.0.1:PORT points the page at a local devnet for end-to-end
+ * runs (scripts/e2e-chain-app-witness.mjs); it is honoured only for the hosts
+ * localhost and 127.0.0.1.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import KeyPanel from '../../components/chain/KeyPanel.astro';
+import Snippet from '../../components/chain/Snippet.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, VERIFIER_KIB, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { APP, CHANNEL, HONESTY_LINE, MEANS, MIDNIGHT_LINE, NET_CHANNEL, NOT_MEANS, RESULT_ROWS, STEPS, VERIFIER, WITNESS_LIMITS, WITNESS_MEANING, terminalSnippet } from '../../data/chain-app-witness';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+import '../../styles/chain-apps.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const SITE = 'https://pointcast.xyz';
+const terminal = terminalSnippet(SITE);
+const quick = [
+  { label: 'Daily Net', href: '/chain/net' },
+  { label: 'Block Yard', href: DEVNET.yardHref },
+  { label: 'Verify a block', href: '/chain/verify-a-block' },
+  { label: 'Bots guide', href: '/chain/bots' },
+];
+const pinRows = [
+  { file: 'pointcast_chain.wasm', label: `Verifier wasm (${VERIFIER_KIB} KiB)`, sha: VERIFIER.pins['pointcast_chain.wasm'] },
+  { file: 'verify.js', label: 'verify.js', sha: VERIFIER.pins['verify.js'] },
+  { file: 'verify-worker.js', label: 'The worker', sha: VERIFIER.pins['verify-worker.js'] },
+];
+const title = APP.title + ': replay the PointCast devnet and sign what you got';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: APP.title,
+  description: APP.description,
+  url: SITE + APP.path + '/',
+  applicationCategory: 'SecurityApplication',
+  operatingSystem: 'Any modern browser',
+  datePublished: '2026-10-20',
+  dateModified: '2026-10-20',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: SITE + '/chain' },
+};
+const ramp = '--ca-l50:' + ch.color50 + ';--ca-l600:' + ch.color600 + ';--ca-l800:' + ch.color800;
+---
+
+<BlockLayout title={title} description={APP.description} jsonLd={jsonLd} hideAds>
+  <!-- One SDK on this page. The shared kit imports it from /chain/first-mints/lib/ and the Daily Net helper (/chain/net/witness.js, the
+       same file the terminal tool uses) imports its own copy from /chain/net/. They are the same bytes (scripts/sync-chain-sdk.mjs keeps
+       them so), and the site serves no-store, so without this map the page fetches, parses and runs it twice. A browser with no import
+       map support still works: it loads both. -->
+  <script slot="head" is:inline type="importmap">{"imports":{"/chain/net/pointcast-chain.js":"/chain/first-mints/lib/pointcast-chain.js"}}</script>
+  <div class="chn ca-page wt-page" style={ramp}>
+    <ChainHeader current="witness" trail={[{ label: 'witness' }]} block={APP.block} quick={quick} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · APP · WITNESS · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>Witness the devnet from your browser.</h1>
+      <p class="dek">
+        Today only code agents and the house’s own runner sign what they got when they replayed the PointCast devnet from its
+        first block. This page lets you do it from a tab. It fetches the Block Yard’s verifier, checks the fingerprint of each
+        file against the pins printed below, replays every block in a worker, and refuses to sign if anything fails. If the
+        replay is clean you can sign one checkpoint with a free key and post it. Nothing is sent until you have read the post
+        and pressed Send.
+      </p>
+      <svg class="ca-art" viewBox="0 0 360 72" role="img" aria-label="A row of blocks being replayed left to right, a ring on one block, and a small flag above it">
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="6" y="30" width="40" height="30" />
+          <rect x="62" y="30" width="40" height="30" />
+          <rect x="118" y="30" width="40" height="30" />
+          <rect x="174" y="30" width="40" height="30" />
+          <rect x="230" y="30" width="40" height="30" stroke-dasharray="4 3" />
+          <rect x="286" y="30" width="40" height="30" stroke-dasharray="4 3" />
+          <path d="M46 45H62M102 45H118M158 45H174M214 45H230M270 45H286" />
+          <circle cx="194" cy="45" r="9" />
+          <path d="M194 30V8M194 8h22l-6 6 6 6h-22" />
+        </g>
+      </svg>
+      <p class="ca-honest" role="note" id="honesty">
+        <b>{HONESTY_LINE}.</b> This is {DEVNET.chainId}: one server runs it. A witness attestation is an accountable claim by a
+        free key, not proof that anyone replayed: a page, or a person, that copied the server’s status signs the same bytes.
+        “Correct” only means it agreed with this server, and counts are keys, not people. A reset is dated and recorded, never
+        silent: devnet-1 was reset on {notYet(RESET.date)} and its recording is still checkable at
+        <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>, but its witnesses are not on the new chain.
+      </p>
+      <p class="jump"><a href="#replay">replay</a><a href="#roll">the roll</a><a href="#means">what it means</a><a href="#terminal">from the terminal</a></p>
+    </header>
+
+    <section
+      id="replay"
+      class="sec"
+      aria-labelledby="replay-title"
+      data-witness-app
+      data-state="static"
+      data-api={D}
+      data-genesis={DEVNET.genesis}
+      data-chain-id={DEVNET.chainId}
+      data-verifier-base={VERIFIER.dir}
+      data-pin-wasm={VERIFIER.pins['pointcast_chain.wasm']}
+      data-pin-js={VERIFIER.pins['verify.js']}
+      data-pin-worker={VERIFIER.pins['verify-worker.js']}
+    >
+      <p class="kicker">01 · REPLAY · THE CHAIN FROM BLOCK 1, IN A WORKER · NOTHING IS SENT UNTIL YOU PRESS SEND</p>
+      <h2 id="replay-title" class="h2">Replay the chain, then decide.</h2>
+      <p class="note">
+        Replaying reads the devnet and this site’s copy of the Block Yard’s verifier, and writes nothing. The worker takes the
+        blocks 500 at a time and runs each one through the chain’s own rules, state root included. The bar counts blocks
+        replayed out of the blocks the devnet has, and the devnet may add some while you wait. You can cancel at any time. Expect to
+        download the verifier ({VERIFIER_KIB} KiB) and then roughly half a kilobyte for each block.
+      </p>
+      <noscript><p class="fine">This page needs JavaScript and a Web Worker, because the replay and the signing happen in your browser. The same thing as a script is <a href="#terminal">below</a>.</p></noscript>
+      <p class="ca-status" data-wt-status role="status" aria-live="polite">The page reads <code>GET /status</code> once this section is on screen. The verifier’s files and the worker load only when you press Replay.</p>
+      <p class="ca-meta" data-wt-meta></p>
+      <p class="ca-banner" data-wt-genesis role="note" hidden></p>
+
+      <dl class="ca-kv wt-pins" aria-label="What this page pins">
+        <div><dt>Genesis hash you trust</dt><dd><code class="ca-hash" data-wt-pin-hash>{DEVNET.genesis}</code></dd></div>
+        <div><dt>How it is pinned</dt><dd data-wt-pin-how>in this page’s build, from the same constants as the Block Yard and the Daily Net. A <code>?devnet=</code> on localhost uses that node’s own genesis and says so.</dd></div>
+        {pinRows.map((p) => (
+          <div><dt>{p.label}</dt><dd><code class="ca-hash">{p.sha}</code> <span class="wt-state" data-wt-pin-state={p.file}>not loaded yet</span></dd></div>
+        ))}
+        <div><dt>Where they come from</dt><dd>{VERIFIER.dir} on this site. Each file’s SHA-256 is worked out in your browser and must equal its pin; the wasm must also equal the Block Yard’s own <code>{VERIFIER.sumsFile}</code>. Until all of that holds, nothing runs.</dd></div>
+        <div><dt>Devnet read</dt><dd data-wt-net>{D} · {DEVNET.chainId}</dd></div>
+      </dl>
+
+      <ol class="steps wt-steps" aria-label="What happens, in order">
+        {STEPS.map((s) => <li><b>{s.title}.</b> {s.what}</li>)}
+      </ol>
+
+      <h3 class="h3">Your key and your name</h3>
+      <KeyPanel signs="the attestation and the check-in" id="wt-kp" />
+      <p class="ca-hint">
+        This is the same play key the Daily Mint, the Notary and Time Capsules use, so an attestation signed here is tied to the
+        same account as any stamp, bid or capsule from this key, and anyone can read that account on the devnet.
+      </p>
+      <div class="ca-controls">
+        <div class="ca-field ca-field--grow">
+          <label class="ca-label" for="wt-name">A name for your key (optional)</label>
+          <input id="wt-name" class="ca-input ca-input--mono" data-wt-name type="text" autocomplete="off" spellcheck="false" maxlength="24" placeholder="2 to 24 of a-z, 0-9 and -" />
+          <p class="ca-hint" data-wt-name-note>No name: the attestation goes out as a key only.</p>
+        </div>
+      </div>
+      <div class="ca-controls">
+        <label class="ca-toggle"><input class="ca-checkbox" type="checkbox" data-wt-checkin /> <span>Also check in on the Daily Net ({NET_CHANNEL}) once the attestation is in a block</span></label>
+        <div class="ca-field ca-field--grow">
+          <label class="ca-label" for="wt-note">A note for the check-in (optional, up to 140 characters, public)</label>
+          <input id="wt-note" class="ca-input" data-wt-note type="text" maxlength="140" autocomplete="off" disabled />
+        </div>
+      </div>
+      <p class="ca-hint">A name is a claim, first come: the first key to use it holds it, and later claimants show as unbound. A few names are reserved: the house’s, the five keyless bots’, and any name that starts the way they do (house-, claude, grok, chatgpt, frog, sparrow, pointcast). {MIDNIGHT_LINE}</p>
+
+      <p class="ca-actions">
+        <button class="btn" type="button" data-wt-replay disabled>Replay the chain from block 1</button>
+        <button class="btn btn--ghost" type="button" data-wt-cancel disabled>Cancel</button>
+        <span class="fine">Reads only. Nothing is signed or sent by replaying.</span>
+      </p>
+
+      <div class="wt-progress" data-wt-progress hidden>
+        <div class="wt-bar" data-wt-bar role="progressbar" aria-label="Blocks replayed" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span class="wt-bar__fill" data-wt-fill></span></div>
+        <p class="wt-progress__text" data-wt-progress-text>waiting for the first block</p>
+        <p class="wt-progress__text" data-wt-progress-note></p>
+      </div>
+      <ul class="ca-checks wt-checks" data-wt-checks aria-label="What the replay did"></ul>
+
+      <div class="ca-banner wt-fault" data-wt-fault role="alert" hidden>
+        <p class="kicker">REFUSING TO SIGN</p>
+        <p data-wt-fault-text></p>
+        <details class="wt-evidence" data-wt-fault-details><summary>The evidence the worker made</summary><textarea class="ca-textarea wt-evidence__t" data-wt-fault-json readonly rows="12" spellcheck="false" aria-label="The evidence file, exactly as the worker made it"></textarea></details>
+        <div data-wt-fault-dl hidden>
+          <p class="fine" data-wt-fault-size></p>
+          <p class="ca-actions"><button class="btn" type="button" data-wt-fault-btn disabled>Download the evidence</button></p>
+        </div>
+      </div>
+
+      <dl class="ca-kv wt-summary" data-wt-summary aria-label="What the replay found" hidden>
+        <div><dt>Replayed</dt><dd data-wt-sum="height"></dd></div>
+        <div><dt>State root at the tip</dt><dd><code class="ca-hash" data-wt-sum="root"></code></dd></div>
+        <div><dt>Epoch (block 1’s hash)</dt><dd><code class="ca-hash" data-wt-sum="epoch"></code></dd></div>
+        <div><dt>UTC day</dt><dd data-wt-sum="day"></dd></div>
+        <div><dt>Day checkpoint</dt><dd data-wt-sum="daycp"></dd></div>
+        <div><dt>Checkpoint to sign</dt><dd data-wt-sum="target"></dd></div>
+        <div><dt>Its block hash</dt><dd><code class="ca-hash" data-wt-sum="hash"></code></dd></div>
+        <div><dt>Its state root</dt><dd><code class="ca-hash" data-wt-sum="claimroot"></code></dd></div>
+      </dl>
+
+      <p class="ca-hint wt-needkey" data-wt-needkey role="status" aria-live="polite" hidden></p>
+      <ul class="ca-confirm wt-errors" data-wt-errors role="alert" hidden></ul>
+      <div class="ca-confirm" data-wt-confirm hidden tabindex="-1" role="group" aria-label="Review the post before it is sent">
+        <p><b>Review. Your browser has signed this claim from its own replay. Nothing has been sent.</b></p>
+        <p class="wt-skip" data-wt-skip></p>
+        <div data-wt-wit-box hidden>
+          <p>If you press Send, one post goes to the public devnet on channel {CHANNEL}. Title: <code class="ca-hash" data-wt-wit-title></code></p>
+          <p>Body, word for word:</p>
+          <pre class="wt-body"><code data-wt-wit-body></code></pre>
+        </div>
+        <div data-wt-net-box hidden>
+          <p>Then, once that is in a block, one check-in on channel {NET_CHANNEL}. Title: <code class="ca-hash" data-wt-net-title></code></p>
+          <p>Body, word for word:</p>
+          <pre class="wt-body"><code data-wt-net-body></code></pre>
+        </div>
+        <p data-wt-notes></p>
+        <p data-wt-confirm-from></p>
+        <p class="ca-actions">
+          <button class="btn" type="button" data-wt-send>Send</button>
+          <button class="btn btn--ghost" type="button" data-wt-dismiss>Not now</button>
+        </p>
+      </div>
+      <div class="ca-result" data-wt-result hidden role="status" aria-live="polite">
+        <h3>Result</h3>
+        <p data-wt-result-text></p>
+        <div data-wt-claim-box hidden>
+          <p class="ca-actions"><button class="btn" type="button" data-wt-claim-btn>Download the claim file</button></p>
+          <details class="wt-evidence"><summary>The claim as text</summary><pre><code data-wt-claim-json></code></pre></details>
+        </div>
+      </div>
+
+      <section id="roll" class="wt-sec" aria-labelledby="roll-title">
+        <p class="kicker">02 · THE ROLL · WHAT THE DEVNET MAKES OF IT</p>
+        <h2 id="roll-title" class="h2">Who signed this checkpoint, and what the roll says.</h2>
+        <p class="note">
+          After a replay the page reads <code>GET /checkpoints/&#123;h&#125;/witnesses</code> and <code>GET /witnesses</code> for the
+          checkpoint it chose, and again after you send. “Correct” means your block hash and state root equal this server’s at that
+          height. “Strike” means they do not. “Pending” means the post is not in a block yet, or the roll has not read that far.
+        </p>
+        <div class="wt-roll" data-wt-roll hidden>
+          <div class="wt-roll__head">
+            <h3 class="h3" data-wt-roll-title>Checkpoint</h3>
+            <span class="ca-badge" data-wt-roll-state hidden></span>
+          </div>
+          <p class="ca-status" data-wt-roll-text role="status" aria-live="polite"></p>
+          <ol class="wt-roll__list" data-wt-roll-list aria-label="Keys that signed this checkpoint"></ol>
+          <p class="ca-meta" data-wt-roll-foot></p>
+          <p class="ca-actions"><button class="btn btn--ghost" type="button" data-wt-roll-read>Read the roll again</button></p>
+        </div>
+        <div class="tbl">
+          <table>
+            <caption>What the page says for each result the devnet gives a claim</caption>
+            <thead><tr><th scope="col">The devnet’s result</th><th scope="col">The page says</th><th scope="col">What it means</th></tr></thead>
+            <tbody>{RESULT_ROWS.map((r) => <tr><th scope="row">{r.result}</th><td>{r.page}</td><td>{r.effect}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section id="means" class="sec" aria-labelledby="means-title">
+      <p class="kicker">03 · WHAT A WITNESS CLAIM MEANS · IN THE DAILY NET’S OWN WORDS</p>
+      <h2 id="means-title" class="h2">A claim by a key, agreed or not by one server.</h2>
+      <p class="wt-words">{WITNESS_MEANING}</p>
+      <p class="wt-words">{WITNESS_LIMITS}</p>
+      <div class="cards cards--2">
+        <article class="card card--tint">
+          <p class="card__k">It means</p>
+          <ul class="bullets">{MEANS.map((t) => <li>{t}</li>)}</ul>
+        </article>
+        <article class="card">
+          <p class="card__k">It does not mean</p>
+          <ul class="bullets">{NOT_MEANS.map((t) => <li>{t}</li>)}</ul>
+        </article>
+      </div>
+      <p class="fine">
+        The pins above are in this page’s code, which this site serves. A page cannot vouch for itself: if you do not want to
+        trust the copy of this page you were served, run the terminal version below from files you fetched and read. The Daily
+        Net’s rules, tiers and limits are at <a href="/chain/net">/chain/net</a>.
+      </p>
+    </section>
+
+    <section id="terminal" class="sec" aria-labelledby="terminal-title">
+      <p class="kicker">04 · THE SAME THING FROM THE TERMINAL</p>
+      <h2 id="terminal-title" class="h2">Witness without this page.</h2>
+      <p class="note">
+        <code>pc-witness.mjs</code> does what this page does: it loads the same Block Yard verifier and checks the same fingerprints,
+        replays from genesis, refuses to sign on any fault, picks the checkpoint by the same rule and keeps a journal. It needs Node 22
+        or newer and nothing else. The whole guide is at <a href="/chain/net#witness">/chain/net</a>.
+      </p>
+      <Snippet label="pc-witness.mjs · replay, sign, print the posts, send nothing; then send" code={terminal} />
+      <p class="cta">
+        <a class="btn" href="/chain/net#witness">The Daily Net guide</a>
+        <a class="btn btn--ghost" href="/chain/net/pc-witness.mjs" download>pc-witness.mjs</a>
+        <span>Its key stays in a file on your disk, with a journal of every claim it signed.</span>
+      </p>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The replay runs the Block Yard’s own verifier (the chain’s Rust code compiled to wasm, {VERIFIER_KIB} KiB) in its own worker
+        from the bytes this page checked, behind a small shim that only reports the block headers the worker downloads. Every
+        header is hashed again here and must equal the hash the verifier computed, so a timestamp is used only if it belongs to a
+        block the verifier accepted. The digest is blake2b-256 over the domain <code>pointcast-devnet/witness/v1</code>, the chain
+        id, the genesis, the epoch, the height, the block hash and the state root, signed raw with your ed25519 key, exactly as
+        <code>witness.js</code> does for the terminal. What the devnet sends is shown as plain text. {HONESTY_LINE}; a reset is
+        dated and recorded. Filed by Claude Code.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded, the browser is idle, the section is near the viewport and the tab is visible.
+  const root = document.querySelector('[data-witness-app]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/witness-view.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style is:global>
+  /* .btn and .ca-badge set a display of their own, which beats the hidden attribute: say it again here */
+  .chn.wt-page [hidden]{display:none !important}
+  .chn .wt-pins{margin-top:16px}
+  .chn .wt-state{font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted);overflow-wrap:anywhere}
+  .chn .wt-steps{margin:18px 0 0;max-width:820px;font-size:14px}
+  .chn .wt-steps b{font-weight:500;color:var(--pc-ink)}
+  .chn .wt-progress{margin:16px 0 0;max-width:820px}
+  .chn .wt-progress[hidden]{display:none}
+  .chn .wt-bar{position:relative;height:18px;border:1.5px solid var(--c600);border-radius:0;background:var(--pc-bg);overflow:hidden}
+  .chn .wt-bar__fill{display:block;width:0;height:100%;background:var(--c600)}
+  .chn .wt-progress__text{margin:6px 0 0;font:400 12px/1.5 var(--pc-font-mono);letter-spacing:.02em;color:var(--pc-ink-muted);overflow-wrap:anywhere}
+  .chn .wt-progress__text:empty{display:none}
+  .chn .wt-checks{max-width:820px}
+  .chn .wt-fault{margin-top:14px}
+  .chn .wt-fault .kicker{margin:0 0 8px;color:var(--ca-bad)}
+  .chn .wt-fault p{margin:0 0 8px;font:400 14px/1.6 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .wt-evidence{margin:8px 0 0}
+  .chn .wt-evidence__t{width:100%;margin:8px 0 0;font:400 12px/1.5 var(--pc-font-mono);white-space:pre;overflow:auto;font-variant-ligatures:none}
+  .chn .wt-evidence summary{cursor:pointer;font:500 10px/2 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .chn .wt-summary[hidden]{display:none}
+  .chn .wt-errors{border-color:var(--ca-bad);border-style:solid}
+  .chn .wt-errors[hidden]{display:none}
+  .chn .wt-body{margin:6px 0 10px}
+  .chn .wt-body code{white-space:pre-wrap;overflow-wrap:anywhere}
+  .chn .wt-skip:empty,.chn .ca-confirm p:empty{display:none}
+  .chn .wt-sec{padding-top:48px;scroll-margin-top:12px}
+  .chn .wt-roll{margin:6px 0 16px}
+  .chn .wt-roll[hidden]{display:none}
+  .chn .wt-roll__head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+  .chn .wt-roll__head .h3{margin:18px 0 6px}
+  .chn .wt-roll__list{list-style:none;margin:10px 0 0;padding:0;border:1.5px solid var(--c600);max-width:820px}
+  .chn .wt-key{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.2fr);gap:2px 14px;padding:9px 12px;border-bottom:1px solid var(--pc-rule-soft);font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .wt-key:last-child{border-bottom:0}
+  .chn .wt-key[data-mine="yes"]{background:var(--c50);border-left:6px solid var(--c600)}
+  .chn .wt-key>span{min-width:0;overflow-wrap:anywhere}
+  .chn .wt-key__n{font-weight:500;color:var(--pc-ink)}
+  .chn .wt-key__a{font:400 12px/1.7 var(--pc-font-mono)}
+  .chn .wt-key--none{display:block;color:var(--pc-ink-muted)}
+  .chn .wt-words{max-width:780px;margin:0 0 12px;padding:12px 14px;border:1.5px solid var(--c600);border-left-width:6px;background:var(--c50);font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .wt-words+.wt-words+.cards{margin-top:14px}
+  @media (max-width:640px){
+    .chn .wt-key{grid-template-columns:minmax(0,1fr)}
+    .chn .ca-actions .btn{flex:1 1 auto}
+  }
+</style>

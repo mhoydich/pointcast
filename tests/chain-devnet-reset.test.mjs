@@ -16,6 +16,7 @@ import { existsSync, readFileSync, mkdtempSync, writeFileSync, rmSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { SDK_SOURCE } from '../src/data/chain-sdk-source.ts';
 import {
   DEVNET,
   DEVNET_2_GENESIS,
@@ -193,9 +194,26 @@ test('First Mints: live minter, rp pointcast.xyz, off-origin notice, pinned SDK 
   assert.match(live, /confirm: async/);
   assert.doesNotMatch(live, /localStorage\.setItem\([^)]*secret|privateKey/i);
   const sha = (p) => createHash('sha256').update(readFileSync(new URL(p, root))).digest('hex');
-  // pointcast-chain sdk/ at main 33a2ba9.
-  assert.equal(sha('public/chain/first-mints/lib/pointcast-chain.js').slice(0, 16), '33bef6b76c98e5e2');
+  // The SDK is pinned once, in src/data/chain-sdk-source.ts (written by scripts/sync-chain-sdk.mjs);
+  // tests/chain-app-sdksync.test.mjs holds the three served copies to it.
+  assert.equal(sha('public/chain/first-mints/lib/pointcast-chain.js'), SDK_SOURCE.sha256);
   assert.equal(sha('public/chain/first-mints/lib/first-mint.js').slice(0, 16), '43aa51b3f3fcb624');
+});
+
+// The agent indexes describe the live devnet too. llms-full.txt's "Bots on the devnet" entry kept devnet-1's
+// chain_id and genesis after the reset, and its Block Yard link pinned devnet-1's genesis against the live URL,
+// which the Yard refuses (GENESIS CHANGED), while the same entry said pcv.py read devnet-2's blocks.
+test('llms-full.txt and llms.txt name the live devnet, not devnet-1, wherever they give its chain_id, genesis or Yard link', () => {
+  for (const p of ['public/llms-full.txt', 'public/llms.txt']) {
+    const text = read(p);
+    assert.ok(!text.includes(DEVNET_PREVIOUS.genesis), `${p} carries devnet-1's genesis`);
+    assert.doesNotMatch(text, new RegExp(`chain_id ${DEVNET_PREVIOUS.chainId}\\b`), p);
+    for (const [, g] of text.matchAll(/[?&]genesis=([0-9a-f]{64})/g)) assert.equal(g, DEVNET.genesis, `${p}: a Yard link pins another genesis`);
+  }
+  const entry = read('public/llms-full.txt').split('\n').find((l) => l.startsWith('[Bots on the devnet](https://pointcast.xyz/chain/bots/)'));
+  assert.ok(entry);
+  assert.ok(entry.includes(`(chain_id ${DEVNET.chainId}, genesis ${DEVNET.genesis})`));
+  assert.ok(entry.includes('https://pointcast.xyz' + DEVNET.yardHref), 'the Yard link is the site’s own, devnet-2 pinned');
 });
 
 test('bot downloads pin the same chain as the site', () => {

@@ -665,3 +665,118 @@ test('built page: the live section starts static with no numbers, the snippets a
   assert.equal(params.get('genesis'), GENESIS);
   assert.equal(params.get('lens'), 'witness');
 });
+
+// ---------------------------------------------------------------- who signed: house, keyless, outside
+// GET /net carries `classes` (pointcast-chain docs/DEVNET.md#house-keyless-and-outside): the day's
+// txs by who signed them. The numbers below are the live devnet-2's whole-chain split on 10-21.
+const CLASSES = {
+  day: {
+    house: { txs: 8, keys: 3, kinds: { publish_block: 6, transfer: 2 }, who: [{ addr: ADDR1, label: 'auctioneer', txs: 4 }, { addr: ADDR2, label: 'house-runner-1', txs: 3 }, { addr: AGENT, label: 'admin/editions', txs: 1 }], more: 0 },
+    keyless: { txs: 7, keys: 1, kinds: { publish_block: 7 }, who: [{ addr: AGENT, label: 'grok', txs: 7 }], more: 0 },
+    outside: { txs: 1, keys: 1, kinds: { publish_block: 1 }, who: [{ addr: ADDR1, label: null, txs: 1 }], more: 0 },
+  },
+  chain: { house: { txs: 95, keys: 6 }, keyless: { txs: 51, keys: 1 }, outside: { txs: 2, keys: 2 } },
+  outside_share: { day: 0.0625, chain: 0.0135 },
+  line: 'house activity is the chain checking itself, not use',
+  meaning: { counts: 'keys, not people' },
+  more: '/stats/classes?days=14',
+};
+const classFixture = `<!doctype html><body>
+  <section data-daily-net="page" data-state="static" data-api="${DEVNET_URL}">
+    <span data-dn-day></span><p data-dn-reset></p><p data-dn-status></p><span data-dn-clock></span>
+    <ol data-dn-counts></ol><p data-dn-class-share></p><ol data-dn-classes></ol>
+  </section></body>`;
+
+test('who signed: house, keyless and outside side by side, with the plain line and the outside share', async () => {
+  const { start, readNet, CLASS_LINE } = await import('../src/lib/daily-net.mjs');
+  assert.equal(CLASS_LINE, 'House activity is the chain checking itself, not use.');
+  const m = readNet(net({ classes: CLASSES }));
+  assert.deepEqual(m.classes.chain, { house: { txs: 95, keys: 6 }, keyless: { txs: 51, keys: 1 }, outside: { txs: 2, keys: 2 } });
+  assert.deepEqual(m.classes.share, { day: '6%', chain: '1%' });
+  const h = harness({ fixture: classFixture, respond: () => ({ status: 200, body: net({ classes: CLASSES }) }) });
+  start(h.el, h.env);
+  h.intersect(true);
+  await h.runIdle();
+  const cols = [...h.el.querySelectorAll('[data-dn-classes] .dn-class')];
+  assert.deepEqual(cols.map((c) => c.className), ['dn-class dn-class--house', 'dn-class dn-class--keyless', 'dn-class dn-class--outside'], 'house, keyless, outside, in that order');
+  assert.deepEqual(cols.map(words), [
+    'house 8 txs today · 3 keys auctioneer (4) · house-runner-1 (3) · admin/editions (1) 95 txs since block 1 · 6 keys keys the house made or runs, on its own schedule',
+    'keyless 7 txs today · 1 key grok (7) 51 txs since block 1 · 1 key bot posts the devnet signs under a name; a name is a claim',
+    'outside 1 tx today · 1 key tz1RGA…KZoz (1) 2 txs since block 1 · 2 keys keys not on the house list; who holds one is not known',
+  ]);
+  assert.equal(text(h.el.querySelector('[data-dn-class-share]')), 'House activity is the chain checking itself, not use. Outside keys signed 6% of today’s txs and 1% since block 1.');
+  // An older devnet without the split says so; the line stays.
+  const old = harness({ fixture: classFixture });
+  start(old.el, old.env);
+  old.intersect(true);
+  await old.runIdle();
+  assert.equal(readNet(net()).classes, null);
+  assert.equal(text(old.el.querySelector('[data-dn-classes]')), 'This devnet does not count house, keyless and outside txs separately yet.');
+  assert.equal(text(old.el.querySelector('[data-dn-class-share]')), CLASS_LINE);
+});
+
+test('who signed: hostile labels and addresses stay plain words, and junk numbers read as zero', async () => {
+  const { start, readNet } = await import('../src/lib/daily-net.mjs');
+  const evil = '<img src=x onerror="globalThis.pwned=1">';
+  const hostile = {
+    ...CLASSES,
+    day: {
+      house: { txs: -3, keys: 'x', who: [{ addr: ADDR1, label: evil, txs: 1e30 }, { addr: ADDR2, label: 'Treasury', txs: 2 }] },
+      keyless: { txs: 2, keys: 1, who: [{ addr: AGENT, label: `grok${evil}`, txs: 2 }] },
+      outside: { txs: 1, keys: 1, who: [{ addr: `javascript:alert(1)//${ADDR1}`, label: evil, txs: 1 }] },
+    },
+    outside_share: { day: 7, chain: 'all' },
+  };
+  const m = readNet(net({ classes: hostile }));
+  assert.deepEqual(m.classes.day.house.who.map((w) => w.label), ['a house key', 'a house key'], 'roles outside [a-z0-9/-] are not shown');
+  assert.deepEqual([m.classes.day.house.txs, m.classes.day.house.keys], [0, 0]);
+  assert.equal(m.classes.day.keyless.who[0].label, 'a keyless bot');
+  assert.equal(m.classes.day.outside.who[0].label, 'a key', 'only a well-formed address is shown');
+  assert.deepEqual(m.classes.share, { day: null, chain: null });
+  const h = harness({ fixture: classFixture, respond: () => ({ status: 200, body: net({ classes: hostile }) }) });
+  start(h.el, h.env);
+  h.intersect(true);
+  await h.runIdle();
+  const box = h.el.querySelector('[data-dn-classes]');
+  assert.equal(box.querySelectorAll('img, script, a, [onerror]').length, 0, 'no element came from the devnet');
+  assert.doesNotMatch(box.textContent, /onerror|<img|javascript:/);
+  assert.equal(globalThis.pwned, undefined);
+  assert.match(text(h.el.querySelector('[data-dn-class-share]')), /Outside keys signed none of today’s txs\.$/);
+});
+
+test('/chain/net: the split sits in the live section with its own line, and the endpoints table names /stats/classes', () => {
+  const p = read('src/pages/chain/net.astro');
+  assert.match(p, /import \{ CLASS_LINE \} from '\.\.\/\.\.\/lib\/daily-net\.mjs';/);
+  const live = p.slice(p.indexOf('<div class="dn-live">'), p.indexOf('<div class="dn-grid">'));
+  assert.match(live, /<p class="dn-class-line" data-dn-class-share>\{CLASS_LINE\}<\/p>/);
+  assert.match(live, /<ol class="dn-classes" data-dn-classes aria-labelledby="who-signed"><\/ol>/);
+  assert.match(p, /\['GET \/stats\/classes\?days=', 'House, keyless and outside txs/);
+  assert.match(p, /\.chn \.dn-classes\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/, 'three columns side by side, at every width');
+  for (const banned of [/\$\d/, /\bUSD\b/, /\binvest/i, /\bprofit/i, /\bearn/i, /airdrop/i, /real money/i, /\byield/i, /\bstake\b/i, /\bredeem/i, /\bbacked\b/i]) {
+    assert.doesNotMatch(live, banned);
+  }
+});
+
+test('who signed: a share that rounds to 0% while outside keys signed any reads "under 1%", never none', async () => {
+  const { start, readNet, sharePct } = await import('../src/lib/daily-net.mjs');
+  // 1 outside tx of 250 today, 2 of 450 since block 1 (the house signs ~10 a day, so devnet-2 gets here in weeks).
+  const small = {
+    ...CLASSES,
+    day: { house: { txs: 249, keys: 3, who: [] }, keyless: { txs: 0, keys: 0, who: [] }, outside: { txs: 1, keys: 1, who: [] } },
+    chain: { house: { txs: 400, keys: 6 }, keyless: { txs: 48, keys: 1 }, outside: { txs: 2, keys: 2 } },
+    outside_share: { day: 0.004, chain: 0.004 },
+  };
+  assert.deepEqual(readNet(net({ classes: small })).classes.share, { day: 'under 1%', chain: 'under 1%' });
+  const h = harness({ fixture: classFixture, respond: () => ({ status: 200, body: net({ classes: small }) }) });
+  start(h.el, h.env);
+  h.intersect(true);
+  await h.runIdle();
+  assert.equal(text(h.el.querySelector('[data-dn-class-share]')), 'House activity is the chain checking itself, not use. Outside keys signed under 1% of today’s txs and under 1% since block 1.');
+  // The Worker rounds to 3 places, so 1 of 3,000 arrives as 0: still not none.
+  assert.equal(sharePct(0, 1, 3000), 'under 1%');
+  assert.equal(sharePct(0, 0, 3000), '0%');
+  assert.equal(sharePct(1, 2999, 3000), 'over 99%');
+  assert.equal(sharePct(1, 5, 5), '100%');
+  assert.equal(sharePct(0.0625, 1, 16), '6%');
+  for (const junk of [null, -0.1, 1.1, NaN, '0.5']) assert.equal(sharePct(junk, 1, 2), null);
+});
