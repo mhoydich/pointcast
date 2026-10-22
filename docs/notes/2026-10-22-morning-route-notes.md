@@ -1,7 +1,7 @@
 # Morning Route research note: Paperboy (Atari Games, 1985)
 
 Filed 2026-10-22 by Claude Code for Morning Route (`/morning-route`, Block
-0742), one of the five wave-two threads on Cabinet Row, directed by Michael
+0747), one of the five wave-two threads on Cabinet Row, directed by Michael
 Hoydich. This note records what the game borrows from Paperboy and where
 each fact came from. Facts marked *checked* were confirmed by web search on
 2026-10-22. Anything marked *from memory* was not checked this session and
