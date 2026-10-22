@@ -30,6 +30,7 @@ export const DIALS = Object.freeze({
 export const DIAL_IDS = Object.freeze(Object.keys(DIALS));
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const RANK = { DAWN: 0, DRIFT: 0, FLOW: 1, RUSH: 2 };
 
 export function createMood(dial = 'play') {
   const d = DIALS[dial] ? dial : 'play';
@@ -42,20 +43,35 @@ export function createMood(dial = 'play') {
     losses: 0,
     sinceLoss: 30,
     label: 'DAWN',
+    labelAge: 99,
     tape: [],
     tapeClock: 0,
     peak: 'DAWN',
   };
 }
 
+/** Enter and exit thresholds differ, and a label holds for DWELL seconds, so a steady rally does not flicker. */
+const ENTER = { drift: 0.38, rush: 0.7, flow: 0.42 };
+const EXIT = { drift: 0.46, rush: 0.62, flow: 0.36 };
+const DWELL = 1.5;
+
 export function computeLabel(m) {
-  if (m.calm < 0.38) return 'DRIFT';
-  if (m.energy > 0.68) return 'RUSH';
-  if (m.energy > 0.4 && m.streak >= 5) return 'FLOW';
-  return 'DAWN';
+  const current = m.label || 'DAWN';
+  const inDrift = current === 'DRIFT' ? m.calm < EXIT.drift : m.calm < ENTER.drift;
+  let next;
+  if (inDrift) next = 'DRIFT';
+  else if (current === 'RUSH' ? m.energy > EXIT.rush : m.energy > ENTER.rush) next = 'RUSH';
+  else if (m.streak >= 5 && (current === 'FLOW' ? m.energy > EXIT.flow : m.energy > ENTER.flow)) next = 'FLOW';
+  else next = 'DAWN';
+  // A fresh label holds for a moment, except that a loss drops to DRIFT at once.
+  if (next !== current && next !== 'DRIFT' && (m.labelAge ?? 99) < DWELL) return current;
+  return next;
 }
 
-const RANK = { DAWN: 0, DRIFT: 0, FLOW: 1, RUSH: 2 };
+function settle(m, label) {
+  if (label !== m.label) { m.label = label; m.labelAge = 0; }
+  if (RANK[m.label] > RANK[m.peak]) m.peak = m.label;
+}
 
 /** Apply a game event. Mutates and returns `m`. */
 export function moodEvent(m, type) {
@@ -72,10 +88,12 @@ export function moodEvent(m, type) {
       break;
     case 'loss':
       m.energy = clamp01(m.energy - 0.22);
-      m.calm = clamp01(m.calm - 0.4);
+      // Bite from a ceiling, so a loss after a long calm stretch still reaches DRIFT.
+      m.calm = clamp01(Math.min(m.calm, 0.72) - 0.4);
       m.streak = 0;
       m.losses += 1;
       m.sinceLoss = 0;
+      m.labelAge = 99;
       break;
     case 'wave':
       m.energy = Math.min(cap, m.energy + 0.1);
@@ -84,8 +102,7 @@ export function moodEvent(m, type) {
     default:
       break;
   }
-  m.label = computeLabel(m);
-  if (RANK[m.label] > RANK[m.peak]) m.peak = m.label;
+  settle(m, computeLabel(m));
   return m;
 }
 
@@ -97,8 +114,8 @@ export function moodStep(m, dt) {
   m.energy = Math.min(d.cap, m.energy);
   m.calm = clamp01(m.calm + 0.016 * dt);
   m.sinceLoss += dt;
-  m.label = computeLabel(m);
-  if (RANK[m.label] > RANK[m.peak]) m.peak = m.label;
+  m.labelAge = (m.labelAge ?? 99) + dt;
+  settle(m, computeLabel(m));
   m.tapeClock += dt;
   if (m.tapeClock >= 2) {
     m.tapeClock = 0;
@@ -112,7 +129,15 @@ export function setDial(m, dial) {
   if (!DIALS[dial]) return m;
   m.dial = dial;
   m.energy = Math.min(DIALS[dial].cap, m.energy);
-  m.label = computeLabel(m);
+  settle(m, computeLabel(m));
+  return m;
+}
+
+/** A new game keeps the mood's momentum but starts its own peak and streak. */
+export function beginGame(m) {
+  m.streak = 0;
+  m.peak = m.label === 'DRIFT' ? 'DAWN' : m.label;
+  m.labelAge = 99;
   return m;
 }
 
@@ -151,7 +176,8 @@ export function restoreMood(saved, dialOverride) {
   }
   if (saved && typeof saved.calm === 'number') m.calm = clamp01(0.5 + saved.calm * 0.5);
   if (Array.isArray(saved?.tape)) m.tape = saved.tape.filter((v) => Number.isInteger(v) && v >= 0 && v < LABELS.length).slice(-120);
-  m.label = computeLabel(m);
+  settle(m, computeLabel(m));
+  m.peak = m.label;
   return m;
 }
 

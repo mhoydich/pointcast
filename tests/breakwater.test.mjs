@@ -146,3 +146,34 @@ test('mood: the town mood maps both ways', () => {
   assert.equal(dialFromSiteMood(null), 'play');
   for (const label of LABELS) assert.ok(['chill', 'flow', 'hype', 'quiet'].includes(siteMoodFromLabel(label)));
 });
+
+test('mood: a steady rally does not flicker between labels, and a lone loss after a long calm still reaches DRIFT', async () => {
+  const { beginGame } = await import('../src/lib/breakwater/mood.mjs');
+  for (const dial of ['calm', 'play', 'rush']) {
+    const m = createMood(dial);
+    const changes = [];
+    let last = m.label;
+    // 60 s of a one-brick-per-return rally at 60 FPS, a return every 2.5 s.
+    for (let frame = 0; frame < 60 * 60; frame += 1) {
+      moodStep(m, 1 / 60);
+      if (frame % 150 === 149) { moodEvent(m, 'paddle'); moodEvent(m, 'brick'); }
+      if (m.label !== last) { changes.push([frame / 60, last, m.label]); last = m.label; }
+    }
+    assert.ok(changes.length <= 3, `${dial}: label changed ${changes.length} times: ${JSON.stringify(changes)}`);
+  }
+  const m = createMood('play');
+  for (let i = 0; i < 30; i += 1) { moodStep(m, 1); if (i % 3 === 0) moodEvent(m, 'paddle'); }
+  assert.equal(m.calm, 1);
+  moodEvent(m, 'loss');
+  assert.equal(m.label, 'DRIFT');
+  for (let i = 0; i < 4; i += 1) moodStep(m, 1);
+  assert.equal(m.label, 'DRIFT', 'one loss eases the game for a few seconds');
+  // A new game keeps momentum but starts its own peak.
+  const hot = createMood('rush');
+  for (let i = 0; i < 6; i += 1) { moodStep(hot, 2.5); moodEvent(hot, 'paddle'); moodEvent(hot, 'brick'); moodEvent(hot, 'brick'); moodEvent(hot, 'brick'); }
+  assert.equal(hot.peak, 'RUSH');
+  setDial(hot, 'calm');
+  beginGame(hot);
+  assert.notEqual(hot.peak, 'RUSH');
+  assert.equal(hot.streak, 0);
+});

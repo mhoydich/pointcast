@@ -206,7 +206,7 @@ const dials = Object.values(DIALS);
 
 <script>
   import { COLS, ROWS, MACHINES, MACHINE_IDS, buildWave, speedStepsFor } from '../lib/breakwater/waves.mjs';
-  import { DIALS, DIAL_IDS, LABELS, createMood, moodEvent, moodStep, moodResponse, setDial, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { DIALS, DIAL_IDS, LABELS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
   import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
 
   const root = document.querySelector('[data-bw]');
@@ -257,7 +257,8 @@ const dials = Object.values(DIALS);
     const save = () => {
       try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, mood: serializeMood(mood) })); } catch {}
     };
-    const handMoodToTown = () => { try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+    // The town only inherits a mood from a game that was actually played, never from a glance at the title.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
 
     // ---------- helpers ----------
     const M = () => MACHINES[machineId];
@@ -397,7 +398,7 @@ const dials = Object.values(DIALS);
       score: 0, balls: 3, nextExtra: EXTRA_EVERY, paddleX: W / 2, paddleW: PADDLE_W, paddleTarget: PADDLE_W,
       ballList: [], hits: 0, orange: false, red: false, particles: [], flash: 0, msg: '', msgT: 0, msgScale: 3,
       pointerX: null, keys: {}, attract: true, loading: 0, multiballUsed: false, fps: 60, fpsAcc: 0, fpsN: 0,
-      sinceLoss: 0, shake: 0, paused: false, lastTouch: 0, over: false, pendingOver: false, pendingH: 0, musicResume: false,
+      sinceLoss: 0, shake: 0, paused: false, lastTouch: 0, over: false, pendingOver: false, pendingH: 0, musicResume: false, played: false,
     };
 
     function bootScript() {
@@ -427,7 +428,8 @@ const dials = Object.values(DIALS);
       readout.wave.textContent = `WAVE ${index + 1} ${G.wave.pattern.toUpperCase()}`;
     }
     function newGame() {
-      G.score = 0; G.balls = 3; G.nextExtra = EXTRA_EVERY; G.attract = false; G.over = false; G.pendingOver = false; G.particles = [];
+      G.score = 0; G.balls = 3; G.nextExtra = EXTRA_EVERY; G.attract = false; G.over = false; G.pendingOver = false; G.particles = []; G.played = true;
+      beginGame(mood); response = moodResponse(mood);
       G.paddleX = W / 2;
       startWave(0);
       audio.setMusic(true);
