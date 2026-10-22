@@ -4,6 +4,51 @@
 
 ---
 
+## Gridtown — a browser-first city builder (2026-10-22)
+
+`/gridtown`, `/gridtown.json`, Block 0742 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
+
+- [x] (CC) Build v1: pure engine `src/lib/gridtown.mjs` (seeded terrain, seven tools, RCI demand, power capacity, smoke and land value, monthly ledger, happiness, twelve lessons, save repair), canvas page with touch, drag and keyboard, browser-local save, JSON export/import, `?seed=` map links, JSON twin, `tests/gridtown.test.mjs` — `done`
+- [x] (CC) Wire Apps shelf, Play layer, `agents.json`, sitemap-discovery, `llms.txt`, `llms-full.txt` — `done`
+- [x] (CC) v1.1: tile inspector, town titles, `#city=` whole-city links with a read-only visit mode, phone share sheet, one-row phone tool strip, game-library entry with offline download — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-gridtown-qa.md` (swipe vs hold-to-paint, inspector, city links, keyboard-only play); results to `docs/manus-logs/2026-10-22-gridtown-qa.md` — `queued`
+- [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
+- [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
+
+---
+
+## PMM (PointCast Mobile Messaging) and Nouns Messenger (2026-10-22)
+
+`/pmm/`, `/pmm/brand/`, `/nouns-messenger/`, `/api/pmm/signal`, `/api/pmm/turn`, `/api/pmm/stat`. Brief: `docs/prd/pointcast-mobile-messaging.md`. Mike 2026-10-22: "make pointcast mobile messaging, pmm ... you are now assigned as product manager, set goals", then "keep going, multitasking be the product manager publish, ship". CI: `.github/workflows/pmm-check.yml` (`npm run test:pmm`).
+
+- [x] (CC) v0 and v0.1–v0.2: P2P chat, signed hello, files, voice, mood, TAB, LINK, paste mode, key export, TURN code path, offline service workers (#1479, #1489, #1491, #1493) — `done`
+- [x] (CC) QR on every link, in-app scanner, answer hand-off between tabs (#1505); Manus brief section 2c (#1510); PMM CI (#1500); Nouns Messenger backup, share target and badge (#1512) — `done`
+- [ ] (CC) `/api/pmm/stat`: anonymous connect outcomes against the 90% goal (#1520) — `in-progress`
+- [ ] (CC) Nouns Messenger companions answer with live town data (#1513, session_01T2Z3U1P4fW82hKHD1fXWr3) — `in-progress`
+- [ ] (CC) v0.3 rooms, three to five friends (`cc/pmm-rooms-20261022`, session_01YX6g6wYdDEnjzvBfWzkpud) — `in-progress`
+- [ ] (CC) v0.4 Tezos settle for TAB: `/pmm/settle` page, TzKT check on the receiving phone (`cc/pmm-settle-20261022`, session_01R5xW9R1R3uD9Zjcq8rw7q5); wires into `app.js` after rooms — `in-progress`
+- [ ] (MH) Deploy with `scripts/deploy.sh` on the iMac; then create and bind `PMM_KV` (brief step 1) and set `CF_TURN_KEY_ID` / `CF_TURN_API_TOKEN` (step 1b) — `waiting-on-mh`
+- [ ] (MH) Optional: add a `CLOUDFLARE_API_TOKEN` repo secret so the Pages workflow deploys merges on its own — `waiting-on-mh`
+- [ ] (M) Two-phone test, offline open and QR connect per `docs/briefs/2026-10-22-manus-pmm.md`, log to `docs/manus-logs/2026-10-22-pmm.md` — `queued`
+- [ ] (CC) A week after deploy: read `GET /api/pmm/stat?days=7` and decide whether the relay or the code flow needs work to reach 90% — `queued`
+- [ ] (X) Review v0.4 settle before it moves real tez (wallet code) — `queued`
+
+---
+
+## Radio network — Radio El Segundo + six South Bay stations (2026-10-20 → 2026-10-22)
+
+`/radio-network`, `/radio-network/{station}`, `/radio-network/kit`, `/radio-network/print`, `/radio-network/status` (each with `.json`), MCP `radio_network` / `radio_station`. A plan; nothing on air. Tracking: issue #1503.
+
+- [x] (CC) Plan, block 0718 (#1466); station pages + Phase 0 kit, block 0726 (#1494); RN-01..RN-10 on the jobs board (#1514); MCP tools + status board (#1517); print campaign + block 0741 — `done`
+- [ ] (MH) Deploy: run `scripts/deploy.sh` or add the `CLOUDFLARE_API_TOKEN` repo secret (CI builds green; deploy step skipped) — `waiting-on-mh`
+- [ ] (MH) Decisions before Phase 0 week 1: network name, talk-first vs music-first, nonprofit partner/fiscal sponsor, first host of The Town Desk, synthetic voices, LPFM channel study — `waiting-on-mh`
+- [ ] (M) QA after deploy: `docs/briefs/2026-10-20-manus-radio-network-qa.md`; Phase 0 research + QA (no outreach): `docs/briefs/2026-10-22-manus-radio-phase0.md` — `queued`
+- [ ] (X) Review the MCP tools in `src/lib/radio-mcp.ts` and the radio rows in `public/opportunities/catalog.json` — `queued`
+- [ ] (MH) Counsel review of the consent form template before anyone signs it — `waiting-on-mh`
+- [ ] (CC) Keep `src/data/radio-status.ts` current with every ship — `in-progress`
+
+---
+
 ## Family Room — the family's Grok bots in one chat room (2026-10-22)
 
 `/family-room/`, `/api/family-room`, MCP `family_room_read` / `family_room_post`. DadGrok, MomGrok, KanaGrok, KenzoGrok talk; the family watches. Setup: `docs/setup/family-room.md`.
