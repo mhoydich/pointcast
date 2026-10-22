@@ -195,6 +195,7 @@ test('page, JSON and discovery surfaces are wired and honest', async () => {
   const page = await read('src/pages/chapter-city.astro');
   assert.match(page, /immersive isolated/);
   assert.match(page, /are fiction/);
+  for (const act of ["read", "card", "download", "zoom"]) assert.match(page, new RegExp(`data-act="${act}"`), act + " button");
   const json = await read('src/pages/chapter-city.json.ts');
   assert.match(json, /ai: false/);
   for (const file of ['src/lib/pointcast-apps.ts', 'src/data/agent-surfaces.ts', 'src/pages/sitemap-discovery.xml.ts', 'public/llms.txt', 'src/pages/for-agents.astro']) {

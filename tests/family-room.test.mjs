@@ -245,3 +245,63 @@ test('MCP: family_room_read is read-only, family_room_post speaks as the key hol
     'MomGrok: and from a header',
   ]);
 });
+
+test('one topic a day in El Segundo time, the same for every reader', async () => {
+  const { TOPICS, roomDate, topicFor } = await import('../functions/_lib/family-room.mjs');
+  // 06:30 UTC on Oct 23 is still Oct 22 in El Segundo.
+  assert.equal(roomDate(Date.parse('2026-10-23T06:30:00Z')), '2026-10-22');
+  const a = topicFor(Date.parse('2026-10-22T08:00:00Z'));
+  const b = topicFor(Date.parse('2026-10-23T06:30:00Z'));
+  const c = topicFor(Date.parse('2026-10-23T08:00:00Z'));
+  assert.equal(a.text, b.text);
+  assert.notEqual(a.text, c.text);
+  assert.ok(TOPICS.includes(c.text));
+  const room = await readRoom(d1(), KEYS, { now: T0 });
+  assert.deepEqual(room.topic, topicFor(T0));
+});
+
+test('each buddy carries its lines from the last 24 hours', async () => {
+  const db = d1();
+  await postToRoom(db, member('kana'), parsePost({ text: 'old' }), T0 - 25 * 3600 * 1000);
+  await postToRoom(db, member('kana'), parsePost({ text: 'one' }), T0 - 1000);
+  await postToRoom(db, member('kana'), parsePost({ text: 'two' }), T0 - 500);
+  const room = await readRoom(db, KEYS, { now: T0 });
+  const byId = Object.fromEntries(room.members.map((m) => [m.id, m.linesToday]));
+  assert.deepEqual(byId, { mike: 0, morgan: 0, kana: 2, kenzo: 0 });
+});
+
+test('the invite names the bot, the others and its own key, and nobody else\'s', async () => {
+  const { invitePrompt } = await import('../functions/_lib/family-room.mjs');
+  const text = invitePrompt(member('kenzo'), 'kenzo-secret-key-123');
+  assert.match(text, /^You are Kenzo Montana's Grok\. Your screen name is KenzoGrok\./);
+  assert.match(text, /DadGrok \(Mike's\), MomGrok \(Morgan's\), KanaGrok \(Kana Jane's\)/);
+  assert.match(text, /Authorization: Bearer kenzo-secret-key-123/);
+  assert.doesNotMatch(text, /KenzoGrok \(Kenzo/);
+  assert.match(text, /family_room_post/);
+});
+
+test('the invites script writes private files outside the repo and never prints a key', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { mkdtempSync, readdirSync, readFileSync, statSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const out = join(mkdtempSync(join(tmpdir(), 'family-room-')), 'invites');
+  const run = spawnSync(process.execPath, ['scripts/family-room-invites.mjs', '--out', out, '--family-only'], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  const files = readdirSync(out).sort();
+  assert.deepEqual(files, ['admin.txt', 'family-password.txt', 'kana-KanaGrok.txt', 'kenzo-KenzoGrok.txt', 'mike-DadGrok.txt', 'morgan-MomGrok.txt']);
+  const keys = new Set();
+  for (const name of files) {
+    assert.equal(statSync(join(out, name)).mode & 0o077, 0, `${name} is owner-only`);
+    const text = readFileSync(join(out, name), 'utf8');
+    const key = (text.match(/Bearer ([0-9a-f]{48})/) || [])[1];
+    if (key) {
+      keys.add(key);
+      assert.equal(run.stdout.includes(key), false, 'no key on stdout');
+    }
+  }
+  assert.equal(keys.size, 5, 'four bots and the admin, each with its own key');
+  const inside = spawnSync(process.execPath, ['scripts/family-room-invites.mjs', '--out', 'tmp/family-room-invites-test'], { encoding: 'utf8' });
+  assert.equal(inside.status, 1);
+  assert.match(inside.stderr, /Refusing to write keys inside the repo/);
+});

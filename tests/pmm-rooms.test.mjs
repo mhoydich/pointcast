@@ -34,3 +34,11 @@ test('room lines open with the same hello, signed over the line DTLS fingerprint
   assert.match(body, /m\.fp === localFp && await verify\(/);
   assert.match(app, /h\.sig = await sign\(\{ t: 'hello', id: state\.me\.id, ts: h\.ts, text: l\.remoteFp \}\)/);
 });
+
+test('a room invite reports its outcome like a two-person line, and mesh lines report nothing', () => {
+  assert.match(app, /if \(pending && pending\.pc === pc\) \{ l\.attempt = pending;/, 'the invite line keeps the pending handshake record');
+  assert.match(app, /function closeLine\(l\) \{ if \(l\.closed\) return; if \(l\.attempt && !l\.attempt\.verified\) report\(l\.attempt, 'fail', 'none', 'hello'\)/);
+  assert.match(app, /a\.verified = true; setTimeout\(\(\) => linePath\(l\.pc\)\.then\(\(path\) => report\(a, 'run', path, '-', ranAt\)\)/);
+  const dial = app.slice(app.indexOf('async function dial'), app.indexOf('async function onRsig'));
+  assert.doesNotMatch(dial, /attempt|pending/, 'a mesh dial never touches the handshake record');
+});

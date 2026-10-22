@@ -6,7 +6,7 @@
  * the same file runs in the page, in node:test, and in an agent.
  */
 
-export const GRIDTOWN_VERSION = '1.1.0';
+export const GRIDTOWN_VERSION = '1.1.1';
 export const GRIDTOWN_TITLE = 'Gridtown';
 export const GRIDTOWN_DESCRIPTION =
   'A small city you can hold in a browser. Lay roads, zone homes, shops and workshops, power them, plant parks, and keep the budget honest. Twelve lessons, one tap at a time, saved on your device.';
@@ -45,6 +45,8 @@ export const POWER_CAPACITY = 24;
 export const UPKEEP = Object.freeze({ road: 2, park: 2, power: 25 });
 export const RESIDENTS_PER_LEVEL = 8;
 export const JOBS = Object.freeze({ com: 6, ind: 10 });
+/** Units of smoke on every tile within two steps. A park clears 2, so one park cancels one workshop. */
+export const SMOKE = Object.freeze({ ind: 2, power: 3, park: -2 });
 /** The share of residents a town wants working in shops and in workshops. Together they make one job per person. */
 export const JOB_MIX = Object.freeze({ com: 0.3, ind: 0.7 });
 
@@ -82,6 +84,12 @@ export function cityTitle(population) {
 }
 
 /* ----------------------------- helpers ----------------------------- */
+
+/** At most 40 characters, counted as code points so an emoji is never cut in half. */
+export function cleanName(value) {
+  const text = String(value ?? '').replace(/[\u0000-\u001f]/g, '').trim();
+  return Array.from(text).slice(0, 40).join('').trim() || 'Gridtown';
+}
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -148,7 +156,7 @@ export function createCity(seed = 20261022, name = 'Gridtown') {
   const s = normalizeSeed(seed);
   const city = {
     version: 1,
-    name: String(name || 'Gridtown').slice(0, 40),
+    name: cleanName(name),
     seed: s,
     month: 0,
     funds: STARTING_FUNDS,
@@ -207,7 +215,7 @@ export function setTaxRate(city, rate) {
 }
 
 export function renameCity(city, name) {
-  const clean = String(name ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) || 'Gridtown';
+  const clean = cleanName(name);
   if (clean === city.name) return city;
   return { ...city, name: clean };
 }
@@ -224,8 +232,10 @@ export function analyze(city) {
   for (let y = 0; y < GRID_SIZE; y += 1) for (let x = 0; x < GRID_SIZE; x += 1) {
     const i = index(x, y);
     const tile = tiles[i];
-    if (tile.id === 'ind' || tile.id === 'power') spread(pollution, x, y, 2, tile.id === 'power' ? 3 : 1 + tile.level);
-    if (tile.id === 'park') { spread(pollution, x, y, 2, -2); spread(value, x, y, 2, 2); spread(parkValue, x, y, 2, 1); }
+    // Smoke does not depend on a workshop's level: level-dependent smoke let a park flip homes in and out of
+    // the smoke as the workshop grew and shrank, and some towns cycled every few months forever.
+    if (tile.id === 'ind' || tile.id === 'power') spread(pollution, x, y, 2, SMOKE[tile.id]);
+    if (tile.id === 'park') { spread(pollution, x, y, 2, SMOKE.park); spread(value, x, y, 2, 2); spread(parkValue, x, y, 2, 1); }
     if (tile.id === 'water') spread(value, x, y, 1, 1);
     if (tile.id === 'trees') spread(value, x, y, 1, 1);
     if (TILES[tile.id].zone) {
@@ -324,18 +334,15 @@ export function refresh(city) {
 /* ------------------------------ time ------------------------------ */
 
 /**
- * Advance one month: zones grow or shrink, the ledger settles, lessons update.
- *
- * Demand is re-read after every tile changes, in reading order, so growth
- * stops the moment the town has what it asked for. One shared pre-month
- * demand applied to every tile at once made large towns swing between
- * two populations forever.
+ * The zoning half of a month, shared by tick() and the inspector so the
+ * inspector can never promise something the month will not do.
+ * Returns the new tiles and, for every zone tile, the demand it saw on its turn.
  */
-export function tick(city) {
-  const before = analyze(city);
+export function stepMonth(city, before = analyze(city)) {
   let population = before.stats.population;
   let comJobs = before.stats.comJobs;
   let indJobs = before.stats.indJobs;
+  const seen = new Array(city.tiles.length).fill(null);
   const tiles = city.tiles.map((tile, i) => {
     if (!TILES[tile.id].zone) return tile;
     const alive = before.powered[i] && before.roaded[i];
@@ -345,6 +352,7 @@ export function tick(city) {
     else if (smoky && level > 1) level -= 1;                       // a home in the smoke loses a level a month, down to one
     else {
       const demand = computeDemand(population, comJobs, indJobs)[tile.id];
+      seen[i] = demand;
       if (demand > 0 && level < MAX_LEVEL && !(smoky && level >= 1)) level += 1;
       else if (demand < -40 && level > 0) level -= 1;
     }
@@ -356,6 +364,19 @@ export function tick(city) {
     }
     return level === tile.level ? tile : { id: tile.id, level };
   });
+  return { tiles, demandSeen: seen };
+}
+
+/**
+ * Advance one month: zones grow or shrink, the ledger settles, lessons update.
+ *
+ * Demand is re-read after every tile changes, in reading order, so growth
+ * stops the moment the town has what it asked for. One shared pre-month
+ * demand applied to every tile at once made large towns swing between
+ * two populations forever.
+ */
+export function tick(city) {
+  const { tiles } = stepMonth(city);
   const grown = { ...city, tiles };
   const after = analyze(grown);
   const income = Math.round((after.stats.population + after.stats.jobs * 0.5) * (city.taxRate / 10));
@@ -399,7 +420,7 @@ export function readCity(raw) {
   });
   const city = {
     version: 1,
-    name: String(data.name || 'Gridtown').replace(/[\u0000-\u001f]/g, '').slice(0, 40) || 'Gridtown',
+    name: cleanName(data.name),
     seed: normalizeSeed(data.seed),
     month: Math.max(0, Math.floor(Number(data.month) || 0)),
     funds: Number.isFinite(Number(data.funds)) ? Math.round(Number(data.funds)) : STARTING_FUNDS,
@@ -449,6 +470,31 @@ export function summarizeCity(city) {
 
 const ZONE_NOUN = { res: 'homes', com: 'shops', ind: 'workshops' };
 
+/** How many tiles of each zone could still gain a level: roaded, powered, below the top, and (for homes) clean. */
+function roomToGrow(city, a) {
+  const room = { res: 0, com: 0, ind: 0 };
+  city.tiles.forEach((t, i) => {
+    if (!TILES[t.id].zone || t.level >= MAX_LEVEL || !a.roaded[i] || !a.powered[i]) return;
+    if (t.id === 'res' && a.pollution[i] > 0 && t.level >= 1) return;
+    room[t.id] += 1;
+  });
+  return room;
+}
+
+/** What actually unblocks a zone whose demand is spent: never two tiles pointing at each other. */
+function demandAdvice(zone, d, room) {
+  const fill = (z) => (room[z] > 0 ? `${ZONE_NOUN[z][0].toUpperCase()}${ZONE_NOUN[z].slice(1)} are still filling in; give it a month or two.` : `Zone more ${ZONE_NOUN[z]}.`);
+  if (zone === 'res') {
+    const hiring = ['com', 'ind'].filter((z) => d[z] > 0).sort((p, q) => d[q] - d[p]);
+    if (!hiring.length) return 'Homes follow jobs, and every job is filled: zone more shops and workshops together.';
+    return `Homes follow jobs. ${fill(hiring[0])}`;
+  }
+  if (d.res > 0) return `It needs more people. ${fill('res')}`;
+  const other = zone === 'com' ? 'ind' : 'com';
+  if (d[other] > 0) return `More people need more jobs first. ${fill(other)}`;
+  return 'The town has the jobs its people need. Grow homes and jobs together.';
+}
+
 /**
  * Explain one tile in plain words: what it is, what it needs, and the one
  * thing standing in its way. Pure; the page shows it in the inspector.
@@ -460,7 +506,8 @@ export function explainTile(city, x, y) {
   const tile = city.tiles[i];
   const kind = TILES[tile.id];
   const smoke = Math.max(0, a.pollution[i]);
-  const value = Math.max(0, a.value[i]);
+  // A tree raises its own tile's value too, but building a home clears it, so leave that part out.
+  const value = Math.max(0, a.value[i] - (tile.id === 'trees' ? 1 : 0));
   const nearPark = a.parkValue[i] > 0;
   const facts = [];
   let blocker = null;
@@ -485,13 +532,19 @@ export function explainTile(city, x, y) {
       facts.push({ label: 'Jobs', ok: tile.level > 0, text: `${tile.level * JOBS[tile.id]} jobs here.` });
       if (tile.id === 'ind') facts.push({ label: 'Smoke', ok: false, text: 'Puts smoke on every tile within two steps.' });
     }
-    if (!a.roaded[i]) blocker = 'Lay a road on one of its four sides.';
-    else if (!a.powered[i]) blocker = a.stats.capacity === 0 ? 'Build a power plant anywhere in town.' : 'Build another power plant; each one powers 24 zone tiles.';
-    else if (tile.id === 'res' && smoke > 0 && tile.level >= 1) blocker = 'Smoke: move it three steps from workshops and plants, or plant a park within two steps.';
+    // The verdict comes from the same month the game will run, so it is never a guess.
+    const next = stepMonth(city, a);
+    const nextLevel = next.tiles[i].level;
+    const turnDemand = next.demandSeen[i];
+    const smokeFix = 'Smoke: keep homes three steps from workshops and plants, or plant a park within two steps (one park cancels one workshop).';
+    let why = null;
+    if (!a.roaded[i]) why = 'Lay a road on one of its four sides.';
+    else if (!a.powered[i]) why = a.stats.capacity === 0 ? 'Build a power plant anywhere in town.' : 'Build another power plant; each one powers 24 zone tiles.';
+    else if (tile.id === 'res' && smoke > 0 && tile.level >= 1) why = smokeFix;
+    if (nextLevel > tile.level) tip = 'It will grow next month.';
+    else if (nextLevel < tile.level) blocker = `It will lose a level next month. ${why ?? `Too many ${noun} for the town (${turnDemand}).`}`;
     else if (tile.level >= MAX_LEVEL) tip = 'Fully grown.';
-    else if (demand <= 0) {
-      blocker = tile.id === 'res' ? 'Homes follow jobs: zone shops or workshops.' : tile.id === 'com' ? 'Shops need customers: zone more homes.' : 'Workshops need workers: zone more homes.';
-    } else tip = 'It will grow next month.';
+    else blocker = why ?? demandAdvice(tile.id, a.stats.demand, roomToGrow(city, a));
   } else if (tile.id === 'road') {
     let served = 0;
     for (const [dx, dy] of NEIGHBORS) if (inBounds(x + dx, y + dy) && TILES[city.tiles[index(x + dx, y + dy)].id].zone) served += 1;
@@ -584,7 +637,7 @@ export function decodeCity(code) {
   }
   let name;
   try { name = decodeURIComponent(parts.slice(6).join('.')); } catch { return null; }
-  name = name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) || 'Gridtown';
+  name = cleanName(name);
   return refresh({
     version: 1, name, seed, month, funds, taxRate, tiles,
     ledger: { income: 0, upkeep: 0, net: 0 }, stats: emptyStats(), lessons: [], log: [],

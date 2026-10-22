@@ -13,6 +13,9 @@
 - [x] (CC) v1.1: tile inspector, town titles, `#city=` whole-city links with a read-only visit mode, phone share sheet, one-row phone tool strip, game-library entry with offline download — `done`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-gridtown-qa.md` (swipe vs hold-to-paint, inspector, city links, keyboard-only play); results to `docs/manus-logs/2026-10-22-gridtown-qa.md` — `queued`
 - [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
+- [x] (CC) Merged to main on Mike's go, no further review: mhoydich/pointcast#1477, merge commit `df8ab42b` — `done`
+- [x] (CC) 1.1.1: the 12 findings a second adversarial review confirmed on 1.1 (inspector off-screen on desktop, "will grow" promises that were wrong most of the time, shop/home advice loops, stale inspector, hidden phone tools, header overflow, local-download links, name truncation, browser Back out of a visit) plus constant workshop smoke so no town cycles — `done`
+- [ ] (MH) Publish: merged is not live. The "Deploy PointCast to Cloudflare Pages" run skipped its deploy step on 2026-10-22 (no `CLOUDFLARE_API_TOKEN` secret). Run `scripts/deploy.sh` on the iMac, or add the repo secret, then check https://pointcast.xyz/gridtown/ and /b/0742 — `waiting-on-mh`
 - [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
 
 ---
@@ -54,9 +57,12 @@
 `/family-room/`, `/api/family-room`, MCP `family_room_read` / `family_room_post`. DadGrok, MomGrok, KanaGrok, KenzoGrok talk; the family watches. Setup: `docs/setup/family-room.md`.
 
 - [x] (CC) Build v1: AIM-style chat room and Buddy List, D1 storage on `AUTH_DB` (self-provisioned), one key per bot, away messages, enter/leave lines, per-bot rate limit, admin hide, optional family read key, noindex, `tests/family-room.test.mjs` — `done`
-- [ ] (MH) Set `FAMILY_ROOM_KEY_MIKE`, `_MORGAN`, `_KANA`, `_KENZO` (encrypted, 16+ characters; optional `FAMILY_ROOM_ADMIN_KEY`, `FAMILY_ROOM_READ_KEY`), redeploy, give each Grok its key and the prompt — `waiting-on-mh`
+- [x] (CC) v0.1 merged, PR #1499 — `done`
+- [x] (CC) v0.2: `npm run family-room:invites -- --set` (keys, wrangler secrets, one private invite per bot), today's topic, lines per bot in the last 24 h, product brief `docs/prd/family-room.md`, block 0749, New today strip — `done`
+- [ ] (MH) On the iMac: `npm run family-room:invites -- --set` (add `--family-only` for a family password), then `scripts/deploy.sh --force`, then hand each person their invite file — `waiting-on-mh`
+- [ ] (MH) Optional, unblocks every merge: add the `CLOUDFLARE_API_TOKEN` repository secret so the GitHub deploy step stops skipping — `waiting-on-mh`
 - [ ] (M) Two-phone check after keys and deploy: `docs/briefs/2026-10-22-manus-family-room.md` — `queued`
-- [ ] (X) Review `/api/family-room` and the two MCP tools (public write surface, kids' bots) — `queued`
+- [ ] (X) Optional: review `/api/family-room` and the two MCP tools (public write surface, kids' bots). Mike waived review on 2026-10-22 — `queued`
 
 ---
 
