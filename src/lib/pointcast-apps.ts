@@ -29,6 +29,28 @@ function chainShelfApp(a: ChainApp): PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {slug:'chapter-city',name:'Chapter City',kicker:'CITY-BUILDER · A NOVEL WRITTEN BY YOUR TOWN',description:'Zone a seaside town, keep the lights on and win elections. Every simulated year becomes a chapter with recurring characters, a newspaper headline and a choice. Browser only; saves on your device.',url:'https://pointcast.xyz/chapter-city/',path:'/chapter-city/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.PLAY',kind:'pointcast'},
+  {
+    slug: 'pmm',
+    name: 'PMM — PointCast Mobile Messaging',
+    kicker: 'PHONE TO PHONE · NO ACCOUNT · READY.',
+    description: 'PMM: phone-to-phone instant messaging with no account and no server in the middle. Every message carries your mood, your hour and your signature. Atari and Commodore at heart. Made in El Segundo by Mike.',
+    url: 'https://pointcast.xyz/pmm/',
+    path: '/pmm/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SIGNAL',
+    kind: 'pointcast',
+  },
+  {
+    slug: 'nouns-messenger',
+    name: 'Nouns Messenger',
+    kicker: 'POCKET MESSENGER · NOGGLES ON · LOCAL-FIRST',
+    description: 'A pocket instant messenger with noggles on. Local-first, phone-first, no account. Talk to the Noun companions, keep notes, or pass a note to a friend with a link. Made in El Segundo by Mike.',
+    url: 'https://pointcast.xyz/nouns-messenger/',
+    path: '/nouns-messenger/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
   {slug:'takes',name:'TAKES',kicker:'WRITING DESK · ALTERNATE TAKES · SOUND + STYLE',description:'Keep several versions of a word, sentence or paragraph in place and audition them with synthesized tones. Dim, stash, export as plain Markdown. Saved only in your browser.',url:'https://pointcast.xyz/takes/',path:'/takes/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
   {
     slug: 'sunset-downs', name: 'Sunset Downs', kicker: 'DAILY RACING · OWNERS & AGENTS · STUDIO SCRIP',
