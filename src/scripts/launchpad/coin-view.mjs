@@ -116,8 +116,13 @@ export function mountCoin(root, ctx) {
   const factsEl = el('p', { class: 'lp-note lp-coin-facts' });
   const rulesEl = el('p', { class: 'lp-note lp-coin-rules' });
   const sniperEl = el('p', { class: 'lp-coin-sniper', hidden: true });
+  // The graduation seal (plan A2): a stamp beside the portrait, never over the Noun. It is decorative; the status
+  // line under it says the same in words.
+  const seal = el('span', { class: 'lp-coin-seal', 'aria-hidden': 'true', hidden: true }, 'Graduated · LP burned');
+  /** Coin id → whether it had graduated at the last paint, so the seal stamps only when a coin graduates on screen. */
+  const graduatedAt = new Map();
   const head = el('div', { class: 'lp-coin-head' }, img,
-    el('div', { class: 'lp-coin-id' }, el('h3', { class: 'lp-coin-title' }, nameEl, ' ', symEl), madeTag, statusEl, factsEl, rulesEl, sniperEl));
+    el('div', { class: 'lp-coin-id' }, el('h3', { class: 'lp-coin-title' }, nameEl, ' ', symEl), madeTag, seal, statusEl, factsEl, rulesEl, sniperEl));
 
   /* ---------- progress bars ---------- */
   function bar(label) {
@@ -279,6 +284,14 @@ export function mountCoin(root, ctx) {
     setText(symEl, coin.symbol);
     setHidden(madeTag, !coin.viewerMade);
     const rules = rulesOf(world, coin);
+    const graduated = coin.status === 'migrated';
+    setHidden(seal, !graduated);
+    if (graduated && graduatedAt.get(coin.id) === false) {
+      seal.classList.remove('lp-coin-seal-stamp');
+      void seal.offsetWidth; // restart the animation
+      seal.classList.add('lp-coin-seal-stamp');
+    }
+    graduatedAt.set(coin.id, graduated);
     setText(statusEl, coin.status === 'auction' ? `Opening auction, trading opens in ${plural(Math.max(0, coin.openTick - world.tick), 'tick')}`
       : coin.status === 'migrated' ? 'Graduated: trading in a pool, LP burned'
       : coin.status === 'complete' ? 'Sold out: moving to a pool'
@@ -664,7 +677,7 @@ export function mountCoin(root, ctx) {
     render(info) {
       const sim = ctx.sim;
       const { world } = sim;
-      if (sim !== state.sim) { state.sim = sim; state.subs = []; state.claimed = new Set(); state.sig = ''; state.riskSig = ''; state.error = null; undraw(); }
+      if (sim !== state.sim) { state.sim = sim; state.subs = []; state.claimed = new Set(); state.sig = ''; state.riskSig = ''; state.error = null; graduatedAt.clear(); undraw(); }
       const sig = `${ctx.selected}|${world.tick}|${world.events.length}|${info.finished}|${info.playing}`;
       if (!info.force && sig === state.sig) return;
       state.sig = sig;

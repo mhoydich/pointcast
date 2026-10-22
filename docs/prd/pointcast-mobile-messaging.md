@@ -51,7 +51,10 @@ something much smarter than a person.
   receipt. Received files are typed from an allowlist, never from the sender.
 - Connect: `LOAD "FRIEND"` makes a code and a link. Friend opens the link.
   Handshake goes through `/api/pmm/signal` when the `PMM_KV` binding exists;
-  otherwise paste mode (two links, no server) does the same job.
+  otherwise paste mode (two links, no server) does the same job. Every link
+  also shows as a QR code, so a phone in the same room can point its camera at
+  it. On Android Chrome, SCAN THEIR CODE reads the code in the app. An answer
+  link opened in a second tab of the same browser goes to the waiting tab.
 - Chat: text, live typing, photos and files, voice notes, reactions, mood,
   TAB ledger, LINK panel.
 - SI line: a local thread addressed to the Desk. SEND posts the packet to
@@ -138,6 +141,8 @@ as the SI line:
 
 - v0.1 (shipped): key export and import; the export now carries friends (names, keys, trust), never messages.
 - v0.2 (shipped, off until configured): TURN via Cloudflare Calls; friends ride along in the key export.
+- v0.2.1 (shipped): QR on every link, an in-app scanner where the browser has
+  BarcodeDetector, and answer links that go to the waiting tab.
 - v0.3 (shipped): ROOM, three to five friends in a full mesh. See the section below.
 - v0.4: Tezos settle for TAB, reusing `/messages` wallet code.
 - v0.5: thin push relay for "your friend is on".

@@ -139,7 +139,7 @@
   function openSheet(id) { $('sheet-wrap').hidden = false; for (const s of document.querySelectorAll('.sheet')) s.hidden = s.id !== id; }
   function closeSheets() { $('sheet-wrap').hidden = true; }
   $('scrim').addEventListener('click', closeSheets);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheets(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSheets(); if (scanStream) stopScan(); } });
 
   /* ---------- lobby ---------- */
   function renderMe() {
@@ -256,17 +256,83 @@
   const code6 = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => ALPHABET[b % ALPHABET.length]).join('');
   async function signalBound() { try { const r = await fetch(SIGNAL, { cache: 'no-store' }); if (!r.ok) return false; return Boolean((await r.json()).bound); } catch (_) { return false; } }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  function cancelPending() { attempt++; currentFriendTarget = null; if (pending) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending.cancelled = true; const p = pending; pending = null; try { p.pc.close(); } catch (_) {} } }
+  function cancelPending() { attempt++; currentFriendTarget = null; if (scanStream) stopScan(); if (pending) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending.cancelled = true; const p = pending; pending = null; try { p.pc.close(); } catch (_) {} } }
   function hangup() { if (peer) { try { peer.dc.close(); peer.pc.close(); } catch (_) {} peer = null; } clearInterval(pingTimer); renderFriends(); renderChatHead(); }
   function screen(l1, l2, l3) { $('load-line1').textContent = l1 ?? $('load-line1').textContent; $('load-line2').textContent = l2 ?? ''; $('load-line3').textContent = l3 ?? ''; }
   const linkFor = (hash) => location.origin + location.pathname + '#' + hash;
+
+  /* ---------- QR: show a link as a code; scan one where the phone can ---------- */
+  let qrLoading = null;
+  const loadQr = () => {
+    if (window.qrcode) return Promise.resolve(window.qrcode);
+    if (!qrLoading) qrLoading = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; sc.onload = () => res(window.qrcode); sc.onerror = () => { qrLoading = null; rej(new Error('qr')); }; document.head.append(sc); });
+    return qrLoading;
+  };
+  function hideQr() { $('load-qr').hidden = true; $('qr-art').replaceChildren(); }
+  async function showQr(p) {
+    const link = p && p.link; if (!link) return hideQr();
+    try {
+      const qrcode = await loadQr(); if (pending !== p || p.link !== link) return;
+      const qr = qrcode(0, 'L'); qr.addData(link); qr.make();
+      const n = qr.getModuleCount(); let d = '';
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { if (!qr.isDark(r, c)) continue; let w = 1; while (c + w < n && qr.isDark(r, c + w)) w++; d += `M${c + 4} ${r + 4}h${w}v1h-${w}z`; c += w - 1; }
+      $('qr-art').innerHTML = `<svg viewBox="0 0 ${n + 8} ${n + 8}" shape-rendering="crispEdges" aria-hidden="true"><rect width="${n + 8}" height="${n + 8}" fill="#fff"/><path d="${d}" fill="#20164d"/></svg>`;
+      $('load-qr').hidden = false;
+    } catch (_) { hideQr(); }
+  }
+  const canScan = 'BarcodeDetector' in window && Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  let scanStream = null, scanTimer = null;
+  function scanKey(label) { const b = $('btn-scan'); b.textContent = label || ''; b.hidden = !(canScan && label); }
+  async function startScan() {
+    let det; try { det = new BarcodeDetector({ formats: ['qr_code'] }); } catch (_) { toast('NO SCANNER ON THIS PHONE'); return; }
+    try { scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); } catch (_) { toast('NO CAMERA'); return; }
+    const v = $('scan-video'); v.srcObject = scanStream; $('scan').hidden = false; $('scan-hint').textContent = 'POINT AT THEIR PMM CODE';
+    try { await v.play(); } catch (_) {}
+    const tick = async () => {
+      if (!scanStream) return;
+      try { for (const c of await det.detect(v)) { if (useScanned(c.rawValue)) { stopScan(); return; } } } catch (_) {}
+      scanTimer = setTimeout(tick, 250);
+    };
+    tick();
+  }
+  function stopScan() { clearTimeout(scanTimer); if (scanStream) scanStream.getTracks().forEach((t) => t.stop()); scanStream = null; $('scan-video').srcObject = null; $('scan').hidden = true; }
+  // A scanned code is only ever a PMM link on this site: a join code, an offer, or the answer to our own offer.
+  function useScanned(text) {
+    let u; try { u = new URL(text); } catch (_) { return false; }
+    if (u.origin !== location.origin || !u.pathname.startsWith('/pmm')) { $('scan-hint').textContent = 'THAT IS NOT A PMM CODE'; return false; }
+    const h = u.hash.slice(1), a = /answer=([A-Za-z0-9_-]+)/.exec(h), o = /offer=([A-Za-z0-9_-]+)/.exec(h), j = /join=([A-Z2-9]{6})/i.exec(h);
+    if (a && pending?.role === 'host') { $('answer-input').value = a[1]; $('form-answer').requestSubmit(); return true; }
+    if (o) { joinOffer(o[1]); return true; }
+    if (j) { joinCode(j[1].toUpperCase()); return true; }
+    $('scan-hint').textContent = a ? 'THAT ANSWER IS FOR THE PHONE THAT PRESSED LOAD' : 'THAT IS NOT A PMM CODE';
+    return false;
+  }
+  $('btn-scan').addEventListener('click', startScan);
+  $('btn-scan-stop').addEventListener('click', stopScan);
+  // An answer link opened in a new tab (a camera app, a messages app) is handed to the tab that is waiting for it.
+  const bc = 'BroadcastChannel' in window ? new BroadcastChannel('pmm') : null;
+  if (bc) bc.addEventListener('message', (e) => {
+    const m = e.data || {};
+    if (m.t === 'answer' && typeof m.a === 'string' && /^[A-Za-z0-9_-]+$/.test(m.a) && pending?.role === 'host' && !pending.answered) {
+      bc.postMessage({ t: 'answer-ok', id: m.id }); $('answer-input').value = m.a; $('form-answer').requestSubmit(); try { window.focus(); } catch (_) {}
+    }
+  });
+  function handOff(a) {
+    return new Promise((resolve) => {
+      if (!bc) return resolve(false);
+      const id = uid();
+      const on = (e) => { if (e.data && e.data.t === 'answer-ok' && e.data.id === id) { clearTimeout(t); bc.removeEventListener('message', on); resolve(true); } };
+      const t = setTimeout(() => { bc.removeEventListener('message', on); resolve(false); }, 900);
+      bc.addEventListener('message', on); bc.postMessage({ t: 'answer', a, id });
+    });
+  }
 
   // HOST: make an offer. Code flow when the signal store is bound, paste mode otherwise.
   // With a room, the same handshake opens a 'pmm-room' channel: the guest's app sees the label and joins the room.
   async function host(room) {
     cancelPending(); if (!room) hangup(); const mine = ++attempt;
     show('load'); $('load-prompt').textContent = room ? 'INVITE TO ROOM' : 'SEARCHING FOR FRIEND'; $('load-code').hidden = true; $('form-join').hidden = true; $('form-answer').hidden = true;
-    $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true; $('load-hint').textContent = '';
+    $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true; $('load-hint').textContent = ''; hideQr(); scanKey('');
     screen('LOAD "FRIEND",8,1', 'PRESS PLAY ON TAPE', '');
     await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); const dc = pc.createDataChannel(room ? 'pmm-room' : 'pmm', { ordered: true });
@@ -284,7 +350,7 @@
     $('load-code').textContent = code; $('load-code').hidden = false;
     screen('LOAD "FRIEND",8,1', 'SEARCHING FOR FRIEND', 'tell them the code, or send the link. ten minutes.');
     p.link = linkFor('join=' + code); p.until = now() + 600000;
-    $('btn-share-code').hidden = !navigator.share; $('btn-copy-code').hidden = false;
+    $('btn-share-code').hidden = !navigator.share; $('btn-copy-code').hidden = false; showQr(p);
     const poll = async () => {
       if (pending !== p) return;
       if (now() > p.until) { screen(null, '?FILE NOT FOUND ERROR', 'the code expired. LOAD again.'); cancelPending(); return; }
@@ -300,14 +366,15 @@
   async function hostPaste(p, sdp) {
     p.link = linkFor('offer=' + await pack(sdp));
     if (pending !== p) return;
-    screen('LOAD "FRIEND",8,1', 'PASTE MODE (NO SERVER)', '1. send them this link. 2. paste back the answer link they get.');
-    $('btn-share-code').hidden = !navigator.share; $('btn-copy-code').hidden = false; $('form-answer').hidden = false;
-    $('load-hint').textContent = 'The link carries the handshake itself. Nothing is stored anywhere.';
+    screen('LOAD "FRIEND",8,1', 'PASTE MODE (NO SERVER)', '1. send them this link, or let them scan the code. 2. take back the answer they get.');
+    $('btn-share-code').hidden = !navigator.share; $('btn-copy-code').hidden = false; $('form-answer').hidden = false; showQr(p); scanKey('SCAN THEIR ANSWER');
+    $('load-hint').textContent = 'The link carries the handshake itself. Nothing is stored anywhere. If their answer link opens in another tab of this browser, it comes back here by itself.';
   }
   $('form-answer').addEventListener('submit', async (e) => {
     e.preventDefault(); const v = $('answer-input').value.trim(); const m = /answer=([A-Za-z0-9_-]+)/.exec(v) || [null, v];
     if (!pending || !m[1]) return toast('NO ANSWER LINK');
-    try { const sdp = await unpack(m[1]); if (!pending) return; screen(null, 'FOUND', 'LOADING'); const pc = pending.pc; await pc.setRemoteDescription({ type: 'answer', sdp }); armWatchdog(pc, 30000); } catch (_) { toast('?SYNTAX ERROR IN ANSWER'); }
+    if (pending.answered) return;
+    try { const sdp = await unpack(m[1]); if (!pending || pending.answered) return; pending.answered = true; stopScan(); scanKey(''); screen(null, 'FOUND', 'LOADING'); const pc = pending.pc; await pc.setRemoteDescription({ type: 'answer', sdp }); armWatchdog(pc, 30000); } catch (_) { toast('?SYNTAX ERROR IN ANSWER'); }
   });
   $('btn-share-code').addEventListener('click', async () => { try { await navigator.share({ title: 'PMM', text: pending?.code ? `PMM code ${pending.code}` : 'PMM link', url: pending?.link }); } catch (_) {} });
   $('btn-copy-code').addEventListener('click', async () => { try { await navigator.clipboard.writeText(pending?.link || ''); toast('LINK COPIED'); } catch (_) { prompt('Copy this link', pending?.link || ''); } });
@@ -315,12 +382,12 @@
   // GUEST: answer an offer from a code (store) or an offer link (paste mode).
   function joinView() {
     cancelPending(); show('load'); $('load-prompt').textContent = 'JOIN'; $('load-code').hidden = true; $('form-answer').hidden = true; $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true;
-    screen('LOAD "FRIEND",8,1', 'TYPE THE CODE YOUR FRIEND READ OUT', 'or paste the link they sent'); $('form-join').hidden = false; $('load-hint').textContent = ''; setTimeout(() => $('join-input').focus(), 50);
+    screen('LOAD "FRIEND",8,1', 'TYPE THE CODE YOUR FRIEND READ OUT', canScan ? 'or paste the link they sent, or scan their code' : 'or paste the link they sent, or point your camera at their code'); $('form-join').hidden = false; $('load-hint').textContent = ''; hideQr(); scanKey('SCAN THEIR CODE'); setTimeout(() => $('join-input').focus(), 50);
   }
   $('form-join').addEventListener('submit', (e) => { e.preventDefault(); const v = $('join-input').value.trim(); const o = /offer=([A-Za-z0-9_-]+)/.exec(v); const j = /join=([A-Z2-9]{6})/i.exec(v); if (o) joinOffer(o[1]); else joinCode((j ? j[1] : v).toUpperCase()); });
   async function joinCode(code) {
     if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code)) return toast('?SYNTAX ERROR: SIX LETTERS');
-    cancelPending(); show('load'); $('form-join').hidden = true; $('load-code').textContent = code; $('load-code').hidden = false;
+    cancelPending(); show('load'); $('form-join').hidden = true; $('load-code').textContent = code; $('load-code').hidden = false; hideQr(); scanKey('');
     screen('LOAD "FRIEND",8,1', 'SEARCHING FOR FRIEND', 'asking the desk for the handshake…');
     const mine = ++attempt; await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); pending = { pc, role: 'guest', code, startedAt: now() };
@@ -337,7 +404,7 @@
     if (pending?.pc === pc) screen(null, '?FILE NOT FOUND ERROR', 'no handshake under that code. ask them to LOAD again.');
   }
   async function joinOffer(packed) {
-    cancelPending(); show('load'); $('form-join').hidden = true; $('load-code').hidden = true; $('load-prompt').textContent = 'JOIN';
+    cancelPending(); show('load'); $('form-join').hidden = true; $('load-code').hidden = true; $('load-prompt').textContent = 'JOIN'; hideQr(); scanKey('');
     screen('LOAD "FRIEND",8,1', 'PASTE MODE', 'reading their handshake…');
     const mine = ++attempt; await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); pending = { pc, role: 'guest', startedAt: now() };
@@ -345,8 +412,8 @@
     let sdp; try { sdp = await unpack(packed); } catch (_) { return screen(null, '?SYNTAX ERROR', 'that link is not a PMM handshake'); }
     await answerOffer(pc, sdp, async (answer) => {
       pending.link = linkFor('answer=' + await pack(answer));
-      screen(null, 'SEND THIS ANSWER LINK BACK', 'when they paste it, you are connected.');
-      $('btn-share-code').hidden = !navigator.share; $('btn-copy-code').hidden = false;
+      screen(null, 'SEND THIS ANSWER BACK', 'as a link, or let them scan the code. when it lands, you are connected.');
+      $('btn-share-code').hidden = !navigator.share; $('btn-copy-code').hidden = false; showQr(pending);
     });
   }
   async function answerOffer(pc, sdp, deliver) {
@@ -1003,7 +1070,14 @@
     const h = location.hash.slice(1);
     const o = /offer=([A-Za-z0-9_-]+)/.exec(h), a = /answer=([A-Za-z0-9_-]+)/.exec(h), j = /join=([A-Z2-9]{6})/i.exec(h), f = /f=([0-9a-f]{16})/.exec(h), r = /r=([A-Za-z0-9_-]{12})/.exec(h);
     if (o) { history.replaceState(null, '', location.pathname); joinOffer(o[1]); }
-    else if (a) { history.replaceState(null, '', location.pathname); if (pending?.role === 'host') { $('answer-input').value = a[1]; $('form-answer').requestSubmit(); } else { joinView(); $('load-line2').textContent = 'THAT IS AN ANSWER LINK'; $('load-line3').textContent = 'open it on the phone that pressed LOAD, or paste it there.'; } }
+    else if (a) {
+      history.replaceState(null, '', location.pathname);
+      if (pending?.role === 'host') { $('answer-input').value = a[1]; $('form-answer').requestSubmit(); }
+      else handOff(a[1]).then((ok) => {
+        if (ok) { cancelPending(); show('load'); $('load-prompt').textContent = 'HANDED OVER'; $('load-code').hidden = true; $('form-join').hidden = true; $('form-answer').hidden = true; $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true; hideQr(); scanKey(''); $('load-hint').textContent = ''; screen('LOAD "FRIEND",8,1', 'HANDED TO YOUR OTHER PMM TAB', 'the line opens there. you can close this one.'); }
+        else { joinView(); $('load-line2').textContent = 'THAT IS AN ANSWER LINK'; $('load-line3').textContent = 'open it in the browser on the phone that pressed LOAD, or paste it there.'; }
+      });
+    }
     else if (j) { history.replaceState(null, '', location.pathname); joinCode(j[1].toUpperCase()); }
     else if (f) { const fr = state.friends.find((x) => x.id.startsWith(f[1])); if (fr) openChat(fr.id); }
     else if (r) { const room = state.rooms.find((x) => x.id === r[1]); if (room) openRoom(room.id); }
