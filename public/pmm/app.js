@@ -11,7 +11,40 @@
     ['calm', '#2F86D8'], ['hyped', '#E8453C'], ['soft', '#7E57B5'], ['sunny', '#F5D142'],
     ['salty', '#58B947'], ['tired', '#8A86A8'], ['curious', '#F28C28'], ['low', '#4B5BA6'],
   ];
-  const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }] };
+  const STUN = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }];
+  const TURN = '/api/pmm/turn';
+  let ice = { servers: STUN, until: 0, relay: false, checked: 0 };
+  let iceInflight = null;
+  let attempt = 0;
+  // A relay server must name only stun/turn/turns URLs, and a turn URL must carry its username and credential.
+  const okServer = (x) => {
+    if (!x || typeof x !== 'object') return false;
+    const urls = typeof x.urls === 'string' ? [x.urls] : Array.isArray(x.urls) ? x.urls : [];
+    if (!urls.length || !urls.every((u) => typeof u === 'string' && /^(stun|turns?):/.test(u))) return false;
+    return !urls.some((u) => /^turns?:/.test(u)) || (typeof x.username === 'string' && typeof x.credential === 'string');
+  };
+  // Ask the site for a relay credential. Without one, STUN only: two phones behind strict carrier NAT will not connect.
+  // A cached credential is used only while it still outlives a full ten-minute handshake window (660 s margin).
+  function refreshIce(force) {
+    if (iceInflight) return iceInflight;
+    if (!force && now() < ice.until) return Promise.resolve(ice);
+    if (!force && ice.checked && now() - ice.checked < 60000 && !ice.relay) return Promise.resolve(ice);
+    ice.checked = now();
+    iceInflight = (async () => {
+      try {
+        const r = await fetch(TURN, { cache: 'no-store' });
+        if (r.ok) {
+          const j = await r.json();
+          const servers = (Array.isArray(j.iceServers) ? j.iceServers : []).filter(okServer);
+          if (servers.length) { ice = { servers: [...STUN, ...servers], until: now() + Math.max(60, (Number(j.ttlSeconds) || 600) - 660) * 1000, relay: true, checked: now() }; return ice; }
+        }
+      } catch (_) {}
+      ice = { servers: STUN, until: now() + 60000, relay: false, checked: now() };
+      return ice;
+    })().finally(() => { iceInflight = null; });
+    return iceInflight;
+  }
+  const iceWithTimeout = (ms) => Promise.race([refreshIce(false), new Promise((r) => setTimeout(() => r(ice), ms))]);
   const CHUNK = 16 * 1024;
   const $ = (id) => document.getElementById(id);
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -164,17 +197,40 @@
     save(); renderMe(); closeSheets(); sendHello();
   });
   $('btn-export').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ type: 'pmm-key-v1', me: state.me }, null, 2)], { type: 'application/json' });
+    const friends = state.friends.map((f) => ({ id: f.id, name: f.name, pub: f.pub, trusted: Boolean(f.trusted), mood: f.mood, tz: f.tz, place: f.place, created: f.created }));
+    const blob = new Blob([JSON.stringify({ type: 'pmm-key-v1', me: state.me, friends }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `pmm-key-${state.me.id.slice(0, 8)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
   $('btn-import').addEventListener('click', () => $('import-input').click());
   $('import-input').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file) return;
     try {
-      const j = JSON.parse(await file.text()); if (j.type !== 'pmm-key-v1' || !j.me || typeof j.me.pub?.x !== 'string' || !j.me.priv?.d) throw 0;
+      const j = JSON.parse(await file.text());
+      if (j.type !== 'pmm-key-v1' || !j.me || typeof j.me.pub?.x !== 'string' || typeof j.me.pub?.y !== 'string' || !j.me.priv?.d) throw 0;
+      if (j.me.priv.x !== j.me.pub.x || j.me.priv.y !== j.me.pub.y) throw 0; // the public half must belong to the private key
       const priv = await crypto.subtle.importKey('jwk', j.me.priv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
-      const id = await fingerprint(j.me.pub);
-      state.me = { ...state.me, name: str(j.me.name, 24), place: str(j.me.place, 32), tzAddr: str(j.me.tzAddr, 40), pub: j.me.pub, priv: j.me.priv, id }; signKey = priv; save(); renderMe(); toast('KEY LOADED'); closeSheets();
+      const pub = { kty: 'EC', crv: 'P-256', x: j.me.priv.x, y: j.me.priv.y, ext: true };
+      const id = await fingerprint(pub);
+      const swapped = id !== state.me.id;
+      if (swapped) { hangup(); cancelPending(); }
+      state.me = { ...state.me, name: str(j.me.name, 24), place: str(j.me.place, 32), tzAddr: str(j.me.tzAddr, 40), pub, priv: j.me.priv, id }; signKey = priv;
+      if (swapped) {
+        for (const fr of state.friends) for (const m of fr.messages) {
+          if (m.from !== 'me' || m.status !== 'queued') continue;
+          if (!m.kind) m.sig = await sign({ t: 'msg', id: m.id, to: m.to || fr.id, ts: m.ts, text: m.text });
+          else if (m.kind === 'tab' && m.wire) { const { sig, ...rest } = m.wire; m.wire = { ...rest, sig: await sign(rest) }; }
+        }
+      }
+      let restored = 0;
+      for (const f of Array.isArray(j.friends) ? j.friends : []) {
+        if (!f || typeof f.pub?.x !== 'string' || typeof f.pub?.y !== 'string') continue;
+        const fid = await fingerprint(f.pub); if (fid === id) continue;
+        let fr = friendById(fid);
+        if (!fr) { fr = { id: fid, name: 'FRIEND', pub: f.pub, created: Number(f.created) || now(), messages: [], ledger: [], trusted: false, unread: 0 }; state.friends.push(fr); restored++; }
+        fr.name = str(f.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.trusted = fr.trusted || f.trusted === true;
+        if (!fr.mood) fr.mood = validMood(f.mood); if (!fr.tz) fr.tz = str(f.tz, 64); if (!fr.place) fr.place = str(f.place, 32);
+      }
+      save(); renderMe(); renderFriends(); toast(restored ? `KEY LOADED · ${restored} FRIEND${restored === 1 ? '' : 'S'} RESTORED` : 'KEY LOADED'); closeSheets();
     } catch (_) { toast('NOT A PMM KEY FILE'); }
     e.target.value = '';
   });
@@ -188,7 +244,9 @@
   let pending = null;        // { pc, dc, role, code, poll }
   let currentFriendTarget = null;
   function freshPc() {
-    const pc = new RTCPeerConnection(ICE);
+    let pc;
+    try { pc = new RTCPeerConnection({ iceServers: ice.servers }); pc.pmmRelay = ice.relay; }
+    catch (_) { ice = { servers: STUN, until: 0, relay: false, checked: 0 }; pc = new RTCPeerConnection({ iceServers: STUN }); pc.pmmRelay = false; }
     pc.addEventListener('connectionstatechange', () => { if (pending?.pc === pc && ['failed', 'closed'].includes(pc.connectionState)) { screen(null, '?LINE FAILED ERROR', 'no direct path between the phones. both LOAD again.'); cancelPending(); } });
     return pc;
   }
@@ -197,17 +255,18 @@
   const code6 = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => ALPHABET[b % ALPHABET.length]).join('');
   async function signalBound() { try { const r = await fetch(SIGNAL, { cache: 'no-store' }); if (!r.ok) return false; return Boolean((await r.json()).bound); } catch (_) { return false; } }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  function cancelPending() { currentFriendTarget = null; if (pending) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending.cancelled = true; const p = pending; pending = null; try { p.pc.close(); } catch (_) {} } }
+  function cancelPending() { attempt++; currentFriendTarget = null; if (pending) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending.cancelled = true; const p = pending; pending = null; try { p.pc.close(); } catch (_) {} } }
   function hangup() { if (peer) { try { peer.dc.close(); peer.pc.close(); } catch (_) {} peer = null; } clearInterval(pingTimer); renderFriends(); renderChatHead(); }
   function screen(l1, l2, l3) { $('load-line1').textContent = l1 ?? $('load-line1').textContent; $('load-line2').textContent = l2 ?? ''; $('load-line3').textContent = l3 ?? ''; }
   const linkFor = (hash) => location.origin + location.pathname + '#' + hash;
 
   // HOST: make an offer. Code flow when the signal store is bound, paste mode otherwise.
   async function host() {
-    cancelPending(); hangup();
+    cancelPending(); hangup(); const mine = ++attempt;
     show('load'); $('load-prompt').textContent = 'SEARCHING FOR FRIEND'; $('load-code').hidden = true; $('form-join').hidden = true; $('form-answer').hidden = true;
     $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true; $('load-hint').textContent = '';
     screen('LOAD "FRIEND",8,1', 'PRESS PLAY ON TAPE', '');
+    await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); const dc = pc.createDataChannel('pmm', { ordered: true });
     const p = { pc, dc, role: 'host', startedAt: now() }; pending = p;
     wire(pc, dc);
@@ -261,6 +320,7 @@
     if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code)) return toast('?SYNTAX ERROR: SIX LETTERS');
     cancelPending(); show('load'); $('form-join').hidden = true; $('load-code').textContent = code; $('load-code').hidden = false;
     screen('LOAD "FRIEND",8,1', 'SEARCHING FOR FRIEND', 'asking the desk for the handshake…');
+    const mine = ++attempt; await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); pending = { pc, role: 'guest', code, startedAt: now() };
     pc.addEventListener('datachannel', (e) => { pending && (pending.dc = e.channel); wire(pc, e.channel); });
     if (!(await signalBound())) { screen(null, '?DEVICE NOT PRESENT ERROR', 'the signal store is not bound on this site. ask your friend for a paste-mode link.'); return; }
@@ -277,6 +337,7 @@
   async function joinOffer(packed) {
     cancelPending(); show('load'); $('form-join').hidden = true; $('load-code').hidden = true; $('load-prompt').textContent = 'JOIN';
     screen('LOAD "FRIEND",8,1', 'PASTE MODE', 'reading their handshake…');
+    const mine = ++attempt; await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); pending = { pc, role: 'guest', startedAt: now() };
     pc.addEventListener('datachannel', (e) => { pending && (pending.dc = e.channel); wire(pc, e.channel); });
     let sdp; try { sdp = await unpack(packed); } catch (_) { return screen(null, '?SYNTAX ERROR', 'that link is not a PMM handshake'); }
@@ -302,7 +363,7 @@
       const startedAt = pending && pending.pc === pc ? pending.startedAt : now();
       if (pending && pending.pc === pc) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending = null; }
       hangup();
-      peer = { pc, dc, friend: null, connectedAt: now(), startedAt, rtt: null, bytesIn: 0, bytesOut: 0, relayBytes: 0, path: '…', localFp: dtlsFp(pc.localDescription), remoteFp: dtlsFp(pc.remoteDescription) };
+      peer = { pc, dc, friend: null, connectedAt: now(), startedAt, rtt: null, bytesIn: 0, bytesOut: 0, relayBytes: 0, relay: Boolean(pc.pmmRelay), path: '…', localFp: dtlsFp(pc.localDescription), remoteFp: dtlsFp(pc.remoteDescription) };
       await sendHello();
       if (peer?.pc !== pc) return;
       pingTimer = setInterval(() => { if (peer?.dc.readyState === 'open') { send({ t: 'ping', ts: now() }); statPath(); } }, 5000);
@@ -578,7 +639,7 @@
   // LINK panel
   $('btn-link').addEventListener('click', () => {
     const online = peer && peer.friend === current && peer.dc.readyState === 'open'; const dl = $('stats'); dl.replaceChildren();
-    const rows = online ? [['STATE', 'RUN'], ['CONNECT', `${peer.connectedAt - peer.startedAt} MS SETUP`], ['ROUND TRIP', peer.rtt == null ? '…' : `${peer.rtt} MS`], ['PATH', peer.path], ['SENT', kb(peer.bytesOut)], ['RECEIVED', kb(peer.bytesIn)], ['VIA RELAY', peer.relayBytes ? kb(peer.relayBytes) : '0 · no relay configured']] : [['STATE', 'OFFLINE'], ['NOTES WAITING', String(current ? current.messages.filter((m) => m.status === 'queued').length : 0)]];
+    const rows = online ? [['STATE', 'RUN'], ['CONNECT', `${peer.connectedAt - peer.startedAt} MS SETUP`], ['ROUND TRIP', peer.rtt == null ? '…' : `${peer.rtt} MS`], ['PATH', peer.path], ['SENT', kb(peer.bytesOut)], ['RECEIVED', kb(peer.bytesIn)], ['VIA RELAY', peer.relayBytes ? kb(peer.relayBytes) : peer.relay ? '0 · relay on standby' : '0 · no relay configured']] : [['STATE', 'OFFLINE'], ['NOTES WAITING', String(current ? current.messages.filter((m) => m.status === 'queued').length : 0)]];
     rows.push(['THEIR SIGIL', current ? `${sigilOf(current.id)} ${current.id.slice(0, 8).toUpperCase()}` : '—'], ['TRUST', current?.trusted ? 'VERIFIED BY YOU' : 'NOT YET VERIFIED'], ['TAB', current ? balanceLine(current) : '—']);
     for (const [k, v] of rows) { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); }
     $('btn-verify').textContent = current?.trusted ? 'UNVERIFY' : 'VERIFY SIGIL'; openSheet('sheet-link');
@@ -623,8 +684,9 @@
   /* ---------- boot ---------- */
   async function boot() {
     if (!state.me.tz) state.me.tz = tzName();
-    renderMe(); renderFriends(); ticker();
+    renderMe(); renderFriends(); ticker(); refreshIce(true);
     await ensureIdentity(); renderMe();
+    setInterval(() => { if (ice.relay) refreshIce(false); }, 240000);
     if (wide.matches) show('lobby');
     route();
     setInterval(() => { if (current) renderAtmo(); if (app.dataset.view === 'si') renderSi(); }, 30000);

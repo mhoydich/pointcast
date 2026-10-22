@@ -1,0 +1,109 @@
+---
+/**
+ * /radio-network/{station} — one station in the PointCast Radio Network plan:
+ * its town, beat, first show, local hours, open seats and how it launches.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/radio-network.css';
+import { CLOCK, STATIONS, STATION_SEATS, WEEK, stationBySlug, stationLaunch } from '../../data/radio-network';
+
+export function getStaticPaths() {
+  return STATIONS.map((s) => ({ params: { slug: s.slug } }));
+}
+
+const station = stationBySlug(String(Astro.params.slug))!;
+const others = STATIONS.filter((s) => s.slug !== station.slug);
+const localSlots = CLOCK.filter((c) => c.who.startsWith('Local'));
+const url = `https://pointcast.xyz/radio-network/${station.slug}`;
+const description = `${station.name}, ${station.role === 'flagship' ? 'flagship' : 'a sister station'} of the PointCast Radio Network plan for ${station.town}: the beat, the first show, local hours and open seats. Not on air yet.`;
+---
+
+<BlockLayout
+  title={`${station.name} — PointCast Radio Network`}
+  description={description}
+  author="PointCast"
+  alternates={[{ type: 'application/json', href: `/radio-network/${station.slug}.json`, title: station.name }]}
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: station.name,
+    url,
+    description,
+    about: { '@type': 'Place', name: station.town, address: { '@type': 'PostalAddress', postalCode: station.zip, addressRegion: 'CA' } },
+    isPartOf: { '@type': 'WebPage', name: 'PointCast Radio Network', url: 'https://pointcast.xyz/radio-network' },
+  }}
+>
+  <div class="rn">
+    <div class="rn-wrap">
+      <header class="rn-mast">
+        <a class="logo" href="/radio-network">PointCast <b>Radio Network</b></a>
+        <nav>
+          <a href="/radio-network#stations">All stations</a>
+          <a href="/radio-network/kit">Launch kit</a>
+          <a href={`/radio-network/${station.slug}.json`}>JSON</a>
+        </nav>
+      </header>
+
+      <p class="rn-kicker">{station.role === 'flagship' ? 'Flagship' : `Sister station · Phase ${station.phase}`} · {station.zip} · planned, not on air</p>
+      <h1>{station.name}</h1>
+      <p class="lede">{station.town}. {station.localHours} {stationLaunch(station.phase)}</p>
+
+      <div class="rn-grid two">
+        <article class="rn-card flagship">
+          <p class="rn-tag">First show</p>
+          <p>{station.firstShow}</p>
+        </article>
+        <article class="rn-card">
+          <p class="rn-tag">The beat</p>
+          <ul class="tight">{station.beat.map((b) => <li>{b}</li>)}</ul>
+        </article>
+      </div>
+
+      <section>
+        <h2>Open seats</h2>
+        <p class="rn-meta">Every seat is open. Nobody has been appointed.</p>
+        <div class="rn-scroll">
+          <table>
+            <thead><tr><th>Seat</th><th>Does</th></tr></thead>
+            <tbody>{STATION_SEATS.map((s) => <tr><td><b>{s.seat}</b></td><td>{s.does}</td></tr>)}</tbody>
+          </table>
+        </div>
+        <p class="rn-meta">How to get there: the participation ladder on <a href="/radio-network#join">the network plan</a>.</p>
+      </section>
+
+      <section>
+        <h2>What this station owns every hour</h2>
+        <div class="rn-scroll">
+          <table>
+            <thead><tr><th>At</th><th>Segment</th></tr></thead>
+            <tbody>{localSlots.map((c) => <tr><td class="mono">{c.at}</td><td>{c.what}</td></tr>)}</tbody>
+          </table>
+        </div>
+        <p class="rn-meta">The rest of the hour can come from the network feed. Full clock on <a href="/radio-network#clock">the plan</a>.</p>
+      </section>
+
+      <section>
+        <h2>The network week</h2>
+        <ul class="tight">{WEEK.map((w) => <li><b>{w.block}:</b> {w.show}</li>)}</ul>
+      </section>
+
+      <section>
+        <h2>The rest of the network</h2>
+        <div class="rn-grid">
+          {others.map((s) => (
+            <article class="rn-card">
+              <p class="rn-tag">{s.role === 'flagship' ? 'Flagship' : `Phase ${s.phase}`}</p>
+              <h3><a href={`/radio-network/${s.slug}`}>{s.name}</a></h3>
+              <p class="rn-meta">{s.town}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <footer class="rn-foot">
+        Part of a plan drafted by Claude Code at Mike Hoydich's request; not written in Mike's voice. {station.name} is a
+        working name. Nothing is on air and no host is appointed.
+      </footer>
+    </div>
+  </div>
+</BlockLayout>
