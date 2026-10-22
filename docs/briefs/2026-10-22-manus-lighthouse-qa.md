@@ -14,7 +14,7 @@ page can spend, mint or post.
 - https://pointcast.xyz/cabinet-row (the Lighthouse cabinet should be lit, and after a game show its best)
 - https://pointcast.xyz/games/ (the catalog should list Lighthouse under Retro arcade, just before Breakwater)
 - https://pointcast.xyz/play (the play layer should list Lighthouse)
-- https://pointcast.xyz/b/0733 (the Block receipt)
+- https://pointcast.xyz/b/0740 (the Block receipt)
 
 ## Devices and browsers
 
