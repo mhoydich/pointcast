@@ -14,6 +14,7 @@
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-breakwater-qa.md`, log to `docs/manus-logs/2026-10-22-breakwater.md` — `queued`
 - [ ] (MH) Decide whether Breakwater rotates into the six-card home GameRail — `waiting-on-mh`
 - [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
+- [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0726–0730: Tideline (Pong, `claude/tideline-20261022`, session_013uS8t2JMoN1mZW7mGugFBV), Kelp (Snake, `claude/kelp-20261022`, session_01AH1gmC9bA57d1xFs6EA8Ku), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, session_01DHqUiJikZvt6La79Z6M7Ma), Crosswalk (Frogger, `claude/crosswalk-20261022`, session_01PYvegxWHGev7hTXfvdBaZ7), Driftwood (Asteroids, `claude/driftwood-20261022`, session_01AnbKW7ZXxYrJxRvzyFNV1j) — `in-progress` — Mike 2026-10-22: "set up 5 new threads to create more"; all five share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence
 
 ---
 
