@@ -23,9 +23,9 @@
 - [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737, one cloud session each, draft PRs based on `claude/epic-albattani-j8tb06`: Lighthouse (Simon, `claude/lighthouse-20261022`, session_01PEDK4795RE7nBmVM7yeaJC), Low Tide (Kaboom!, `claude/low-tide-20261022`, session_016rpwV276Uk53dyNtHncrzz), Morning Route (Paperboy, `claude/morning-route-20261022`, session_01SDvFBq3oSr9SEfkD32XwZx), Sea Glass (Q*bert, `claude/sea-glass-20261022`, session_01QCPxosyU53LGtzQjrG99Fv), Sandcastle (Missile Command, `claude/sandcastle-20261022`, session_01FtckgMyrwsT8mZSzswKh4Q); each lights its own cabinet when published; their discovery entries sit after Cabinet Row's, wave one's after Breakwater's — `in-progress`
 - [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
 
-### Low Tide — catch what the gull drops (wave two, Block 0741)
+### Low Tide — catch what the gull drops (wave two, Block 0746)
 
-`/low-tide`, `/low-tide.json`, Block 0741, branch `claude/low-tide-20261022` stacked on #1478. Kaboom! (Activision, 1981) made gentle. Rules in `src/lib/low-tide/tide.mjs`, tests in `tests/low-tide.test.mjs`, research note `docs/notes/2026-10-22-low-tide-notes.md`.
+`/low-tide`, `/low-tide.json`, Block 0746, branch `claude/low-tide-20261022` stacked on #1478. Kaboom! (Activision, 1981) made gentle. Rules in `src/lib/low-tide/tide.mjs`, tests in `tests/low-tide.test.mjs`, research note `docs/notes/2026-10-22-low-tide-notes.md`.
 
 - [x] (CC) Build the game: gull, shells and a three-bucket stack with paddle-style absolute control, fixed-count waves that speed up, a rising catch run, a tide wash for a miss, a bucket back every 1000 points, golden shells in RUSH, shared mood and machines, JSON twin, Block, cover art, discovery — `done`
 - [ ] (Manus) Real-device QA per `docs/briefs/2026-10-22-manus-low-tide-qa.md` after deploy — `queued`
