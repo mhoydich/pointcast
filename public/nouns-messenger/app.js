@@ -186,6 +186,9 @@
     if (before && before.classList.contains('day') && (!after || after.classList.contains('day'))) before.remove();
     const prev = t.messages[index - 1]; if (!prev) return;
     const next = t.messages[index];
+    // Notes imported by link keep their sender's time, so days can interleave: [Today P][Yesterday M]
+    // [Today N]. With M gone, P and N share a day and the full build draws one row for them, not two.
+    if (next && fmtDay(prev.ts) === fmtDay(next.ts)) { const row = nodeFor(next)?.previousElementSibling; if (row && row.classList.contains('day')) row.remove(); }
     const pli = nodeFor(prev); if (!pli) return;
     const meta = pli.querySelector('.meta'), wants = !next || !sameRun(prev, next);
     if (wants && !meta) pli.append(metaFor(t, prev)); else if (!wants && meta) meta.remove();
