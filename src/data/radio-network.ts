@@ -282,6 +282,22 @@ export function stationLaunch(phase: number) {
   return 'Joins in year two, once the network is on at least one real radio signal.';
 }
 
+/** One station's detail: /radio-network/{slug}.json and the radio_station MCP tool. */
+export function buildStationDetail(slug: string) {
+  const station = stationBySlug(slug);
+  if (!station) return null;
+  return {
+    ...station,
+    status: RADIO_STATUS,
+    launch: stationLaunch(station.phase),
+    seats: STATION_SEATS.map((s) => ({ ...s, status: 'open' })),
+    localSlots: CLOCK.filter((c) => c.who.startsWith('Local')),
+    url: `${RADIO_BASE}/${station.slug}`,
+    network: `${RADIO_BASE}.json`,
+    launchKit: `${RADIO_BASE}/kit.json`,
+  };
+}
+
 export const CONNECTIONS = [
   { label: 'Mike Hoydich Radio', url: 'https://pointcast.xyz/station', note: 'The existing one-listener station. Its log and sleeves can become a Listener Shift show.' },
   { label: 'Morning Edition', url: 'https://pointcast.xyz/morning', note: 'The 6:45 AM paper becomes the morning drive script.' },
