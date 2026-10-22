@@ -289,6 +289,8 @@ export const AGENT_SURFACES = {
     mcpV2: 'https://pointcast.xyz/api/mcp-v2',
     // PMM handshake note. GET → { bound, ttlSeconds }: a ten-minute WebRTC offer/answer store, not a message store.
     pmmSignal: 'https://pointcast.xyz/api/pmm/signal',
+    // PMM connect success. GET ?days=1..90 → anonymous RUN/FAIL counts against the 90% goal; no identities.
+    pmmStat: 'https://pointcast.xyz/api/pmm/stat',
     // The public pointcast-chain devnet (its own Worker, not pointcast.xyz): no value, may reset. Guide: /chain/bots/.
     chainDevnet: 'https://pointcast-devnet.mhoydich.workers.dev',
     chainDevnetMcp: 'https://pointcast-devnet.mhoydich.workers.dev/mcp',

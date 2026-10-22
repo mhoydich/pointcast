@@ -40,7 +40,7 @@ something much smarter than a person.
 | style, leading | The Atari and Commodore brand. READY. prompts, Fuji stripes, PETSCII sigils. | A stranger can name the two references unprompted. |
 | researched, intelligent | The SI line: a channel that composes a full atmosphere packet and sends it to the Desk inbox, where Claude Code reads it. | Every packet carries text, mood, time, zone, place, sigil, signature. |
 | measured | LINK panel: connect time, round trip, bytes sent and received, path (direct or relayed). | Visible on every connected chat. |
-| easy to connect with friends | A six-letter code or a link. Friend opens it, you are connected. Works with no server at all via paste mode. | Connect success over 90% on home Wi-Fi and LTE with the code flow. |
+| easy to connect with friends | A six-letter code or a link. Friend opens it, you are connected. Works with no server at all via paste mode. | Connect success over 90% on home Wi-Fi and LTE with the code flow, read from `GET /api/pmm/stat`. |
 
 ## What ships in v0 (this PR)
 
@@ -143,6 +143,7 @@ as the SI line:
 - v0.2 (shipped, off until configured): TURN via Cloudflare Calls; friends ride along in the key export.
 - v0.2.1 (shipped): QR on every link, an in-app scanner where the browser has
   BarcodeDetector, and answer links that go to the waiting tab.
+- v0.2.2 (shipped): `/api/pmm/stat` measures the connect goal. It records one anonymous RUN or FAIL per handshake that reached FOUND, sent only by the phone that pressed LOAD, along with the flow, how the answer arrived (store, paste, scan, tab, link), the path (direct or relay) and the time to RUN. Nothing identifying is stored. DNT and GPC browsers send nothing.
 - v0.3: three to five person mesh.
 - v0.4: Tezos settle for TAB, reusing `/messages` wallet code.
 - v0.5: thin push relay for "your friend is on".
