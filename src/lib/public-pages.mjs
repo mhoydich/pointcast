@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { isNoindexPath, isRedirectPath } from './seo-rules.mjs';
 
@@ -10,6 +10,7 @@ import { isNoindexPath, isRedirectPath } from './seo-rules.mjs';
  */
 export function listPublicIndexPages(publicDir) {
   const pages = [];
+  if (!publicDir || !existsSync(publicDir)) return pages; // never fail a sitemap over a missing dir
   const walk = (dir, route) => {
     for (const name of readdirSync(dir)) {
       const file = join(dir, name);

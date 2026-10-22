@@ -9,7 +9,10 @@ import afterimageExamples from '../data/afterimage-examples.json';
 import { CABINET_PROFILES } from '../data/agent-cabinet';
 import { isNoindexPath } from '../lib/seo-rules.mjs';
 import { listPublicIndexPages } from '../lib/public-pages.mjs';
-import { fileURLToPath } from 'node:url';
+
+// Absolute public dir injected by astro.config.mjs (vite define); import.meta.url
+// points into the prerender bundle at build time, not at src/.
+declare const __PC_PUBLIC_DIR__: string;
 import { BRANDS, PADDLES } from '../lib/paddle-register';
 
 type SitemapEntry = [loc: string, changefreq: string, priority: string];
@@ -696,7 +699,7 @@ export const GET: APIRoute = async () => {
   ];
   // Static public/ pages that no Astro route produces (23 on 2026-10-22).
   const listed = new Set([...staticUrls, ...dynamicUrls].map(([loc]) => canonicalSitemapUrl(loc)));
-  const publicUrls: SitemapEntry[] = listPublicIndexPages(fileURLToPath(new URL('../../public', import.meta.url)))
+  const publicUrls: SitemapEntry[] = listPublicIndexPages(typeof __PC_PUBLIC_DIR__ === 'string' ? __PC_PUBLIC_DIR__ : `${process.cwd()}/public`)
     .map((route) => [`https://pointcast.xyz${route}`, 'monthly', '0.5'] as SitemapEntry)
     .filter(([loc]) => !listed.has(canonicalSitemapUrl(loc)));
   // Keep this bespoke sitemap and @astrojs/sitemap on one noindex policy.
