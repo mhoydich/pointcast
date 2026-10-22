@@ -1,0 +1,137 @@
+---
+/**
+ * /radio-network/status — the product status board for the PointCast Radio
+ * Network: counts per status, blockers first, the milestones table, decisions
+ * waiting on Mike, risks and a changelog. Data: src/data/radio-status.ts.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/radio-network.css';
+import { RADIO_STATUS } from '../../data/radio-network';
+import { CHANGELOG, DECISION_BOARD, MILESTONES, RISKS, STATUSES, STATUS_AS_OF, statusCounts } from '../../data/radio-status';
+
+const title = 'Radio network status — PointCast Radio Network';
+const description = `Where the PointCast Radio Network plan stands as of ${STATUS_AS_OF}: what is done, in progress, blocked and not started, the decisions waiting on Mike, risks and a changelog. A plan; nothing is on air.`;
+
+const counts = statusCounts();
+const order = (s: string) => STATUSES.indexOf(s as (typeof STATUSES)[number]);
+const blockers = MILESTONES.filter((m) => m.status === 'blocked');
+const rows = [...MILESTONES].sort((a, b) => order(a.status) - order(b.status));
+const pill = (s: string) => `rn-pill rn-pill-${s.replace(/\s+/g, '-')}`;
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  author="PointCast"
+  alternates={[{ type: 'application/json', href: '/radio-network/status.json', title: 'Radio network status board' }]}
+>
+  <div class="rn">
+    <div class="rn-wrap">
+      <header class="rn-mast">
+        <a class="logo" href="/radio-network">PointCast <b>Radio Network</b></a>
+        <nav>
+          <a href="#blockers">Blockers</a>
+          <a href="#milestones">Milestones</a>
+          <a href="#decisions">Decisions</a>
+          <a href="#risks">Risks</a>
+          <a href="#changelog">Changelog</a>
+          <a href="/radio-network/status.json">JSON</a>
+        </nav>
+      </header>
+
+      <p class="rn-kicker">Status board · last updated <time datetime={STATUS_AS_OF}>{STATUS_AS_OF}</time></p>
+      <h1>Where the radio network stands.</h1>
+      <p class="lede">
+        The network is a plan: {RADIO_STATUS}. This board tracks the work to get Radio El Segundo to its first four
+        episodes, and what comes after. Owners are roles; an open seat has no one in it yet.
+      </p>
+
+      <div class="rn-summary" role="list" aria-label="Milestones by status">
+        {STATUSES.map((s) => (
+          <p role="listitem" class={pill(s)}><b>{counts[s]}</b> {s}</p>
+        ))}
+      </div>
+
+      <section id="blockers">
+        <h2>Blocked</h2>
+        <div class="rn-grid two">
+          {blockers.map((m) => (
+            <article class="rn-card rn-blocked">
+              <p class="rn-tag">{m.track} · owner: {m.owner}</p>
+              <h3>{m.title}</h3>
+              <p>{m.note}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="milestones">
+        <h2>Milestones</h2>
+        <div class="rn-scroll">
+          <table>
+            <thead><tr><th>Status</th><th>Track</th><th>Milestone</th><th>Owner</th><th>Note</th></tr></thead>
+            <tbody>
+              {rows.map((m) => (
+                <tr id={m.id}>
+                  <td><span class={pill(m.status)}>{m.status}</span></td>
+                  <td>{m.track}</td>
+                  <td><b>{m.title}</b>{m.ref && <> · <a href={m.ref.url}>{m.ref.label}</a></>}</td>
+                  <td>{m.owner}</td>
+                  <td>{m.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="decisions">
+        <h2>Decisions waiting on Mike</h2>
+        <p class="rn-meta">From the plan's open decisions. Phase 0 week 1 cannot finish until the first four are made.</p>
+        <div class="rn-scroll">
+          <table>
+            <thead><tr><th>Status</th><th>Decision</th><th>Detail</th><th>Blocks</th></tr></thead>
+            <tbody>
+              {DECISION_BOARD.map((d) => (
+                <tr>
+                  <td><span class={pill(d.status)}>{d.status}</span></td>
+                  <td><b>{d.title}</b></td>
+                  <td>{d.detail}</td>
+                  <td>{d.blocks}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="risks">
+        <h2>Risks</h2>
+        <div class="rn-scroll">
+          <table>
+            <thead><tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr></thead>
+            <tbody>{RISKS.map((r) => <tr><td><b>{r.risk}</b></td><td>{r.impact}</td><td>{r.mitigation}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="changelog">
+        <h2>Changelog</h2>
+        <ul class="rn-log">
+          {CHANGELOG.map((c) => (
+            <li>
+              <span class="mono">{c.date}</span> {c.shipped}
+              {c.ref && <> · Block {c.ref.block} · <a href={c.ref.url}>{c.ref.label}</a></>}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <footer class="rn-foot">
+        Last updated {STATUS_AS_OF}. Kept by the product manager in <code>src/data/radio-status.ts</code>; not written in
+        Mike's voice. Machine-readable twin: <a href="/radio-network/status.json">/radio-network/status.json</a>. Back to
+        <a href="/radio-network">the network plan</a>.
+      </footer>
+    </div>
+  </div>
+</BlockLayout>
