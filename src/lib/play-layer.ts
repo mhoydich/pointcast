@@ -16,6 +16,13 @@ export const PLAY_SURFACES = [
     summary: 'The lobby for the 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood.',
   },
   {
+    id: 'low-tide',
+    code: 'TIDE',
+    title: 'Low Tide',
+    route: '/low-tide',
+    summary: 'Catch what the gull drops: a gentle Kaboom! with a stack of buckets that follows your finger, a rising run of notes, and the tide for a miss.',
+  },
+  {
     id: 'breakwater',
     code: 'BRK',
     title: 'Breakwater',
