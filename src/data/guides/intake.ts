@@ -1,4 +1,5 @@
 import { GUIDES, INTERN_ASSIGNMENTS } from './index';
+import { agentCheck, suggestKinds } from '../../lib/guides-intake/classify.mjs';
 
 export const INTAKE_SPEC = 'pointcast.guides-intake/v1';
 export const INTAKE_ENDPOINT = 'https://pointcast.xyz/api/guides/intake';
@@ -8,26 +9,6 @@ export const INTAKE_KINDS = ['tip', 'correction', 'resource', 'schedule', 'resul
 export type IntakeKind = (typeof INTAKE_KINDS)[number];
 
 const SOURCE_KINDS: IntakeKind[] = ['correction', 'resource', 'dataset', 'schedule', 'result'];
-
-function suggestKinds(ask: string): IntakeKind[] {
-  const t = ask.toLowerCase();
-  const out: IntakeKind[] = [];
-  if (/\bcorrection|out of date|wrong\b/.test(t)) out.push('correction');
-  if (/schedule|calendar|agenda|hours|recurring/.test(t)) out.push('schedule');
-  if (/result|score|standings|recap/.test(t)) out.push('result');
-  if (/list of|ledger|template|directory|roster|table|spreadsheet/.test(t)) out.push('dataset');
-  if (/link|page|resource|sample|template|format/.test(t)) out.push('resource');
-  if (/tip|idea|advice|ways to/.test(t)) out.push('tip');
-  return out.length ? [...new Set(out)] : ['tip', 'resource'];
-}
-
-function agentCheck(ask: string): { agentFriendly: boolean; reason?: string } {
-  const t = ask.toLowerCase();
-  if (/photo|picture|image/.test(t)) return { agentFriendly: false, reason: 'Involves photos; needs a human who took them and consent from anyone pictured.' };
-  if (/interview|consent|permission|approved|agreed/.test(t)) return { agentFriendly: false, reason: 'Involves interviews or people\'s consent; a human must ask and confirm.' };
-  if (/contact|organizer|captain|call\b|reach out/.test(t)) return { agentFriendly: false, reason: 'Involves contacting someone; agents never contact people.' };
-  return { agentFriendly: true };
-}
 
 export function buildIntakeFeed() {
   const tasks: Record<string, unknown>[] = [];
