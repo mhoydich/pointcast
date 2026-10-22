@@ -1,0 +1,360 @@
+---
+/**
+ * /cabinet-row — the lobby for PointCast's 8-bit arcade.
+ *
+ * One cabinet per game that shares the Breakwater cabinet (pixel font,
+ * machine palettes, mood model). A cabinet is lit when its game is in the
+ * game catalog; each game lights its own cabinet when it is published.
+ * In the browser the lobby reads every game's save (`${slug}:v1`) and the
+ * town mood (`pc:mood`, written by the last game played) and suggests the
+ * next cabinet for the mood you left the last one in. Nothing leaves the
+ * browser. Rules live in src/lib/breakwater/row.mjs (tests/cabinet-row.test.mjs).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import catalog from '../data/game-catalog.json';
+import { ROW, WHY, litSlugs, suggest } from '../lib/breakwater/row.mjs';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { LABELS } from '../lib/breakwater/mood.mjs';
+import { eachPixel, textWidth, GLYPH_H } from '../lib/breakwater/font.mjs';
+
+const lit = new Set(litSlugs(catalog.map((g) => g.slug)));
+const litCount = lit.size;
+const firstPick = suggest('DAWN', [...lit], {});
+const palette = Object.entries({ xl: MACHINES.xl, c64: MACHINES.c64 }).map(([id, m]) => `--${id}-field:${m.field};--${id}-rim:${m.border === '#000000' ? '#1b2350' : m.border};--${id}-text:${m.text};--${id}-paddle:${m.paddle};--${id}-b0:${m.bands.red};--${id}-b1:${m.bands.orange};--${id}-b2:${m.bands.green};--${id}-b3:${m.bands.yellow}`).join(';');
+
+/** Pixel text as one SVG path, so it scales crisply and takes its color from CSS. */
+function pixelPath(text) {
+  let d = '';
+  eachPixel(text.toUpperCase(), 0, 0, 1, (x, y) => { d += `M${x} ${y}h1v1h-1z`; });
+  return { d, w: Math.max(1, textWidth(text, 1)), h: GLYPH_H };
+}
+const title = 'CABINET ROW'.split('').map((ch, i) => ({ ch, i, ...pixelPath(ch) }));
+const moodWords = Object.fromEntries(LABELS.map((l) => [l, pixelPath(l)]));
+const marquees = Object.fromEntries(ROW.map((c) => [c.slug, pixelPath(c.name)]));
+
+const description = 'The lobby for PointCast\'s 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood. Phone or full screen.';
+const canonical = 'https://pointcast.xyz/cabinet-row';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': `${canonical}#row`,
+      name: 'Cabinet Row',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/cabinet-row/og.png',
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      hasPart: ROW.filter((c) => lit.has(c.slug)).map((c) => ({ '@type': 'VideoGame', name: c.name, url: `https://pointcast.xyz${c.route}`, gamePlatform: 'Web browser' })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Cabinet Row', item: canonical },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout
+  title="Cabinet Row"
+  description={description}
+  image="/images/cabinet-row/og.png"
+  imageAlt="A row of small arcade cabinets under the words Cabinet Row, each with a pixel marquee and a lit or dark screen."
+  themeColor="#0b0d1a"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/cabinet-row.json', title: 'Cabinet Row: cabinets, lit state and mood rules (JSON)' }]}
+>
+  <div class="row" data-row data-machine="xl" data-mood="DAWN" style={palette}>
+    <header class="row-bar">
+      <a class="row-home" href="/">POINTCAST</a>
+      <span class="row-name" aria-hidden="true">CABINET ROW</span>
+      <div class="row-controls" role="group" aria-label="Lobby settings">
+        <button type="button" data-machine-btn title="Switch machine colors">800XL</button>
+        <button type="button" data-sound-btn aria-pressed="false" title="Lobby hum in the row's mood">SND</button>
+      </div>
+    </header>
+
+    <section class="row-hero" aria-labelledby="row-title">
+      <h1 id="row-title" class="sr-only">Cabinet Row</h1>
+      <svg class="row-title" viewBox={`0 0 ${title.reduce((w, t) => w + t.w + 1, -1)} 5`} role="img" aria-label="Cabinet Row" shape-rendering="crispEdges">
+        {(() => { let x = 0; return title.map((t) => { const g = <path d={t.d} transform={`translate(${x} 0)`} class={`band band-${t.i % 4}`} />; x += t.w + 1; return g; }); })()}
+      </svg>
+      <p class="row-count"><span data-lit-count>{litCount}</span> of {ROW.length} cabinets lit · each one lights when its game is published</p>
+
+      <div class="row-mood" aria-live="polite">
+        <p class="row-mood-lead">THE ROW IS IN</p>
+        {LABELS.map((l) => (
+          <svg class="row-mood-word" data-mood-word={l} hidden={l !== 'DAWN'} viewBox={`0 0 ${moodWords[l].w} 5`} role="img" aria-label={l} shape-rendering="crispEdges"><path d={moodWords[l].d} /></svg>
+        ))}
+        <p class="row-mood-why" data-mood-why>No games played in this browser yet. Start with {WHY.DAWN}.</p>
+      </div>
+
+      {firstPick && (
+        <a class="row-next" data-next href={firstPick.route}>
+          <span class="row-next-label">NEXT CABINET</span>
+          <span class="row-next-name" data-next-name>{firstPick.name}</span>
+          <span class="row-next-after" data-next-after>after {firstPick.after}, {firstPick.year}</span>
+          <span class="row-next-go" aria-hidden="true">PLAY ▸</span>
+        </a>
+      )}
+
+      <div class="row-ribbon" data-ribbon hidden>
+        <p class="row-ribbon-label">MOOD ACROSS THE ROW</p>
+        <div class="row-ribbon-strip" data-ribbon-strip role="img" aria-label="Recent mood samples from each game you played"></div>
+        <p class="row-ribbon-key"><span class="k k0"></span>DAWN <span class="k k1"></span>FLOW <span class="k k2"></span>RUSH <span class="k k3"></span>DRIFT</p>
+      </div>
+    </section>
+
+    <ol class="row-cabinets" aria-label="Cabinets">
+      {ROW.map((c) => {
+        const on = lit.has(c.slug);
+        const m = marquees[c.slug];
+        const inner = (
+          <>
+            <span class="cab-marquee"><svg viewBox={`-1 -1 ${m.w + 2} 7`} aria-hidden="true" shape-rendering="crispEdges"><path d={m.d} /></svg></span>
+            <span class="cab-screen">
+              {on ? <img src={c.cover} alt="" loading="lazy" decoding="async" width="1200" height="630" /> : <span class="cab-coin">INSERT COIN</span>}
+            </span>
+            <span class="cab-panel">
+              <span class="cab-title">{c.name}</span>
+              <span class="cab-after">after {c.after}, {c.year}</span>
+              {on ? (
+                <span class="cab-stats"><span data-best>BEST —</span><span data-last>NOT PLAYED</span></span>
+              ) : (
+                <span class="cab-stats"><span>COMING TO THE ROW</span></span>
+              )}
+            </span>
+          </>
+        );
+        return (
+          <li class:list={['cab', on ? 'cab-lit' : 'cab-dark']} data-cab={c.slug} data-lit={on ? 'true' : 'false'}>
+            {on ? <a class="cab-body" href={c.route} aria-label={`${c.name}: ${c.tagline}`}>{inner}</a> : <div class="cab-body" aria-label={`${c.name}, coming to the row`}>{inner}</div>}
+          </li>
+        );
+      })}
+    </ol>
+
+    <section class="row-notes" aria-labelledby="notes-title">
+      <h2 id="notes-title">How the row keeps your mood</h2>
+      <p>Every game on the row keeps a mood with you: rallies raise its energy, a lost ball lowers its calm, and time brings both back. It names that mood DAWN, FLOW, RUSH or DRIFT. When you leave a game after playing, it hands the mood to the town, and the row picks it up here.</p>
+      <p>The next cabinet follows the mood you left: DAWN gets {WHY.DAWN}, FLOW {WHY.FLOW}, RUSH {WHY.RUSH}, DRIFT {WHY.DRIFT}. The row prefers a cabinet you have not played yet.</p>
+      <p>Scores and moods stay in this browser. The lobby only reads what the games saved; nothing is sent anywhere. Each cabinet lights when its game is published to PointCast.</p>
+      <p class="row-credits">Directed by Michael Hoydich. Designed and built by Claude Code, October 2026. Original code, art and sound; machine names are tributes. <a href="/cabinet-row.json">cabinet-row.json</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a></p>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .row { --field: var(--xl-field); --rim: var(--xl-rim); --text: var(--xl-text); --paddle: var(--xl-paddle); --b0: var(--xl-b0); --b1: var(--xl-b1); --b2: var(--xl-b2); --b3: var(--xl-b3); min-height: 100vh; min-height: 100dvh; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); }
+  .row[data-machine='c64'] { --field: var(--c64-field); --rim: var(--c64-rim); --text: var(--c64-text); --paddle: var(--c64-paddle); --b0: var(--c64-b0); --b1: var(--c64-b1); --b2: var(--c64-b2); --b3: var(--c64-b3); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .row-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .row-home { color: #a9b9f5; text-decoration: none; font-weight: 700; }
+  .row-home:hover { color: #fff; }
+  .row-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .row-controls { display: flex; gap: 6px; }
+  .row-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; min-width: 44px; min-height: 30px; cursor: pointer; touch-action: manipulation; }
+  .row-controls button:hover { background: #1f2456; }
+  .row-controls button[aria-pressed='false'] { color: #9aa1cc; text-decoration: line-through; }
+  .row-controls button:focus-visible, .row a:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+
+  .row-hero { max-width: 1080px; margin: 0 auto; padding: 40px 16px 24px; text-align: center; }
+  .row-title { width: min(720px, 100%); height: auto; display: block; margin: 0 auto 14px; }
+  .band-0 { fill: var(--b0); } .band-1 { fill: var(--b1); } .band-2 { fill: var(--b3); } .band-3 { fill: var(--b2); }
+  .row-count { margin: 0 0 30px; font-size: 11px; letter-spacing: 0.12em; color: #9aa1cc; }
+  .row-mood { margin: 0 auto 22px; }
+  .row-mood-lead { margin: 0 0 10px; font-size: 12px; letter-spacing: 0.2em; color: #c9cfee; }
+  .row-mood-word { display: block; height: clamp(40px, 9vw, 72px); width: auto; margin: 0 auto 12px; fill: var(--mood-color, var(--b2)); }
+  .row-mood-word[hidden] { display: none; }
+  .row[data-mood='DAWN'] { --mood-color: var(--b2); }
+  .row[data-mood='FLOW'] { --mood-color: var(--b3); }
+  .row[data-mood='RUSH'] { --mood-color: var(--b0); }
+  .row[data-mood='DRIFT'] { --mood-color: var(--text); }
+  .row-mood-why { margin: 0 auto; max-width: 52ch; font: 15px/1.5 var(--pc-font-sans); color: #c9cfee; }
+  .row-next { display: inline-grid; grid-template-columns: auto auto; align-items: center; gap: 4px 18px; margin: 6px auto 28px; padding: 14px 18px; text-align: left; color: #fff; text-decoration: none; background: var(--field); border: 2px solid var(--paddle); border-radius: 6px; box-shadow: 0 0 0 4px #0b0d1a, 0 0 24px color-mix(in srgb, var(--paddle) 35%, transparent); }
+  .row-next:hover { background: color-mix(in srgb, var(--field) 80%, #fff); }
+  .row-next-label { grid-column: 1 / -1; font-size: 10px; letter-spacing: 0.18em; color: var(--paddle); }
+  .row-next-name { font: 700 24px/1.1 var(--pc-font-sans); letter-spacing: -0.01em; }
+  .row-next-after { grid-column: 1; font-size: 11px; color: #dfe3f5; }
+  .row-next-go { grid-column: 2; grid-row: 2 / span 2; align-self: center; font-weight: 700; font-size: 13px; letter-spacing: 0.12em; color: var(--paddle); }
+
+  .row-ribbon { margin: 0 auto; max-width: 860px; }
+  .row-ribbon[hidden] { display: none; }
+  .row-ribbon-label { margin: 0 0 8px; font-size: 10px; letter-spacing: 0.18em; color: #9aa1cc; }
+  .row-ribbon-strip { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  /* Ribbon cells are built in the browser, so these selectors are global. */
+  .row-ribbon-strip :global(.rib) { display: grid; gap: 4px; justify-items: center; }
+  .row-ribbon-strip :global(.rib-cells) { display: flex; gap: 1px; }
+  .row-ribbon-strip :global(.rib-cells i) { display: block; width: 6px; height: 16px; }
+  .row-ribbon-strip :global(.rib-name) { font-size: 9px; letter-spacing: 0.1em; color: #9aa1cc; }
+  .row-ribbon-strip :global(.l0), .k0 { background: var(--b2); }
+  .row-ribbon-strip :global(.l1), .k1 { background: var(--b3); }
+  .row-ribbon-strip :global(.l2), .k2 { background: var(--b0); }
+  .row-ribbon-strip :global(.l3), .k3 { background: var(--text); }
+  .row-ribbon-key { margin: 10px 0 0; font-size: 9px; letter-spacing: 0.1em; color: #9aa1cc; }
+  .k { display: inline-block; width: 8px; height: 8px; margin: 0 4px 0 10px; vertical-align: middle; }
+
+  .row-cabinets { list-style: none; margin: 0 auto; padding: 8px 16px 48px; max-width: 1180px; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 18px; }
+  .cab-body { display: grid; grid-template-rows: auto auto 1fr; height: 100%; padding: 8px 8px 10px; color: #dfe3f5; text-decoration: none; background: linear-gradient(180deg, var(--rim), #0e1230 70%); border: 1px solid #2b3070; border-radius: 12px 12px 4px 4px; box-shadow: inset 0 -6px 0 #070918; }
+  .cab-lit .cab-body { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+  .cab-lit .cab-body:hover { transform: translateY(-3px); box-shadow: inset 0 -6px 0 #070918, 0 10px 24px color-mix(in srgb, var(--paddle) 25%, transparent); }
+  .cab-marquee { display: block; padding: 7px 8px; margin-bottom: 8px; background: #05060f; border-radius: 6px 6px 2px 2px; border-bottom: 2px solid var(--paddle); }
+  .cab-marquee svg { display: block; width: 100%; height: 22px; fill: var(--paddle); }
+  .cab-dark .cab-marquee { border-bottom-color: #2b3070; }
+  .cab-dark .cab-marquee svg { fill: #5a6199; }
+  .cab-screen { display: grid; place-items: center; aspect-ratio: 4 / 3; overflow: hidden; background: #000; border: 6px solid #05060f; border-radius: 6px; }
+  .cab-screen img { width: 100%; height: 100%; object-fit: cover; object-position: 22% 50%; image-rendering: pixelated; }
+  .cab-coin { font-size: 10px; letter-spacing: 0.18em; color: var(--paddle); animation: coin 2s steps(2, jump-none) infinite; }
+  @keyframes coin { 50% { opacity: 0.4; } }
+  .cab-panel { display: grid; align-content: start; gap: 4px; padding: 10px 2px 0; }
+  .cab-title { font: 700 15px/1.15 var(--pc-font-sans); color: #fff; }
+  .cab-after { font-size: 10px; color: #9aa1cc; letter-spacing: 0.04em; }
+  .cab-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 10px; letter-spacing: 0.08em; color: #dfe3f5; }
+  .cab-dark .cab-stats { color: #9aa1cc; }
+  .cab-dark .cab-title { color: #c9cfee; }
+
+  .row-notes { max-width: 760px; margin: 0 auto; padding: 8px 16px 64px; font: 15px/1.6 var(--pc-font-sans); color: #c9cfee; }
+  .row-notes h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); }
+  .row-notes a { color: #a9b9f5; }
+  .row-credits { font-size: 13px; color: #9aa1cc; border-top: 1px solid #2b3070; padding-top: 14px; }
+
+  @media (max-width: 520px) {
+    .row-cabinets { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .row-name { display: none; }
+    .cab-title { font-size: 14px; }
+    .row-next-name { font-size: 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cab-coin { animation: none; }
+    .cab-lit .cab-body { transition: none; }
+    .cab-lit .cab-body:hover { transform: none; }
+  }
+</style>
+
+<script>
+  import { ROW, WHY, litSlugs, readSave, rowMood, suggest, ribbon } from '../lib/breakwater/row.mjs';
+  import { MACHINES } from '../lib/breakwater/waves.mjs';
+
+  const root = document.querySelector('[data-row]');
+  if (root) lobby(root);
+
+  function lobby(root) {
+    const STORE = 'cabinet-row:v1';
+    const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+    const lit = [...root.querySelectorAll('[data-cab][data-lit="true"]')].map((el) => el.dataset.cab);
+    const saves = Object.fromEntries(ROW.map((c) => [c.slug, readSave(get(c.storeKey))]));
+    let prefs = {};
+    try { prefs = JSON.parse(get(STORE) || '{}') || {}; } catch { prefs = {}; }
+    const lastMachine = Object.values(saves).find((s) => s.machine)?.machine;
+    let machine = MACHINES[prefs.machine] ? prefs.machine : lastMachine || 'xl';
+    const savePrefs = () => { try { localStorage.setItem(STORE, JSON.stringify({ machine })); } catch {} };
+
+    // Cabinets: best score and the mood each game was left in.
+    for (const slug of lit) {
+      const el = root.querySelector(`[data-cab="${slug}"]`);
+      const s = saves[slug];
+      if (!el || !s.played) continue;
+      const best = el.querySelector('[data-best]');
+      const last = el.querySelector('[data-last]');
+      if (best) best.textContent = s.best ? `BEST ${String(s.best).padStart(6, '0')}` : 'BEST —';
+      if (last) last.textContent = s.label ? `LEFT IN ${s.label}` : 'PLAYED';
+    }
+
+    // The row's mood and the next cabinet.
+    const mood = rowMood(get('pc:mood'), saves);
+    root.dataset.mood = mood.label;
+    // SVG elements have no `hidden` property; set the attribute itself.
+    for (const svg of root.querySelectorAll('[data-mood-word]')) svg.toggleAttribute('hidden', svg.dataset.moodWord !== mood.label);
+    const why = root.querySelector('[data-mood-why]');
+    if (why) {
+      why.textContent = mood.source === 'town'
+        ? `Your last game handed the town ${mood.label}. Next: ${WHY[mood.label]}.`
+        : mood.source === 'tapes'
+          ? `Your games have mostly been in ${mood.label} lately. Next: ${WHY[mood.label]}.`
+          : `No games played in this browser yet. Start with ${WHY.DAWN}.`;
+    }
+    const pick = suggest(mood.label, lit, saves);
+    const next = root.querySelector('[data-next]');
+    if (next && pick) {
+      next.href = pick.route;
+      next.querySelector('[data-next-name]').textContent = pick.name;
+      next.querySelector('[data-next-after]').textContent = `after ${pick.after}, ${pick.year}`;
+      next.setAttribute('aria-label', `Next cabinet: ${pick.name}. Play.`);
+    }
+
+    // One ribbon across every game played.
+    const strips = ribbon(lit, saves, 20);
+    const box = root.querySelector('[data-ribbon]');
+    const strip = root.querySelector('[data-ribbon-strip]');
+    if (box && strip && strips.length) {
+      strip.replaceChildren(...strips.map((r) => {
+        const wrap = document.createElement('span'); wrap.className = 'rib';
+        const cells = document.createElement('span'); cells.className = 'rib-cells';
+        for (const v of r.values) { const i = document.createElement('i'); i.className = `l${v}`; cells.append(i); }
+        const name = document.createElement('span'); name.className = 'rib-name'; name.textContent = r.name.toUpperCase();
+        wrap.append(cells, name);
+        return wrap;
+      }));
+      box.hidden = false;
+    }
+
+    // Machine colors.
+    const machineBtn = root.querySelector('[data-machine-btn]');
+    const syncMachine = () => { root.dataset.machine = machine; if (machineBtn) machineBtn.textContent = MACHINES[machine].label; };
+    syncMachine();
+    machineBtn?.addEventListener('click', (e) => { machine = machine === 'xl' ? 'c64' : 'xl'; syncMachine(); savePrefs(); if (e.detail > 0) machineBtn.blur(); });
+
+    // A quiet hum in the row's mood, off until asked for.
+    const hum = (() => {
+      const TEMPO = { DAWN: 92, FLOW: 110, RUSH: 132, DRIFT: 76 };
+      const SCALE = {
+        DAWN: [60, 64, 67, 72, 67, 64], FLOW: [60, 64, 67, 71, 74, 71], RUSH: [57, 60, 64, 69, 64, 60], DRIFT: [60, 67, 72, 67],
+      };
+      let ac = null, out = null, on = false, timer = 0, next = 0, step = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      function note(t, n) {
+        const o = ac.createOscillator(); o.type = machine === 'c64' ? 'triangle' : 'square';
+        o.frequency.value = midi(n);
+        const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05, t + 0.01); g.gain.setTargetAtTime(0.0001, t + 0.12, 0.06);
+        let tail = g;
+        if (machine === 'c64') { const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 4; f.frequency.setValueAtTime(midi(n) * 6, t); f.frequency.exponentialRampToValueAtTime(midi(n) * 1.2, t + 0.25); g.connect(f); tail = f; }
+        o.connect(g); tail.connect(out); o.start(t); o.stop(t + 0.6);
+      }
+      function tick() {
+        if (!ac || !on) return;
+        const seq = SCALE[root.dataset.mood] || SCALE.DAWN;
+        const dt = 60 / (TEMPO[root.dataset.mood] || 92) / 2;
+        if (next < ac.currentTime - 0.1) next = ac.currentTime + 0.05;
+        while (next < ac.currentTime + 0.15) { note(next, seq[step % seq.length] - (step % 8 === 0 ? 12 : 0)); next += dt; step += 1; }
+      }
+      return {
+        toggle() {
+          if (!ac) {
+            const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+            ac = new AC(); out = ac.createGain(); out.gain.value = 0.6; out.connect(ac.destination);
+          }
+          on = !on;
+          if (on) { if (ac.state === 'suspended') ac.resume().catch(() => {}); next = ac.currentTime + 0.05; clearInterval(timer); timer = setInterval(tick, 40); }
+          else clearInterval(timer);
+          return on;
+        },
+        pause() { clearInterval(timer); },
+        resume() { if (on && ac) { next = ac.currentTime + 0.05; clearInterval(timer); timer = setInterval(tick, 40); } },
+      };
+    })();
+    const soundBtn = root.querySelector('[data-sound-btn]');
+    soundBtn?.addEventListener('click', (e) => { const on = hum.toggle(); soundBtn.setAttribute('aria-pressed', String(Boolean(on))); if (e.detail > 0) soundBtn.blur(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) hum.pause(); else hum.resume(); });
+  }
+</script>
