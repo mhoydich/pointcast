@@ -4,10 +4,14 @@ import {
   parseDoc, serializeDoc, serializeBlock, makeBlock, blockTokens, flatTakes, setTakeActive, addTakeOption,
   removeTakeOption, flattenTake, promoteTake, wrapTake, wrapDim, unwrapDimAt, cutRange, sentenceBounds,
   rangeIsClean, rangeCanTake, sourceRangeIsInline, docStats, cleanMarkdown, SAMPLE_DOC,
+  blockPlain, setVersionActive, promoteVersion, removeVersion, wordDiff, scoreEvents,
+  encodeShare, decodeShare, shareCodeFromHash, SHARE_MAX,
 } from './takes-core.mjs';
-import { TakesAudio, AUDIO_DEFAULTS } from './takes-audio.mjs';
+import { TakesAudio, AUDIO_DEFAULTS, encodeWav } from './takes-audio.mjs';
 
 export const STORAGE_KEY = 'pointcast.takes.v1';
+// Opening a share link keeps the draft it replaced here, one deep.
+export const BACKUP_KEY = 'pointcast.takes.v1.before-share';
 
 export const STYLE_DEFAULTS = {
   theme: 'midnight',
@@ -37,6 +41,8 @@ export const FONTS = {
 const store = {
   get() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; } },
   set(v) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); return true; } catch { return false; } },
+  getBackup() { try { return JSON.parse(localStorage.getItem(BACKUP_KEY) || 'null'); } catch { return null; } },
+  setBackup(v) { try { localStorage.setItem(BACKUP_KEY, JSON.stringify(v)); return true; } catch { return false; } },
 };
 
 // ---------- hand-drawn underline tiles ----------
@@ -126,6 +132,7 @@ export function initTakes(root) {
   const selbar = $('[data-selbar]');
   const lab = $('[data-lab]');
   const help = $('[data-help]');
+  const compare = $('[data-compare]');
 
   const announce = msg => { live.textContent = ''; requestAnimationFrame(() => { live.textContent = msg; }); };
   const flash = msg => {
@@ -241,7 +248,7 @@ export function initTakes(root) {
       return `<div class="tk-block is-editing" data-b="${b}" data-id="${block.id}"${meta}>${vlabel}<textarea class="tk-inline" data-inline aria-label="Edit paragraph source" spellcheck="true">${esc(src)}</textarea><p class="tk-inline-hint">Enter to keep · Shift+Enter for a line break · Esc to cancel</p></div>`;
     }
     const body = renderTokens(tokens, b) || '<span class="tk-empty">Empty paragraph. Double-click to write.</span>';
-    return `<div class="tk-block tk-${kind}${block.active > 0 ? ' is-alt' : ''}" data-b="${b}" data-id="${block.id}"${meta}>${vlabel}<div class="tk-tools" aria-label="Paragraph tools"><button type="button" data-act="prev-version" title="Previous paragraph take ([)" aria-label="Previous paragraph take">‹</button><button type="button" data-act="add-version" title="New paragraph take (P)" aria-label="New paragraph take">+</button><button type="button" data-act="next-version" title="Next paragraph take (])" aria-label="Next paragraph take">›</button><button type="button" data-act="edit" title="Edit (E)" aria-label="Edit paragraph">✎</button></div><${tag} class="tk-text">${body}</${tag}></div>`;
+    return `<div class="tk-block tk-${kind}${block.active > 0 ? ' is-alt' : ''}" data-b="${b}" data-id="${block.id}"${meta}>${vlabel}<div class="tk-tools" aria-label="Paragraph tools"><button type="button" data-act="prev-version" title="Previous paragraph take ([)" aria-label="Previous paragraph take">‹</button><button type="button" data-act="add-version" title="New paragraph take (P)" aria-label="New paragraph take">+</button><button type="button" data-act="next-version" title="Next paragraph take (])" aria-label="Next paragraph take">›</button><button type="button" data-act="edit" title="Edit (E)" aria-label="Edit paragraph">✎</button>${multi ? '<button type="button" data-act="compare" title="Compare paragraph takes side by side (C)" aria-label="Compare paragraph takes">⇆</button>' : ''}</div><${tag} class="tk-text">${body}</${tag}></div>`;
   };
 
   const renderStash = () => {
@@ -264,6 +271,7 @@ export function initTakes(root) {
     if (!keepSource) source.value = serializeDoc(state.doc);
     renderStash();
     renderStatus();
+    if (!compare.hidden) renderCompare();
     decorate();
     markFocus();
     if (state.editing !== null) {
@@ -550,7 +558,8 @@ export function initTakes(root) {
 
   // --- file ---
   const download = (name, text, type = 'text/markdown') => {
-    const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
+    const binary = typeof text !== 'string';
+    const url = URL.createObjectURL(new Blob([text], { type: binary ? type : `${type};charset=utf-8` }));
     const a = document.createElement('a');
     a.href = url; a.download = name;
     document.body.append(a); a.click(); a.remove();
@@ -663,6 +672,13 @@ export function initTakes(root) {
       case 'reset-style': state.style = { ...STYLE_DEFAULTS, layout: state.style.layout }; applyStyle(); syncLab(); decorate(); persist(); break;
       case 'reset-sound': audio.apply({ ...AUDIO_DEFAULTS, enabled: audio.s.enabled }); syncLab(); persist(); break;
       case 'preset': applyPreset(act.dataset.preset); break;
+      case 'compare': openCompare(b); break;
+      case 'close-compare': closeCompare(); break;
+      case 'cmp-use': case 'cmp-promote': case 'cmp-remove': compareAction(name, i); break;
+      case 'share-link': shareLink(); break;
+      case 'restore-backup': restoreBackup(); break;
+      case 'export-wav': exportWav(); break;
+      case 'print-clean': case 'print-marks': printDraft(name === 'print-marks' ? 'marks' : 'clean'); break;
       default: break;
     }
   });
@@ -766,8 +782,9 @@ export function initTakes(root) {
       return;
     }
     // Text fields own their native undo; document history is for the desk.
-    if (t.matches?.('input, select, textarea') || t.closest?.('[data-lab]')) {
+    if (t.matches?.('input, select, textarea') || t.closest?.('[data-lab]') || t.closest?.('[data-compare]')) {
       if (e.key === 'Escape' && t.closest?.('[data-lab]')) { lab.hidden = true; }
+      if (e.key === 'Escape' && t.closest?.('[data-compare]')) { e.preventDefault(); closeCompare(); }
       return;
     }
     // Let the browser move focus or activate a button before a render replaces
@@ -797,13 +814,14 @@ export function initTakes(root) {
       if (key === 'Enter' || key === ' ') { e.preventDefault(); return popTarget ? closePop({ restoreFocus: true }) : openPop(b, g); }
       if (key === 'Delete' || key === 'Backspace') { e.preventDefault(); mutateBlock(b, src => flattenTake(src, g)); audio.action('commit'); state.focusTake = null; closePop(); return render(); }
     }
-    if (key === 'Escape') { closePop(); selbar.hidden = true; help.hidden = true; lab.hidden = true; return; }
+    if (key === 'Escape') { closePop(); closeCompare(); selbar.hidden = true; help.hidden = true; lab.hidden = true; return; }
     if (key === '?') { e.preventDefault(); help.hidden = !help.hidden; return; }
     const b = state.focusBlock;
     if (key === '[') { e.preventDefault(); return cycleVersion(b, -1); }
     if (key === ']') { e.preventDefault(); return cycleVersion(b, 1); }
     if (key === 'p' || key === 'P') { e.preventDefault(); return addVersion(b); }
     if (key === 'e' || key === 'E') { e.preventDefault(); return startEdit(b); }
+    if (key === 'c' || key === 'C') { e.preventDefault(); return openCompare(b); }
     if (key === 'u' || key === 'U') {
       const block = state.doc.blocks[b];
       const src = block?.versions[block.active] || '';
@@ -936,6 +954,133 @@ export function initTakes(root) {
     'riso-zine': { style: { theme: 'riso', font: 'courier', underline: 'marker', wobble: 0.8, texture: 'grain' }, audio: { voice: 'marimba', scale: 'pentatonic', reverb: 0.25, ambience: 'off', keys: 'notes' } },
     'deep-focus': { style: { theme: 'ink', font: 'atkinson', underline: 'straight', wobble: 0, texture: 'none', focus: true }, audio: { voice: 'pad', scale: 'insen', reverb: 0.6, ambience: 'drone', keys: 'off' } },
   };
+  // --- compare paragraph takes ---
+  let compareId = null;
+  let compareAt = -1; // undo/redo rebuild block IDs; fall back to the position
+  const compareIndex = () => {
+    let b = state.doc.blocks.findIndex(x => x.id === compareId);
+    if (b < 0 && state.doc.blocks[compareAt]) { b = compareAt; compareId = state.doc.blocks[b].id; }
+    if (b >= 0) compareAt = b;
+    return b;
+  };
+  function openCompare(b) {
+    const block = state.doc.blocks[b];
+    if (!block) return;
+    if (block.versions.length < 2) { audio.ensure(); audio.action('error'); return flash('One take so far. Press P for a new paragraph take, then compare.'); }
+    compareId = block.id;
+    compareAt = b;
+    renderCompare();
+    compare.hidden = false;
+    compare.querySelector('[data-act="cmp-use"][aria-pressed="true"]')?.focus();
+  }
+  function closeCompare() {
+    if (compare.hidden) return;
+    compare.hidden = true;
+    const b = compareIndex();
+    compareId = null;
+    page.querySelector(`.tk-block[data-b="${b}"]`)?.focus?.();
+  }
+  function renderCompare() {
+    const b = compareIndex();
+    const block = state.doc.blocks[b];
+    if (!block || block.versions.length < 2) { compare.hidden = true; compareId = null; return; }
+    const plains = block.versions.map(blockPlain);
+    const words = t => (t.match(/[\p{L}\p{N}’']+/gu) || []).length;
+    const cols = plains.map((text, i) => {
+      const body = i === 0 ? esc(text) : wordDiff(plains[0], text).map(p => (p.added ? `<mark>${esc(p.text)}</mark>` : esc(p.text))).join('');
+      const label = i === 0 ? 'Original' : `Take ${i + 1}`;
+      return `<article class="tk-cmp-col${i === block.active ? ' is-on' : ''}" aria-label="${label}"><header><span>${label}${i === block.active ? ' · showing' : ''}</span><span>${words(text)} words</span></header><div class="tk-cmp-text">${body || '<em>(empty)</em>'}</div><footer><button type="button" data-act="cmp-use" data-i="${i}" aria-pressed="${i === block.active}">${i === block.active ? 'Showing' : 'Use this'}</button>${i > 0 ? `<button type="button" data-act="cmp-promote" data-i="${i}" title="Make this take the original">Make original</button><button type="button" data-act="cmp-remove" data-i="${i}" aria-label="Delete take ${i + 1}">×</button>` : ''}</footer></article>`;
+    }).join('');
+    compare.innerHTML = `<div class="tk-lab-head"><p class="tk-k">PARAGRAPH TAKES · ${block.versions.length} SIDE BY SIDE</p><button type="button" data-act="close-compare" aria-label="Close compare">×</button></div><div class="tk-cmp-grid">${cols}</div><p class="tk-note">Highlighted words are new against the original. Esc closes.</p>`;
+  }
+  function compareAction(name, i) {
+    const b = compareIndex();
+    const block = state.doc.blocks[b];
+    if (!block) return;
+    if (name === 'cmp-use') {
+      if (!setVersionActive(block, i)) return;
+      audio.ensure(); audio.paragraph(block.active, { pan: panFor(b) });
+      announce(block.active === 0 ? 'Original paragraph' : `Paragraph take ${block.active + 1}`);
+    } else {
+      snapshot();
+      const ok = name === 'cmp-promote' ? promoteVersion(block, i) : removeVersion(block, i);
+      if (!ok) return;
+      audio.ensure(); audio.action(name === 'cmp-promote' ? 'promote' : 'stash', { pan: panFor(b) });
+      announce(name === 'cmp-promote' ? 'That take is the original now' : 'Paragraph take deleted');
+    }
+    state.focusBlock = b;
+    render();
+    renderCompare();
+    compare.querySelector(`[data-act="cmp-use"][data-i="${block.active}"]`)?.focus();
+  }
+
+  // --- share link: the draft travels in the URL fragment ---
+  async function shareLink() {
+    const out = $('[data-share-out]');
+    try {
+      const code = await encodeShare(serializeDoc(state.doc));
+      if (code.length > SHARE_MAX) return flash('Too long for a link. Download the .md instead.');
+      const url = `${window.location.origin}${window.location.pathname}#d=${code}`;
+      if (out) { out.hidden = false; out.value = url; }
+      await navigator.clipboard?.writeText(url).then(() => flash('Link copied. The draft lives inside it; nothing is uploaded.'), () => flash('Copy the link from the File panel.'));
+      audio.ensure(); audio.action('save');
+    } catch { flash('Could not make a link in this browser.'); }
+  }
+  function refreshBackupButton() {
+    const btn = $('[data-act="restore-backup"]');
+    if (btn) btn.hidden = !store.getBackup()?.md;
+  }
+  function restoreBackup() {
+    const backup = store.getBackup();
+    if (!backup?.md) return flash('No earlier draft to restore.');
+    snapshot();
+    store.setBackup({ md: serializeDoc(state.doc), at: new Date().toISOString() });
+    state.doc = parseDoc(backup.md);
+    state.focusBlock = 0;
+    render();
+    flash('Restored your earlier draft. The shared one is kept as the backup.');
+  }
+  async function openSharedFromHash() {
+    const code = shareCodeFromHash(window.location?.hash);
+    if (!code) return;
+    try {
+      const md = await decodeShare(code);
+      const current = serializeDoc(state.doc);
+      if (saved.md && current !== md) store.setBackup({ md: current, at: new Date().toISOString() });
+      snapshot();
+      state.doc = parseDoc(md);
+      state.focusBlock = 0;
+      render();
+      flash(saved.md ? 'Opened a shared draft. Yours is under File → Restore.' : 'Opened a shared draft.');
+    } catch {
+      flash('That share link could not be opened.');
+    }
+    try { window.history.replaceState(null, '', window.location.pathname + window.location.search); } catch {}
+    refreshBackupButton();
+  }
+
+  // --- record the take score ---
+  async function exportWav() {
+    const events = scoreEvents(state.doc);
+    if (!events.length) return flash('No takes to play yet. Select words and press T.');
+    flash(`Rendering ${events.length} takes…`);
+    try {
+      const buffer = await audio.renderScore(events);
+      download(`${titleSlug()}.takes.wav`, encodeWav(buffer), 'audio/wav');
+      flash('Downloaded the take score (.wav)');
+    } catch (err) {
+      flash(err?.message || 'Could not render audio in this browser.');
+    }
+  }
+
+  // --- print / PDF ---
+  function printDraft(mode) {
+    if (state.editing !== null) commitInline();
+    closePop(); closeCompare(); lab.hidden = true;
+    root.dataset.print = mode;
+    window.print?.();
+  }
+
   const applyPreset = name => {
     const p = PRESETS[name];
     if (!p) return;
@@ -956,5 +1101,8 @@ export function initTakes(root) {
   syncLab();
   render();
   $('[data-saved]').textContent = saved.md ? 'Restored from this browser' : 'Sample draft · edits save in this browser';
+  refreshBackupButton();
+  openSharedFromHash();
+  window.addEventListener('hashchange', openSharedFromHash);
   return { state, audio, render };
 }
