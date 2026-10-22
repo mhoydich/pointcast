@@ -14,7 +14,7 @@ can spend, mint or post.
 - https://pointcast.xyz/cabinet-row (the Sandcastle cabinet should be lit; after a game it shows your best)
 - https://pointcast.xyz/games/ (the catalog should list Sandcastle under Retro arcade)
 - https://pointcast.xyz/play (the play layer should list Sandcastle)
-- https://pointcast.xyz/b/0737 (the Block receipt)
+- https://pointcast.xyz/b/0744 (the Block receipt)
 
 ## Devices and browsers
 
