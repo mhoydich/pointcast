@@ -34,6 +34,26 @@ export function rowY(r) {
 export function rowHeight(r) {
   return r === 0 ? WATER_H : ROW_H;
 }
+/** Tallest a lane may grow on a tall screen, and the tallest field that buys. */
+export const ROW_H_MAX = 40;
+export const H_MAX = HUD + (WATER_H + ROW_H_MAX - ROW_H) + (ROWS - 1) * ROW_H_MAX + TIMER_H;
+
+/**
+ * Drawing geometry for a screen `height` logical pixels tall. A tall phone
+ * gets taller lanes (never shorter than the base 28, never past 40) so the
+ * field fills more of the glass; the water keeps its extra 12. Hops and
+ * collisions use row indexes and x only, so the rules never see this.
+ */
+export function layoutFor(height = H) {
+  const spare = Math.max(0, Math.floor(Number.isFinite(height) ? height : H) - H);
+  const rowH = Math.min(ROW_H_MAX, ROW_H + Math.floor(spare / ROWS));
+  const waterH = WATER_H + (rowH - ROW_H);
+  const total = HUD + waterH + (ROWS - 1) * rowH + TIMER_H;
+  const y = (r) => (r <= 0 ? HUD : HUD + waterH + (r - 1) * rowH);
+  const h = (r) => (r === 0 ? waterH : rowH);
+  return { rowH, waterH, H: total, timerY: total - TIMER_H, rowY: y, rowHeight: h };
+}
+
 export const SAFE_ROWS = Object.freeze(ROW_KINDS.map((k, i) => (k === 'lane' ? -1 : i)).filter((i) => i >= 0));
 export const LANE_ROWS = Object.freeze(ROW_KINDS.map((k, i) => (k === 'lane' ? i : -1)).filter((i) => i >= 0));
 

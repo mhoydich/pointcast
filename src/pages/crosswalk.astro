@@ -156,7 +156,8 @@ const dials = Object.values(DIALS);
   .cw { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
   .cw[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
   .cw-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
-  .cw-stage:fullscreen, .cw-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .cw-stage:fullscreen { height: 100%; min-height: 0; }
+  .cw-stage:-webkit-full-screen { height: 100%; min-height: 0; }
   .cw-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
   .cw-home { color: var(--text); text-decoration: none; font-weight: 700; }
   .cw-home:hover { color: #fff; }
@@ -164,7 +165,7 @@ const dials = Object.values(DIALS);
   .cw-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .cw-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
   .cw-controls button:hover { background: #1f2456; }
-  .cw-controls button[aria-pressed='false'] { color: #6b7199; text-decoration: line-through; }
+  .cw-controls button[aria-pressed='false'] { color: #9aa1cc; text-decoration: line-through; }
   .cw-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
   .cw-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
   .cw-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -173,10 +174,11 @@ const dials = Object.values(DIALS);
   .cw-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
   .cw-noscript a { color: var(--paddle); }
   .cw-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
-  .cw-readout span { white-space: nowrap; }
-  .cw-readout a { margin-left: auto; color: var(--text); text-decoration: none; }
+  .cw-readout span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .cw-readout a { margin-left: auto; flex-shrink: 0; color: var(--text); text-decoration: none; }
   .cw-readout a:hover { color: #fff; }
-  .cw-stage:fullscreen .cw-readout a, .cw-stage:-webkit-full-screen .cw-readout a { display: none; }
+  .cw-stage:fullscreen .cw-readout a { display: none; }
+  .cw-stage:-webkit-full-screen .cw-readout a { display: none; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .cw-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
   .cw-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
@@ -213,7 +215,7 @@ const dials = Object.values(DIALS);
   import { MACHINES } from '../lib/breakwater/waves.mjs';
   import { DIALS, DIAL_IDS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
   import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
-  import { W, H, COLS, CELL, ROWS, ROW_KINDS, HUD, TIMER_H, TOWER_COLS, rowY, rowHeight, screenX, onScreen, laneAt } from '../lib/crosswalk/field.mjs';
+  import { W, H as H_BASE, COLS, CELL, ROWS, ROW_KINDS, HUD, TIMER_H, TOWER_COLS, VEHICLES, layoutFor, screenX, onScreen, laneAt } from '../lib/crosswalk/field.mjs';
   import { SCORE, DIAL_NOTES, HOP_TIME, trafficFromResponse, createRun, resetCrossing, placeBall, hop, stepRun, loseLife, checkExtraLife, nextStage, cellSafeIn, cellIsSafe } from '../lib/crosswalk/rules.mjs';
   import { eachSpriteCell } from '../lib/crosswalk/sprites.mjs';
 
@@ -225,7 +227,12 @@ const dials = Object.values(DIALS);
     const STORE = 'crosswalk:v1';
     const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const COARSE = matchMedia('(pointer: coarse)').matches;
-    const TIMER_Y = H - TIMER_H;
+    // A tall phone gets taller lanes (layoutFor); the rules only ever see row indexes.
+    let L = layoutFor(H_BASE), H = L.H, TIMER_Y = L.timerY;
+    const rowY = (r) => L.rowY(r);
+    const rowHeight = (r) => L.rowHeight(r);
+    /** Top of a 24 px sprite centered in row `r`. */
+    const spriteTop = (r) => rowY(r) + Math.round((rowHeight(r) - 24) / 2);
 
     const stage = root.querySelector('[data-stage]');
     const screen = root.querySelector('[data-screen]');
@@ -470,14 +477,14 @@ const dials = Object.values(DIALS);
         audio.hop(r.row, r.forward);
         if (r.forward) { moodEvent(mood, 'paddle'); buzz(4); }
         if (r.laneCleared) moodEvent(mood, 'brick');
-        if (r.pickedBall) { audio.ball(); showMsg('BEACH BALL', 2, 0.8); announce('Beach ball picked up. Carry it to a tower.'); spawnParticles(p.col * CELL + CELL / 2, rowY(1) + 14, M().bands.red, 8); }
+        if (r.pickedBall) { audio.ball(); showMsg('BEACH BALL', 2, 0.8); announce('Beach ball picked up. Carry it to a tower.'); spawnParticles(p.col * CELL + CELL / 2, rowY(1) + rowHeight(1) / 2, M().bands.red, 8); }
         readout.lane.textContent = laneName(r.row);
         return;
       }
       if (r.type === 'splash') {
         moodEvent(mood, 'loss'); audio.splash(); buzz(30);
         G.flash = 0.25; G.phase = 'lost'; G.t = 0; G.hitAt = { kind: 'splash' };
-        spawnParticles(p.col * CELL + CELL / 2, rowY(0) + 20, M().bright, REDUCED ? 4 : 14, 60);
+        spawnParticles(p.col * CELL + CELL / 2, rowY(0) + rowHeight(0) / 2, M().bright, REDUCED ? 4 : 14, 60);
         afterLoss('SPLASH', 'Splash. The water between the towers is deep.');
         return;
       }
@@ -514,7 +521,7 @@ const dials = Object.values(DIALS);
         G.flash = 0.35; G.shake = REDUCED ? 0 : 0.25;
         G.hitAt = { kind: 'hit', vehicle: ev.vehicle, lane: ev.lane };
         spawnParticles(c.x, c.y, M().bands.red, REDUCED ? 3 : 12);
-        afterLoss('OUCH', `Hit by a ${ev.vehicle.kind}.`);
+        afterLoss('OUCH', `Hit by a ${(VEHICLES[ev.vehicle.kind]?.name || 'car').toLowerCase()}.`);
       } else {
         audio.timeout();
         G.flash = 0.2; G.hitAt = { kind: 'timeout' };
@@ -635,7 +642,8 @@ const dials = Object.values(DIALS);
       cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
       dpr = Math.min(window.devicePixelRatio || 1, 3);
       canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
-      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H) * 4) / 4);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H_BASE) * 4) / 4);
+      L = layoutFor(cssH / scale); H = L.H; TIMER_Y = L.timerY;
       offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
     }
     function text(str, x, y, s, color, align = 'left') {
@@ -692,12 +700,14 @@ const dials = Object.values(DIALS);
         const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
         const shift = (G.t * speed) % (m.raster.length * h * 2);
         ctx.globalAlpha = bars;
-        for (let y = -m.raster.length * h * 2; y < cssH + h; y += h) {
-          const idx = Math.floor((y + shift) / h);
-          const k = ((idx % (m.raster.length * 2)) + m.raster.length * 2) % (m.raster.length * 2);
+        // Color and offset come from the same base, so the bars scroll instead of snapping back every 6 px.
+        const f = shift % h, base = shift - f, period = m.raster.length * 2;
+        for (let y = -period * h; y < cssH + h; y += h) {
+          const idx = Math.round((y - base) / h);
+          const k = ((idx % period) + period) % period;
           if (k >= m.raster.length) continue;
           ctx.fillStyle = m.raster[k];
-          ctx.fillRect(0, y + (shift % h), cssW, h);
+          ctx.fillRect(0, y + f, cssW, h);
         }
         ctx.globalAlpha = 1;
       }
@@ -713,7 +723,8 @@ const dials = Object.values(DIALS);
         if (kind === 'water') {
           ctx.fillStyle = pal.wave; ctx.globalAlpha = 0.45;
           const drift = REDUCED ? 0 : Math.floor(G.t * 10) % 16;
-          for (let i = 0; i < 4; i += 1) { const wy = y + 6 + i * 9; for (let x = -16; x < W; x += 16) ctx.fillRect(x + drift + (i % 2) * 8, wy, 6, 1); }
+          const pitch = Math.max(9, Math.floor((h - 4) / 4));
+          for (let i = 0; i < 4; i += 1) { const wy = y + 4 + i * pitch; for (let x = -16; x < W; x += 16) ctx.fillRect(x + drift + (i % 2) * 8, wy, 6, 1); }
           ctx.globalAlpha = 1;
         } else if (kind === 'lane' && r > 3 && r < ROWS - 2 && ROW_KINDS[r + 1] === 'lane') {
           ctx.fillStyle = pal.dash; ctx.globalAlpha = 0.35;
@@ -724,16 +735,16 @@ const dials = Object.values(DIALS);
           for (let x = 0; x < W; x += 48) ctx.fillRect(x, y, 1, h);
           ctx.globalAlpha = 1;
         } else if (kind === 'median') {
-          for (let i = 0; i < 3; i += 1) drawSprite('palm', 24 + i * 96 + 8, y + 2, 3, pal);
+          for (let i = 0; i < 3; i += 1) drawSprite('palm', 24 + i * 96 + 8, spriteTop(r), 3, pal);
         } else if (kind === 'sand' && r === 1) {
           ctx.fillStyle = m.bright; ctx.globalAlpha = 0.18;
-          for (let x = 10; x < W; x += 37) ctx.fillRect(x, y + 8 + (x % 3) * 6, 2, 2);
+          for (let x = 10; x < W; x += 37) ctx.fillRect(x, y + Math.round(h / 2) - 6 + (x % 3) * 6, 2, 2);
           ctx.globalAlpha = 1;
         }
       }
       // Lifeguard towers in the water row.
       for (let i = 0; i < TOWER_COLS.length; i += 1) {
-        const x = TOWER_COLS[i] * CELL, y = rowY(0) + 8;
+        const x = TOWER_COLS[i] * CELL, y = spriteTop(0);
         drawSprite(G.run && G.run.towers[i] ? 'towerHome' : 'tower', x, y, 3, pal);
       }
       if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.12 : 0.5, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
@@ -742,15 +753,15 @@ const dials = Object.values(DIALS);
       if (!G.run) return;
       ctx.globalAlpha = alpha;
       for (const lane of G.run.lanes) {
-        const y = rowY(lane.row), h = rowHeight(lane.row);
+        const top = spriteTop(lane.row);
         for (const v of lane.vehicles) {
           if (!v.active || !onScreen(v)) continue;
           const x = screenX(v);
           const flip = lane.dir < 0;
-          if (v.kind === 'bus') drawSprite('bus', Math.round(x), y + h - 24, 3, pal, { flip }, v.variant);
-          else if (v.kind === 'car') drawSprite('car', Math.round(x), y + h - 24, 3, pal, { flip }, v.variant);
-          else if (v.kind === 'bike') drawSprite('bike', Math.round(x - 2), y + 2, 3, pal, { flip }, v.variant);
-          else drawSprite('skate', Math.round(x - 3), y + 2, 3, pal, { flip }, v.variant);
+          if (v.kind === 'bus') drawSprite('bus', Math.round(x), top + 2, 3, pal, { flip }, v.variant);
+          else if (v.kind === 'car') drawSprite('car', Math.round(x), top + 2, 3, pal, { flip }, v.variant);
+          else if (v.kind === 'bike') drawSprite('bike', Math.round(x - 2), top, 3, pal, { flip }, v.variant);
+          else drawSprite('skate', Math.round(x - 3), top, 3, pal, { flip }, v.variant);
         }
       }
       ctx.globalAlpha = 1;
@@ -759,7 +770,7 @@ const dials = Object.values(DIALS);
       if (!G.run) return;
       const run = G.run, p = run.player;
       ctx.globalAlpha = alpha;
-      if (run.ball) drawSprite('ball', run.ball.col * CELL, rowY(1) + 2, 3, pal);
+      if (run.ball) drawSprite('ball', run.ball.col * CELL, spriteTop(1), 3, pal);
       const c = playerCenter();
       const x = Math.round(c.x - 12), y = Math.round(c.y - 12);
       if (G.hitAt && G.hitAt.kind === 'hit') { drawSprite('splat', x, y, 3, pal); ctx.globalAlpha = 1; return; }
@@ -806,7 +817,7 @@ const dials = Object.values(DIALS);
         ctx.fillRect(10, TIMER_Y + 12, Math.round(barW * frac), 8);
         text('TIME', W - 10, TIMER_Y + 11, 2, m.text, 'right');
       } else {
-        text(G.attract ? 'ATTRACT' : '', W / 2, TIMER_Y + 11, 2, m.dim, 'center');
+        if (G.attract) text('2026 HOYDICH / POINTCAST', W / 2, TIMER_Y + 11, 2, m.text, 'center');
       }
     }
     function drawBoot() {
@@ -830,11 +841,10 @@ const dials = Object.values(DIALS);
       ctx.fillStyle = m.field; ctx.globalAlpha = 0.55; ctx.fillRect(0, 70, W, 150); ctx.globalAlpha = 1;
       rainbowText('CROSSWALK', W / 2, 86, 6, [m.bands.red, m.bands.orange, m.bands.yellow, m.bands.green]);
       text('FIVE LANES TO THE SAND', W / 2, 142, 2, m.bright, 'center');
-      text(`${m.label} MODE / ${m.chip}`, W / 2, 162, 2, m.text, 'center');
-      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 178, 2, m.text, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, 162, 2, m.bright, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 178, 2, m.bright, 'center');
       if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY' : 'TAP OR PRESS SPACE', W / 2, 200, 2, m.paddle, 'center');
       if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, 260, 2, m.bright, 'center');
-      text('2026 HOYDICH / POINTCAST', W / 2, H - TIMER_H - 14, 2, m.dim, 'center');
     }
     function drawOver(pal) {
       const m = M();
@@ -863,7 +873,7 @@ const dials = Object.values(DIALS);
       ctx.restore();
       const m = M();
       if (G.phase === 'play' && G.t < 2 && G.run.hops === 0 && G.run.crossings === 0 && G.run.stage === 0 && Math.floor(G.t * 2) % 2 === 0 && G.msgT <= 0) text(COARSE ? 'SWIPE OR TAP TO HOP' : 'ARROWS TO HOP', W / 2, rowY(4) + 10, 2, m.bright, 'center');
-      if (G.phase === 'paused') { text('PAUSED', W / 2, 180, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 212, 2, m.text, 'center'); }
+      if (G.phase === 'paused') { text('PAUSED', W / 2, 180, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 212, 2, m.paddle, 'center'); }
       if (G.msgT > 0 && G.msg) text(G.msg, W / 2, 196, G.msgScale, m.bright, 'center');
     }
 
@@ -930,8 +940,12 @@ const dials = Object.values(DIALS);
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
       const t = e.target;
-      if (t && typeof t.closest === 'function' && t.closest('a, button, input, textarea, select, [contenteditable]')) return;
       const k = e.code;
+      if (t && typeof t.closest === 'function') {
+        if (t.closest('input, textarea, select, [contenteditable]')) return;
+        // Enter and Space belong to a focused link or button; arrows and letters still hop from there.
+        if ((k === 'Space' || k === 'Enter') && t.closest('a, button')) return;
+      }
       if (HOP_KEYS[k]) {
         e.preventDefault(); audio.unlock();
         if (!e.repeat) { G.keys[k] = true; if (G.phase === 'play') { tryHop(HOP_KEYS[k]); G.keys.held = false; setTimeout(() => { if (G.keys[k]) G.keys.held = true; }, 220); } else if (G.phase === 'title' || G.phase === 'over' || G.phase === 'boot') action(); }
@@ -1003,11 +1017,13 @@ const dials = Object.values(DIALS);
       const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
       if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
     }
-    btn.machine.addEventListener('click', () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
-    btn.dial.addEventListener('click', () => { audio.unlock(); cycleDial(); });
-    btn.sound.addEventListener('click', toggleSound);
-    btn.crt.addEventListener('click', toggleCrt);
-    btn.full.addEventListener('click', toggleFull);
+    // A mouse or touch click leaves focus on the button; hand it back so Space starts again. Keyboard activation keeps focus.
+    const press = (el, fn) => el.addEventListener('click', (e) => { fn(); if (e.detail > 0) el.blur(); });
+    press(btn.machine, () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    press(btn.dial, () => { audio.unlock(); cycleDial(); });
+    press(btn.sound, toggleSound);
+    press(btn.crt, toggleCrt);
+    press(btn.full, toggleFull);
     if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
     document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
     document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });

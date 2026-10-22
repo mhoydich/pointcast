@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { W, COLS, CELL, ROWS, ROW_KINDS, START, TOWER_COLS, H, HUD, rowY, rowHeight, LANE_ROWS, SAFE_ROWS, LANE_SPECS, VEHICLES, PERIOD, rng, paceForStage, buildLanes, stepLanes, laneAt, onScreen, screenX, vehiclesOverlapping } from '../src/lib/crosswalk/field.mjs';
+import { W, COLS, CELL, ROWS, ROW_KINDS, START, TOWER_COLS, H, HUD, TIMER_H, H_MAX, ROW_H_MAX, layoutFor, rowY, rowHeight, LANE_ROWS, SAFE_ROWS, LANE_SPECS, VEHICLES, PERIOD, rng, paceForStage, buildLanes, stepLanes, laneAt, onScreen, screenX, vehiclesOverlapping } from '../src/lib/crosswalk/field.mjs';
 import { SCORE, LIVES, DIAL_NOTES, trafficFromResponse, createRun, resetCrossing, placeBall, hop, collision, stepRun, loseLife, checkExtraLife, nextStage, cellIsSafe, cellSafeIn } from '../src/lib/crosswalk/rules.mjs';
 import { SPRITES, SPRITE_KEYS, spriteCells, eachSpriteCell } from '../src/lib/crosswalk/sprites.mjs';
 import { createMood, moodEvent, moodResponse, DIALS, setDial } from '../src/lib/breakwater/mood.mjs';
@@ -22,6 +22,22 @@ test('field: the strip is Breakwater-wide, eleven rows from water to sidewalk, a
   for (let r = 0; r < ROWS; r += 1) { assert.equal(rowY(r), y); y += rowHeight(r); }
   assert.ok(y < H && H <= 384, `field height ${H}`);
   for (const spec of Object.values(LANE_SPECS)) assert.ok(VEHICLES[spec.kind], `${spec.row} ${spec.kind}`);
+});
+
+test('field: a tall screen gets taller lanes, the base layout matches the constants, and the field never shrinks', () => {
+  const base = layoutFor(H);
+  assert.equal(base.H, H);
+  for (let r = 0; r < ROWS; r += 1) { assert.equal(base.rowY(r), rowY(r)); assert.equal(base.rowHeight(r), rowHeight(r)); }
+  const nums = (l) => [l.rowH, l.waterH, l.H, l.timerY];
+  assert.deepEqual(nums(layoutFor(100)), nums(base), 'a short screen keeps the base field and letterboxes');
+  assert.deepEqual(nums(layoutFor(NaN)), nums(base));
+  const tall = layoutFor(608);
+  assert.ok(tall.rowH > base.rowH && tall.rowH <= ROW_H_MAX);
+  assert.ok(tall.H <= 608 && tall.H > H);
+  assert.equal(tall.timerY, tall.H - TIMER_H);
+  assert.equal(tall.rowY(ROWS - 1) + tall.rowHeight(ROWS - 1), tall.timerY, 'the sidewalk meets the clock');
+  assert.equal(layoutFor(5000).H, H_MAX);
+  for (let h = H; h < H_MAX + 40; h += 7) { const l = layoutFor(h); assert.ok(l.H <= Math.max(H, h)); }
 });
 
 test('field: lanes are reproducible from a seed, wrap on their track, and alternate direction by stage', () => {
