@@ -86,6 +86,7 @@ assembles the three static files inline and writes results into ignored
 
 ## Release validation — 2026-10-22
 
+`npm run build:bare` passes, including preparation of 126 game downloads.
 The original suite passes **117 Chromium checks**, with inline content and an
 explicit storage double. **16 bridge unit checks** pass with simulated companion
 DOM; that bridge remains disabled in the public beta.
