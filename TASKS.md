@@ -4,6 +4,18 @@
 
 ---
 
+## Gridtown — a browser-first city builder (2026-10-22)
+
+`/gridtown`, `/gridtown.json`, Block 0725. Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
+
+- [x] (CC) Build v1: pure engine `src/lib/gridtown.mjs` (seeded terrain, seven tools, RCI demand, power capacity, smoke and land value, monthly ledger, happiness, twelve lessons, save repair), canvas page with touch, drag and keyboard, browser-local save, JSON export/import, `?seed=` map links, JSON twin, `tests/gridtown.test.mjs` — `done`
+- [x] (CC) Wire Apps shelf, Play layer, `agents.json`, sitemap-discovery, `llms.txt`, `llms-full.txt` — `done`
+- [ ] (M) After deploy: open https://pointcast.xyz/gridtown/ on a phone and desktop, play through lesson 6 by touch and by keyboard only, reload to confirm the save, export and re-import, open a `?seed=` link in a private window; screenshots to `docs/manus-logs/YYYY-MM-DD-gridtown.md` — `queued`
+- [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds) and the canvas input on iOS Safari — `queued`
+- [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
+
+---
+
 ## The Loom — append to anything (2026-10-20)
 
 `/loom`, `/api/loom`, `/loom.json`, `/loom/embed.js`, MCP `loom_read` / `loom_append`. Public federated message system: one verb, append(to, message), any address.

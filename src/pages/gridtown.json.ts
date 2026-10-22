@@ -1,0 +1,48 @@
+import type { APIRoute } from 'astro';
+import {
+  GRIDTOWN_VERSION, GRIDTOWN_TITLE, GRIDTOWN_DESCRIPTION, GRID_SIZE, MAX_LEVEL, STARTING_FUNDS, POWER_CAPACITY, UPKEEP, RESIDENTS_PER_LEVEL, JOBS,
+  TOOLS, LESSONS, TILES, STORAGE_KEY, createCity, cityToText,
+} from '../lib/gridtown.mjs';
+
+export const GET: APIRoute = () => {
+  const sample = createCity(20261022);
+  const payload = {
+    schema: 'pointcast.gridtown/v1',
+    version: GRIDTOWN_VERSION,
+    title: GRIDTOWN_TITLE,
+    url: 'https://pointcast.xyz/gridtown/',
+    description: GRIDTOWN_DESCRIPTION,
+    published: '2026-10-22',
+    author: 'PointCast · Claude Code',
+    play: {
+      input: 'Tap or click a tile with a tool selected; drag to paint roads, zones and bulldozing. Arrow keys move a cursor, Enter builds, number keys pick tools, N advances a month.',
+      time: 'One month per Next month press, or one every two seconds with Auto on.',
+      storage: { where: 'browser-local', key: STORAGE_KEY, portable: 'Export or import city JSON; the same file reloads the same town.' },
+      share: 'https://pointcast.xyz/gridtown/?seed={seed} opens the same terrain for anyone. It shares the map, not the buildings.',
+      price: 'free',
+      account: 'none',
+    },
+    board: { size: GRID_SIZE, startingFunds: STARTING_FUNDS, maxLevel: MAX_LEVEL, tiles: Object.values(TILES) },
+    tools: TOOLS.map((t) => ({ id: t.id, label: t.label, cost: t.cost, key: t.key, hint: t.hint })),
+    rules: {
+      growth: 'A zone gains one level a month when it touches a road on one of four sides, is powered, and its demand is positive. It loses a level when dark or cut off, or when demand is below -40. Homes in smoke stop at level one.',
+      people: { residentsPerHomeLevel: RESIDENTS_PER_LEVEL, jobsPerShopLevel: JOBS.com, jobsPerWorkshopLevel: JOBS.ind },
+      power: { zoneTilesPerPlant: POWER_CAPACITY, order: 'reading order from the top left; zones beyond capacity are dark' },
+      pollution: 'Workshops and power plants add smoke to tiles within two steps (Manhattan). Parks remove two units within two steps and add land value; water and trees add value to neighbors.',
+      demand: {
+        homes: '30 + (jobs - people) / 2, clamped to -100..100',
+        shops: '20 + 2 x (people - 12 per shop tile), clamped',
+        workshops: '20 + 1.5 x (people - 20 per workshop tile), clamped',
+      },
+      money: { income: '(people + jobs / 2) x taxRate / 10 per month', upkeep: UPKEEP, taxRange: [0, 20], defaultTax: 7 },
+      happiness: 'Starts at 50. Plus up to 25 for full employment, up to 15 for parks per 40 residents, up to 10 for land value; minus 3 per tax point over 7 and up to 30 for smoke over homes.',
+      determinism: 'The map comes from a 32-bit seed. Nothing after that is random: the same moves on the same seed give the same town.',
+    },
+    lessons: LESSONS.map((l, i) => ({ number: i + 1, id: l.id, title: l.title, text: l.text })),
+    sample: { seed: sample.seed, legend: { '.': 'grass', '~': 'water', t: 'trees', '#': 'road', R: 'homes', C: 'shops', I: 'workshops', P: 'park', '*': 'power plant' }, map: cityToText(sample).split('\n') },
+    source: 'https://github.com/mhoydich/pointcast/blob/main/src/lib/gridtown.mjs',
+  };
+  return new Response(JSON.stringify(payload, null, 2), {
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=300' },
+  });
+};

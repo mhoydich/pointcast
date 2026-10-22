@@ -118,6 +118,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'gridtown',
+    name: 'Gridtown',
+    kicker: 'BROWSER CITY BUILDER · TWELVE LESSONS · SAVED ON YOUR DEVICE',
+    description: 'A small city you can hold in a browser. Lay roads, zone homes, shops and workshops, power them, plant parks, and keep the budget honest. Deterministic rules, browser-local save, shareable map seeds.',
+    url: 'https://pointcast.xyz/gridtown/',
+    path: '/gridtown',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.ESC',
+    kind: 'pointcast',
+  },
+  {
     slug: 'pocket-rocks',
     name: 'Pocket Rocks',
     kicker: 'TEN FAMILIES · ENDLESS SPECIMENS · YOUR LITTLE CABINET',
