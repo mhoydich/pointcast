@@ -84,28 +84,45 @@ Set `CHROMIUM_PATH=/path/to/chromium` to use a system browser. The browser suite
 assembles the three static files inline and writes results into ignored
 `tests/player-v1/artifacts/`. The bridge suite writes its own ignored report.
 
-Observed in the build environment: **117 Chromium checks passed**, covering
-real imported-WAV playback, the actual EQ graph, media controls, skin invariance,
-safe rendering, scoped exports, quotes and all ten skins at widths 320, 390,
-768 and 1440 pixels. **16 bridge logic tests passed** with explicit DOM and
-companion stubs, including spoof rejection, context clearing and no auto-run.
+## Release validation — 2026-10-22
 
-Limitations: Chromium only; mobile sizes are emulated viewports. URL navigation
-was blocked in the build environment, so browser tests use `set_content` and
-persistence checks use an explicit local-storage test double. Native-origin
-reload persistence, physical iPhone/Safari, background media controls, a full
-Astro build and authenticated AI integration are not verified. Bridge unit tests
-are not an end-to-end provider test. A passing test count is not a deployment.
+The original suite passes **117 Chromium checks**, with inline content and an
+explicit storage double. **16 bridge unit checks** pass with simulated companion
+DOM; that bridge remains disabled in the public beta.
 
-## Before public release
+**227 real-origin Chromium checks and 80 mobile/focus layout cases pass.**
+The separate [real-origin suite](../tests/player-v1/real-origin.md) uses actual
+HTTP navigation, browser localStorage, generated WAV and actual MP3 files. It
+covers native reload/reselection/reset, actual audio and EQ, ten skins, private
+notes, scoped exports, quote validation, safe imports, keyboard, PNG capture,
+reduced motion and enlarged text. Its JSON report records exact asset hashes.
 
-1. Run the full PointCast build and inspect `/player-v1` in a real-origin staging
-   environment. Confirm existing companion scripts initialize in the host.
-2. Check actual storage reloads and file reselection, real iPhone/Safari playback,
-   seeking, EQ support, focus mode and the AI form's exact review payload.
-3. Merge and use the established Cloudflare release process. The repository's
-   deploy workflow can pass its build but skip uploading when its token is
-   missing. Verify the served route and deployed commit after publishing.
+Desktop Safari smoke checks on a localhost origin verified original-study and
+local MP3 playback, a skin change during playback, skin restoration after reload,
+and the expected original-file reconnection state. This was a native Safari UI
+check, not Playwright WebKit or an iPhone claim.
+
+Independent code review identified and verified fixes for reset restoring
+previously deleted data, unnamed dialogs, ineffective text scaling and mobile
+scene/control overlap. The enlarged mobile focus view may scroll vertically;
+its fixed mini transport remains available.
+
+Physical iPhone/Safari, real Cloudflare staging, authenticated AI execution and
+production deployment are not yet verified. A static host test cannot certify
+Cloudflare Functions. No live AI capability is advertised by this release.
+
+## Publication gates
+
+1. Run `npm run build:bare`, both original suites and the real-origin suite on
+   the release candidate. Record the tested commit and source fingerprints.
+2. Verify the built host and export-only mode, actual storage and file
+   reselection, and physical iPhone/Safari behavior. Keep unavailable checks
+   explicitly pending; never turn viewport emulation into a device claim.
+3. After release checks and review, merge and use `scripts/deploy.sh` per
+   `docs/OPERATIONS.md`. Verify actual deployment metadata and served assets.
+4. After the player is live, add one Player entry to the existing app registry,
+   inspect the homepage and Layers control, and file the town-inspector report
+   in a follow-up PR.
 
 No release or provider credentials are added by this change. This independent
 PointCast product is not affiliated with Winamp.
