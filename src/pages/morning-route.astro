@@ -1,0 +1,1070 @@
+---
+/**
+ * /morning-route — deliver the Morning Edition.
+ *
+ * A Paperboy-style route (after Atari Games' 1985 arcade game) on an El
+ * Segundo street at 6:45 AM, when PointCast's Morning Edition comes out.
+ * Directed by Michael Hoydich (brief 2026-10-22: 80s innocence, joy of the
+ * compute and flow, mood-state symbiosis, mobile and full screen,
+ * audio-visual multimedia, Atari and Commodore inspired, rendered modern).
+ * A wave-two cabinet on Cabinet Row.
+ *
+ * Everything in the playfield is plain rects and the 3x5 pixel font on a
+ * canvas; every sound is synthesized in the browser. The street, the ride and
+ * the report card live in src/lib/morning-route (tests/morning-route.test.mjs);
+ * the font, palettes and mood are Breakwater's shared modules.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { DIALS } from '../lib/breakwater/mood.mjs';
+import { HOUSES_PER_DAY, PAPERS_START, SCORE } from '../lib/morning-route/route.mjs';
+
+const description = 'A paper-route arcade game with 1980s innocence: ride an El Segundo street at 6:45 AM, throw the Morning Edition onto lit porches and into mailboxes, and weave past sprinklers, a sitting dog and a car backing out. Atari 800XL or Commodore 64 colors, synthesized chip sound, a mood you keep together. Phone or full screen.';
+const canonical = 'https://pointcast.xyz/morning-route';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': `${canonical}#game`,
+      name: 'Morning Route',
+      alternateName: 'Morning Route: deliver the Morning Edition',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/morning-route/og.png',
+      gamePlatform: 'Web browser',
+      genre: 'Arcade',
+      playMode: 'SinglePlayer',
+      inLanguage: 'en-US',
+      isAccessibleForFree: true,
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      datePublished: '2026-10-22',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Morning Route', item: canonical },
+      ],
+    },
+  ],
+};
+const machines = Object.values(MACHINES);
+const dials = Object.values(DIALS);
+const DIAL_NOTES = { calm: 'crashes never end the route', play: 'three riders, an extra rider for a perfect day', rush: 'starts hot; the street goes faster and a ramp lane appears' };
+---
+
+<BlockLayout
+  title="Morning Route"
+  description={description}
+  image="/images/morning-route/og.png"
+  imageAlt="A blue pixel street at dawn with lit porches, a mailbox, a sitting dog and a rider on a bike beside the words Morning Route, deliver the Morning Edition."
+  themeColor="#2545a8"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/morning-route.json', title: 'Morning Route rules, moods and machines (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/morning-route/og.png',
+    buttons: [
+      { label: 'Play Morning Route', action: 'link', target: canonical },
+      { label: 'Game JSON', action: 'link', target: `${canonical}.json` },
+    ],
+  }}
+>
+  <div class="mr" data-mr data-machine="xl" data-crt="on">
+    <div class="mr-stage" data-stage>
+      <header class="mr-bar">
+        <a class="mr-home" href="/" aria-label="PointCast home">POINTCAST</a>
+        <span class="mr-name" aria-hidden="true">MORNING ROUTE</span>
+        <div class="mr-controls" role="group" aria-label="Game settings">
+          <button type="button" data-machine-btn title="Switch machine (1 / 2)">800XL</button>
+          <button type="button" data-dial-btn title="Mood dial (3)">PLAY</button>
+          <button type="button" data-sound-btn aria-pressed="true" title="Sound (M)">SND</button>
+          <button type="button" data-crt-btn aria-pressed="true" title="CRT scanlines (C)">CRT</button>
+          <button type="button" data-full-btn title="Full screen (F)">FULL</button>
+        </div>
+      </header>
+      <div class="mr-screen" data-screen>
+        <canvas data-canvas role="img" aria-label="Morning Route playfield. Steer the rider up the street and throw the paper to the right, onto lit porches and into mailboxes."></canvas>
+        <div class="mr-scan" aria-hidden="true"></div>
+        <noscript><p class="mr-noscript">Morning Route needs JavaScript to draw the street and make its sounds. The rules and moods are readable at <a href="/morning-route.json">/morning-route.json</a>.</p></noscript>
+      </div>
+      <footer class="mr-readout" aria-label="Live readout">
+        <span data-r-mood>DAWN</span>
+        <span data-r-tempo>104 BPM</span>
+        <span data-r-day>MON 0/{HOUSES_PER_DAY}</span>
+        <span data-r-papers>PAPERS {PAPERS_START}</span>
+        <span data-r-fps>-- FPS</span>
+        <a href="#notes" data-notes-link>notes ↓</a>
+      </footer>
+      <p class="sr-only" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <section id="notes" class="mr-notes">
+      <p class="mr-eyebrow">PointCast / Games / Morning Route</p>
+      <h1>Deliver the Morning Edition.</h1>
+      <p class="mr-lede">It is 6:45 AM in El Segundo and the Morning Edition is out. Ride up the street, throw a paper onto every lit porch, and get it in the mailbox when you can. The street answers how you ride.</p>
+
+      <div class="mr-grid">
+        <article>
+          <h2>Mood, both ways</h2>
+          <p>The game keeps two numbers with you. Deliveries raise its <strong>energy</strong>; a crash lowers its <strong>calm</strong>; time brings both back toward the dial you set. Four words name where it is.</p>
+          <ul class="mr-moods">
+            <li><b>DAWN</b> warming up. Dewy lawns, a bouncy major tune, porches and mailboxes a little easier to hit.</li>
+            <li><b>FLOW</b> five porches in a row without a fall. Bright lawns, the music opens up.</li>
+            <li><b>RUSH</b> the street speeds up, the border runs raster bars, the targets tighten, and a short ramp lane with stars to catch in the air appears on the left.</li>
+            <li><b>DRIFT</b> after a crash. The street slows, the gaps between obstacles widen, bundles come sooner and the targets grow.</li>
+          </ul>
+          <p>Your side is the dial: {dials.map((d, i) => <span><b>{d.label}</b> ({DIAL_NOTES[d.id]}){i < dials.length - 1 ? '; ' : '.'}</span>)} The game relaxes toward it. The mood tape stays in this browser, and when you leave after a ride, the game hands its mood to the town.</p>
+        </article>
+        <article>
+          <h2>The route</h2>
+          <p>{HOUSES_PER_DAY} houses a day, Monday to Sunday, then the week starts again a little faster. Lit porches take the paper; dark houses do not. A paper on a lit porch scores {SCORE.porch}, in its mailbox {SCORE.mailbox}; a paper on a dark house is a miss. You start each day with {PAPERS_START} papers and pick up bundles from the road. Every subscriber served is a perfect day: a bonus and, on PLAY or RUSH, an extra rider. The day ends with a report card.</p>
+          <p>The street is gentle: sprinklers that come and go, trash bins, a friendly dog that just sits there, a car backing out of its driveway, skateboarders rolling down the road. Bump one and you fall off; three falls end the route, never on CALM.</p>
+          <h2>Two machines</h2>
+          {machines.map((m) => (
+            <p><b style={`color:${m.bands.yellow}`}>{m.name}</b> ({m.year}, {m.chip}). {m.id === 'xl' ? 'The Graphics 0 blue with a black border; raw square waves with a noise bite, in the POKEY spirit. A READY prompt and a RUN before the street.' : 'The blue field inside a light-blue border; a resonant filter sweep on every voice, in the SID spirit. The BASIC banner, then LOAD, then RUN.'}</p>
+          ))}
+        </article>
+        <article>
+          <h2>Controls</h2>
+          <ul>
+            <li>Phone: drag anywhere to steer; drag up to pedal faster, down to ease off; tap the right half of the field to throw. Two thumbs work: one steers, one throws.</li>
+            <li>Keys: ← → or A D steer, ↑ ↓ or W S speed up and slow down, Space throws, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial.</li>
+            <li>The paper flies to the right and keeps your pace, so throw a moment before the porch reaches you.</li>
+            <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead; add to Home Screen for the whole display.</li>
+          </ul>
+          <h2>After Paperboy</h2>
+          <p>Paperboy (Atari Games, 1985) put a newspaper route on an arcade cabinet with handlebars. Morning Route borrows the idea, a week of days, subscribers and non-subscribers, a bag of papers that runs out, and turns the trouble down to a friendly street. Nothing is copied: the sprites are plain rectangles drawn for this page, and the music is generated as you ride. Read the <a href="https://github.com/mhoydich/pointcast/blob/main/docs/notes/2026-10-22-morning-route-notes.md">research note</a>.</p>
+        </article>
+      </div>
+
+      <footer class="mr-credits">
+        <p>Directed by Michael Hoydich. Designed and built by Claude Code on October 22, 2026. Original code, art and synthesized sound; no ROMs, no recordings, no characters from any other game. Machine names are tributes.</p>
+        <p><a href="/cabinet-row">Cabinet Row</a> · <a href="/morning-route.json">morning-route.json</a> · <a href="/breakwater">Breakwater</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a> · <a href="/">PointCast</a></p>
+      </footer>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .mr { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
+  .mr[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
+  .mr-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .mr-stage:fullscreen { height: 100%; min-height: 0; }
+  .mr-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .mr-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .mr-home { color: var(--text); text-decoration: none; font-weight: 700; }
+  .mr-home:hover { color: #fff; }
+  .mr-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .mr-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .mr-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
+  .mr-controls button:hover { background: #1f2456; }
+  .mr-controls button[aria-pressed='false'] { color: #9aa1cc; text-decoration: line-through; }
+  .mr-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+  .mr-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
+  .mr-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .mr-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; opacity: 0.55; }
+  .mr[data-crt='off'] .mr-scan { display: none; }
+  .mr-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
+  .mr-noscript a { color: var(--paddle); }
+  .mr-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .mr-readout span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .mr-readout a { margin-left: auto; flex-shrink: 0; color: var(--text); text-decoration: none; }
+  .mr-readout a:hover { color: #fff; }
+  .mr-stage:fullscreen .mr-readout a { display: none; }
+  .mr-stage:-webkit-full-screen .mr-readout a { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .mr-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
+  .mr-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
+  .mr-notes h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; margin: 0 0 16px; color: #fff; }
+  .mr-lede { font-size: 18px; line-height: 1.5; max-width: 60ch; color: #c9cfee; margin: 0 0 36px; }
+  .mr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .mr-grid article { border-top: 2px solid #2b3070; padding-top: 18px; font-size: 14px; line-height: 1.55; }
+  .mr-grid h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); margin: 0 0 10px; }
+  .mr-grid p + h2, .mr-grid ul + h2 { margin-top: 22px; }
+  .mr-grid p { margin: 0 0 12px; }
+  .mr-grid ul { margin: 0 0 12px; padding-left: 18px; }
+  .mr-grid li { margin-bottom: 6px; }
+  .mr-moods { list-style: none; padding: 0 !important; }
+  .mr-moods b { display: inline-block; min-width: 54px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; color: #fff; }
+  .mr-notes a { color: #a9b9f5; }
+  .mr-notes a:hover { color: #fff; }
+  .mr-credits { margin-top: 44px; border-top: 1px solid #2b3070; padding-top: 18px; font-size: 13px; line-height: 1.6; color: #9aa1cc; }
+  .mr-credits p { margin: 0 0 8px; }
+  @media (max-width: 760px) {
+    .mr-stage { min-height: 0; }
+    .mr-bar { gap: 8px; padding: 6px 10px; }
+    .mr-name { display: none; }
+    .mr-controls { gap: 4px; }
+    .mr-controls button { padding: 7px 7px; min-width: 40px; font-size: 9px; }
+    .mr-readout { gap: 10px; font-size: 9px; height: 26px; }
+    .mr-readout [data-r-fps], .mr-readout [data-r-tempo] { display: none; }
+    .mr-grid { grid-template-columns: 1fr; gap: 20px; }
+    .mr-notes { padding: 40px 16px 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .mr-scan { opacity: 0.35; } }
+</style>
+
+<script>
+  import { MACHINES } from '../lib/breakwater/waves.mjs';
+  import { DIALS, DIAL_IDS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
+  import {
+    W, ROAD, CURB, WALK, LAWN, HOUSE, LOT, START_RUN, DAY_LENGTH, HOUSES_PER_DAY, PAPER_RANGE, RIDERS_START, AIR_TIME,
+    MOOD_FOR_EVENT, createRun, stepRun, autopilot, dayName, subscriberCount, deliveredCount, sprinklerOn, reportLines, houseRect, porchRect, mailboxRect, drivewayRect, pathRect,
+  } from '../lib/morning-route/route.mjs';
+  import { paletteFor, mix, eachRect, RIDER_SPRITE, PAPER_SPRITE, BUNDLE_SPRITE, BIN_SPRITE, DOG_SPRITES, SPRINKLER_SPRITE, SKATER_SPRITE, CAR_SPRITE, RAMP_SPRITE, mailboxSprite } from '../lib/morning-route/sprites.mjs';
+
+  const root = document.querySelector('[data-mr]');
+  if (root) main(root);
+
+  function main(root) {
+    // ---------- geometry (logical pixels) ----------
+    const H_MIN = 384, H_MAX = 480, HUD = 32;
+    let H = H_MIN;
+    let RY = H - 84;
+    const STORE = 'morning-route:v1';
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+    const ATTRACT = Object.freeze({ label: 'DAWN', speed: 1, paddle: 1.1, density: 0.4 });
+
+    const stage = root.querySelector('[data-stage]');
+    const screen = root.querySelector('[data-screen]');
+    const canvas = root.querySelector('[data-canvas]');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const live = root.querySelector('[data-live]');
+    const btn = {
+      machine: root.querySelector('[data-machine-btn]'),
+      dial: root.querySelector('[data-dial-btn]'),
+      sound: root.querySelector('[data-sound-btn]'),
+      crt: root.querySelector('[data-crt-btn]'),
+      full: root.querySelector('[data-full-btn]'),
+    };
+    const readout = {
+      mood: root.querySelector('[data-r-mood]'),
+      tempo: root.querySelector('[data-r-tempo]'),
+      day: root.querySelector('[data-r-day]'),
+      papers: root.querySelector('[data-r-papers]'),
+      fps: root.querySelector('[data-r-fps]'),
+    };
+
+    // ---------- settings ----------
+    const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch { return {}; } };
+    const readSiteMood = () => { try { return localStorage.getItem('pc:mood'); } catch { return null; } };
+    const settings = load();
+    let machineId = MACHINES[settings.machine] ? settings.machine : 'xl';
+    let soundOn = settings.sound !== false;
+    let crtOn = settings.crt !== false;
+    let best = Number.isFinite(settings.best) && settings.best > 0 ? Math.floor(settings.best) : 0;
+    let mood = restoreMood(settings.mood, DIALS[settings.dial] ? settings.dial : dialFromSiteMood(readSiteMood()));
+    let response = moodResponse(mood);
+    const save = () => {
+      try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, mood: serializeMood(mood) })); } catch {}
+    };
+    // The town only inherits a mood from a route that was actually ridden, never from a glance at the title.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+
+    // ---------- helpers ----------
+    const M = () => MACHINES[machineId];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const announce = (text) => { if (live) live.textContent = text; };
+    const buzz = (ms) => { if (COARSE && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} } };
+    const isCalm = () => !!DIALS[mood.dial].unlimitedBalls;
+
+    // ---------- audio ----------
+    const audio = (() => {
+      let ac = null, master, sfx, music;
+      let tempo = 104, scale = 'major', density = 0.5, musicOn = false, wantMusic = false;
+      let nextNote = 0, step = 0, timer = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      // A four-bar loop per scale; each chord is root, third, fifth, top.
+      const PROG = {
+        major: [[60, 64, 67, 72], [65, 69, 72, 77], [57, 60, 64, 69], [55, 59, 62, 67]],
+        bright: [[60, 64, 67, 71], [62, 66, 69, 74], [64, 67, 71, 76], [62, 66, 69, 74]],
+        minor: [[57, 60, 64, 69], [55, 59, 62, 67], [53, 57, 60, 65], [52, 56, 59, 64]],
+        soft: [[60, 67, 72, 76], [57, 64, 69, 72], [53, 60, 65, 69], [55, 62, 67, 71]],
+      };
+      // Melody: chord-tone indexes per 16th, -1 rests; two phrases alternate by bar.
+      const TUNE = [
+        [2, -1, 3, -1, 2, -1, 1, -1, 0, -1, 1, 2, -1, -1, 1, -1],
+        [3, -1, 2, 1, 2, -1, 3, -1, 2, -1, 1, -1, 0, -1, -1, -1],
+      ];
+      function ensure() {
+        if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return ac; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 6;
+        master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0;
+        master.connect(comp); comp.connect(ac.destination);
+        sfx = ac.createGain(); sfx.gain.value = 0.7; sfx.connect(master);
+        music = ac.createGain(); music.gain.value = 0.3; music.connect(master);
+        return ac;
+      }
+      function voice({ freq, type = 'square', t = ac.currentTime, dur = 0.12, vol = 0.3, slide = 0, dest = sfx, a = 0.004, r = 0.05, detune = 0 }) {
+        if (!ac) return;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+        o.detune.value = detune;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + a);
+        g.gain.setTargetAtTime(vol * 0.55, t + a + dur * 0.25, Math.max(0.01, dur * 0.25));
+        g.gain.setTargetAtTime(0.0001, t + dur, r);
+        o.connect(g);
+        let out = g;
+        if (machineId === 'c64') {
+          const f = ac.createBiquadFilter();
+          f.type = 'lowpass'; f.Q.value = 4;
+          f.frequency.setValueAtTime(Math.min(12000, freq * 7), t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 1.3), t + dur + 0.05);
+          g.connect(f); out = f;
+        }
+        out.connect(dest);
+        o.start(t); o.stop(t + dur + r * 5 + 0.05);
+      }
+      function noise(t, dur = 0.05, vol = 0.12, freq = 2400, dest = sfx) {
+        if (!ac) return;
+        const len = Math.max(1, Math.floor(ac.sampleRate * dur));
+        const buf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const s = ac.createBufferSource(); s.buffer = buf;
+        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.8;
+        const g = ac.createGain(); g.gain.value = vol;
+        s.connect(f); f.connect(g); g.connect(dest); s.start(t);
+      }
+      const bass = () => (machineId === 'c64' ? 'triangle' : 'square');
+      function playStep(s, t) {
+        const chords = PROG[scale] || PROG.major;
+        const bar = Math.floor(s / 16);
+        const chord = chords[bar % chords.length];
+        const idx = s % 16;
+        // Oom-pah bass: root on the beat, fifth on the off-beat.
+        if (idx % 4 === 0) voice({ freq: midi(chord[idx % 8 === 0 ? 0 : 2] - 24), type: bass(), t, dur: 0.16, vol: 0.17, dest: music, r: 0.06 });
+        if (scale !== 'soft' && idx % 4 === 2 && density > 0.35) voice({ freq: midi(chord[1] - 12), type: 'square', t, dur: 0.04, vol: 0.05, dest: music, r: 0.02 });
+        const n = TUNE[bar % 2][idx];
+        const gate = scale === 'soft' ? 0.4 : 0.6 + density * 0.4;
+        if (n >= 0 && Math.random() < gate) {
+          voice({ freq: midi(chord[n] + (scale === 'bright' ? 12 : 0)), type: 'square', t, dur: scale === 'soft' ? 0.22 : 0.1, vol: scale === 'soft' ? 0.08 : 0.1, dest: music, r: 0.04, detune: machineId === 'xl' ? 4 : 0 });
+        }
+        if (scale === 'minor' && idx % 4 === 2) noise(t, 0.025, 0.05, 6000, music);
+      }
+      function schedule() {
+        if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed step as one burst.
+        if (nextNote < ac.currentTime - 0.1) { nextNote = ac.currentTime + 0.05; step += 1; }
+        while (nextNote < ac.currentTime + 0.14) {
+          playStep(step, nextNote);
+          nextNote += 60 / tempo / 4;
+          step += 1;
+        }
+      }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+      }
+      const now = () => ac.currentTime;
+      return {
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
+        },
+        setMusic,
+        wantsMusic: () => wantMusic,
+        set(t, sc, d) { tempo = t; scale = sc; density = d; },
+        mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
+        throwPaper() { if (!ac) return; noise(now(), 0.08, 0.08, 1800); voice({ freq: 520, type: 'triangle', dur: 0.07, vol: 0.08, slide: 1.6, r: 0.02 }); },
+        porch() { if (!ac) return; const t = now(); voice({ freq: 120, type: 'triangle', t, dur: 0.08, vol: 0.24, slide: 0.6, r: 0.03 }); voice({ freq: midi(76), type: 'square', t: t + 0.05, dur: 0.1, vol: 0.14, r: 0.06 }); },
+        mailbox() { if (!ac) return; const t = now(); [88, 91].forEach((n, i) => voice({ freq: midi(n), type: 'triangle', t: t + i * 0.09, dur: 0.18, vol: 0.2, r: 0.12 })); if (machineId === 'xl') noise(t, 0.03, 0.06, 5000); },
+        miss() { if (ac) voice({ freq: 220, type: 'square', dur: 0.16, vol: 0.12, slide: 0.7, r: 0.04 }); },
+        thud() { if (ac) voice({ freq: 90, type: 'triangle', dur: 0.06, vol: 0.14, slide: 0.7, r: 0.03 }); },
+        bundle() { if (!ac) return; const t = now(); [67, 71, 74, 79].forEach((n, i) => voice({ freq: midi(n), type: 'square', t: t + i * 0.05, dur: 0.07, vol: 0.13 })); },
+        empty() { if (!ac) return; const t = now(); [0, 0.1].forEach((d) => voice({ freq: 140, type: 'square', t: t + d, dur: 0.05, vol: 0.1, r: 0.02 })); },
+        ramp() { if (ac) voice({ freq: 200, type: 'square', dur: 0.3, vol: 0.14, slide: 4, r: 0.05 }); },
+        star() { if (!ac) return; const t = now(); voice({ freq: midi(84), type: 'triangle', t, dur: 0.06, vol: 0.16 }); voice({ freq: midi(91), type: 'triangle', t: t + 0.05, dur: 0.1, vol: 0.14 }); },
+        crash() { if (!ac) return; voice({ freq: 380, type: 'sawtooth', dur: 0.36, vol: 0.2, slide: 0.2, r: 0.1 }); noise(now() + 0.04, 0.18, 0.12, 900); },
+        honk() { if (!ac) return; const t = now(); [0, 0.16].forEach((d) => { voice({ freq: 330, type: 'square', t: t + d, dur: 0.1, vol: 0.07 }); voice({ freq: 415, type: 'square', t: t + d, dur: 0.1, vol: 0.07 }); }); },
+        arf() { if (!ac) return; const t = now(); [0, 0.14].forEach((d) => voice({ freq: 560, type: 'square', t: t + d, dur: 0.06, vol: 0.08, slide: 0.65, r: 0.02 })); },
+        day() { if (!ac) return; const t = now(); [60, 64, 67, 72, 67, 72, 76, 79].forEach((n, i) => voice({ freq: midi(n), type: 'square', t: t + i * 0.08, dur: 0.12, vol: 0.16, r: 0.08 })); },
+        over() { if (!ac) return; const t = now(); [67, 64, 60, 55].forEach((n, i) => voice({ freq: midi(n), type: 'triangle', t: t + i * 0.14, dur: 0.18, vol: 0.18, r: 0.1 })); },
+        extra() { if (!ac) return; const t = now(); voice({ freq: midi(79), type: 'triangle', t, dur: 0.1, vol: 0.2 }); voice({ freq: midi(84), type: 'triangle', t: t + 0.1, dur: 0.22, vol: 0.2, r: 0.1 }); },
+        sio() { if (!ac) return; const t = now(); for (let i = 0; i < 4; i += 1) voice({ freq: i % 2 ? 1046 : 1318, type: 'square', t: t + i * 0.12, dur: 0.07, vol: 0.14, r: 0.02 }); },
+        jingle() { if (!ac) return; const t = now(); [60, 64, 67, 72, 76, 79].forEach((n, i) => voice({ freq: midi(n), type: 'square', t: t + i * 0.06, dur: 0.12, vol: 0.16, r: 0.1 })); },
+      };
+    })();
+
+    // ---------- game state ----------
+    const G = {
+      phase: 'boot', t: 0, boot: { lines: [], chars: 0, beeped: false, total: 0 }, run: null, attractRun: null, attractDay: 0,
+      day: 0, score: 0, riders: RIDERS_START, report: null, particles: [], floats: [], flash: 0, shake: 0, msg: '', msgT: 0, msgScale: 3,
+      keys: {}, input: { dx: 0, dThrottle: 0, throw: false }, loading: 0, fps: 60, fpsAcc: 0, fpsN: 0, border: 0,
+      resume: null, musicResume: false, played: false, extra: false,
+    };
+    const pointers = new Map();
+
+    function bootScript() {
+      if (machineId === 'c64') return ['', '    **** POINTCAST 64 BASIC V2 ****', '', ' 64K RAM SYSTEM', ' 38911 BASIC BYTES FREE', '', 'READY.', 'LOAD"MORNING ROUTE",8,1', '', 'SEARCHING FOR MORNING ROUTE', 'LOADING', 'READY.', 'RUN'];
+      return ['READY', 'RUN "D:ROUTE"', '', 'LOADING', 'READY', 'RUN'];
+    }
+    function beginBoot() {
+      G.phase = 'boot'; G.t = 0;
+      G.boot = { lines: bootScript(), chars: 0, beeped: false, total: 0 };
+      G.boot.total = G.boot.lines.reduce((n, l) => n + l.length + 1, 0);
+      audio.setMusic(false);
+    }
+    function enterTitle() {
+      G.phase = 'title'; G.t = 0;
+      G.attractRun = createRun({ day: G.attractDay, seed: (Math.random() * 1e9) | 0 });
+      audio.setMusic(true);
+    }
+    function startDay(day) {
+      G.day = day;
+      G.run = createRun({ day, score: G.score, riders: G.riders });
+      G.particles = []; G.floats = []; G.report = null; G.extra = false;
+      G.phase = 'ready'; G.t = 0;
+      announce(`${dayName(day)}. ${subscriberCount(G.run)} subscribers. Tap or press space to ride.`);
+    }
+    function newGame() {
+      G.score = 0; G.riders = RIDERS_START; G.played = true;
+      beginGame(mood); response = moodResponse(mood);
+      startDay(0);
+      audio.setMusic(true);
+    }
+    function showMsg(text, scale = 3, time = 1.2) { G.msg = text; G.msgScale = scale; G.msgT = time; }
+    function float(text, x, s, color) { G.floats.push({ text, x, s, t: 0, color }); if (G.floats.length > 12) G.floats.shift(); }
+    function burst(x, s, color, n, spread = 60) {
+      const k = REDUCED ? Math.min(2, n) : n;
+      for (let i = 0; i < k; i += 1) G.particles.push({ x, s, vx: rnd(-spread, spread), vs: rnd(-20, spread * 1.4), life: rnd(0.3, 0.7), t: 0, color });
+      if (G.particles.length > 200) G.particles.splice(0, G.particles.length - 200);
+    }
+
+    // ---------- events from the ride ----------
+    function handle(events) {
+      const p = pal();
+      const run = G.run;
+      for (const e of events) {
+        const moodType = MOOD_FOR_EVENT[e.type];
+        if (moodType) moodEvent(mood, moodType);
+        const n = Math.round(2 + 8 * response.density);
+        switch (e.type) {
+          case 'throw': audio.throwPaper(); break;
+          case 'porch':
+            audio.porch(); buzz(8); burst(e.x, e.s, p.paper, n); float(`+${e.points}`, e.x - 10, e.s + 8, p.yellow);
+            announce(`Porch. ${deliveredCount(run)} of ${subscriberCount(run)} delivered.`);
+            break;
+          case 'mailbox':
+            audio.mailbox(); buzz(14); burst(e.x, e.s, p.yellow, n + 4); float(`+${e.points}`, e.x, e.s + 10, p.yellow);
+            announce(`Mailbox. ${deliveredCount(run)} of ${subscriberCount(run)} delivered.`);
+            break;
+          case 'miss': audio.miss(); float('MISS', e.x - 14, e.s + 8, p.bright); break;
+          case 'drop': audio.thud(); break;
+          case 'bundle': audio.bundle(); float(e.got ? `+${e.got}` : 'FULL', e.x, e.s + 10, p.bright); announce(`Bundle. ${e.left} papers.`); break;
+          case 'empty': audio.empty(); if (G.msgT <= 0) showMsg('NO PAPERS', 2, 0.8); break;
+          case 'ramp': audio.ramp(); break;
+          case 'star': audio.star(); burst(e.x, e.s, p.yellow, n); float(`+${e.points}`, e.x, e.s + 8, p.yellow); break;
+          case 'honk': audio.honk(); break;
+          case 'arf': audio.arf(); break;
+          case 'crash': {
+            audio.crash(); buzz(40);
+            G.flash = 0.3; G.shake = REDUCED ? 0 : 0.3;
+            burst(e.x, e.s, p.walk, n + 6, 50);
+            if (isCalm()) { showMsg('OOPS', 3, 1); announce('A fall. CALM: ride on.'); }
+            else if (e.final) { showMsg('LAST FALL', 3, 1.2); announce(`Last fall. Score ${run.score}.`); }
+            else { showMsg(`${run.riders} LEFT`, 3, 1); announce(`A fall. ${run.riders} ${run.riders === 1 ? 'rider' : 'riders'} left.`); }
+            break;
+          }
+          case 'over': gameOver(); return;
+          case 'day': {
+            audio.day();
+            G.score = run.score; G.riders = run.riders; G.report = e.report; G.extra = e.extra;
+            if (e.extra) audio.extra();
+            if (G.score > best) best = G.score;
+            save();
+            G.phase = 'report'; G.t = 0;
+            announce(`${e.report.day} done. ${e.report.delivered} of ${e.report.subscribers} delivered. Grade ${e.report.grade}.${e.extra ? ' Perfect day: an extra rider.' : ''}`);
+            return;
+          }
+          default: break;
+        }
+      }
+    }
+    function gameOver() {
+      G.phase = 'over'; G.t = 0;
+      G.score = G.run.score; G.riders = 0;
+      G.report = G.run.report || null;
+      if (G.score > best) best = G.score;
+      save(); handMoodToTown();
+      audio.setMusic(false); audio.over();
+    }
+
+    // ---------- update ----------
+    function update(dt) {
+      G.t += dt;
+      if (G.msgT > 0) G.msgT -= dt;
+      if (G.flash > 0) G.flash -= dt;
+      if (G.shake > 0) G.shake -= dt;
+      if (G.loading > 0) G.loading -= dt;
+      for (const q of G.particles) { q.t += dt; q.vs -= 260 * dt; q.x += q.vx * dt; q.s += q.vs * dt; }
+      G.particles = G.particles.filter((q) => q.t < q.life);
+      for (const f of G.floats) { f.t += dt; f.s += 24 * dt; }
+      G.floats = G.floats.filter((f) => f.t < 0.9);
+
+      if (G.phase === 'boot') {
+        const rate = machineId === 'c64' ? 48 : 30;
+        G.boot.chars += rate * dt;
+        if (machineId === 'xl' && !G.boot.beeped && G.boot.chars > 22) { G.boot.beeped = true; audio.sio(); }
+        if (machineId === 'c64' && !G.boot.beeped && G.boot.chars > 80) { G.boot.beeped = true; G.loading = 1.4; }
+        if (G.boot.chars >= G.boot.total + 20) { audio.jingle(); enterTitle(); }
+        return;
+      }
+      if (G.phase === 'title') {
+        const a = G.attractRun;
+        stepRun(a, dt, autopilot(a, ATTRACT), { response: ATTRACT, calm: true });
+        G.border += dt * 30;
+        if (a.done || a.over) { G.attractDay = (G.attractDay + 1) % 7; G.attractRun = createRun({ day: G.attractDay, seed: (Math.random() * 1e9) | 0 }); }
+        audio.set(104, 'major', 0.3);
+        return;
+      }
+      if (G.phase === 'paused' || G.phase === 'over') { G.input = { dx: 0, dThrottle: 0, throw: false }; return; }
+
+      moodStep(mood, dt);
+      response = moodResponse(mood);
+      audio.set(response.tempo, response.scale, response.density);
+      if (G.phase !== 'play') { G.input = { dx: 0, dThrottle: 0, throw: false }; return; }
+
+      const k = G.keys;
+      const input = {
+        steer: (k.ArrowRight || k.KeyD ? 1 : 0) - (k.ArrowLeft || k.KeyA ? 1 : 0),
+        pedal: (k.ArrowUp || k.KeyW ? 1 : 0) - (k.ArrowDown || k.KeyS ? 1 : 0),
+        dx: G.input.dx, dThrottle: G.input.dThrottle, hold: pointers.size > 0, throw: G.input.throw,
+      };
+      G.input = { dx: 0, dThrottle: 0, throw: false };
+      const events = stepRun(G.run, dt, input, { response, calm: isCalm() });
+      G.border += dt * G.run.speed * 0.5;
+      handle(events);
+    }
+
+    // ---------- rendering ----------
+    let dpr = 1, cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
+    function resize() {
+      const r = screen.getBoundingClientRect();
+      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H_MIN) * 4) / 4);
+      // A tall phone gets a longer look up the street, never a shorter one.
+      const nextH = clamp(Math.floor(cssH / scale), H_MIN, H_MAX);
+      if (nextH !== H) applyHeight(nextH);
+      offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function applyHeight(nextH) {
+      // Rotation or fullscreen: the new height applies at once and anything drawn in flight stays on the field.
+      H = nextH; RY = H - 84;
+      const run = G.phase === 'title' ? G.attractRun : G.run;
+      if (!run) return;
+      const top = run.s + (RY - HUD), bottom = run.s - (H - RY);
+      for (const q of G.particles) q.s = clamp(q.s, bottom, top);
+      for (const f of G.floats) f.s = clamp(f.s, bottom + 10, top);
+    }
+    const yOf = (run, s) => Math.round(RY - (s - run.s));
+    function text(str, x, y, s, color, align = 'left') {
+      if (!str) return;
+      const w = textWidth(str, s);
+      const ox = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? Math.round(x - w) : x;
+      ctx.fillStyle = color;
+      eachPixel(str, ox, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+    }
+    function rainbowText(str, x, y, s, colors) {
+      const w = textWidth(str, s);
+      const ox = Math.round(x - w / 2);
+      for (let i = 0; i < str.length; i += 1) {
+        ctx.fillStyle = colors[i % colors.length];
+        eachPixel(str[i], ox + i * 4 * s, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+      }
+    }
+    function sprite(sp, x, y, p) { eachRect(sp, Math.round(x), Math.round(y), p, (rx, ry, rw, rh, c) => { ctx.fillStyle = c; ctx.fillRect(rx, ry, rw, rh); }); }
+
+    // The street's colors follow the machine and the mood; rebuilt only when either changes.
+    let palKey = '', palCache = null;
+    function pal() {
+      const label = G.phase === 'title' ? 'DAWN' : response.label;
+      const key = `${machineId}:${label}`;
+      if (key === palKey) return palCache;
+      const base = paletteFor(machineId);
+      const m = M();
+      const p = { ...base };
+      if (label === 'DAWN') { p.lawn = mix(base.lawn, base.field, 0.18); p.road = mix(base.road, m.raster[0], 0.06); }
+      if (label === 'FLOW') { p.lawn = mix(base.lawn, '#ffffff', 0.14); p.lit = mix(base.lit, '#ffffff', 0.3); }
+      if (label === 'RUSH') { p.lawn = mix(base.lawn, m.raster[1], 0.22); p.road = mix(base.road, m.raster[0], 0.14); p.roofA = mix(base.roofA, m.raster[1], 0.3); }
+      if (label === 'DRIFT') { p.lawn = mix(base.lawn, base.field, 0.42); p.walk = mix(base.walk, base.field, 0.25); p.lit = mix(base.lit, base.field, 0.2); }
+      p.lawnDark = mix(p.lawn, base.field, 0.3);
+      palKey = key; palCache = p;
+      return p;
+    }
+    function drawBorder() {
+      const m = M();
+      ctx.fillStyle = m.border;
+      ctx.fillRect(0, 0, cssW, cssH);
+      const label = G.phase === 'title' ? 'DAWN' : response.label;
+      const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.62 : label === 'FLOW' ? 0.34 : label === 'DAWN' ? 0.14 : 0;
+      if (bars === 'load') {
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else if (bars > 0) {
+        // The bars ride the street: color index and pixel offset both come from one scroll value.
+        const h = 6, period = m.raster.length * 2;
+        const shift = REDUCED ? 0 : G.border % (period * h);
+        const f = shift % h, base = shift - f;
+        ctx.globalAlpha = bars;
+        for (let y = -period * h; y < cssH + h; y += h) {
+          const idx = Math.round((y - base) / h);
+          const k = ((idx % period) + period) % period;
+          if (k >= m.raster.length) continue;
+          ctx.fillStyle = m.raster[k];
+          ctx.fillRect(0, y + f, cssW, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    function drawStreet(run) {
+      const p = pal();
+      const sTop = run.s + RY + 20, sBottom = run.s - (H - RY) - 20;
+      // road, curb, walk, lawn
+      ctx.fillStyle = p.gutter; ctx.fillRect(0, 0, ROAD.l, H);
+      ctx.fillStyle = p.road; ctx.fillRect(ROAD.l, 0, ROAD.r - ROAD.l, H);
+      ctx.fillStyle = p.curb; ctx.fillRect(CURB.l, 0, CURB.r - CURB.l, H);
+      ctx.fillStyle = p.walk; ctx.fillRect(WALK.l, 0, WALK.r - WALK.l, H);
+      ctx.fillStyle = p.lawn; ctx.fillRect(LAWN.l, 0, W - LAWN.l, H);
+      // Lane dashes and walk joints sit at fixed world positions, so they scroll with the street and never snap.
+      ctx.fillStyle = p.lane;
+      for (let k = Math.floor(sBottom / 28); k * 28 < sTop; k += 1) { const y = yOf(run, k * 28); ctx.fillRect(ROAD.mid - 1, y - 14, 2, 14); }
+      ctx.fillStyle = p.joint;
+      for (let k = Math.floor(sBottom / 22); k * 22 < sTop; k += 1) ctx.fillRect(WALK.l, yOf(run, k * 22), WALK.r - WALK.l, 1);
+      // The finish: a checkered line across the street after the last house.
+      const fy = yOf(run, DAY_LENGTH - 40);
+      if (fy > -10 && fy < H + 10) {
+        for (let x = ROAD.l; x < LAWN.l; x += 6) for (let r = 0; r < 2; r += 1) { ctx.fillStyle = ((x / 6 + r) % 2) ? p.bright : p.ink; ctx.fillRect(x, fy - 6 + r * 3, 6, 3); }
+        text('END', ROAD.mid, fy - 16, 2, p.bright, 'center');
+      }
+      for (const h of run.houses) {
+        if (h.b > sTop || h.b + LOT < sBottom) continue;
+        drawLot(run, h, p);
+      }
+      for (const l of run.litter) sprite(PAPER_SPRITE, l.x - 3, yOf(run, l.s) - 2, p);
+    }
+    function rectY(run, r) { const y0 = yOf(run, r.s1), y1 = yOf(run, r.s0); return [y0, y1 - y0]; }
+    function drawLot(run, h, p) {
+      const rect = (r, color) => { const [y, hh] = rectY(run, r); ctx.fillStyle = color; ctx.fillRect(r.x0, y, r.x1 - r.x0, hh); };
+      // hedge between lots
+      rect({ x0: LAWN.l + 16, x1: HOUSE.l - 4, s0: h.b + 132, s1: h.b + 138 }, p.hedge);
+      rect(drivewayRect(h), p.drive);
+      rect(pathRect(h), p.drive);
+      const body = houseRect(h);
+      const roofs = [p.roofA, p.roofB, p.roofC, p.roofD];
+      rect({ ...body, x0: body.x0 + 8 }, roofs[h.style]);
+      rect({ x0: body.x0 + 8 + Math.round((body.x1 - body.x0 - 8) / 2) - 1, x1: body.x0 + 8 + Math.round((body.x1 - body.x0 - 8) / 2) + 1, s0: body.s0, s1: body.s1 }, p.ink);
+      rect({ ...body, x1: body.x0 + 8 }, h.subscriber ? p.wall : p.wallDark);
+      // windows: lit at subscribers, dark at the rest
+      for (const ws of [h.b + 34, h.b + 92, h.b + 106]) rect({ x0: body.x0 + 2, x1: body.x0 + 6, s0: ws, s1: ws + 8 }, h.subscriber ? p.lit : p.unlit);
+      rect({ x0: body.x0 + 1, x1: body.x0 + 7, s0: h.b + 60, s1: h.b + 74 }, p.ink);
+      const porch = porchRect(h);
+      rect(porch, h.subscriber ? p.porch : p.porchDark);
+      if (h.subscriber) {
+        // porch light: a lamp and a soft glow
+        const [py] = rectY(run, porch);
+        ctx.globalAlpha = 0.3; ctx.fillStyle = p.lit; ctx.fillRect(porch.x0 - 4, py - 4, porch.x1 - porch.x0 + 4, 8); ctx.globalAlpha = 1;
+        ctx.fillStyle = p.lit; ctx.fillRect(porch.x1 - 4, py, 3, 3);
+        const mb = mailboxRect(h);
+        sprite(mailboxSprite(h.delivered === 'mailbox'), mb.x0, yOf(run, mb.s1) - 2, p);
+        if (h.delivered === 'porch') sprite(PAPER_SPRITE, porch.x0 + 5, yOf(run, h.b + 67) - 2, p);
+      }
+    }
+    function drawThings(run) {
+      const p = pal();
+      for (const th of run.things) {
+        const y = yOf(run, th.s);
+        if (y < -40 || y > H + 40) continue;
+        if (th.kind === 'bundle') sprite(BUNDLE_SPRITE, th.x - 6, y - 4, p);
+        else if (th.kind === 'ramp') sprite(RAMP_SPRITE, th.x - 12, y - 8, p);
+        else if (th.kind === 'star') text('*', th.x, y - 5, 2, run.airT > 0 ? p.bright : p.yellow, 'center');
+        else if (th.kind === 'bin') sprite(BIN_SPRITE, th.x - 4, y - 5, p);
+        else if (th.kind === 'dog') sprite(DOG_SPRITES[REDUCED ? 0 : Math.floor(run.t * 4 + (th.wag || 0)) % 2], th.x - 7, y - 6, p);
+        else if (th.kind === 'skater') sprite(SKATER_SPRITE, th.x - 4, y - 7, p);
+        else if (th.kind === 'car') sprite(CAR_SPRITE, th.x - 13, y - 7, p);
+        else if (th.kind === 'sprinkler') {
+          sprite(SPRINKLER_SPRITE, th.x - 2, y - 2, p);
+          if (sprinklerOn(th, run.t)) {
+            // A fan of drops toward the walk; it sweeps unless motion is reduced.
+            ctx.fillStyle = p.water;
+            const sweep = REDUCED ? 0 : Math.sin((run.t + th.phase) * 5) * 3;
+            for (let i = 1; i <= 6; i += 1) for (const dy of [-3, 0, 3]) ctx.fillRect(th.x - i * 4 + 2, y + Math.round(dy * (i / 6) + sweep * (i / 6)) - 1, 2, 2);
+          }
+        }
+      }
+    }
+    function drawPapers(run) {
+      const p = pal();
+      for (const q of run.papersOut) {
+        const y = yOf(run, q.s);
+        const lift = Math.round(Math.sin(Math.PI * Math.min(1, (q.x - q.x0) / PAPER_RANGE)) * 8);
+        ctx.globalAlpha = 0.35; ctx.fillStyle = p.ink; ctx.fillRect(Math.round(q.x) - 3, y, 6, 2); ctx.globalAlpha = 1;
+        sprite(PAPER_SPRITE, q.x - 3, y - 2 - lift, p);
+      }
+    }
+    function drawRider(run, alpha = 1) {
+      const p = pal();
+      let x = run.x - RIDER_SPRITE.w / 2, y = RY - RIDER_SPRITE.h / 2;
+      if (run.crashT > 0) {
+        // a tumble: the bike wobbles and three stars circle overhead
+        x += REDUCED ? 2 : Math.round(Math.sin(run.t * 24) * 2);
+        ctx.globalAlpha = alpha;
+        sprite(RIDER_SPRITE, x, y + 2, p);
+        for (let i = 0; i < 3; i += 1) { const a = (REDUCED ? 0 : run.t * 5) + i * 2.1; text('*', Math.round(run.x + Math.cos(a) * 8), Math.round(y - 6 + Math.sin(a) * 3), 1, p.yellow, 'center'); }
+        ctx.globalAlpha = 1;
+        return;
+      }
+      const lift = run.airT > 0 ? Math.round(Math.sin(Math.PI * (run.airT / AIR_TIME)) * 8) : 0;
+      if (lift) { ctx.globalAlpha = 0.35 * alpha; ctx.fillStyle = p.ink; ctx.fillRect(Math.round(run.x) - 4, RY + 6, 8, 3); }
+      ctx.globalAlpha = alpha * (run.invuln > 0 ? (REDUCED ? 0.6 : Math.floor(run.t * 10) % 2 ? 0.35 : 1) : 1);
+      sprite(RIDER_SPRITE, x, y - lift, p);
+      ctx.globalAlpha = 1;
+    }
+    function drawEffects(run) {
+      for (const q of G.particles) {
+        ctx.globalAlpha = 1 - q.t / q.life;
+        ctx.fillStyle = q.color;
+        ctx.fillRect(Math.round(q.x), yOf(run, q.s), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+      for (const f of G.floats) { ctx.globalAlpha = Math.min(1, 2 * (1 - f.t / 0.9)); text(f.text, Math.round(f.x), yOf(run, f.s), 2, f.color, 'center'); }
+      ctx.globalAlpha = 1;
+    }
+    function drawHud(run) {
+      const m = M(), p = pal();
+      ctx.fillStyle = p.panel; ctx.fillRect(0, 0, W, HUD);
+      ctx.fillStyle = m.text; ctx.globalAlpha = 0.5; ctx.fillRect(0, HUD - 1, W, 1); ctx.globalAlpha = 1;
+      text(String(run.score).padStart(6, '0'), 6, 4, 2, m.bright);
+      const label = response.label;
+      const col = label === 'RUSH' ? m.bands.red : label === 'FLOW' ? m.bands.yellow : label === 'DRIFT' ? m.bright : m.bands.green;
+      text(label, W / 2 + 6, 4, 2, col, 'center');
+      if (isCalm()) text('CALM', W - 6, 4, 2, m.bright, 'right');
+      else { ctx.fillStyle = m.paddle; for (let i = 0; i < Math.min(run.riders, 6); i += 1) ctx.fillRect(W - 10 - i * 8, 5, 5, 8); }
+      const house = clamp(Math.floor((run.s - START_RUN) / LOT) + 1, 0, HOUSES_PER_DAY);
+      text(`${dayName(run.day).slice(0, 3)} ${house}/${HOUSES_PER_DAY}`, 6, 17, 2, m.bright);
+      sprite(PAPER_SPRITE, W - 52, 19, p);
+      text(`${run.papers}`.padStart(2, '0'), W - 6, 17, 2, run.papers > 2 ? m.bright : m.bands.yellow, 'right');
+      text(`${deliveredCount(run)}/${subscriberCount(run)}`, W / 2 + 6, 17, 2, m.bright, 'center');
+      // the mood tape along the HUD's lower edge
+      if (mood.tape.length) {
+        const n = Math.min(90, mood.tape.length), start = mood.tape.length - n;
+        for (let i = 0; i < n; i += 1) {
+          const v = mood.tape[start + i];
+          ctx.fillStyle = v === 2 ? m.bands.red : v === 1 ? m.bands.yellow : v === 3 ? m.text : m.bands.green;
+          ctx.fillRect(3 + i * 3, HUD - 3, 2, 2);
+        }
+      }
+    }
+    function panel(x, y, w, h) {
+      const m = M(), p = pal();
+      ctx.fillStyle = p.panel; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = m.text; ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1); ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
+    }
+    const blink = () => REDUCED || Math.floor(G.t * 2) % 2 === 0;
+    function drawBoot() {
+      const m = M();
+      ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H);
+      let left = Math.floor(G.boot.chars);
+      let y = 12;
+      for (const line of G.boot.lines) {
+        if (left <= 0) break;
+        const shown = line.slice(0, Math.min(line.length, left));
+        text(shown, 10, y, 2, m.text);
+        left -= line.length + 1;
+        if (left <= 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10 + textWidth(shown, 2) + (shown ? 2 : 0), y, 6, 10); }
+        y += 12;
+      }
+      if (G.boot.lines.length && left > 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10, y, 6, 10); }
+    }
+    function drawTitle() {
+      const m = M(), p = pal();
+      const a = G.attractRun;
+      drawStreet(a); drawThings(a); drawPapers(a); drawRider(a);
+      ctx.globalAlpha = 0.55; ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+      panel(12, 54, W - 24, 226);
+      rainbowText('MORNING', W / 2, 70, 5, [m.bands.red, m.bands.orange, m.bands.yellow, m.bands.green]);
+      rainbowText('ROUTE', W / 2, 104, 5, [m.bands.yellow, m.bands.green, m.bands.red, m.bands.orange]);
+      text('DELIVER THE MORNING EDITION', W / 2, 140, 2, m.bright, 'center');
+      text('6:45 AM  EL SEGUNDO', W / 2, 156, 2, m.bright, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, 180, 2, m.bright, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 196, 2, m.bright, 'center');
+      if (blink()) text(COARSE ? 'TAP TO RIDE' : 'TAP OR PRESS SPACE', W / 2, 224, 2, p.prompt, 'center');
+      if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, 252, 2, m.bright, 'center');
+      text('2026 HOYDICH / POINTCAST', W / 2, H - 24, 2, m.bright, 'center');
+    }
+    function drawReady(run) {
+      const m = M(), p = pal();
+      const first = run.day === 0;
+      const h = first ? 176 : 120;
+      const y = Math.round(HUD + (RY - HUD - 30 - h) / 2);
+      panel(16, y, W - 32, h);
+      text(dayName(run.day), W / 2, y + 12, 4, m.bright, 'center');
+      text(`${subscriberCount(run)} PAPERS TO DELIVER`, W / 2, y + 40, 2, m.bright, 'center');
+      text(`${HOUSES_PER_DAY} HOUSES  ${run.papers} IN THE BAG`, W / 2, y + 56, 2, m.bright, 'center');
+      let ly = y + 74;
+      if (first) {
+        text('LIT PORCHES TAKE THE PAPER', W / 2, ly, 2, m.bright, 'center'); ly += 16;
+        text(COARSE ? 'DRAG TO STEER' : 'ARROWS STEER', W / 2, ly, 2, m.bright, 'center'); ly += 16;
+        text(COARSE ? 'SWIPE UP OR DOWN: SPEED' : 'UP AND DOWN: SPEED', W / 2, ly, 2, m.bright, 'center'); ly += 16;
+        text(COARSE ? 'TAP RIGHT HALF TO THROW' : 'SPACE THROWS', W / 2, ly, 2, m.bright, 'center'); ly += 22;
+      } else ly += 10;
+      if (blink()) text(COARSE ? 'TAP TO RIDE' : 'TAP OR SPACE TO RIDE', W / 2, ly, 2, p.prompt, 'center');
+    }
+    function drawReportCard(r, y, title) {
+      const m = M(), p = pal();
+      const lines = reportLines(r);
+      const h = 34 + lines.length * 12 + 34;
+      panel(16, y, W - 32, h);
+      text(title || lines[0], W / 2, y + 10, 2, p.prompt, 'center');
+      lines.slice(1).forEach((line, i) => text(line, 36, y + 28 + i * 12, 2, i === lines.length - 2 ? m.bands.yellow : m.bright));
+      return y + h;
+    }
+    function drawReport() {
+      const m = M(), p = pal();
+      const r = G.report;
+      const end = drawReportCard(r, HUD + 14, `${r.day} REPORT CARD`);
+      if (G.extra) text('PERFECT DAY: EXTRA RIDER', W / 2, end - 44, 2, m.bands.yellow, 'center');
+      else if (r.perfect) text('PERFECT DAY', W / 2, end - 44, 2, m.bands.yellow, 'center');
+      if (G.t > 0.8 && blink()) text(COARSE ? 'TAP FOR TOMORROW' : 'TAP OR SPACE: TOMORROW', W / 2, end - 22, 2, p.prompt, 'center');
+    }
+    function drawOver() {
+      const m = M(), p = pal();
+      const run = G.run;
+      const y = HUD + 18;
+      panel(16, y, W - 32, 196);
+      text('ROUTE OVER', W / 2, y + 14, 4, m.bright, 'center');
+      text(`SCORE ${String(G.score).padStart(6, '0')}`, W / 2, y + 50, 2, m.bright, 'center');
+      text(`BEST  ${String(best).padStart(6, '0')}`, W / 2, y + 66, 2, m.bands.yellow, 'center');
+      text(`${dayName(run.day)}  HOUSE ${clamp(Math.floor((run.s - START_RUN) / LOT) + 1, 0, HOUSES_PER_DAY)}`, W / 2, y + 90, 2, m.bright, 'center');
+      text(`DELIVERED ${deliveredCount(run)}/${subscriberCount(run)} TODAY`, W / 2, y + 106, 2, m.bright, 'center');
+      text(`PEAK MOOD ${mood.peak}`, W / 2, y + 122, 2, m.bright, 'center');
+      if (G.t > 1 && blink()) text(COARSE ? 'TAP TO RIDE AGAIN' : 'TAP OR SPACE TO RIDE AGAIN', W / 2, y + 160, 2, p.prompt, 'center');
+    }
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBorder();
+      let sx = offX, sy = offY;
+      if (G.shake > 0) { sx += Math.round(rnd(-2, 2)); sy += Math.round(rnd(-2, 2)); }
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, sx * dpr, sy * dpr);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+      if (G.phase === 'boot') drawBoot();
+      else if (G.phase === 'title') drawTitle();
+      else {
+        const run = G.run, m = M();
+        drawStreet(run); drawThings(run); drawPapers(run);
+        drawRider(run); drawEffects(run);
+        if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.12 : 0.4, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+        drawHud(run);
+        if (G.phase === 'ready') drawReady(run);
+        if (G.phase === 'report') drawReport();
+        if (G.phase === 'over') drawOver();
+        if (G.phase === 'paused') {
+          panel(40, 150, W - 80, 70);
+          text('PAUSED', W / 2, 164, 4, m.bright, 'center');
+          text(COARSE ? 'TAP TO RESUME' : 'P OR SPACE TO RESUME', W / 2, 198, 2, pal().prompt, 'center');
+        }
+        if (G.phase === 'play' && G.msgT > 0 && G.msg) {
+          const w = textWidth(G.msg, G.msgScale) + 20, hh = 5 * G.msgScale + 16;
+          panel(Math.round(W / 2 - w / 2), 120, w, hh);
+          text(G.msg, W / 2, 128, G.msgScale, m.bright, 'center');
+        }
+      }
+      ctx.restore();
+    }
+
+    // ---------- loop ----------
+    let last = performance.now(), readoutClock = 0;
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000));
+      last = now;
+      G.fpsAcc += dt; G.fpsN += 1;
+      if (G.fpsAcc >= 0.5) { G.fps = Math.round(G.fpsN / G.fpsAcc); G.fpsAcc = 0; G.fpsN = 0; }
+      update(dt);
+      render();
+      readoutClock += dt;
+      if (readoutClock > 0.25) {
+        readoutClock = 0;
+        const attract = G.phase === 'title' || G.phase === 'boot';
+        const run = attract ? null : G.run;
+        readout.mood.textContent = `${attract ? 'ATTRACT' : response.label} E${mood.energy.toFixed(2)} C${mood.calm.toFixed(2)}`;
+        readout.tempo.textContent = `${attract ? 104 : response.tempo} BPM ${attract ? 'MAJOR' : response.scale.toUpperCase()}`;
+        readout.day.textContent = run ? `${dayName(run.day).slice(0, 3)} ${clamp(Math.floor((run.s - START_RUN) / LOT) + 1, 0, HOUSES_PER_DAY)}/${HOUSES_PER_DAY}` : 'MON 0/16';
+        readout.papers.textContent = run ? `PAPERS ${run.papers}` : 'PAPERS 10';
+        readout.fps.textContent = `${G.fps} FPS`;
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
+    }
+    /** Everything a tap or Space does outside of riding. True when it was used. */
+    function action() {
+      audio.unlock();
+      if (G.phase === 'boot') { audio.jingle(); enterTitle(); return true; }
+      if (G.phase === 'title') { newGame(); return true; }
+      // The last fall usually comes mid-tap; let the score show before a new route starts.
+      if (G.phase === 'over') { if (G.t > 1) newGame(); return true; }
+      if (G.phase === 'ready') { G.phase = 'play'; G.t = 0; announce('Ride.'); return true; }
+      if (G.phase === 'report') { if (G.t > 0.8) startDay(G.day + 1); return true; }
+      if (G.phase === 'paused') { G.phase = G.resume || 'play'; G.resume = null; audio.setMusic(true); return true; }
+      return false;
+    }
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      const p = pointerToField(e);
+      if (G.phase !== 'play') { action(); return; }
+      audio.unlock();
+      pointers.set(e.pointerId, { x: p.x, y: p.y });
+      if (p.x >= W / 2) G.input.throw = true;
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      const q = pointers.get(e.pointerId);
+      if (!q) return;
+      const p = pointerToField(e);
+      // Drag steers one to one; dragging up pedals faster, down eases off.
+      G.input.dx += p.x - q.x;
+      G.input.dThrottle += -(p.y - q.y) * 0.012;
+      q.x = p.x; q.y = p.y;
+    });
+    const release = (e) => { pointers.delete(e.pointerId); };
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
+    canvas.addEventListener('lostpointercapture', release);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    const RIDE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS']);
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      const k = e.code;
+      if (t && typeof t.closest === 'function') {
+        if (t.closest('input, textarea, select, [contenteditable]')) return;
+        // Enter and Space belong to a focused link or button; arrows and letters still ride from there.
+        if ((k === 'Space' || k === 'Enter') && t.closest('a, button')) return;
+      }
+      if (RIDE_KEYS.has(k)) { G.keys[k] = true; e.preventDefault(); audio.unlock(); return; }
+      if (k === 'Space' || k === 'Enter') {
+        e.preventDefault();
+        if (G.phase === 'play') { audio.unlock(); if (!e.repeat) G.input.throw = true; } else if (!e.repeat) action();
+        return;
+      }
+      if (k === 'KeyP') { togglePause(); return; }
+      if (k === 'KeyF') { toggleFull(); return; }
+      if (k === 'KeyM') { toggleSound(); return; }
+      if (k === 'KeyC') { toggleCrt(); return; }
+      if (k === 'Digit1') { setMachine('xl'); return; }
+      if (k === 'Digit2') { setMachine('c64'); return; }
+      if (k === 'Digit3') { cycleDial(); }
+    });
+    document.addEventListener('keyup', (e) => { G.keys[e.code] = false; });
+    function togglePause() {
+      if (G.phase === 'play') { G.resume = 'play'; G.phase = 'paused'; audio.setMusic(false); }
+      else if (G.phase === 'paused') { G.phase = G.resume || 'play'; G.resume = null; audio.setMusic(true); }
+    }
+    const releaseAll = () => { G.keys = {}; pointers.clear(); G.input = { dx: 0, dThrottle: 0, throw: false }; };
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        releaseAll();
+        // A ride in progress, a tumble included, pauses and resumes into that moment.
+        if (G.phase === 'play') { G.resume = 'play'; G.phase = 'paused'; }
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
+    });
+    window.addEventListener('blur', releaseAll);
+    window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
+
+    // ---------- settings UI ----------
+    function syncButtons() {
+      btn.machine.textContent = M().label;
+      btn.dial.textContent = DIALS[mood.dial].label;
+      btn.sound.setAttribute('aria-pressed', String(soundOn));
+      btn.crt.setAttribute('aria-pressed', String(crtOn));
+      root.dataset.machine = machineId;
+      root.dataset.crt = crtOn ? 'on' : 'off';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
+    }
+    function setMachine(id) {
+      if (!MACHINES[id] || id === machineId) return;
+      machineId = id;
+      G.loading = 0.5;
+      syncButtons(); save();
+      announce(`${M().name} mode.`);
+    }
+    function cycleDial() {
+      const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
+      // Riders are never counted down on CALM, so leaving it keeps the count you had; a last fall already
+      // counting down to the end stays final.
+      setDial(mood, next); response = moodResponse(mood);
+      syncButtons(); save();
+      announce(`Dial ${DIALS[next].label}.`);
+      if (G.phase === 'play') showMsg(DIALS[next].label, 3, 0.8);
+    }
+    function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); syncButtons(); save(); }
+    function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function toggleFull() {
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
+    }
+    // A mouse or touch click leaves focus on the button; hand it back so Space throws again. Keyboard activation keeps focus.
+    const press = (el, fn) => el.addEventListener('click', (e) => { fn(); if (e.detail > 0) el.blur(); });
+    press(btn.machine, () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    press(btn.dial, () => { audio.unlock(); cycleDial(); });
+    press(btn.sound, toggleSound);
+    press(btn.crt, toggleCrt);
+    press(btn.full, toggleFull);
+    if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
+    document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
+    document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
+
+    // ---------- go ----------
+    syncButtons();
+    resize();
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(screen); else window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    beginBoot();
+    requestAnimationFrame(frame);
+  }
+</script>

@@ -16,6 +16,13 @@ export const PLAY_SURFACES = [
     summary: 'The lobby for the 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood.',
   },
   {
+    id: 'morning-route',
+    code: 'NEWS',
+    title: 'Morning Route',
+    route: '/morning-route',
+    summary: 'Deliver the Morning Edition at 6:45 AM: lit porches take the paper, the mailbox scores more, and the trouble is a sprinkler, a sitting dog and a car backing out.',
+  },
+  {
     id: 'breakwater',
     code: 'BRK',
     title: 'Breakwater',

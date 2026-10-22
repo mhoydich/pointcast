@@ -68,6 +68,14 @@
 - [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737, one cloud session each, draft PRs based on `claude/epic-albattani-j8tb06`: Lighthouse (Simon, `claude/lighthouse-20261022`, session_01PEDK4795RE7nBmVM7yeaJC), Low Tide (Kaboom!, `claude/low-tide-20261022`, session_016rpwV276Uk53dyNtHncrzz), Morning Route (Paperboy, `claude/morning-route-20261022`, session_01SDvFBq3oSr9SEfkD32XwZx), Sea Glass (Q*bert, `claude/sea-glass-20261022`, session_01QCPxosyU53LGtzQjrG99Fv), Sandcastle (Missile Command, `claude/sandcastle-20261022`, session_01FtckgMyrwsT8mZSzswKh4Q); each lights its own cabinet when published; their discovery entries sit after Cabinet Row's, wave one's after Breakwater's — `in-progress`
 - [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
 
+### Morning Route — deliver the Morning Edition (wave two, 2026-10-22)
+
+`/morning-route`, `/morning-route.json`, Block 0747, branch `claude/morning-route-20261022`, PR #1516 against main. After Paperboy (1985): an El Segundo street at 6:45 AM, lit porches and mailboxes, gentle obstacles, a report card per day. Rules in `src/lib/morning-route/{route,sprites}.mjs`, tests in `tests/morning-route.test.mjs`. Research note: `docs/notes/2026-10-22-morning-route-notes.md`.
+
+- [x] (CC) Build the game, JSON twin, Block, cover art and discovery; lights its Cabinet Row cabinet — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-morning-route-qa.md`, log to `docs/manus-logs/2026-10-22-morning-route.md` — `queued`
+- [ ] (MH/X) Review and merge #1516 (#1478 is on main) — `waiting-on-mh`
+
 ---
 
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)
