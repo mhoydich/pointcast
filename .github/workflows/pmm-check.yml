@@ -1,0 +1,37 @@
+name: PMM and Nouns Messenger checks
+# The two phone messengers are plain files under public/, so no other workflow sees them.
+# This runs their unit tests (service workers, offline digest, signal and TURN endpoints)
+# on any PR that touches them. Fast: no site build.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/pmm-check.yml'
+      - 'public/pmm/**'
+      - 'public/nouns-messenger/**'
+      - 'functions/api/pmm/**'
+      - 'tests/pmm-*.test.mjs'
+      - 'tests/nouns-messenger*.test.mjs'
+      - 'tests/fixtures/pmm-offline/**'
+permissions:
+  contents: read
+concurrency:
+  group: pmm-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Syntax check the app scripts and workers
+        run: for f in public/pmm/*.js public/nouns-messenger/*.js; do node --check "$f"; done
+      - name: Unit tests
+        run: node --test tests/pmm-*.test.mjs $(ls tests/nouns-messenger*.test.mjs 2>/dev/null) tests/home-new-today.test.mjs
