@@ -61,10 +61,13 @@ export function flavour(id) {
 /* ---------- note helpers ---------- */
 const r4 = (x) => Math.round(x * 1e4) / 1e4;
 // Perceived loudness differs by wave: a square at the same gain sounds about twice a sine.
-const LEVEL = { sine: 1, triangle: 0.9, square: 0.55, noise: 0.5 };
+// A narrow pulse carries less energy than a square, so it gets back 0.5/sqrt(pw(1-pw)) of it.
+const LEVEL = { sine: 1, triangle: 0.9, square: 0.75, noise: 0.5 };
+const pwk = (pw) => (pw && pw < 0.5 ? 0.5 / Math.sqrt(pw * (1 - pw)) : 1);
 export const st = (f, semis) => f * 2 ** (semis / 12);
 export function note(t, hz, dur, wave, gain, extra) {
-  return { t: r4(t), freq: r4(hz), dur: r4(dur), wave, gain: r4(gain * LEVEL[wave]), ...extra };
+  const k = wave === 'square' ? pwk(extra?.pw) : 1;
+  return { t: r4(t), freq: r4(hz), dur: r4(dur), wave, gain: r4(gain * LEVEL[wave] * k), ...extra };
 }
 const tone = (fl, t, hz, dur, gain, extra) => note(t, hz, dur, fl.wave, gain, fl.wave === 'square' ? { pw: fl.pw, ...extra } : extra);
 // Arpeggio: one note per interval, `step` apart, each `len` long.
@@ -115,12 +118,12 @@ const PLANS = {
     note(0.02, me.root, 0.38, 'triangle', 0.16, { to: me.root / 2, r: 0.16 }),
   ],
   send: (me) => [
-    tone(me, 0, st(me.root, 7), 0.08, 0.1, { bright: 3 }),
-    tone(me, 0.07, me.root * 2, 0.11, 0.1, { bright: 3, r: 0.06 }),
+    tone(me, 0, st(me.root, 7), 0.08, 0.1, { bright: 4 }),
+    tone(me, 0.07, me.root * 2, 0.11, 0.1, { bright: 4, r: 0.06 }),
   ],
   receive: (me, them) => {
     const [a, b] = hook(them.id);
-    return [tone(them, 0, a, 0.1, 0.12, { bright: 3 }), tone(them, 0.1, b, 0.14, 0.12, { bright: 3, r: 0.08 }),
+    return [tone(them, 0, a, 0.1, 0.12, { bright: 4 }), tone(them, 0.1, b, 0.14, 0.12, { bright: 4, r: 0.08 }),
       note(0, a / 2, 0.24, 'sine', 0.07, { r: 0.12 })];
   },
   unverified: () => [0, 1, 2, 3].map((i) => note(i * 0.1, i % 2 ? 311.13 : 440, 0.1, 'triangle', 0.15, { det: i % 2 ? -14 : 9, a: 0.01, r: 0.03 })),
@@ -206,8 +209,8 @@ export const ATMO_LOOP_S = 9.6;
 export function atmospherePlan(me, them) {
   const soft = { a: 0.5, d: 0.2, s: 0.8, r: 0.9 };
   return [
-    ...motifIn(mood(them).id, 0, ATMO_LOOP_S * 0.5, -1, 'sine', 0.05, soft),
-    ...motifIn(mood(me).id, ATMO_LOOP_S * 0.45, ATMO_LOOP_S * 0.5, -2, 'triangle', 0.05, soft),
+    ...motifIn(mood(them).id, 0, ATMO_LOOP_S * 0.5, -1, 'sine', 0.04, soft),
+    ...motifIn(mood(me).id, ATMO_LOOP_S * 0.45, ATMO_LOOP_S * 0.5, -2, 'triangle', 0.04, soft),
   ].map((n) => ({ ...n, dur: r4(Math.max(n.dur, 1.2)) }));
 }
 
