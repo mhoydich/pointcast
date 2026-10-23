@@ -156,8 +156,9 @@ as the SI line:
   screen as a two-person line: a six-letter code through `/api/pmm/signal`, or paste mode
   with no server. The invite opens a WebRTC data channel labelled `pmm-room`; the friend's
   app sees the label and joins the room instead of opening a two-person chat. INVITE in the
-  room panel brings in the next friend. Five members, host included, is the cap: the host's
-  INVITE goes grey at five, and a sixth phone that answers anyway is told ROOM FULL.
+  room panel brings in the next friend. Five members, host included, is the cap: at five the
+  button reads RE-INVITE (for a member whose line dropped) and goes grey once all five are on a
+  line; a new sixth phone that answers anyway is told ROOM FULL and never hears the room.
 - **Full mesh.** Every member holds its own line to every other member. A new member meets
   the others through the host: the host sends a roster it signs (every member's public key,
   name, mood and zone, ordered by time so an old roster cannot be replayed), and for each pair
@@ -168,7 +169,14 @@ as the SI line:
   the v0 hello, signed over that line's own DTLS fingerprint. A mesh line must prove the exact
   key the roster named for that member, so the host cannot sit in the middle of a line it
   carried: it cannot sign another member's hello.
-- **Texts are signed by their author** over the room id, the text, the mood and the local
+- **Signatures cannot be re-split.** Every room signature (hello, roster, join, offer and answer,
+  text, goodbye) covers a JSON tuple whose first element names its kind and version, and fields
+  are checked for type before verifying. The `|`-joined form of two-person lines is never used in
+  a room, so a relay cannot move characters from one field into another.
+- **Members sign their own seat.** Each member signs a join for this room and this host, and the
+  host carries it in the roster. A member the roster names without one shows UNCONFIRMED until a
+  direct line proves them, so a host cannot quietly seat a stranger under a friend's key.
+- **Texts are signed by their author** over the room id, the host, the text, the mood and the local
   hour, and verified by every member against the author's key. Each member passes a new text
   on once to its other lines, so a text still lands when a mesh line cannot form (strict NAT,
   no relay). A copy changed in transit fails the author's signature and is dropped: never
@@ -200,8 +208,16 @@ as the SI line:
   checked against sigils. Read sigils aloud to verify, as with two people.
 - Texts are signed, not encrypted beyond what WebRTC already does per line. A member who passes
   a text on can read it; that is everyone in the room anyway.
-- LEAVE removes the room from your phone and tells the host, who drops your seat. There is no
+- LEAVE removes the room from your phone and sends a goodbye you sign. Every member passes it on
+  and drops you; the host frees the seat, and a member who saw it hands it to the host later if the
+  host was away. When the host leaves, members see HOST LEFT and nobody new can join. There is no
   kick.
+- A phone on the app from before rooms that opens a room invite is not seated: the host sends it
+  one note in the two-person form ("UPDATE PMM: reload…"), closes the line, and shows THEIR PMM IS
+  OUT OF DATE.
+- Limits against a hostile member or host: at most three half-open mesh lines per room, one offer
+  answered at a time per member, offers and answers relayed at most six a minute per pair, at most
+  one roster a second per line, and no more than 64 messages waiting per line.
 
 **Measured, 2026-10-22, headless Chromium, phones as separate browser contexts on one machine,
 the real `/api/pmm/signal` handler over an in-memory KV.**
@@ -214,7 +230,11 @@ the real `/api/pmm/signal` handler over an in-memory KV.**
 | Sixth phone answering a five-member room | refused, ROOM FULL |
 | Text when one pair has no line (offers blocked on purpose) | arrives via the host, `SIGNED · PASSED ON` |
 | Text altered by the host while passing it on | dropped on the receiving phone, never shown |
-| Missing pair after offers unblocked | line formed within 40 s by the periodic check |
+| Text re-split across fields by the host (`ts` takes the text up to a `\|`) | dropped, never shown |
+| Guest on the app from before rooms | not seated; gets UPDATE PMM: reload…; host shows THEIR PMM IS OUT OF DATE |
+| Member reloads, host re-invites | back in the room, all three lines lit again; the host's text queued meanwhile arrives |
+| LEAVE | host and the other member drop the seat; the room is gone from the leaver's phone |
+| Missing pair after offers unblocked | line formed in about 5 s by the periodic check |
 | Two-person code flow and paste mode, re-run | text, signature, read receipt, tab, file, mood, LINK all pass |
 
 ## Manus follow-up
