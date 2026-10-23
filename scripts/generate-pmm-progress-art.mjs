@@ -11,11 +11,13 @@
  * says what the post says.
  */
 import fs from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 import { eachPixel, textWidth } from '../src/lib/breakwater/font.mjs';
 
-const OUT = path.resolve(process.cwd(), 'public/images/pmm/progress');
+const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'images', 'pmm', 'progress');
 const W = 1200;
 const H = 630;
 const MERGED = 15;
@@ -98,4 +100,4 @@ async function main() {
   console.log('wrote', path.relative(process.cwd(), OUT), 'og.png hero.png cover.svg');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main().catch((e) => { console.error(e); process.exit(1); });
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) main().catch((e) => { console.error(e); process.exit(1); });

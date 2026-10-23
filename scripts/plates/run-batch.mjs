@@ -15,14 +15,15 @@
  *   { "out": "public/images/<dir>/<name>.png", "prompt": "...",
  *     "aspect": "portrait" | "square" | "landscape", "quality": "low" | "medium" | "high",
  *     "og": "public/images/<dir>/<name>-og.png" (optional), "model": "..." (optional) }
- * Every path must stay under public/images/. The key comes from the
+ * Every path must stay under public/images/, and no file (png, its .webp twin,
+ * or og) may be written by two entries, even across manifests. The key comes from the
  * environment or the gitignored .env.local, the same way scripts/mcp/plates.mjs
  * reads it, and is never printed.
  */
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, '..', '..');
@@ -57,19 +58,52 @@ export function entryProblems(e) {
   return out;
 }
 
-/** Read and check a manifest file; throws listing every problem. */
-export function loadManifest(file) {
+/** Every absolute file an entry writes: the png, its .webp twin and the og crop. */
+export function entryFiles(e) {
+  const png = imagePath(e.out);
+  const files = [png, png.replace(/\.png$/i, '.webp')];
+  if (e.og !== undefined) files.push(imagePath(e.og, 'og'));
+  return files;
+}
+
+/**
+ * Read and check a manifest file; throws listing every problem. Pass the same
+ * `claimed` map across manifests to catch two entries writing one file.
+ */
+export function loadManifest(file, claimed = new Map()) {
   const list = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (!Array.isArray(list)) throw new Error(`${file}: a manifest is a JSON array`);
   const problems = [];
-  const outs = new Set();
+  const name = path.basename(file);
   list.forEach((e, i) => {
-    for (const p of entryProblems(e)) problems.push(`#${i}: ${p}`);
-    if (e && outs.has(e.out)) problems.push(`#${i}: duplicate out ${e.out}`);
-    if (e) outs.add(e.out);
+    const bad = entryProblems(e);
+    for (const p of bad) problems.push(`#${i}: ${p}`);
+    if (bad.length) return;
+    for (const f of entryFiles(e)) {
+      const rel = path.relative(REPO_ROOT, f);
+      if (claimed.has(f)) problems.push(`#${i}: ${rel} is also written by ${claimed.get(f)}`);
+      else claimed.set(f, `${name} #${i}`);
+    }
   });
   if (problems.length) throw new Error(`${path.relative(REPO_ROOT, file)}:\n  ${problems.join('\n  ')}`);
   return list;
+}
+
+/** Parse argv; throws on an unknown flag or a --model without a plain id. */
+export function parseArgs(args) {
+  const opts = { dry: false, force: false, model: null, files: [] };
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--dry-run') opts.dry = true;
+    else if (a === '--force') opts.force = true;
+    else if (a === '--model' || a.startsWith('--model=')) {
+      const v = a === '--model' ? args[++i] : a.slice('--model='.length);
+      if (!v || v.startsWith('-') || !/^[a-z0-9.\-]+$/i.test(v)) throw new Error('--model needs a plain model id, e.g. --model gpt-image-1');
+      opts.model = v;
+    } else if (a.startsWith('-')) throw new Error(`unknown flag ${a} (use --dry-run, --force or --model <id>)`);
+    else opts.files.push(a);
+  }
+  return opts;
 }
 
 function apiKey() {
@@ -100,27 +134,46 @@ async function generate(entry, model, key) {
   return Buffer.from(b64, 'base64');
 }
 
+/** Write the .webp twin and og crop for a png. */
+async function writeDerived(j, png, sharp) {
+  const out = imagePath(j.out);
+  await fsp.writeFile(out.replace(/\.png$/i, '.webp'), await sharp(png).webp({ quality: 82 }).toBuffer());
+  if (j.og) {
+    const og = imagePath(j.og, 'og');
+    await fsp.mkdir(path.dirname(og), { recursive: true });
+    await fsp.writeFile(og, await sharp(png).resize(1200, 630, { fit: 'cover', position: 'centre' }).png().toBuffer());
+  }
+}
+
 async function main(argv) {
-  const args = argv.slice(2);
-  const dry = args.includes('--dry-run');
-  const force = args.includes('--force');
-  const mi = args.indexOf('--model');
-  const modelOverride = mi >= 0 ? args[mi + 1] : null;
-  const named = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--model');
+  const { dry, force, model: modelOverride, files: named } = parseArgs(argv.slice(2));
   const files = named.length
     ? named.map((f) => path.resolve(HERE, f))
     : fs.readdirSync(path.join(HERE, 'batch')).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(HERE, 'batch', f));
 
   const jobs = [];
-  for (const f of files) for (const e of loadManifest(f)) jobs.push({ ...e, manifest: path.basename(f) });
+  const claimed = new Map();
+  for (const f of files) for (const e of loadManifest(f, claimed)) jobs.push({ ...e, manifest: path.basename(f) });
+  // A png that exists only needs its missing webp/og rebuilt, locally and for free.
   const todo = jobs.filter((j) => force || !fs.existsSync(imagePath(j.out)));
-  console.error(`${jobs.length} plates in ${files.length} manifest(s); ${todo.length} to generate${force ? ' (forced)' : ''}.`);
-  if (dry) { for (const j of todo) console.error(`  ${j.manifest}  ${j.out}  ${j.aspect || 'portrait'}`); return; }
+  const patch = force ? [] : jobs.filter((j) => fs.existsSync(imagePath(j.out)) && entryFiles(j).some((f) => !fs.existsSync(f)));
+  console.error(`${jobs.length} plates in ${files.length} manifest(s); ${todo.length} to generate${force ? ' (forced)' : ''}${patch.length ? `, ${patch.length} to rebuild webp/og from the existing png` : ''}.`);
+  if (dry) {
+    for (const j of todo) console.error(`  ${j.manifest}  ${j.out}  ${j.aspect || 'portrait'}`);
+    for (const j of patch) console.error(`  ${j.manifest}  ${j.out}  (webp/og only)`);
+    return;
+  }
+  if (!todo.length && !patch.length) return;
+
+  const sharp = (await import('sharp')).default;
+  for (const j of patch) {
+    await writeDerived(j, await fsp.readFile(imagePath(j.out)), sharp);
+    console.error(`  rebuilt webp/og for ${j.out}`);
+  }
   if (!todo.length) return;
 
   const key = apiKey();
   if (!key) throw new Error('OPENAI_API_KEY is not set (environment or .env.local at the repo root).');
-  const sharp = (await import('sharp')).default;
   let model = modelOverride || DEFAULT_MODEL;
   let done = 0;
   const failures = [];
@@ -139,16 +192,13 @@ async function main(argv) {
     const out = imagePath(j.out);
     await fsp.mkdir(path.dirname(out), { recursive: true });
     await fsp.writeFile(out, png);
-    await fsp.writeFile(out.replace(/\.png$/i, '.webp'), await sharp(png).webp({ quality: 82 }).toBuffer());
-    if (j.og) {
-      const og = imagePath(j.og, 'og');
-      await fsp.mkdir(path.dirname(og), { recursive: true });
-      await fsp.writeFile(og, await sharp(png).resize(1200, 630, { fit: 'cover', position: 'centre' }).png().toBuffer());
-    }
+    await writeDerived(j, png, sharp);
     done++;
     console.error(`  [${done}/${todo.length}] ${j.out}`);
   }
   if (failures.length) { console.error(`${failures.length} failed:\n  ${failures.join('\n  ')}`); process.exitCode = 1; }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main(process.argv).catch((e) => { console.error(e.message); process.exit(1); });
+// Compare real paths so a checkout under a space or a symlink still runs main().
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
+if (isMain) main(process.argv).catch((e) => { console.error(e.message); process.exit(1); });
