@@ -214,7 +214,7 @@ if (window.requestIdleCallback) requestIdleCallback(loadMotion, { timeout: 2000 
 | `boot` | `boot()` line 764, after the first `renderMe()` | `.crt` |
 | `found` | `screen()` line 271: when `l2 === 'FOUND'` | `#load-line2` |
 | `fail` | `screen()` line 271: when `l2` starts with `?` | the load pane |
-| `connect` | `onData` case `hello`, the `if (first)` branch (line ~509), after `renderAtmo()` | `.crt` |
+| `connect` | `onData` case `hello`, the `if (first)` branch (line ~509), after `renderAtmo()`. This is when the hello is verified, the friend's mood is known and the line is trusted. It is not dc `open`. | `.crt` |
 | `hangup` | `closed()` in `wire()` line 453, next to `toast('LINE DROPPED')` | the chat pane |
 | `send` | composer submit line 675, after `renderChat()` | the new message's bubble |
 | `receive` | case `msg` line 520, after `renderChat()`; `theirMood: m.mood` | the new message's bubble |
@@ -232,9 +232,14 @@ Other phase-2 work:
 - **CSS:** when `motion` is loaded, a hooked bubble gets `style.animation = 'none'`, so the CSS `pop` and the motion entrance don't stack. Unhooked bubbles keep `pop`. The global `prefers-reduced-motion` rule in `style.css` stays: `motion.js` reads the same media query and plays its alternatives through WAAPI, which that CSS rule does not block.
 - **`sw.js`:** precache `/pmm/motion/motion.js`, so motion works offline. Bump `VERSION` and refresh `DIGEST`, per the offline tests.
 - **Sound:** `fx(ev, …)` and the sound sprint's player take the same event names. Phase 2 can call both from one helper, so a moment's motion and sound start together.
-- **Reactions:** the app's reaction is an emoji character today. Showing the mood emote as the reaction badge (via `loopEmote`) is a product decision for the coordinator and Mike, because it changes what the `react` message carries.
+- **Reactions:** emoji reactions stay, and the eight mood emotes are a second row in the reaction sheet (PM decision, §7). An emote goes over the wire as `r: 'mood:<id>'`, and the receiver accepts it only if `<id>` is in `MOOD_IDS`. That means widening the `str(m.r, 2)` cap in case `react`. The badge is a `loopEmote()` canvas, which holds its first frame under reduced motion.
+- **Boot border:** it plays once per session. `sessionStorage` key `pmm/motion-booted`; if storage throws, it plays on every open. A tap calls `clear()` and skips the rest, and it never runs under reduced motion.
 
-## 7. Open questions for the coordinator
+## 7. PM decisions
 
-- Emote reactions versus emoji reactions (above).
-- The `boot` tape border uses a 1.2 s canvas on every app open. If that feels slow after real-phone QA, the reduced crossfade is a good default with the bands kept for first run only.
+These came from the coordinator (acting PM) on 2026-10-23. Mike can overrule either one.
+
+1. **Emotes and emoji.** Emoji reactions stay, and the eight mood emotes become a second reaction row. PMM isn't deployed yet, so there are no old clients to stay compatible with. An emote is sent as `r: 'mood:<id>'` and validated against `MOOD_IDS` on receipt. Under reduced motion it shows its first frame, held still.
+2. **The boot tape border plays once per session.** It uses `sessionStorage`, and falls back to every open if storage throws. A tap skips it, and it never runs under reduced motion. Connect keeps its border sweep every time, because a verified line is always new.
+
+Also decided: `connect` means the moment the hello is verified, not dc `open`. The sound sprint uses the same definition, and the hook table above follows it. The line numbers are against `54a56a73` and get re-checked against main at the phase-2 rebase.
