@@ -5,7 +5,7 @@
  * fetching a font file at view time.
  */
 
-export const BLOCK = '0723';
+export const BLOCK = '0764';
 export const PATH = '/signature';
 export const HISTORY_PATH = '/signature/history';
 

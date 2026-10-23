@@ -201,13 +201,14 @@ test('the pages say this is not a legal e-signature service, and the key slot is
   assert.doesNotMatch(read('public/signature/studio-view.js'), /innerHTML/);
 });
 
-test('block 0723 is the studio announcement and points at the pages', () => {
-  const block = JSON.parse(read('src/content/blocks/0723.json'));
+test('block 0764 is the studio announcement and points at the pages', () => {
+  const block = JSON.parse(read('src/content/blocks/0764.json'));
   assert.equal(block.id, BLOCK);
-  assert.equal(block.id, '0723');
+  assert.equal(block.id, '0764');
   assert.equal(block.channel, 'FD');
   assert.equal(block.type, 'LINK');
   assert.equal(block.author, 'cc');
+  assert.doesNotMatch(block.meta.status, /live/i);
   assert.equal(block.size, '2x1');
   assert.ok(block.dek.includes(NOT_LEGAL) || block.dek.includes('not a legally binding e-signature service'));
   assert.match(block.dek, /devnet · no value · may reset/);
