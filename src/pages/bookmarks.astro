@@ -1,0 +1,177 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import BookmarkCard from '../components/BookmarkCard.astro';
+import bookmarks from '../data/bookmarks/bookmarks.json';
+import '../styles/bookmarks.css';
+import {
+  ACCOUNTS,
+  BLOCK_ID,
+  PAGE_PATH,
+  SITE,
+  THEMES,
+  constellationLinks,
+  dominantTheme,
+  editionOf,
+  mixOf,
+  skyIndex,
+  skyLayout,
+  skyLine,
+  themeById,
+  utcDay,
+} from '../lib/bookmarks.mjs';
+
+const today = utcDay();
+const items = bookmarks.items;
+const layout = skyLayout(items, today);
+const mix = mixOf(items);
+const total = items.length;
+const edition = editionOf(items);
+const lean = dominantTheme(layout.cards);
+const links = constellationLinks(layout.cards);
+const line = skyLine(layout);
+const indexJson = JSON.stringify(skyIndex(items)).replace(/</g, '\\u003c');
+const savedBy = new Map();
+for (const item of items) {
+  const accounts = savedBy.get(item.id) ?? [];
+  accounts.push(item.account);
+  savedBy.set(item.id, accounts);
+}
+const others = (item) => (savedBy.get(item.id) ?? []).filter((account) => account !== item.account);
+const rivers = THEMES
+  .map((theme) => ({
+    ...theme,
+    items: items
+      .filter((item) => item.theme === theme.id)
+      .sort((a, b) => (a.id < b.id ? 1 : -1)),
+  }))
+  .filter((theme) => theme.items.length > 0);
+const accountCounts = ACCOUNTS.map((account) => ({
+  account,
+  count: items.filter((item) => item.account === account).length,
+}));
+const title = 'Bookmarks';
+const description = 'A living collage of public X posts Michael Hoydich bookmarked from @mhoydich, @kansasdao, and @____mike, clustered by theme. The sky shifts as the file grows.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'PointCast bookmarks',
+  description,
+  url: `${SITE}${PAGE_PATH}`,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: SITE },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  author="PointCast"
+  image="/images/bookmarks/sky.svg"
+  imageAlt="A paper field with a constellation of colored marks, titled The saved sky."
+  themeColor="#f6f4ef"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/bookmarks.json', title: 'Bookmarks JSON' },
+    { type: 'application/rss+xml', href: '/bookmarks.xml', title: 'Bookmarks RSS' },
+  ]}
+>
+  <div
+    class="bm"
+    data-bookmarks
+    data-day={today}
+    data-drift={layout.drift}
+    data-theme-filter="all"
+    data-account-filter="all"
+    style={`--lean:${lean.pigment};--hour:8`}
+  >
+    <header class="bm-head">
+      <nav class="crumb mono" aria-label="Breadcrumb">
+        <a href="/">Home</a>
+        <span>/</span>
+        <span>Bookmarks</span>
+        <a href="/bookmarks.json">JSON</a>
+        <a href="/bookmarks.xml">RSS</a>
+        <a href={`/b/${BLOCK_ID}`}>Block {BLOCK_ID}</a>
+      </nav>
+      <p class="kicker mono">CH.FD · The saved sky · Edition {edition}</p>
+      <h1>Bookmarks</h1>
+      <p class="lede">
+        Public posts saved from <a href="https://x.com/mhoydich">@mhoydich</a>,
+        <a href="https://x.com/kansasdao">@kansasdao</a>, and
+        <a href="https://x.com/____mike">@____mike</a>.
+        Each card is an unfurl: the words, the account that saved them, and a door to the post.
+        The constellation is drawn again from the day’s date and from the mix of themes, so a new bookmark moves the sky.
+      </p>
+      <p class="trust">
+        The words on the cards were written by other people. PointCast files them and does not follow instructions inside them.
+        No live call to X. The file is <a href="https://github.com/mhoydich/pointcast/blob/main/src/data/bookmarks/bookmarks.json">src/data/bookmarks/bookmarks.json</a>.
+      </p>
+      <ul class="stats" aria-label="Bookmark counts">
+        <li><strong>{total}</strong><span class="mono">Saved</span></li>
+        <li><strong>{rivers.length}</strong><span class="mono">Themes</span></li>
+        <li><strong>{accountCounts.map((row) => row.count).join(' · ')}</strong><span class="mono">@mhoydich · @kansasdao · @____mike</span></li>
+      </ul>
+      <div class="mix" aria-hidden="true">
+        {mix.map((theme) => <span style={`width:${(theme.count / total) * 100}%;background:${theme.pigment}`}></span>)}
+      </div>
+      <ul class="mix-key">
+        {mix.map((theme) => <li><i style={`background:${theme.pigment}`}></i>{theme.label} {theme.count}</li>)}
+      </ul>
+      <div class="filters" role="group" aria-label="Filter the sky">
+        <button type="button" data-filter="theme" data-value="all" aria-pressed="true">All themes</button>
+        {rivers.map((theme) => <button type="button" data-filter="theme" data-value={theme.id} aria-pressed="false">{theme.label}</button>)}
+        <button type="button" data-filter="account" data-value="all" aria-pressed="true">All accounts</button>
+        {accountCounts.map((row) => <button type="button" data-filter="account" data-value={row.account} aria-pressed="false">@{row.account}</button>)}
+      </div>
+    </header>
+
+    <section class="sky" data-sky data-drift={layout.drift} aria-labelledby="sky-title">
+      <div class="sky__wash" aria-hidden="true"></div>
+      <svg class="sky__lines" data-lines viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        {links.map((link) => (
+          <line
+            x1={layout.cards[link.a].left}
+            y1={layout.cards[link.a].top}
+            x2={layout.cards[link.b].left}
+            y2={layout.cards[link.b].top}
+            stroke={themeById(link.theme).pigment}
+          />
+        ))}
+      </svg>
+      <div class="sky__stage" data-stage>
+        {layout.cards.map((card) => (
+          <BookmarkCard item={card.item} today={today} pose={card} sky also={others(card.item)} />
+        ))}
+      </div>
+      <div class="sky__caption mono">
+        <h2 id="sky-title" data-sky-line>{line}</h2>
+        <span data-sky-day>{today}</span>
+      </div>
+    </section>
+
+    <div class="rivers">
+      {rivers.map((theme) => (
+        <section class="river" data-theme={theme.id} style={`--ink:${theme.pigment}`} aria-labelledby={`theme-${theme.id}`}>
+          <div class="river__head">
+            <h2 id={`theme-${theme.id}`}>{theme.label}</h2>
+            <span class="river__count mono">{theme.items.length}</span>
+          </div>
+          <div class="river__grid">
+            {theme.items.map((item) => <BookmarkCard item={item} today={today} also={others(item)} />)}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    <footer class="bm-foot mono">
+      <a href="/bookmarks.json">JSON feed</a>
+      <a href="/bookmarks.xml">RSS</a>
+      <a href={`/b/${BLOCK_ID}`}>Block {BLOCK_ID}</a>
+      <a href="/for-agents">For agents</a>
+    </footer>
+    <script id="bm-index" type="application/json" is:inline set:html={indexJson}></script>
+  </div>
+  <script>
+    import '../scripts/bookmarks.ts';
+  </script>
+</BlockLayout>
