@@ -1,0 +1,36 @@
+name: Signature Studio checks
+on:
+  pull_request:
+    paths:
+      - 'src/pages/signature/**'
+      - 'src/pages/signature.json.ts'
+      - 'src/data/signature-studio.ts'
+      - 'src/data/signature-history.ts'
+      - 'src/styles/signature.css'
+      - 'src/content/blocks/0765.json'
+      - 'public/signature/**'
+      - 'public/images/signature/**'
+      - 'scripts/signature/**'
+      - 'tests/signature-studio.test.mjs'
+      - '.github/workflows/signature-studio-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: signature-studio-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/signature-studio.test.mjs
+      - run: npm run build:bare
