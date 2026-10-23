@@ -140,11 +140,51 @@
     const skip = document.querySelector('.skip'); skip.href = '#' + target; skip.textContent = !profileReady() ? 'Skip to handle setup' : view === 'chat' || view === 'si' ? 'Skip to composer' : 'Skip to connection controls';
     for (const p of ['lobby', 'load', 'chat', 'si']) $('pane-' + p).hidden = wide.matches ? false : p !== view;
   }
-  function openSheet(id) { $('sheet-wrap').hidden = false; for (const s of document.querySelectorAll('.sheet')) s.hidden = s.id !== id; }
-  function closeSheets() { $('sheet-wrap').hidden = true; }
-  document.querySelector('.skip').addEventListener('click', (e) => { e.preventDefault(); $(e.currentTarget.hash.slice(1)).focus(); });
+  let activeSheet = null, sheetOpener = null;
+  function visibleFocusTarget(el) {
+    if (!el || !el.isConnected || el.matches(':disabled') || el.closest('[hidden], [inert]')) return false;
+    for (let node = el; node && node !== document.body; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    }
+    return true;
+  }
+  function sheetControls() {
+    return [...activeSheet.querySelectorAll('button, input, select, textarea, a[href], [tabindex]')].filter((el) => el.tabIndex >= 0 && visibleFocusTarget(el));
+  }
+  function focusSheet() { (sheetControls()[0] || activeSheet).focus(); }
+  function focusFlow() {
+    const target = $(document.querySelector('.skip').hash.slice(1));
+    if (visibleFocusTarget(target)) target.focus({ preventScroll: true });
+  }
+  function openSheet(id, opener = document.activeElement) {
+    if (!activeSheet) sheetOpener = opener;
+    activeSheet = $(id); activeSheet.tabIndex = -1;
+    $('sheet-wrap').hidden = false;
+    for (const s of document.querySelectorAll('.sheet')) s.hidden = s !== activeSheet;
+    app.setAttribute('inert', ''); document.querySelector('.skip').setAttribute('inert', '');
+    focusSheet();
+  }
+  function closeSheets() {
+    if (!activeSheet) return;
+    $('sheet-wrap').hidden = true; activeSheet = null;
+    app.removeAttribute('inert'); document.querySelector('.skip').removeAttribute('inert');
+    if (visibleFocusTarget(sheetOpener) && sheetOpener.tabIndex >= 0) sheetOpener.focus({ preventScroll: true });
+    else focusFlow();
+    sheetOpener = null;
+  }
+  document.querySelector('.skip').addEventListener('click', (e) => { e.preventDefault(); focusFlow(); });
   $('scrim').addEventListener('click', closeSheets);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSheets(); if (scanStream) stopScan(); } });
+  document.addEventListener('focusin', (e) => { if (activeSheet && !activeSheet.contains(e.target)) focusSheet(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (activeSheet) { e.preventDefault(); closeSheets(); } if (scanStream) stopScan(); return; }
+    if (e.key !== 'Tab' || !activeSheet) return;
+    const controls = sheetControls(), first = controls[0], last = controls[controls.length - 1];
+    const focused = document.activeElement, outside = !activeSheet.contains(focused) || focused === activeSheet;
+    if (!first) { e.preventDefault(); activeSheet.focus(); }
+    else if (e.shiftKey && (focused === first || outside)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (focused === last || outside)) { e.preventDefault(); first.focus(); }
+  });
 
   /* ---------- quickstart: a display name, never a username registry ---------- */
   function handleValue(value) {
@@ -180,7 +220,7 @@
       await ensureIdentity({ create: true }); identityReady = true;
       state.me.name = result.name; save(); renderMe(); renderQuickstart(); renderFriends();
       startSession();
-      if (app.dataset.view === 'lobby') $('btn-host').focus();
+      focusFlow();
     } catch (_) {
       $('quickstart-error').textContent = 'Could not set up this device. Try again, or restore a key in Settings. Your invite link has not changed.';
       $('quickstart-error').hidden = false;
@@ -234,12 +274,12 @@
   /* ---------- settings ---------- */
   let soundChoiceChanged = false;
   $('set-sound').addEventListener('change', () => { soundChoiceChanged = true; });
-  $('btn-settings').addEventListener('click', () => {
+  $('btn-settings').addEventListener('click', (e) => {
     soundChoiceChanged = false; $('set-name-error').hidden = true; $('set-name').removeAttribute('aria-invalid');
     $('set-name').value = state.me.name; $('set-place').value = state.me.place || ''; $('set-tz').value = state.me.tzAddr || '';
     $('set-live').checked = state.me.live !== false; $('set-sound').checked = state.me.sound === true && state.me.soundChoice === true;
     $('set-key').textContent = state.me.id ? `${sigilOf(state.me.id)}  ${state.me.id.slice(0, 16).toUpperCase()} · minted on this phone. Export it to keep your sigil if you clear the browser.` : 'Created when you continue through quickstart.';
-    openSheet('sheet-settings');
+    openSheet('sheet-settings', e.currentTarget);
   });
   $('btn-settings-done').addEventListener('click', () => {
     const handle = $('set-name').value === state.me.name ? { name: state.me.name } : handleValue($('set-name').value);
@@ -247,7 +287,7 @@
     state.me.name = handle.name; state.me.place = $('set-place').value.trim().slice(0, 32);
     state.me.tzAddr = $('set-tz').value.trim().slice(0, 40); state.me.live = $('set-live').checked; state.me.sound = $('set-sound').checked;
     if (soundChoiceChanged) state.me.soundChoice = true;
-    save(); renderMe(); renderQuickstart(); closeSheets(); if (profileReady() && !sessionStarted) startSession(); sendHello();
+    save(); renderMe(); renderQuickstart(); if (profileReady() && !sessionStarted) startSession(); closeSheets(); sendHello();
   });
   $('btn-export').addEventListener('click', () => {
     const friends = state.friends.map((f) => ({ id: f.id, name: f.name, pub: f.pub, trusted: Boolean(f.trusted), mood: f.mood, tz: f.tz, place: f.place, created: f.created }));
@@ -284,7 +324,7 @@
         if (!fr.mood) fr.mood = validMood(f.mood); if (!fr.tz) fr.tz = str(f.tz, 64); if (!fr.place) fr.place = str(f.place, 32);
       }
       identityReady = true; renderQuickstart();
-      save(); renderMe(); renderFriends(); toast(restored ? `KEY LOADED · ${restored} FRIEND${restored === 1 ? '' : 'S'} RESTORED` : 'KEY LOADED'); closeSheets(); if (profileReady()) startSession();
+      save(); renderMe(); renderFriends(); toast(restored ? `KEY LOADED · ${restored} FRIEND${restored === 1 ? '' : 'S'} RESTORED` : 'KEY LOADED'); if (profileReady()) startSession(); closeSheets();
     } catch (_) { toast('NOT A PMM KEY FILE'); }
     e.target.value = '';
   });

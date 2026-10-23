@@ -16,7 +16,7 @@ assert.match(source, bootCall, 'Update the inert test harness if PMM boot change
 const inertSource = source.replace(bootCall, `
   window.__pmmTest = {
     state: () => state, blip, openChat, renderChat, renderChatHead,
-    boot, route, ensureIdentity, identityReady: () => identityReady,
+    boot, route, show, ensureIdentity, identityReady: () => identityReady,
     stubIdentity: (fn) => { ensureIdentity = fn; },
     stubSessionEffects: (onRoute) => {
       ticker = () => {};
@@ -418,4 +418,111 @@ test('first-message guidance remains after system notices and clears after a hum
   h.api.renderChat();
   assert.equal(h.$('messages').querySelector('.conversation-empty'), null);
   assert.match(h.$('messages').textContent, /Hello!/);
+});
+
+
+function pressKey(h, key, shiftKey = false) {
+  const event = new h.w.KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true });
+  h.w.document.activeElement.dispatchEvent(event);
+  return event;
+}
+
+test('Settings focuses its first field and makes background controls inert', async (t) => {
+  const h = harness(t, undefined, { hash: '#join=ABCDEF' });
+  await h.api.boot();
+  h.$('quickstart-name').focus();
+  h.$('btn-settings').click();
+  assert.equal(h.w.document.activeElement, h.$('set-name'));
+  assert.equal(h.$('sheet-wrap').hidden, false);
+  assert.equal(h.$('sheet-settings').hidden, false);
+  assert.equal(h.$('app').hasAttribute('inert'), true);
+  assert.equal(h.w.document.querySelector('.skip').hasAttribute('inert'), true);
+  assert.equal(h.$('import-input').tabIndex, -1, 'the import picker has its own visible button');
+  // jsdom does not implement native inert focus suppression; exercise the
+  // focusin backstop explicitly without relying on browser layout.
+  h.$('quickstart-name').focus();
+  assert.equal(h.w.document.activeElement, h.$('set-name'));
+  assert.equal(h.w.location.hash, '#join=ABCDEF');
+});
+
+test('Settings wraps Tab through visible enabled fields and its footer links', async (t) => {
+  const h = harness(t);
+  await h.api.boot();
+  h.$('btn-settings').click();
+  const sheet = h.$('sheet-settings');
+  const lastLink = [...sheet.querySelectorAll('a[href]')].at(-1);
+  assert.ok(lastLink, 'the Settings footer links belong in the keyboard sequence');
+  const disabled = h.w.document.createElement('button');
+  disabled.textContent = 'Unavailable action'; disabled.disabled = true;
+  const hidden = h.w.document.createElement('div');
+  hidden.hidden = true;
+  hidden.innerHTML = '<button>Hidden action</button>';
+  const cssHidden = h.w.document.createElement('button');
+  cssHidden.textContent = 'Hidden by CSS'; cssHidden.style.display = 'none';
+  sheet.append(disabled, hidden, cssHidden);
+  assert.equal(pressKey(h, 'Tab', true).defaultPrevented, true);
+  assert.equal(h.w.document.activeElement, lastLink);
+  assert.equal(pressKey(h, 'Tab').defaultPrevented, true);
+  assert.equal(h.w.document.activeElement, h.$('set-name'));
+  h.$('btn-settings-done').focus();
+  assert.equal(pressKey(h, 'Tab').defaultPrevented, false, 'DONE is not the final control: footer links follow it');
+  h.$('set-name').disabled = true;
+  lastLink.focus();
+  pressKey(h, 'Tab');
+  assert.equal(h.w.document.activeElement, h.$('set-place'), 'disabled controls are skipped at the wrap boundary');
+});
+
+test('invalid Settings save stays inside the dialog, then Escape restores its opener', async (t) => {
+  const h = harness(t);
+  await h.api.boot();
+  h.$('btn-settings').focus();
+  h.$('btn-settings').click();
+  h.$('set-name').value = '!invalid';
+  h.$('btn-settings-done').focus();
+  h.$('btn-settings-done').click();
+  assert.equal(h.$('sheet-wrap').hidden, false);
+  assert.equal(h.w.document.activeElement, h.$('set-name'));
+  assert.equal(h.$('set-name').getAttribute('aria-invalid'), 'true');
+  assert.equal(h.$('app').hasAttribute('inert'), true);
+  assert.equal(pressKey(h, 'Escape').defaultPrevented, true);
+  assert.equal(h.$('sheet-wrap').hidden, true);
+  assert.equal(h.$('app').hasAttribute('inert'), false);
+  assert.equal(h.w.document.querySelector('.skip').hasAttribute('inert'), false);
+  assert.equal(h.w.document.activeElement, h.$('btn-settings'));
+});
+
+test('Settings Done restores the actual clicked opener; Escape without a dialog leaves focus alone', async (t) => {
+  const h = harness(t);
+  await h.api.boot();
+  // Programmatic click leaves focus in the input, so this also checks that
+  // Settings records its actual button rather than the stale activeElement.
+  h.$('quickstart-name').focus();
+  h.$('btn-settings').click();
+  h.$('btn-settings-done').click();
+  assert.equal(h.$('sheet-wrap').hidden, true);
+  assert.equal(h.$('app').hasAttribute('inert'), false);
+  assert.equal(h.w.document.querySelector('.skip').hasAttribute('inert'), false);
+  assert.equal(h.w.document.activeElement, h.$('btn-settings'));
+  h.$('quickstart-name').focus();
+  assert.equal(pressKey(h, 'Escape').defaultPrevented, false);
+  assert.equal(h.w.document.activeElement, h.$('quickstart-name'));
+});
+
+test('Settings completion focuses the visible invite flow when routing hides its opener', async (t) => {
+  const h = harness(t, fixture({ ...inertIdentity, name: '' }), { allowFakeImport: true, hash: '#join=ABCDEF' });
+  const routes = [];
+  h.api.stubSessionEffects(() => { routes.push(h.w.location.hash); h.api.show('load'); });
+  await h.api.boot();
+  h.$('btn-settings').focus();
+  h.$('btn-settings').click();
+  h.$('set-name').value = 'Restored Friend';
+  h.$('btn-settings-done').click();
+  assert.deepEqual(routes, ['#join=ABCDEF']);
+  assert.equal(h.$('pane-lobby').hidden, true);
+  assert.equal(h.$('pane-load').hidden, false);
+  assert.equal(h.$('sheet-wrap').hidden, true);
+  assert.equal(h.$('app').hasAttribute('inert'), false);
+  assert.equal(h.w.document.querySelector('.skip').hasAttribute('inert'), false);
+  assert.equal(h.w.document.activeElement, h.$('load-screen'));
+  assert.equal(h.w.location.hash, '#join=ABCDEF');
 });
