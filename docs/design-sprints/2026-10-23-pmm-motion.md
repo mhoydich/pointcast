@@ -170,7 +170,7 @@ The test runs this check for 4 directions × 16 events × 8 × 8 mood pairs × r
 | `EVENTS`, `DURATION_MS`, `TARGET` | The event list, the shared timings, and what each event animates. |
 
 - **Size:** `motion.js` is under 20 KB of source and imports nothing but the moods module. The three sketches are in `sketches.js`, which only the lab loads.
-- **TEMP:** until #1533 merges, `motion.js` imports `./moods.temp.js`, a verbatim copy of `public/pmm/moods/moods.js` from that branch (5bbc2a89). After the merge the import becomes `../moods/moods.js` and the copy is deleted. That is a one-line change in each of `motion.js`, `sketches.js`, the lab and the test.
+- **Moods:** `motion.js` imports the Mood Atlas module, `../moods/moods.js` (#1533), for the eight moods, their glyphs and colour helpers. It never redefines them.
 
 ## 5. Verification
 
@@ -195,7 +195,7 @@ Run in this cloud session:
 
 ## 6. Phase 2: integration plan
 
-Phase 2 starts once the coordinator says #1526, #1528, #1532 and #1533 have merged. First, rebase onto main and switch the TEMP import. The line numbers below are against main at `54a56a73` and will move with those PRs, so match on the quoted code.
+Phase 2 starts once the coordinator says #1526, #1528, #1532 and #1533 have merged. First, bring in main. The line numbers below are against main at `54a56a73` and will move with those PRs, so match on the quoted code.
 
 **Loading.** `app.js` is a classic script, so motion comes in lazily with a dynamic `import()`, which classic scripts allow. A failure leaves PMM exactly as it is today. Add this near `reduced` (line 52):
 

@@ -3,7 +3,7 @@
    Animations API plus at most two small canvases. Keyframes only touch transform and opacity: colour
    comes from a mood-coloured layer whose opacity moves. DURATION_MS is shared with the sound sprint
    (/pmm/sound/); change it through the PMM coordinator, never here alone. */
-import { MOODS, mood, mix, luminance, FIELD } from './moods.temp.js'; // TEMP: ../moods/moods.js once #1533 merges
+import { MOODS, mood, mix, luminance, FIELD } from '../moods/moods.js';
 
 export const EVENTS = Object.freeze(['boot', 'found', 'connect', 'fail', 'hangup', 'send', 'receive', 'unverified', 'react', 'file-done', 'mood', 'their-mood', 'tab', 'settle', 'join', 'leave']);
 export const DURATION_MS = Object.freeze({ boot: 1200, found: 600, connect: 900, fail: 500, hangup: 400, send: 180, receive: 240, unverified: 400, react: 300, 'file-done': 400, mood: 600, 'their-mood': 600, tab: 300, settle: 900, join: 400, leave: 300 });

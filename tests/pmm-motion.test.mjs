@@ -9,7 +9,7 @@ import {
   EVENTS, DURATION_MS, TARGET, MOOD_IDS, MAX_FLASHES, EMOTE_FPS, plan, flashes, layerSeries, emoteFrames, directions, CHOSEN, play,
 } from '../public/pmm/motion/motion.js';
 import { SKETCHED } from '../public/pmm/motion/sketches.js';
-import { MOODS } from '../public/pmm/motion/moods.temp.js';
+import { MOODS } from '../public/pmm/moods/moods.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const read = (p) => readFileSync(resolve(ROOT, p), 'utf8');
@@ -126,7 +126,7 @@ test('play() is a no-op without a document, and the module stays under 20 KB wit
   const src = read('public/pmm/motion/motion.js');
   assert.ok(statSync(resolve(ROOT, 'public/pmm/motion/motion.js')).size < 20 * 1024);
   const imports = [...src.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]);
-  assert.ok(imports.every((p) => /^\.\.?\/moods\/moods\.js$|^\.\/moods\.temp\.js$/.test(p)), imports.join());
+  assert.ok(imports.every((p) => /^\.\.\/moods\/moods\.js$/.test(p)), imports.join());
 });
 
 test('the lab page loads the module, offers a reduced-motion preview and both mood pickers', () => {

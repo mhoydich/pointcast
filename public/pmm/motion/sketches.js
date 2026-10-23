@@ -5,7 +5,7 @@
 import { register, kit, EMOTE_FPS } from './motion.js';
 
 export const SKETCHED = Object.freeze(['connect', 'send', 'receive', 'react', 'mood', 'their-mood']);
-import { mood } from './moods.temp.js'; // TEMP: ../moods/moods.js once #1533 merges
+import { mood } from '../moods/moods.js';
 
 const { k, fade, self, tint, sparks, sprite, KEEP, grad, tape, ring, sweep, flavourKeys, lateFade, FLAVOUR } = kit;
 // Raster's mood flavour is how many lines a frame draws: hyped in two, tired in eight.
