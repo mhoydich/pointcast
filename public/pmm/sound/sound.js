@@ -166,8 +166,10 @@ const PLANS = {
 export function plan(event, opts = {}) {
   const make = PLANS[event];
   if (!make) throw new Error(`unknown event: ${event}`);
-  const notes = make(flavour(opts.mood), flavour(opts.theirMood));
-  const k = 1 - Math.min(0.45, 0.05 * (opts.streak || 0));
+  return recede(make(flavour(opts.mood), flavour(opts.theirMood)), opts.streak);
+}
+export function recede(notes, streak) {
+  const k = 1 - Math.min(0.45, 0.05 * (streak || 0));
   return k === 1 ? notes : notes.map((n) => ({ ...n, gain: r4(n.gain * k) }));
 }
 
@@ -283,23 +285,44 @@ export function scheduleNotes(ctx, notes, dest, t0 = ctx.currentTime, live) {
 const PRIORITY = new Set(['connect', 'fail', 'hangup', 'unverified']);
 let ac = null, chain = null, enabled = true, volume = 0.8, haptics = true, hiddenReceive = false, unlocked = false;
 let bed = null;
-const live = new Set(), last = new Map();
+const live = new Set(), last = new Map(), buzzed = new Map();
 const counts = { played: 0, coalesced: 0, capped: 0, muted: 0 };
 const hidden = () => typeof document !== 'undefined' && document.hidden;
 const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+const fold = (event) => DURATION_MS[event] + 160;
 
-// Call from the first tap or key press. Creates the context inside the gesture and plays one
-// silent sample, which is what iOS needs before it will make any sound.
+// Never more than MAX_VOICES notes per cue: past that, the quietest go first.
+export function fitVoices(notes) {
+  if (notes.length <= MAX_VOICES) return notes;
+  const keep = new Set([...notes].sort((a, b) => b.gain - a.gain).slice(0, MAX_VOICES));
+  return notes.filter((n) => keep.has(n));
+}
+
+function onVisibility() {
+  if (!ac) return;
+  if (!hidden() && ac.state !== 'running') ac.resume().catch(() => {});
+  // The bed is scheduled a loop ahead, so hiding fades it out rather than waiting for the loop.
+  if (bed) bed.g.gain.setTargetAtTime(hidden() ? 0 : 1, ac.currentTime, hidden() ? 0.1 : 0.5);
+}
+
+// Call on every tap or key until stats().state is 'running'. Makes the context inside the
+// gesture plus one silent sample (iOS needs it). False if no Web Audio or no start in 300 ms.
 export function unlock() {
   unlocked = true;
   const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!AC) return Promise.resolve(false);
-  if (!ac) {
-    ac = new AC({ latencyHint: 'interactive' }); chain = buildChain(ac, volume);
-    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (!hidden() && ac.state !== 'running') ac.resume().catch(() => {}); });
+  try {
+    if (!ac) {
+      ac = new AC({ latencyHint: 'interactive' }); chain = buildChain(ac, volume);
+      if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility);
+    }
+    const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1, 1, ac.sampleRate); s.connect(ac.destination); s.start(0);
+  } catch (_) {
+    if (!chain) ac = null;
+    if (!ac) return Promise.resolve(false);
   }
-  try { const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1, 1, ac.sampleRate); s.connect(ac.destination); s.start(0); } catch (_) {}
-  return ac.state === 'running' ? Promise.resolve(true) : ac.resume().then(() => true, () => false);
+  if (ac.state === 'running') return Promise.resolve(true);
+  return Promise.race([ac.resume().then(() => ac.state === 'running', () => false), new Promise((r) => setTimeout(r, 300, false))]);
 }
 
 export function setEnabled(on) { enabled = Boolean(on); if (!enabled) { stopAll(); stopAtmosphere(); } }
@@ -314,25 +337,28 @@ export const stats = () => ({ ...counts, voices: live.size, state: ac ? ac.state
 
 function stopAll() { for (const s of live) { try { s.stop(); } catch (_) {} } live.clear(); }
 
-// play(event, {mood, theirMood, plan}). Returns true if it made a sound. A cue that repeats
-// inside its own length plus 160 ms is folded into the first, so twenty messages landing at
-// once make one knock and one buzz.
+// play(event, {mood, theirMood, plan}) → true if it made a sound. A repeat inside the cue's
+// length + 160 ms folds into the one that played (20 at once: one knock, one buzz). Sound and
+// buzz fold apart, so a muted cue never silences the next. Any planner recedes with the streak
+// of plays in the last 6 s.
 export function play(event, opts = {}) {
   if (!DURATION_MS[event]) return false;
-  const t = clock(), prev = last.get(event);
-  if (prev && t - prev.at < DURATION_MS[event] + 160) { counts.coalesced++; return false; }
-  const streak = prev && t - prev.at < 6000 ? prev.streak + 1 : 0;
-  last.set(event, { at: t, streak });
-  if (unlocked && haptics && !hidden() && opts.haptic !== false) {
+  const t = clock(), b = buzzed.get(event);
+  if (unlocked && haptics && !hidden() && opts.haptic !== false && !(b !== undefined && t - b < fold(event))) {
+    buzzed.set(event, t);
     try { globalThis.navigator?.vibrate?.(haptic(event, event === 'receive' ? opts.theirMood : opts.mood, opts.theirMood)); } catch (_) {}
   }
   if (!enabled || !ac || (hidden() && !(event === 'receive' && hiddenReceive))) { counts.muted++; return false; }
   if (ac.state !== 'running') { ac.resume().catch(() => {}); counts.muted++; return false; }
-  const notes = (opts.plan || plan)(event, { ...opts, streak });
+  const prev = last.get(event);
+  if (prev && t - prev.at < fold(event)) { counts.coalesced++; return false; }
+  const streak = prev && t - prev.at < 6000 ? prev.streak + 1 : 0;
+  const notes = fitVoices(recede((opts.plan || plan)(event, { ...opts, streak: 0 }), streak));
   if (live.size + notes.length > MAX_VOICES) {
     if (!PRIORITY.has(event)) { counts.capped++; return false; }
     stopAll();
   }
+  last.set(event, { at: t, streak });
   scheduleNotes(ac, notes, chain.input, ac.currentTime + 0.01, live);
   counts.played++;
   return true;
@@ -341,7 +367,7 @@ export function play(event, opts = {}) {
 export function startAtmosphere(opts = {}) {
   stopAtmosphere();
   if (!enabled || !ac || ac.state !== 'running') return false;
-  const g = ac.createGain(); g.gain.setValueAtTime(0, ac.currentTime); g.gain.linearRampToValueAtTime(1, ac.currentTime + 1.5);
+  const g = ac.createGain(); g.gain.setValueAtTime(0, ac.currentTime); g.gain.linearRampToValueAtTime(hidden() ? 0 : 1, ac.currentTime + 1.5);
   g.connect(chain.input);
   const srcs = new Set(), notes = atmospherePlan(opts.mood, opts.theirMood);
   let next = ac.currentTime + 0.05;

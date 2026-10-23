@@ -64,10 +64,13 @@ const results = await page.evaluate(async (wantWav) => {
   const S = await import('/pmm/sound/sound.js');
   const { SKETCHES, SKETCH_EVENTS } = await import('/pmm/sound/sketches.js');
   const SR = 48000;
-  async function render(notes, ms) {
+  // With `hp`, the output goes through a 2 kHz high-pass first: what is left is the bright part.
+  async function render(notes, ms, hp) {
     const len = Math.ceil(SR * (ms / 1000 + 0.3));
     const ctx = new OfflineAudioContext(1, len, SR);
-    const { input } = S.buildChain(ctx, 1);
+    let out = ctx.destination;
+    if (hp) { out = ctx.createBiquadFilter(); out.type = 'highpass'; out.frequency.value = 2000; out.Q.value = 0.7; out.connect(ctx.destination); }
+    const { input } = S.buildChain(ctx, 1, out);
     S.scheduleNotes(ctx, notes, input, 0);
     const d = (await ctx.startRendering()).getChannelData(0);
     let peak = 0, sum = 0, nan = 0, clip = 0, lastLoud = 0;
@@ -82,14 +85,18 @@ const results = await page.evaluate(async (wantWav) => {
   }
   const out = [];
   const pairEvents = new Set(['receive', 'their-mood', 'connect']);
+  // Share of a cue's energy above 2 kHz, for the cues that repeat all day.
+  const bright = async (notes, e) => ((await render(notes, S.DURATION_MS[e], true)).rms / (await render(notes, S.DURATION_MS[e])).rms) ** 2;
   for (const e of S.EVENTS) {
     for (const a of S.MOOD_IDS) for (const b of pairEvents.has(e) ? S.MOOD_IDS : ['calm']) {
-      const r = await render(S.plan(e, { mood: a, theirMood: b }), S.DURATION_MS[e]);
+      const notes = S.plan(e, { mood: a, theirMood: b });
+      const r = { ...(await render(notes, S.DURATION_MS[e])), hi: ['send', 'receive', 'react'].includes(e) ? await bright(notes, e) : null };
       out.push({ sys: 'final', event: e, mood: a, theirMood: b, ...r, data: wantWav && ((e === 'receive' && a === 'calm' && ['hyped', 'low'].includes(b)) || (a === 'calm' && b === 'calm' && ['boot', 'connect', 'send', 'fail', 'settle'].includes(e)) || (e === 'their-mood' && a === 'calm' && b === 'low')) ? r.data : null });
     }
   }
   for (const [key, d] of Object.entries(SKETCHES)) for (const e of SKETCH_EVENTS) for (const a of S.MOOD_IDS) {
-    const r = await render(d.plan(e, { mood: a, theirMood: 'hyped' }), S.DURATION_MS[e]);
+    const notes = d.plan(e, { mood: a, theirMood: 'hyped' });
+    const r = { ...(await render(notes, S.DURATION_MS[e])), hi: ['send', 'receive', 'react'].includes(e) ? await bright(notes, e) : null };
     out.push({ sys: key, event: e, mood: a, theirMood: 'hyped', ...r, data: null });
   }
   return { out, durations: S.DURATION_MS };
@@ -113,12 +120,13 @@ for (const sys of ['final', 'sid', 'vcs', 'glass']) {
   for (const e of events) {
     const rs = results.out.filter((r) => r.sys === sys && r.event === e);
     const rms = rs.map((r) => dB(r.rms)), pk = rs.map((r) => dB(r.peak)), ms = rs.map((r) => r.audibleMs);
-    rows.push({ sys, event: e, n: rs.length, rmsMin: Math.min(...rms), rmsMax: Math.max(...rms), rmsMean: rms.reduce((a, b) => a + b, 0) / rms.length,
+    const his = rs.map((r) => r.hi).filter((x) => x !== null);
+    rows.push({ sys, event: e, n: rs.length, hi: his.length ? his.reduce((a, b) => a + b, 0) / his.length : null, rmsMin: Math.min(...rms), rmsMax: Math.max(...rms), rmsMean: rms.reduce((a, b) => a + b, 0) / rms.length,
       peakMax: Math.max(...pk), msMin: Math.min(...ms), msMax: Math.max(...ms), want: results.durations[e] });
   }
 }
-console.log('\n| system | event | renders | RMS dBFS (mean, min to max) | worst peak dBFS | audible ms (min to max) | table ms |\n|---|---|---|---|---|---|---|');
-for (const r of rows) console.log(`| ${r.sys} | ${r.event} | ${r.n} | ${r.rmsMean.toFixed(1)} (${r.rmsMin.toFixed(1)} to ${r.rmsMax.toFixed(1)}) | ${r.peakMax.toFixed(1)} | ${r.msMin.toFixed(0)} to ${r.msMax.toFixed(0)} | ${r.want} |`);
+console.log('\n| system | event | renders | RMS dBFS (mean, min to max) | worst peak dBFS | audible ms (min to max) | table ms | energy above 2 kHz |\n|---|---|---|---|---|---|---|---|');
+for (const r of rows) console.log(`| ${r.sys} | ${r.event} | ${r.n} | ${r.rmsMean.toFixed(1)} (${r.rmsMin.toFixed(1)} to ${r.rmsMax.toFixed(1)}) | ${r.peakMax.toFixed(1)} | ${r.msMin.toFixed(0)} to ${r.msMax.toFixed(0)} | ${r.want} | ${r.hi === null ? '' : (r.hi * 100).toFixed(1) + '%'} |`);
 if (opt('--json')) await writeFile(opt('--json'), JSON.stringify({ rows, renders: results.out.map(({ data, ...r }) => r) }, null, 2));
 
 // WAV previews: 22.05 kHz mono 16-bit, decimated from the 48 kHz render with a box filter.

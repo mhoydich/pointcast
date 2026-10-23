@@ -1,7 +1,7 @@
 /* The three directions the sprint sketched before choosing, kept so the lab can play them side by
    side with the chosen system in sound.js. Same note-event shape, same durations, six events each.
    Not shipped to /pmm/: only the lab imports this. */
-import { note, arp, motifIn, flavour, st, DURATION_MS } from './sound.js';
+import { note, arp, motifIn, flavour, st, fitVoices, DURATION_MS } from './sound.js';
 
 export const SKETCH_EVENTS = Object.freeze(['send', 'receive', 'connect', 'fail', 'react', 'their-mood']);
 
@@ -11,8 +11,8 @@ const sid = {
   receive: (me, them) => [...arp({ ...them, wave: 'square', pw: 0.125 }, 0, them.root, [12, 7, 3, 0, 7, 12], 0.04, 0.04, 0.13)],
   connect: (me, them) => [
     note(0, 120, 0.06, 'noise', 0.14, { q: 0.7 }), note(0.45, 120, 0.06, 'noise', 0.14, { q: 0.7 }),
-    // the classic 3-voice-in-one trick: a chord played as a 30 ms arpeggio, three times over
-    ...[0, 1, 2].flatMap((k) => arp({ ...me, wave: 'square', pw: 0.25 }, k * 0.12, st(me.root, k * 5), me.chord.slice(0, 3).concat(me.chord.slice(0, 1)), 0.03, 0.03, 0.12)),
+    // the classic 3-voice-in-one trick: a chord played as a 30 ms arpeggio, twice over
+    ...[0, 1].flatMap((k) => arp({ ...me, wave: 'square', pw: 0.25 }, k * 0.15, st(me.root, k * 5), me.chord.slice(0, 3), 0.03, 0.03, 0.12)),
     ...arp({ ...them, wave: 'square', pw: 0.375 }, 0.48, them.root * 2, [0, 7, 12, 7, 12, 19], 0.07, 0.07, 0.12),
   ],
   fail: () => [note(0, 150, 0.25, 'noise', 0.12, { to: 60, q: 0.6 }), note(0, 196, 0.5, 'square', 0.13, { pw: 0.125, to: 98, r: 0.2 })],
@@ -60,7 +60,7 @@ const wrap = (table) => (event, opts = {}) => {
   const make = table[event];
   if (!make) throw new Error(`sketch has no ${event}`);
   const notes = make(flavour(opts.mood), flavour(opts.theirMood));
-  return notes.filter((n) => n.t < DURATION_MS[event] / 1000);
+  return fitVoices(notes.filter((n) => n.t < DURATION_MS[event] / 1000));
 };
 
 export const SKETCHES = Object.freeze({

@@ -4,7 +4,8 @@ import { readFileSync, statSync } from 'node:fs';
 import * as S from '../public/pmm/sound/sound.js';
 import { SKETCHES, SKETCH_EVENTS, snap } from '../public/pmm/sound/sketches.js';
 
-// Pure checks on the PMM earcon planners. The rendered pass (real Web Audio, peak and RMS) is
+// Pure checks on the PMM earcon planners. The engine, with Web Audio stubbed, is in
+// pmm-sound-engine.test.mjs. The rendered pass (real Web Audio, peak and RMS) is
 // scripts/pmm-sound-render.mjs, which needs Chromium and so is not part of `npm run test:pmm`.
 const root = new URL('..', import.meta.url).pathname;
 const appJs = readFileSync(`${root}public/pmm/app.js`, 'utf8');
@@ -37,6 +38,7 @@ function checkNotes(label, notes, ms) {
     assert.ok(n.gain <= S.LIMITS.noteGain, `${label}: note gain ${n.gain}`);
     if (n.pw !== undefined) assert.ok(n.pw > 0 && n.pw <= 0.5, `${label}: pulse width ${n.pw}`);
   }
+  assert.ok(notes.length <= S.MAX_VOICES, `${label}: ${notes.length} notes, more than the engine will ever play at once`);
   assert.ok(S.peakGain(notes) <= S.LIMITS.peakGain, `${label}: peak ${S.peakGain(notes)}`);
   const span = S.span(notes) * 1000;
   assert.ok(Math.abs(span - ms) <= ms * 0.1, `${label}: ${span.toFixed(0)} ms vs ${ms}`);
@@ -103,6 +105,14 @@ test('the three sketches cover their six events within the same budgets', () => 
     checkNotes(`${key} ${e} ${a}/${b}`, d.plan(e, { mood: a, theirMood: b }), TABLE[e]);
   }
   assert.ok(Math.abs(snap(440) - 440) / 440 > 0.005, 'VCS pitches are off the piano');
+});
+
+test('fitVoices keeps the loudest MAX_VOICES notes, in order', () => {
+  const many = Array.from({ length: 20 }, (_, i) => ({ t: i / 100, freq: 440, dur: 0.1, wave: 'sine', gain: (i % 5) / 10 + 0.01 }));
+  const kept = S.fitVoices(many);
+  assert.equal(kept.length, S.MAX_VOICES);
+  assert.deepEqual(kept, many.filter((n) => kept.includes(n)), 'order preserved');
+  assert.ok(Math.min(...kept.map((n) => n.gain)) >= Math.max(...many.filter((n) => !kept.includes(n)).map((n) => n.gain)));
 });
 
 test('the engine is inert in Node: no context, no sound, no throw', () => {

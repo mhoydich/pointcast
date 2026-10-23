@@ -64,6 +64,8 @@ for (const app of APPS) {
     assert.match(version(src), new RegExp(`^${app.prefix}\\d{4}-\\d{2}-\\d{2}[a-z]?$`));
     const files = list(src);
     assert.ok(files.length >= 7, 'precache list is present');
+    // cache.addAll rejects a list that names a URL twice, and the worker then never installs.
+    assert.equal(new Set(files).size, files.length, 'no file is precached twice');
     for (const f of files) {
       const onDisk = resolve(PUBLIC, '.' + (f.endsWith('/') ? f + 'index.html' : f));
       assert.ok(existsSync(onDisk), `${f} exists under public/`);

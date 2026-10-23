@@ -77,11 +77,11 @@
     <fieldset class="moods" id="me"><legend>ME</legend></fieldset>
     <fieldset class="moods" id="them"><legend>THEM</legend></fieldset>
     <div class="row">
-      <label class="t">VOLUME <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"> <span id="vol-v" class="meter">80%</span></label>
-      <label class="t"><input type="checkbox" id="hap" checked> HAPTICS (Android)</label>
-      <label class="t"><input type="checkbox" id="snd" checked> SOUND</label>
-      <label class="t"><input type="checkbox" id="atmo"> ATMOSPHERE BED (opt-in)</label>
-      <label class="t"><input type="checkbox" id="bg"> MESSAGES SOUND WHILE HIDDEN</label>
+      <label class="t">VOLUME <input type="range" id="vol" autocomplete="off" min="0" max="1" step="0.05" value="0.8"> <span id="vol-v" class="meter">80%</span></label>
+      <label class="t"><input type="checkbox" id="hap" autocomplete="off" checked> HAPTICS (Android)</label>
+      <label class="t"><input type="checkbox" id="snd" autocomplete="off" checked> SOUND</label>
+      <label class="t"><input type="checkbox" id="atmo" autocomplete="off"> ATMOSPHERE BED (opt-in)</label>
+      <label class="t"><input type="checkbox" id="bg" autocomplete="off"> MESSAGES SOUND WHILE HIDDEN</label>
     </div>
   </section>
 
@@ -101,7 +101,7 @@
     <h2 id="h-fat">3 · FATIGUE: 200 MESSAGES</h2>
     <p>200 incoming messages over about a minute, from moods that change as they come. Repeats inside a cue's own length are folded into one. Each repeat within six seconds plays 5% quieter, down to 55%. BURST sends 20 at once, and you should hear one knock.</p>
     <div class="row">
-      <label class="t">SYSTEM <select id="fat-dir"><option value="final">chosen</option><option value="sid">SID</option><option value="vcs">VCS</option><option value="glass">Glass</option></select></label>
+      <label class="t">SYSTEM <select id="fat-dir" autocomplete="off"><option value="final">chosen</option><option value="sid">SID</option><option value="vcs">VCS</option><option value="glass">Glass</option></select></label>
       <button type="button" class="go" id="fat-go">PLAY 200</button>
       <button type="button" id="burst">BURST 20</button>
       <button type="button" id="fat-stop">STOP</button>
@@ -130,33 +130,36 @@
   for (const [who, start] of [['me', 'calm'], ['them', 'hyped']]) {
     for (const m of MOODS) {
       const l = document.createElement('label'); l.className = 'chip'; l.style.setProperty('--m', m.color); l.style.setProperty('--k', ink(m.color));
-      l.innerHTML = `<input type="radio" name="${who}" value="${m.id}"${m.id === start ? ' checked' : ''}><span>${m.id}</span>`;
+      l.innerHTML = `<input type="radio" autocomplete="off" name="${who}" value="${m.id}"${m.id === start ? ' checked' : ''}><span>${m.id}</span>`;
       l.querySelector('input').addEventListener('change', () => { document.documentElement.style.setProperty(`--${who}`, m.color); if ($('atmo').checked) atmo(true); });
       $(who).append(l);
     }
   }
   document.documentElement.style.setProperty('--them', color('hyped'));
 
-  // Unlock on the first gesture anywhere, before any handler tries to play.
-  let ready = null;
-  const unlock = () => (ready ||= S.unlock());
-  addEventListener('pointerdown', unlock, { once: true, capture: true });
-  addEventListener('keydown', unlock, { once: true, capture: true });
+  // Every gesture tries to unlock until the context runs: a press the browser does not count as
+  // a gesture must not leave the lab silent for good. Handlers never wait on it.
+  const unlock = () => { if (S.stats().state !== 'running') S.unlock(); };
+  for (const ev of ['pointerdown', 'keydown', 'click']) addEventListener(ev, unlock, { capture: true });
 
   function caption(label, event, notes, played) {
     const me = pick('me'), them = pick('them');
     const by = event === 'receive' || event === 'their-mood' ? `from ${them}` : `as ${me}`;
-    $('caption').innerHTML = `<b>${label}</b> · ${event} · ${by} · ${S.DURATION_MS[event]} ms${played ? '' : ' · (silent: sound off, folded or locked)'}<br>${S.CAPTIONS[event]}<div class="notes">${notes.map(fmt).join(' · ')}</div>`;
+    $('caption').innerHTML = `<b>${label}</b> · ${event} · ${by} · ${S.DURATION_MS[event]} ms${played ? '' : ` · (silent: ${played === false ? 'sound off or locked' : played})`}<br>${S.CAPTIONS[event]}<div class="notes">${notes.map(fmt).join(' · ')}</div>`;
     const f = $('flash'); f.style.background = color(event === 'receive' || event === 'their-mood' ? them : me);
     f.style.setProperty('--d', `${S.DURATION_MS[event]}ms`); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
   }
 
-  async function fire(label, event, planner) {
-    await unlock();
-    const opts = { mood: pick('me'), theirMood: pick('them') };
-    const notes = (planner || S.plan)(event, opts);
-    const played = S.play(event, { ...opts, plan: planner });
-    caption(label, event, notes, played);
+  // Why a cue was silent, read from the engine's counters: true if it played.
+  function outcome(before) {
+    const s = S.stats();
+    return s.played > before.played || (s.capped > before.capped ? 'capped, too many voices' : s.coalesced > before.coalesced ? 'folded into the last one' : false);
+  }
+  function fire(label, event, planner) {
+    unlock();
+    const opts = { mood: pick('me'), theirMood: pick('them') }, before = S.stats();
+    S.play(event, { ...opts, plan: planner });
+    caption(label, event, (planner || S.plan)(event, opts), outcome(before));
   }
 
   for (const [key, d] of Object.entries(SKETCHES)) {
@@ -176,15 +179,26 @@
     $('spec').append(tr);
   }
 
-  $('vol').addEventListener('input', (ev) => { S.setVolume(ev.target.value); $('vol-v').textContent = `${Math.round(ev.target.value * 100)}%`; });
-  $('hap').addEventListener('change', (ev) => S.setHaptics(ev.target.checked));
-  $('bg').addEventListener('change', (ev) => S.setHiddenReceive(ev.target.checked));
-  $('snd').addEventListener('change', (ev) => { S.setEnabled(ev.target.checked); if (!ev.target.checked) $('atmo').checked = false; });
-  async function atmo(on) {
-    await unlock();
+  // Read every control into the engine, so what the page shows is what plays, even after the
+  // browser restores form state on reload or back. The bed always starts off.
+  function sync(fresh) {
+    S.setEnabled($('snd').checked); S.setVolume($('vol').value); S.setHaptics($('hap').checked); S.setHiddenReceive($('bg').checked);
+    $('vol-v').textContent = `${Math.round($('vol').value * 100)}%`;
+    if (fresh === true || !$('snd').checked) { $('atmo').checked = false; S.stopAtmosphere(); }
+  }
+  sync(true);
+  addEventListener('pageshow', () => sync(true));
+  $('vol').addEventListener('input', sync);
+  for (const id of ['hap', 'bg', 'snd']) $(id).addEventListener('change', sync);
+  function atmo(on) {
+    const ready = S.unlock();
     if (!on) { S.stopAtmosphere(); $('caption').innerHTML = '<b>ATMOSPHERE</b> · off'; return; }
-    const ok = S.startAtmosphere({ mood: pick('me'), theirMood: pick('them') });
-    $('caption').innerHTML = `<b>ATMOSPHERE</b> · ${ok ? `on: ${pick('them')} drifting over ${pick('me')}, a quiet 9.6 s loop` : 'could not start: is sound on?'}`;
+    const start = () => S.startAtmosphere({ mood: pick('me'), theirMood: pick('them') });
+    const say = (ok) => { $('caption').innerHTML = `<b>ATMOSPHERE</b> · ${ok ? `on: ${pick('them')} drifting over ${pick('me')}, a quiet 9.6 s loop` : 'off: sound is off, or this browser will not start audio'}`; if (!ok) $('atmo').checked = false; };
+    if (start()) return say(true);
+    // The first press may be the one that starts audio: try once more when it is running.
+    $('caption').innerHTML = '<b>ATMOSPHERE</b> · starting…';
+    ready.then((ok) => { if ($('atmo').checked) say(ok && start()); });
   }
   $('atmo').addEventListener('change', (ev) => atmo(ev.target.checked));
 
@@ -208,8 +222,8 @@
     step();
   }
   // 200 over a minute: a gap that wanders 150-450 ms, the way a busy group chat lands.
-  $('fat-go').addEventListener('click', async () => { await unlock(); fatigue(200, 300); });
-  $('burst').addEventListener('click', async () => { await unlock(); fatigue(20, 0); });
+  $('fat-go').addEventListener('click', () => { unlock(); fatigue(200, 300); });
+  $('burst').addEventListener('click', () => { unlock(); fatigue(20, 0); });
   $('fat-stop').addEventListener('click', () => clearTimeout(fatTimer));
 </script>
 </body>
