@@ -1,0 +1,84 @@
+---
+import { displayText, hashString, isFresh, safeImage, safePostUrl, snowflakeMs, themeById } from '../lib/bookmarks.mjs';
+
+interface Item {
+  id: string;
+  account: string;
+  text: string;
+  url: string;
+  theme: string;
+  first_seen: string;
+  article?: string;
+  image?: string;
+}
+
+interface Pose {
+  column: number;
+  row: number;
+  jx: number;
+  jy: number;
+  rotate: number;
+}
+
+interface Props {
+  item: Item;
+  today: string;
+  pose?: Pose;
+  sky?: boolean;
+  also?: string[];
+}
+
+const { item, today, pose, sky = false, also = [] } = Astro.props;
+const theme = themeById(item.theme);
+const face = displayText(item.text);
+const href = safePostUrl(item.url, item.id);
+const image = safeImage(item.image);
+const swatch = hashString(`${item.account}:${item.id}`);
+const sx = 18 + (swatch % 64);
+const sy = 16 + ((swatch >>> 8) % 58);
+const posted = new Date(snowflakeMs(item.id)).toISOString().slice(0, 10);
+const fresh = isFresh(item, today);
+const style = [
+  `--ink:${theme.pigment}`,
+  `--wash:${theme.wash}`,
+  `--sx:${sx}%`,
+  `--sy:${sy}%`,
+  pose ? `--col:${pose.column}` : '',
+  pose ? `--row:${pose.row}` : '',
+  pose ? `--jx:${pose.jx}px` : '',
+  pose ? `--jy:${pose.jy}px` : '',
+  pose ? `--r:${pose.rotate}deg` : '',
+].filter(Boolean).join(';');
+---
+
+<article
+  class:list={['card', sky && 'card--sky', fresh && 'card--fresh']}
+  id={sky ? undefined : `bm-${item.account}-${item.id}`}
+  data-id={item.id}
+  data-account={item.account}
+  data-theme={item.theme}
+  data-seen={item.first_seen}
+  style={style}
+>
+  {href ? (
+    <a class="card__link" href={href} rel="noreferrer noopener" target="_blank">
+      {image ? <img class="card__image" src={image} alt="" loading="lazy" referrerpolicy="no-referrer" /> : <span class="card__swatch" aria-hidden="true"></span>}
+      <span class="card__meta">
+        <span>@{item.account}</span>
+        <span>{theme.label}</span>
+        {fresh ? <span class="card__new">New</span> : null}
+      </span>
+      {item.article ? <strong class="card__article">{item.article}</strong> : null}
+      <p class="card__text">{face}</p>
+      {also.length ? <p class="card__also">Also saved by {also.map((account) => `@${account}`).join(', ')}</p> : null}
+      <span class="card__foot">
+        <time datetime={posted}>{posted}</time>
+        <span>Open on X</span>
+      </span>
+    </a>
+  ) : (
+    <div class="card__link">
+      <p class="card__text">{face}</p>
+    </div>
+  )}
+</article>
