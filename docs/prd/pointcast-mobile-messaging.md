@@ -173,11 +173,17 @@ as the SI line:
   text, goodbye) covers a JSON tuple whose first element names its kind and version, and fields
   are checked for type before verifying. The `|`-joined form of two-person lines is never used in
   a room, so a relay cannot move characters from one field into another.
-- **Members sign their own seat.** Each member signs a join for this room and this host, and the
-  host carries it in the roster. A member the roster names without one shows UNCONFIRMED until a
-  direct line proves them, so a host cannot quietly seat a stranger under a friend's key.
-- **Texts are signed by their author** over the room id, the host, the text, the mood and the local
-  hour, and verified by every member against the author's key. Each member passes a new text
+- **Seats.** Each time the host seats someone it gives them a fresh seat id, carried in the signed
+  roster. The member signs a join for this room, this host and that seat, and the host carries it
+  in the roster. A member the roster names without a join for their current seat shows UNCONFIRMED
+  until a direct line proves them, so a host cannot quietly seat a stranger under a friend's key,
+  and a join from an earlier seat vouches for nothing.
+- **Texts name their recipients.** The members a text is for, as the author's phone saw the room
+  when it was written, are inside the signature. A text goes, and is passed on, only to them, and
+  waits on the author's phone for each of them in turn; someone seated after it was written never
+  gets it, and a member a text does not name drops it.
+- **Texts are signed by their author** over the room id, the host, the text, the mood, the local
+  hour and the recipients, and verified by every member against the author's key. Each member passes a new text
   on once to its other lines, so a text still lands when a mesh line cannot form (strict NAT,
   no relay). A copy changed in transit fails the author's signature and is dropped: never
   shown, never passed on. A text that came the long way says `SIGNED · PASSED ON`.
@@ -208,15 +214,18 @@ as the SI line:
   checked against sigils. Read sigils aloud to verify, as with two people.
 - Texts are signed, not encrypted beyond what WebRTC already does per line. A member who passes
   a text on can read it; that is everyone in the room anyway.
-- LEAVE removes the room from your phone and sends a goodbye you sign. Every member passes it on
-  and drops you; the host frees the seat, and a member who saw it hands it to the host later if the
-  host was away. When the host leaves, members see HOST LEFT and nobody new can join. There is no
-  kick.
-- A phone on the app from before rooms that opens a room invite is not seated: the host sends it
-  one note in the two-person form ("UPDATE PMM: reload…"), closes the line, and shows THEIR PMM IS
-  OUT OF DATE.
+- LEAVE removes the room from your phone and sends a goodbye you sign over your seat. Every member
+  passes it on and drops that seat; the host frees it. Members remember the seats they saw leave:
+  they hand those goodbyes to a host that was away before taking its roster, and never take a gone
+  seat back from a stale roster. A goodbye ends only the seat it names, so a member who rejoins
+  (a new seat) cannot be removed by an old one, and no phone compares its clock with another's.
+  When the host leaves, members see HOST LEFT and nobody new can join. There is no kick.
+- A phone on the app from before rooms that opens a room invite is not seated. A room hello carries
+  no two-person signature, so the old app refuses the line (HELLO NOT SIGNED) and sends nothing into
+  it; any note it had waiting for the host stays waiting. The host shows THEIR PMM IS OUT OF DATE
+  (or, if the old phone hung up first, "no room hello came back").
 - Limits against a hostile member or host: at most three half-open mesh lines per room, one offer
-  answered at a time per member, offers and answers relayed at most six a minute per pair, at most
+  answered at a time per member, offers and answers relayed at most twelve a minute per pair, at most
   one roster a second per line, and no more than 64 messages waiting per line.
 
 **Measured, 2026-10-22, headless Chromium, phones as separate browser contexts on one machine,
@@ -231,10 +240,13 @@ the real `/api/pmm/signal` handler over an in-memory KV.**
 | Text when one pair has no line (offers blocked on purpose) | arrives via the host, `SIGNED · PASSED ON` |
 | Text altered by the host while passing it on | dropped on the receiving phone, never shown |
 | Text re-split across fields by the host (`ts` takes the text up to a `\|`) | dropped, never shown |
-| Guest on the app from before rooms | not seated; gets UPDATE PMM: reload…; host shows THEIR PMM IS OUT OF DATE |
+| Guest on the app from before rooms | not seated; its app refuses the line (HELLO NOT SIGNED) and a waiting two-person note stays waiting; host shows ?VERSION MISMATCH ERROR |
+| C leaves while the host is away; the host comes back with a stale roster | C stays gone on every phone (3, 3, 3 seats) |
+| An old goodbye replayed after the member rejoined | ignored; the member keeps their seat and their texts arrive |
+| Host text queued while A and B were away, then C invited | C never gets it; A gets it on rejoin |
 | Member reloads, host re-invites | back in the room, all three lines lit again; the host's text queued meanwhile arrives |
 | LEAVE | host and the other member drop the seat; the room is gone from the leaver's phone |
-| Missing pair after offers unblocked | line formed in about 5 s by the periodic check |
+| Missing pair after offers unblocked | line formed in 5 to 16 s by the periodic check |
 | Two-person code flow and paste mode, re-run | text, signature, read receipt, tab, file, mood, LINK all pass |
 
 ## Manus follow-up

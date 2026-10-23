@@ -744,7 +744,11 @@
      changes a byte breaks the signature and the copy is dropped. Every room signature covers a JSON tuple
      whose first element names its kind and version, never the '|' canon of two-person lines, so no field
      can be re-split into its neighbour. Each member signs a join for this room and host, and the host
-     carries it in the roster; a member without one shows UNCONFIRMED until a direct line proves them. */
+     carries it in the roster; a member without one shows UNCONFIRMED until a direct line proves them.
+     Seats: the host gives a member a fresh seat id each time it seats them. The join and the goodbye are
+     signed over that seat, so a goodbye ends one seat and never a later one, and an old join cannot vouch
+     for a new seat. Members remember the seats they saw leave and never take them back from a stale
+     roster. A text names its recipients inside the signature: it goes to them only, and waits for each. */
   const ROOM_MAX = 5;
   const rlines = new Set();  // { pc, dc, roomId, expect, member, localFp, remoteFp, nonce, ready }
   let currentRoom = null;
@@ -760,8 +764,10 @@
   const okMood = (v) => typeof v === 'string' && MOODS.some(([k]) => k === v);
   async function signTuple(arr) { return b64u(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, signKey, enc.encode(JSON.stringify(arr)))); }
   async function verifyTuple(f, arr, sig) { try { return typeof sig === 'string' && await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, await verifierFor(f), unb64u(sig), enc.encode(JSON.stringify(arr))); } catch (_) { return false; } }
-  const joinTuple = (room, id) => ['pmm-join-1', room.id, room.host, id];
-  const byeTuple = (room, m) => ['pmm-bye-1', room.id, room.host, m.from, m.ts];
+  const joinTuple = (room, id, seat) => ['pmm-join-2', room.id, room.host, id, seat];
+  const byeTuple = (room, m) => ['pmm-bye-2', room.id, room.host, m.from, m.seat];
+  const isGone = (room, id, seat) => (room.gone || []).some((g) => g.from === id && g.seat === seat);
+  const HEX64 = /^[0-9a-f]{64}$/;
   const seen = new Set();        // bye and offer nonces already handled, per room and sender
   const answering = new Set();   // one offer in flight per room and sender
   const relayed = new Map();     // host: recent offer/answer relays per pair
@@ -795,9 +801,9 @@
       if (pending && pending.pc === pc) { l.attempt = pending; clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending = null; }
       clearTimeout(l.watchdog); l.watchdog = setTimeout(() => { if (!l.member) closeLine(l); }, 20000);
       l.localFp = dtlsFp(pc.localDescription); l.remoteFp = dtlsFp(pc.remoteDescription);
-      // room: 1 and rsig mark a room hello. sig is the two-person form, so an out-of-date app can still read our note.
+      // room: 1 and rsig mark a room hello. It carries no two-person signature, so an app from before rooms
+      // refuses the line (HELLO NOT SIGNED) instead of taking it for a two-person line and flushing notes into it.
       const h = { t: 'hello', ...helloBody(), fp: l.remoteFp, room: 1 };
-      h.sig = await sign({ t: 'hello', id: state.me.id, ts: h.ts, text: l.remoteFp });
       h.rsig = await signTuple(['pmm-room-hello-1', state.me.id, h.ts, l.remoteFp]);
       lsend(l, h); l.readyNow();
     });
@@ -805,7 +811,8 @@
     l.enqueue = (fn) => { l.depth++; inbox = inbox.then(fn).catch(() => {}).finally(() => { l.depth--; }); };
     dc.addEventListener('message', (e) => { if (typeof e.data !== 'string' || e.data.length > 60000 || l.leaving || l.depth > 64) return; const raw = e.data; l.enqueue(() => onRoomData(l, raw)); });
     const closed = () => {
-      if (l.closed) return; const had = l.member; closeLine(l);
+      if (l.closed) return; const had = l.member; const hostInvite = l.attempt && !had; closeLine(l);
+      if (hostInvite && app.dataset.view === 'load') screen(null, '?LINE FAILED ERROR', 'no room hello came back. if their PMM is old, they reload and you INVITE again.');
       const room = l.roomId && roomById(l.roomId); if (!room || !had) return;
       if (memberOf(room, had.id)) pushRoomSys(room, `${had.name.toUpperCase()} · LINE DROPPED`);
       renderRoomAll(room);
@@ -823,16 +830,10 @@
     if (m.room !== 1) return (await verify(f, { t: 'hello', id, ts: m.ts, text: localFp, sig: m.sig })) ? { id, old: true } : null;
     return okTs(m.ts) && (await verifyTuple(f, ['pmm-room-hello-1', id, m.ts, localFp], m.rsig)) ? { id } : null;
   }
-  // HOST: an out-of-date guest gets one note in the two-person form it can read, then the line closes.
-  async function outdated(l, id, pub) {
+  // HOST: a guest on the app from before rooms is told nothing over the line (its app has already refused ours); the host is told why.
+  function outdated(l) {
     const room = l.roomId && roomById(l.roomId);
-    if (room && room.host === state.me.id && !l.expect) {
-      const n = { t: 'msg', id: uid(), to: id, ts: now(), text: 'UPDATE PMM: reload the page, then ask for the room code again.', mood: state.me.mood, lt: localTime() };
-      n.sig = await sign({ t: 'msg', id: n.id, to: n.to, ts: n.ts, text: n.text });
-      try { l.dc.send(JSON.stringify(n)); } catch (_) {}
-      toast('THEIR PMM IS OUT OF DATE'); screen(null, '?VERSION MISMATCH ERROR', 'their PMM is from before rooms. they reload, then INVITE again.');
-      setTimeout(() => closeLine(l), 1500); return;
-    }
+    if (room && room.host === state.me.id && !l.expect) { toast('THEIR PMM IS OUT OF DATE'); screen(null, '?VERSION MISMATCH ERROR', 'their PMM is from before rooms. they reload, then INVITE again.'); }
     closeLine(l);
   }
   async function onRoomData(l, raw) {
@@ -844,7 +845,7 @@
       const hp = await provenHello(m, l.localFp); if (l.closed) return;
       if (!hp) { toast('HELLO NOT SIGNED. LINE CLOSED.'); return closeLine(l); }
       const id = hp.id;
-      if (hp.old) return outdated(l, id, m.pub);
+      if (hp.old) return outdated(l);
       if ((l.expect && id !== l.expect) || (l.member && l.member.id !== id)) { toast('THE LINE CHANGED HANDS. CLOSED.'); return closeLine(l); }
       const info = { id, pub: pubOf(m.pub), name: cleanName(m.name), mood: validMood(m.mood), tz: str(m.tz, 64), place: str(m.place, 32) };
       if (l.attempt && !l.attempt.verified) { const a = l.attempt, ranAt = now(); a.verified = true; setTimeout(() => linePath(l.pc).then((path) => report(a, 'run', path, '-', ranAt)), 300); }
@@ -887,15 +888,15 @@
   function adopt(room, l, info) {
     l.roomId = room.id;
     for (const o of [...rlines]) if (o !== l && o.roomId === room.id && (o.member?.id === info.id || o.expect === info.id) && !o.closed) closeLine(o);
-    const x = memberOf(room, info.id);
-    if (!x) { room.members.push({ ...info, confirmed: true, seated: now() }); pushRoomSys(room, `${info.name.toUpperCase()} IN · ${sigilOf(info.id)}`); blip(true); buzz(20); }
+    let x = memberOf(room, info.id);
+    if (!x) { x = { ...info, confirmed: true }; room.members.push(x); pushRoomSys(room, `${info.name.toUpperCase()} IN · ${sigilOf(info.id)}`); blip(true); buzz(20); }
     else Object.assign(x, info, { confirmed: true }); // a direct line proved them
-    if (info.id === room.host) for (const b of room.byes || []) lsend(l, b); // goodbyes the host missed
+    if (room.host === state.me.id && !l.expect) { x.seat = uid(); x.join = ''; } // every seating is a new seat
     if (room.host !== state.me.id) flushRoom(room);
     save(); renderRoomAll(room);
   }
   // HOST: the roster is signed, carries every member's key, and only ever moves forward in time.
-  const rosterBody = (room) => JSON.stringify({ name: room.name, members: room.members.map((x) => ({ id: x.id, pub: pubOf(x.pub), name: x.name, mood: x.mood, tz: x.tz, place: x.place, join: x.join || '' })) });
+  const rosterBody = (room) => JSON.stringify({ name: room.name, members: room.members.map((x) => ({ id: x.id, pub: pubOf(x.pub), name: x.name, mood: x.mood, tz: x.tz, place: x.place, join: x.join || '', seat: x.seat || '' })) });
   async function sendRoster(room) {
     if (room.host !== state.me.id) return;
     const ts = Math.max(now(), (room.rosterTs || 0) + 1); room.rosterTs = ts; const body = rosterBody(room);
@@ -912,30 +913,32 @@
     if (!(await verifyTuple(l.member, ['pmm-roster-1', roomId, l.member.id, m.ts, m.body], m.sig))) return;
     if (l.closed || l.leaving) return;
     room = roomById(roomId); if (room && (room.host !== l.member.id || m.ts <= (room.rosterTs || 0))) return;
+    if (room && invite) for (const g of room.gone || []) lsend(l, g.raw); // goodbyes the host missed, before its roster counts here
     let b; try { b = JSON.parse(m.body); } catch (_) { return; }
     const members = [];
     for (const x of Array.isArray(b.members) ? b.members.slice(0, ROOM_MAX) : []) {
       if (!x || typeof x.pub?.x !== 'string' || typeof x.pub?.y !== 'string' || members.some((y) => y.id === x.id)) continue;
       if ((await fingerprint(x.pub)) !== x.id) continue;
-      members.push({ id: x.id, pub: pubOf(x.pub), name: cleanName(x.name), mood: validMood(x.mood), tz: str(x.tz, 64), place: str(x.place, 32), join: typeof x.join === 'string' ? x.join.slice(0, 200) : '' });
+      members.push({ id: x.id, pub: pubOf(x.pub), name: cleanName(x.name), mood: validMood(x.mood), tz: str(x.tz, 64), place: str(x.place, 32), join: typeof x.join === 'string' ? x.join.slice(0, 200) : '', seat: okId(x.seat) ? x.seat : '' });
     }
     if (!members.some((x) => x.id === state.me.id) || !members.some((x) => x.id === l.member.id)) return;
-    // The host's word is enough for the host and for this phone; everyone else must have signed a join for this room and host.
+    // A seat this phone saw leave stays gone, whatever a stale roster says.
+    if (room) for (let i = members.length - 1; i >= 0; i--) { const x = members[i]; if (x.id !== state.me.id && x.id !== l.member.id && isGone(room, x.id, x.seat)) members.splice(i, 1); }
+    // The host's word is enough for the host and for this phone; everyone else must have signed a join for this seat.
     const shape = { id: roomId, host: l.member.id };
-    for (const x of members) x.confirmed = x.id === state.me.id || x.id === l.member.id || Boolean(room && memberOf(room, x.id)?.confirmed) || await verifyTuple(x, joinTuple(shape, x.id), x.join);
+    for (const x of members) { const old = room && memberOf(room, x.id); x.confirmed = x.id === state.me.id || x.id === l.member.id || Boolean(old && old.seat === x.seat && old.confirmed) || (Boolean(x.seat) && await verifyTuple(x, joinTuple(shape, x.id, x.seat), x.join)); }
     if (l.closed || l.leaving || (l.roomId && !roomById(roomId))) return;
     room = roomById(roomId); if (room && m.ts <= (room.rosterTs || 0)) return;
     const first = !room;
     if (first) { room = { id: roomId, name: str(b.name, 32) || 'ROOM', host: l.member.id, members: [], messages: [], created: now(), unread: 0 }; state.rooms.push(room); }
     room.rosterTs = Number(m.ts); room.name = str(b.name, 32) || room.name;
     const before = new Set(room.members.map((x) => x.id));
-    room.members = members.map((x) => { const had = lineTo(room, x.id); const old = memberOf(room, x.id); return had && old ? old : x; });
-    if (room.byes) room.byes = room.byes.filter((b) => { try { return !memberOf(room, JSON.parse(b).from); } catch (_) { return false; } });
+    room.members = members.map((x) => { const had = lineTo(room, x.id); const old = memberOf(room, x.id); return had && old ? Object.assign(old, { seat: x.seat, join: x.join, confirmed: x.confirmed || old.confirmed }) : x; });
     for (const x of room.members) if (!before.has(x.id) && !first && x.id !== state.me.id) pushRoomSys(room, `${x.name.toUpperCase()} IN · ${sigilOf(x.id)}`);
     for (const o of [...rlines]) if (o.roomId === room.id && ((o.member && !memberOf(room, o.member.id)) || (!o.member && o.expect && !memberOf(room, o.expect)))) closeLine(o);
     if (invite) adopt(room, l, l.member); else { save(); renderRoomAll(room); }
     const mine = memberOf(room, state.me.id);
-    if (!mine.join || invite) { mine.join = await signTuple(joinTuple(room, state.me.id)); lsend(l, { t: 'join', room: room.id, sig: mine.join }); }
+    if (mine.seat && (room.joinedSeat !== mine.seat || !mine.join)) { room.joinedSeat = mine.seat; mine.join = await signTuple(joinTuple(room, state.me.id, mine.seat)); lsend(l, { t: 'join', room: room.id, seat: mine.seat, sig: mine.join }); }
     if (first) pushRoomSys(room, `RUN · in ${room.name.toUpperCase()} · ${room.members.length} OF ${ROOM_MAX}`);
     else if (invite) pushRoomSys(room, `RUN · back in ${room.name.toUpperCase()}`);
     if (first || invite) openRoom(room.id);
@@ -944,24 +947,25 @@
   // HOST: a member's signed join for this room and this host, carried in every roster after it.
   async function onJoin(l, m) {
     const room = roomById(l.roomId); if (!room || room.host !== state.me.id || m.room !== room.id) return;
-    const x = memberOf(room, l.member.id); if (!x || x.join === m.sig) return;
-    if (!(await verifyTuple(x, joinTuple(room, x.id), m.sig))) return;
+    const x = memberOf(room, l.member.id); if (!x || !x.seat || m.seat !== x.seat || x.join === m.sig) return;
+    if (!(await verifyTuple(x, joinTuple(room, x.id, x.seat), m.sig))) return;
     x.join = m.sig; save(); rosterSoon(room);
   }
   // Leaving: signed by whoever leaves, passed on once, applied by every member. The host frees the seat.
   async function onBye(l, m, raw) {
-    const room = roomById(l.roomId); if (!room || m.room !== room.id || !okTs(m.ts)) return;
-    const who = memberOf(room, m.from); if (!who || who.id === state.me.id || (who.seated && m.ts < who.seated)) return; // an old goodbye never unseats a rejoined member
-    const key = `bye:${room.id}:${m.from}:${m.ts}`; if (seen.has(key)) return;
+    const room = roomById(l.roomId); if (!room || m.room !== room.id || !okId(m.seat)) return;
+    // A goodbye ends the seat it names. A member seated again since holds a new seat, so an old goodbye passes them by.
+    const who = memberOf(room, m.from); if (!who || who.id === state.me.id || who.seat !== m.seat) return;
+    const key = `bye:${room.id}:${m.from}:${m.seat}`; if (seen.has(key)) return;
     if (!(await verifyTuple(who, byeTuple(room, m), m.sig))) return;
-    if (seen.has(key) || !memberOf(room, m.from)) return; seen.add(key);
+    if (seen.has(key) || memberOf(room, m.from)?.seat !== m.seat) return; seen.add(key);
+    room.gone = [...(room.gone || []), { from: m.from, seat: m.seat, raw }].slice(-20);
     for (const o of roomLines(room)) if (o !== l && o.member.id !== who.id) lsend(o, raw);
     for (const o of [...rlines]) if (o.roomId === room.id && (o.member?.id === who.id || o.expect === who.id)) closeLine(o);
     if (who.id === room.host) { room.hostLeft = true; pushRoomSys(room, 'HOST LEFT · NOBODY NEW CAN JOIN'); }
     else {
       room.members = room.members.filter((x) => x.id !== who.id); pushRoomSys(room, `${who.name.toUpperCase()} LEFT THE ROOM`);
-      if (room.host === state.me.id) await sendRoster(room);
-      else room.byes = [...(room.byes || []), raw].slice(-ROOM_MAX); // for the host, if it was away
+      if (room.host === state.me.id) await sendRoster(room); // members keep it in room.gone for a host that was away
     }
     save(); renderRoomAll(room);
   }
@@ -997,7 +1001,7 @@
     if (m.to !== state.me.id) { // the host carries a member's own offer or answer to the member it names, unchanged, a few a minute per pair
       if (room.host !== state.me.id || m.from !== l.member.id || !memberOf(room, m.to)) return;
       const pair = `${room.id}:${m.from}>${m.to}`, t = now(); const recent = (relayed.get(pair) || []).filter((x) => t - x < 60000);
-      if (recent.length >= 6) return; recent.push(t); relayed.set(pair, recent);
+      if (recent.length >= 12) return; recent.push(t); relayed.set(pair, recent);
       const out = lineTo(room, m.to); if (out) lsend(out, m); return;
     }
     const from = memberOf(room, m.from); if (!from || from.id === state.me.id || l.member.id !== room.host) return;
@@ -1030,27 +1034,32 @@
     } finally { answering.delete(busy); }
   }
   // Texts: signed by the author over the room id, the host, the text, the mood and the hour. Verified, kept, passed on once.
-  const rtuple = (room, m) => ['pmm-rmsg-1', m.id, room.id, room.host, m.ts, m.text, m.mood, m.lt];
+  const rtuple = (room, m) => ['pmm-rmsg-2', m.id, room.id, room.host, m.ts, m.text, m.mood, m.lt, m.to];
+  const okTo = (to, from) => Array.isArray(to) && to.length >= 1 && to.length < ROOM_MAX && to.every((x) => typeof x === 'string' && HEX64.test(x) && x !== from) && new Set(to).size === to.length;
   async function onRmsg(l, m, raw) {
     const room = roomById(l.roomId); if (!room) return;
     const id = m.id; if (!okId(id) || m.room !== room.id || room.messages.some((x) => x.id === id)) return;
     const author = memberOf(room, m.from); if (!author || author.id === state.me.id) return;
     if (!okTs(m.ts) || typeof m.text !== 'string' || !m.text || m.text.length > 4000 || !okMood(m.mood) || typeof m.lt !== 'string' || m.lt.length > 16 || m.lt.includes('|')) return;
+    if (!okTo(m.to, m.from) || !m.to.includes(state.me.id)) return; // written for others: not ours to read
     if (!(await verifyTuple(author, rtuple(room, m), m.sig))) return; // altered on the way: dropped, never shown, never passed on
     if (room.messages.some((x) => x.id === id)) return;
     room.messages.push({ id, from: author.id, text: m.text, ts: m.ts, mood: m.mood, lt: m.lt, verified: true, via: l.member.id === author.id ? '' : l.member.id });
     if (room.messages.length > 500) room.messages = room.messages.slice(-500);
-    for (const o of roomLines(room)) if (o !== l && o.member.id !== author.id) lsend(o, raw);
+    for (const o of roomLines(room)) if (o !== l && o.member.id !== author.id && m.to.includes(o.member.id)) lsend(o, raw);
     if (currentRoom !== room) room.unread = (room.unread || 0) + 1;
     save(); renderRoomAll(room); blip(false); buzz(12);
     if (currentRoom === room) $('announce').textContent = `${author.name}: ${m.text}`;
   }
+  // Each of my texts goes straight to every recipient it names, as their lines open; never to anyone seated after it was written.
   function flushRoom(room) {
     const lines = roomLines(room); if (!lines.length) return;
     for (const m of room.messages) {
-      if (m.from !== state.me.id || m.status !== 'queued') continue;
-      const raw = JSON.stringify({ t: 'rmsg', room: room.id, id: m.id, from: m.from, ts: m.ts, text: m.text, mood: m.mood, lt: m.lt, sig: m.sig });
-      if (lines.map((o) => lsend(o, raw)).some(Boolean)) m.status = 'sent';
+      if (m.from !== state.me.id || !Array.isArray(m.to) || !m.sig) continue;
+      m.sentTo = m.sentTo || []; if (m.sentTo.length >= m.to.length) continue;
+      const raw = JSON.stringify({ t: 'rmsg', room: room.id, id: m.id, from: m.from, ts: m.ts, text: m.text, mood: m.mood, lt: m.lt, to: m.to, sig: m.sig });
+      for (const o of lines) if (m.to.includes(o.member.id) && !m.sentTo.includes(o.member.id) && lsend(o, raw)) m.sentTo.push(o.member.id);
+      if (m.sentTo.length) m.status = 'sent';
     }
   }
   function roomMood(k) { for (const l of [...rlines]) if (live(l)) lsend(l, { t: 'mood', mood: k }); if (currentRoom) renderRoomAtmo(); }
@@ -1118,12 +1127,14 @@
   $('room-composer').addEventListener('submit', async (e) => {
     e.preventDefault(); const text = roomInput.value.trim().slice(0, 4000); const r = currentRoom; if (!text || !r) return;
     roomInput.value = ''; autosize(roomInput); $('btn-room-send').disabled = true; roomInput.focus({ preventScroll: true });
-    const m = { id: uid(), from: state.me.id, text, ts: now(), mood: state.me.mood, lt: localTime().slice(0, 16).replace(/\|/g, ''), status: 'queued' };
+    const to = r.members.map((x) => x.id).filter((id) => id !== state.me.id).sort();
+    if (!to.length) { roomInput.value = text; autosize(roomInput); $('btn-room-send').disabled = false; toast('NOBODY IN THE ROOM YET. INVITE FIRST.'); return; }
+    const m = { id: uid(), from: state.me.id, text, ts: now(), mood: state.me.mood, lt: localTime().slice(0, 16).replace(/\|/g, ''), to, sentTo: [], status: 'queued' };
     m.sig = await signTuple(rtuple(r, m));
     r.messages.push(m); flushRoom(r); save(); renderRoomAll(r); blip(true); buzz();
   });
   $('btn-room').addEventListener('click', () => {
-    const r = { id: b64u(crypto.getRandomValues(new Uint8Array(9))), name: `${myName()}'S ROOM`.slice(0, 32), host: state.me.id, members: [{ id: state.me.id, pub: pubOf(state.me.pub), name: myName(), mood: state.me.mood, tz: tzName(), place: state.me.place || '' }], messages: [], created: now(), unread: 0 };
+    const r = { id: b64u(crypto.getRandomValues(new Uint8Array(9))), name: `${myName()}'S ROOM`.slice(0, 32), host: state.me.id, members: [{ id: state.me.id, pub: pubOf(state.me.pub), name: myName(), mood: state.me.mood, tz: tzName(), place: state.me.place || '', seat: uid() }], messages: [], created: now(), unread: 0 };
     state.rooms.push(r); pushRoomSys(r, `ROOM MADE · YOU HOST · UP TO ${ROOM_MAX}`); renderRooms(); currentFriendTarget = null; host(r);
   });
   $('btn-room-back').addEventListener('click', back);
@@ -1147,8 +1158,8 @@
   $('btn-room-invite').addEventListener('click', () => { const r = currentRoom; closeSheets(); if (r) host(r); });
   $('btn-room-leave').addEventListener('click', () => {
     const r = currentRoom; if (!r || !confirm(`Leave ${r.name}? Its notes on this phone go too.`)) return;
-    const bye = { t: 'bye', room: r.id, from: state.me.id, ts: now() };
-    signTuple(byeTuple(r, bye)).then((sig) => {
+    const bye = { t: 'bye', room: r.id, from: state.me.id, seat: memberOf(r, state.me.id)?.seat || '' };
+    if (bye.seat) signTuple(byeTuple(r, bye)).then((sig) => {
       const raw = JSON.stringify({ ...bye, sig });
       for (const l of [...rlines]) if (l.roomId === r.id) { lsend(l, raw); l.leaving = true; setTimeout(() => closeLine(l), 200); }
     });

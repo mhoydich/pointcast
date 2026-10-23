@@ -9,7 +9,7 @@ import vm from 'node:vm';
 
 const PUBLIC = resolve(import.meta.dirname, '../public');
 const APPS = [
-  { dir: 'pmm', prefix: 'pmm-', pages: ['/pmm/', '/pmm/brand/'] },
+  { dir: 'pmm', prefix: 'pmm-', pages: ['/pmm/', '/pmm/brand/', '/pmm/moods/'] },
   { dir: 'nouns-messenger', prefix: 'nouns-messenger-', pages: ['/nouns-messenger/'] },
 ];
 
@@ -73,6 +73,18 @@ for (const app of APPS) {
     assert.ok(!files.some((f) => f.endsWith('/sw.js')), 'the worker never caches itself');
   });
 
+  test(`${app.dir}: every script and module a precached page loads by a relative URL is precached too`, () => {
+    const files = list(src);
+    for (const page of files.filter((f) => f.endsWith('/'))) {
+      const html = read('.' + page + 'index.html');
+      const refs = [...html.matchAll(/\bfrom\s+['"](\.{1,2}\/[^'"]+)['"]|<script\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1] || m[2]);
+      for (const ref of refs.filter((r) => !/^(https?:)?\/\//.test(r))) {
+        const url = new URL(ref, 'https://pointcast.xyz' + page).pathname;
+        if (url.startsWith(`/${app.dir}/`)) assert.ok(files.includes(url), `${page} loads ${ref}, so ${url} is in FILES`);
+      }
+    }
+  });
+
   test(`${app.dir}: index.html registers the worker once, feature-detected, after load, without throwing`, () => {
     const html = read(`${app.dir}/index.html`);
     const lines = html.split('\n').filter((l) => l.includes('serviceWorker'));
@@ -91,6 +103,8 @@ for (const app of APPS) {
     await new Promise((r) => setTimeout(r, 0));
     assert.equal(await w.route(`/${app.dir}/`, { mode: 'navigate' }), `network https://pointcast.xyz/${app.dir}/index.html?utm=x`, 'the one page copy was refreshed in the background by the previous navigation');
     for (const p of app.pages) assert.ok((await w.route(p, { mode: 'navigate' })).includes(`https://pointcast.xyz${p}`), `${p} is served under its own key`);
+    // Without its trailing slash a page is left to the host's redirect: served here, its relative URLs would resolve one level up.
+    for (const p of app.pages) if (p !== `/${app.dir}/`) assert.equal(await w.route(p.slice(0, -1), { mode: 'navigate' }), null, `${p.slice(0, -1)} is not answered by the worker`);
     assert.equal(await w.route('/api/pmm/signal'), null, 'the signal note is never handled');
     assert.equal(await w.route('/api/ping'), null, 'the SI packet is never handled');
     assert.equal(await w.route('/now.json'), null, 'the ticker is never handled');
