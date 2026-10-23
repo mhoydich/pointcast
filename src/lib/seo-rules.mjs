@@ -2,6 +2,8 @@ import { isFutureAlmanacCard } from './almanac-seo.mjs';
 
 /** Paths that deliberately stay public but must never be indexed or listed. */
 export const NOINDEX_PATHS = new Set([
+  // PMM's settle page: a one-time wallet step opened from a chat, never a landing page.
+  '/pmm/settle/',
   '/catan/flyer/',
   '/25/thanks/',
   '/auth/project/',

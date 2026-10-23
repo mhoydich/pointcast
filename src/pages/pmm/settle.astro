@@ -1,7 +1,14 @@
 ---
-// PMM v0.4: settle a TAB in tez. PMM links here with the payee and amount in the URL fragment,
-// which never reaches a server. The wallet library loads only when SEND is pressed, so PMM
-// itself stays small. See docs/prd/pointcast-mobile-messaging.md.
+// PMM v0.4: settle a TAB in tez, and prove a tz1 address. PMM opens this page in a new tab with
+// everything in the URL fragment, which never reaches a server. Two modes:
+// - prove: your wallet signs "PMM xtz v1 <your PMM id> <tz1…>" once, so friends know the address
+//   is yours (public/pmm/tezos-proof.js checks it on their phone).
+// - pay: one transfer from your proven address to your friend's proven address. You type the
+//   amount. SEND is enabled only for a settle PMM is waiting on (one-time nonce), and the gate is
+//   checked again right before the transfer.
+// Sending does not close any tab: PMM sends a signed claim, both phones check it on chain, and
+// the payee's ACCEPT closes the tabs (NOT ENOUGH reopens them). The wallet library loads only
+// when a button is pressed. See docs/prd/pointcast-mobile-messaging.md.
 ---
 <!doctype html>
 <html lang="en">
@@ -9,7 +16,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PMM — settle a tab in tez</title>
-<meta name="description" content="Settle a PMM tab with one tez transfer from your own wallet. PointCast never holds the money.">
+<meta name="description" content="Settle a PMM tab with one tez transfer from your own wallet, or prove your tez address. PointCast never holds the money.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#7869C4">
 <link rel="icon" href="/pmm/icon.svg" type="image/svg+xml">
@@ -26,6 +33,7 @@
   .val { word-break: break-all; padding: 10px; background: var(--panel); border-radius: 4px; }
   input { width: 100%; font: inherit; font-size: 18px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px; }
   button { font: inherit; letter-spacing: .06em; color: var(--field); background: var(--ink); border: 0; border-radius: 4px; padding: 12px 16px; margin-top: 18px; width: 100%; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
   button[disabled] { opacity: .5; cursor: default; }
   a { color: var(--ink); }
   .hint { font-size: 13px; color: var(--ink-2); }
@@ -35,85 +43,151 @@
 </head>
 <body>
 <main>
-  <h1>SETTLE A TAB IN TEZ</h1>
-  <div class="fuji" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-  <p class="hint">One transfer from your wallet to your friend's. PointCast never holds the money and cannot reverse it. Check the address with your friend before you send.</p>
-  <label>PAY TO</label>
-  <div class="val" id="to">—</div>
-  <label id="note-label" hidden>FOR</label>
-  <div class="val" id="note" hidden></div>
-  <form id="form" novalidate>
-    <label for="tez">AMOUNT IN TEZ</label>
-    <input id="tez" inputmode="decimal" autocomplete="off" placeholder="1.5" required>
-    <button id="send" type="submit" disabled>CONNECT WALLET AND SEND</button>
-  </form>
+  <section id="pay" hidden>
+    <h1>SETTLE A TAB IN TEZ</h1>
+    <div class="fuji" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <p class="hint">One transfer from your wallet to your friend's. PointCast never holds the money and cannot reverse it. Your friend then checks it on chain and taps ACCEPT, or NOT ENOUGH.</p>
+    <label>PAY TO</label>
+    <div class="val" id="to">—</div>
+    <label id="note-label" hidden>FOR</label>
+    <div class="val" id="note" hidden></div>
+    <form id="form" novalidate>
+      <label for="tez">AMOUNT IN TEZ</label>
+      <input id="tez" inputmode="decimal" autocomplete="off" placeholder="1.5" required>
+      <button id="send" type="submit" disabled>CONNECT WALLET AND SEND</button>
+    </form>
+  </section>
+  <section id="prove" hidden>
+    <h1>PROVE YOUR TEZ ADDRESS</h1>
+    <div class="fuji" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <p class="hint">Your wallet signs one line that ties this address to your PMM sigil. It costs nothing and moves no money. Friends' phones check it, so nobody can name your address as theirs.</p>
+    <label>ADDRESS</label>
+    <div class="val" id="prove-addr">—</div>
+    <button id="sign" type="button" disabled>CONNECT WALLET AND SIGN</button>
+  </section>
+  <button id="switch" class="ghost" type="button" hidden>SWITCH WALLET</button>
   <p class="prompt" id="prompt" role="status" aria-live="polite"></p>
   <p class="hint" id="back"><a href="/pmm/">BACK TO PMM</a></p>
 </main>
 <script>
-  // The pure settle logic lives in public/pmm/settle.js, shared with PMM. Vite cannot bundle files
-  // from public/, so it loads at runtime from its published path. An absolute URL keeps Vite's dev
-  // server from rewriting the import (it appends ?import to root-relative paths, which public/ refuses).
-  const SETTLE_JS = new URL('/pmm/settle.js', location.origin).href;
+  // The pure logic lives in public/pmm/settle.js and public/pmm/tezos-proof.js, shared with PMM.
+  // Vite cannot bundle files from public/, so they load at runtime. An absolute URL keeps Vite's
+  // dev server from rewriting the import (it appends ?import to root-relative paths).
+  const at = (p) => new URL(p, location.origin).href;
   main();
   async function main() {
-  const { parseSettleHash, pendingSettleFor, toMutez, formatTez, returnLink } = await import(/* @vite-ignore */ SETTLE_JS);
+  const S = await import(/* @vite-ignore */ at('/pmm/settle.js'));
+  const P = await import(/* @vite-ignore */ at('/pmm/tezos-proof.js'));
   const $ = (id) => document.getElementById(id);
-  const tellPmm = (h) => new Promise((resolve) => {
+  const say = (text, bad = false) => { $('prompt').textContent = text; $('prompt').classList.toggle('err', bad); };
+  const saved = () => { try { return JSON.parse(localStorage.getItem('pmm/v1') || 'null'); } catch (_) { return null; } };
+  const used = (nonce) => { try { return sessionStorage.getItem('pmm-settle-used:' + nonce); } catch (_) { return null; } };
+  const markUsed = (nonce, op) => { try { sessionStorage.setItem('pmm-settle-used:' + nonce, op); } catch (_) {} };
+  // Hand a result to the PMM tab that started it; that tab acks only after it accepted the result.
+  const tell = (t, h) => new Promise((resolve) => {
     if (!('BroadcastChannel' in window)) return resolve(false);
     const bc = new BroadcastChannel('pmm'), id = Math.random().toString(36).slice(2);
-    const done = (ok) => { clearTimeout(t); bc.close(); resolve(ok); };
-    const t = setTimeout(() => done(false), 900);
-    bc.addEventListener('message', (e) => { if (e.data && e.data.t === 'settled-ok' && e.data.id === id) done(true); });
-    bc.postMessage({ t: 'settled', h, id });
+    const done = (ok) => { clearTimeout(tm); bc.close(); resolve(ok); };
+    const tm = setTimeout(() => done(false), 4000);
+    bc.addEventListener('message', (e) => { if (e.data && e.data.t === t + '-ok' && e.data.id === id) done(true); });
+    bc.postMessage({ t, h, id });
   });
-  const req = parseSettleHash(location.hash);
-  const say = (text, bad = false) => { $('prompt').textContent = text; $('prompt').classList.toggle('err', bad); };
-
-  // Only a settle this browser's PMM is waiting on: a friend, their shared address, your shared
-  // address, and the one-time nonce PMM saved when you pressed SETTLE. Anything else stays disabled.
-  let saved = null; try { saved = JSON.parse(localStorage.getItem('pmm/v1') || 'null'); } catch (_) {}
-  const gate = pendingSettleFor(req, saved);
-  const WHY = { 'bad-link': 'open this page from SETTLE IN TEZ in a PMM chat.', 'not-a-friend': 'that is not one of your PMM friends.', 'not-their-address': 'this is not your PMM friend\'s address.', 'not-your-address': 'this is not the tez address you shared in PMM.', 'no-pending-settle': 'PMM is not waiting on this settle. press SETTLE IN TEZ again.' };
-  if (req.to) $('to').textContent = req.to;
-  if (!gate.ok) {
-    say('?NOT YOUR PMM FRIEND ERROR. ' + (WHY[gate.reason] || ''), true);
-  } else {
-    $('to').textContent = `${req.to} (${gate.name})`;
-    if (req.note) { $('note').textContent = req.note; $('note').hidden = false; $('note-label').hidden = false; }
-    const check = () => { $('send').disabled = toMutez($('tez').value) === null; };
-    $('tez').addEventListener('input', check); check();
+  const backTo = async (t, link, okText) => {
+    $('back').innerHTML = '';
+    const told = await tell(t, link.split('#')[1]);
+    if (told) { const p = document.createElement('span'); p.textContent = okText; $('back').append(p); }
+    else { const a = document.createElement('a'); a.href = link; a.textContent = 'RUN: BACK TO PMM'; $('back').append(a); }
+    return told;
+  };
+  // Connect the wallet and insist on the expected address. A different active account gets one
+  // automatic switch; after that, SWITCH WALLET clears it and asks again.
+  async function walletFor(want, tezos) {
+    let from = await tezos.connectKukaiForSigning();
+    if (from !== want) {
+      const w = await tezos.pointCastWallet(); try { await w.clearActiveAccount(); } catch (_) {}
+      from = await tezos.connectKukaiForSigning();
+    }
+    if (from !== want) { $('switch').hidden = false; throw new Error(`this wallet is ${from}; connect the one for ${want}`); }
+    $('switch').hidden = true; return from;
   }
+  $('switch').addEventListener('click', async () => {
+    try { const tezos = await import('../../lib/tezos'); const w = await tezos.pointCastWallet(); await w.clearActiveAccount(); $('switch').hidden = true; say('WALLET CLEARED. PRESS THE BUTTON AGAIN AND PICK THE RIGHT ACCOUNT.'); }
+    catch (err) { say('?SWITCH ERROR. ' + String(err?.message || err).slice(0, 120), true); }
+  });
+
+  const req = S.parseSettleHash(location.hash);
+
+  if (req.mode === 'prove') {
+    $('prove').hidden = false;
+    if (req.me) $('prove-addr').textContent = req.me;
+    const gate = () => S.pendingProofFor(req, saved());
+    const g = gate();
+    if (!g.ok) say('?NOT WAITING ERROR. ' + ({ 'bad-link': 'open this from PROVE IT in PMM.', 'not-your-address': 'that is not the address in your PMM settings.', 'no-pending-proof': 'PMM is not waiting on this proof. press PROVE IT again.' }[g.reason] || ''), true);
+    else $('sign').disabled = false;
+    $('sign').addEventListener('click', async () => {
+      if (!gate().ok) { $('sign').disabled = true; return say('?NOT WAITING ERROR. press PROVE IT in PMM again.', true); }
+      $('sign').disabled = true;
+      try {
+        say('LOADING WALLET…');
+        const tezos = await import('../../lib/tezos');
+        say('APPROVE IN YOUR WALLET…');
+        await walletFor(req.me, tezos);
+        const issuedAt = new Date().toISOString();
+        const signed = await tezos.signTezosMichelineMessage(P.proofMessage(req.pid, req.me), issuedAt, P.PROOF_DOMAIN);
+        const proof = { addr: signed.address, pk: signed.publicKey, sig: signed.signature, at: signed.issuedAt };
+        if (!(await P.verifyAddressProof(req.pid, proof))) throw new Error('the wallet signature does not check out here; only tz1 (ed25519) addresses work for now');
+        say('SIGNED.');
+        await backTo('proved', S.provedLink({ ...proof, nonce: req.nonce }), 'PMM HAS IT. RETURN TO YOUR PMM TAB AND CLOSE THIS ONE.');
+      } catch (err) { say('?SIGN ERROR. ' + String(err?.message || err).slice(0, 160), true); $('sign').disabled = false; }
+    });
+    return;
+  }
+
+  $('pay').hidden = false;
+  // SEND only for a settle PMM is waiting on. Checked at load, on every change PMM makes in another
+  // tab, and once more right before the transfer.
+  const WHY = { 'bad-link': 'open this page from SETTLE IN TEZ in a PMM chat.', 'not-a-friend': 'that is not one of your PMM friends.', 'not-their-address': 'this is not your PMM friend\'s proven address.', 'not-your-address': 'this is not your proven tez address in PMM.', 'no-pending-settle': 'PMM is not waiting on this settle. press SETTLE IN TEZ again.', expired: 'this settle timed out. press SETTLE IN TEZ again.' };
+  const gate = () => {
+    if (req.nonce && used(req.nonce)) return { ok: false, reason: 'used' };
+    return S.pendingSettleFor(req, saved());
+  };
+  let g = gate(), busy = false;
+  if (req.to) $('to').textContent = req.to;
+  const showGate = () => {
+    if (g.ok) { $('to').textContent = `${req.to} (${g.name})`; say(''); }
+    else say(g.reason === 'used' ? `ALREADY SENT FROM THIS TAB (${used(req.nonce).slice(0, 12)}…). RETURN TO PMM.` : '?NOT YOUR PMM FRIEND ERROR. ' + (WHY[g.reason] || ''), true);
+    const check = () => { $('send').disabled = busy || !g.ok || S.toMutez($('tez').value) === null; };
+    check(); return check;
+  };
+  const check = showGate();
+  if (req.note) { $('note').textContent = req.note; $('note').hidden = false; $('note-label').hidden = false; }
+  $('tez').addEventListener('input', check);
+  addEventListener('storage', (e) => { if (e.key === 'pmm/v1' && !busy) { g = gate(); showGate(); } });
 
   $('form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const mutez = toMutez($('tez').value);
-    if (!gate.ok || mutez === null) return;
-    $('send').disabled = true; $('tez').disabled = true;
+    const mutez = S.toMutez($('tez').value);
+    g = gate(); if (!g.ok || mutez === null) { showGate(); return; }
+    busy = true; check(); $('tez').disabled = true;
     try {
       say('LOADING WALLET…');
       const [{ validateAddress, ValidationResult }, tezos] = await Promise.all([import('@taquito/utils'), import('../../lib/tezos')]);
       if (validateAddress(req.to) !== ValidationResult.VALID) throw new Error('that payee address fails its checksum');
       say('APPROVE IN YOUR WALLET…');
-      const from = await tezos.connectKukaiForSigning();
+      const from = await walletFor(req.me, tezos);
       if (from === req.to) throw new Error('that is your own address');
-      // Your friend only counts a payment from the address you shared with them in PMM.
-      if (from !== req.me) throw new Error(`connect the wallet for ${req.me}, the address you shared in PMM (this one is ${from})`);
+      // Last look before money moves: PMM may have pressed SETTLE again, or another tab may have sent.
+      g = gate(); if (!g.ok) throw new Error(WHY[g.reason] || 'PMM is no longer waiting on this settle');
       const toolkit = await tezos.tezosClient();
       const op = await toolkit.wallet.transfer({ to: req.to, amount: mutez, mutez: true }).send();
-      const back = returnLink({ opHash: op.opHash, friend: req.friend, mutez, to: req.to, from, nonce: req.nonce });
-      say(`SENT ${formatTez(mutez)} TEZ. WAITING FOR THE BLOCK…`);
-      $('back').innerHTML = '';
-      // Hand the result to the PMM tab that pressed SETTLE. Only when none answers, link into PMM.
-      const told = await tellPmm(back.split('#')[1]);
-      if (told) { const p = document.createElement('span'); p.textContent = 'PMM HAS IT. RETURN TO YOUR PMM TAB AND CLOSE THIS ONE.'; $('back').append(p); }
-      else { const a = document.createElement('a'); a.href = back; a.textContent = 'RUN: BACK TO PMM AND TELL YOUR FRIEND'; $('back').append(a); }
+      markUsed(req.nonce, op.opHash);
+      say(`SENT ${S.formatTez(mutez)} TEZ. YOUR FRIEND CHECKS IT AND TAPS ACCEPT.`);
+      await backTo('settled', S.returnLink({ opHash: op.opHash, friend: req.friend, mutez, to: req.to, from, nonce: req.nonce }), 'PMM HAS IT. RETURN TO YOUR PMM TAB AND CLOSE THIS ONE.');
       const tzkt = document.createElement('a'); tzkt.href = `https://tzkt.io/${op.opHash}`; tzkt.textContent = 'see it on tzkt'; tzkt.rel = 'noopener'; tzkt.target = '_blank';
       $('back').append(document.createElement('br'), tzkt);
-      op.confirmation(1).then(() => say(`READY. ${formatTez(mutez)} TEZ LANDED.`)).catch(() => say('SENT. THE BLOCK IS SLOW; PMM CHECKS IT AGAIN LATER.'));
     } catch (err) {
-      say('?SEND ERROR. ' + String(err?.message || err).slice(0, 140), true);
-      $('send').disabled = false; $('tez').disabled = false;
+      say('?SEND ERROR. ' + String(err?.message || err).slice(0, 160), true);
+      busy = false; $('tez').disabled = false; g = gate(); check();
     }
   });
   }
