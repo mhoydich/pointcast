@@ -144,7 +144,7 @@ test('the atlas page is linked from PMM settings and the brand page, and loads t
   const body = /function play\([^)]*\) \{([\s\S]*?)\n\}/.exec(html)?.[1] || '';
   assert.match(body, /new A\(\)/, 'play() makes the AudioContext');
   assert.ok(!/new A\(\)|AudioContext/.test(html.replace(body, '')), 'nothing outside play() touches AudioContext');
-  assert.equal([...html.matchAll(/(?<!function )\bplay\(m, /g)].length, 1, 'play() is called from one place');
+  assert.equal([...html.matchAll(/(?<!function )\bplay\(/g)].length, 1, 'play() is called from one place');
   assert.match(html, /addEventListener\('click', \(\) => \(btn\.getAttribute\('aria-pressed'\) === 'true' && playing \? playing\.stop\(\) : play\(m, btn, svg\)\)\)/);
   // The minute redraw must not re-announce the chat: only the change handler writes the status line.
   assert.ok(!/id="chat"[^>]*aria-live/.test(html));

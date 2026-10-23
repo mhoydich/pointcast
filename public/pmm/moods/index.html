@@ -235,6 +235,8 @@ let stripMood = mine;
 const hereMin = -new Date().getTimezoneOffset();
 const hereOffset = ((Math.round(hereMin / 60) + 11) % 24 + 24) % 24 - 11;
 const exact = hereMin % 60 === 0 && hereMin / 60 === hereOffset;
+// Every third column is labelled, and yours; a labelled neighbour of yours gives way so the two don't collide.
+const labelled = (o) => o === hereOffset || (o % 3 === 0 && Math.abs(o - hereOffset) !== 1);
 const fmtOff = (o) => (o === 0 ? 'UTC' : (o > 0 ? '+' : '−') + Math.abs(o));
 const fmtMin = (m) => (m === 0 ? 'UTC' : `UTC${m > 0 ? '+' : '−'}${Math.floor(Math.abs(m) / 60)}${Math.abs(m) % 60 ? ':' + String(Math.abs(m) % 60).padStart(2, '0') : ''}`);
 $('here-note').textContent = exact ? 'Your own zone is outlined.' : `The column nearest your zone (${fmtMin(hereMin)}) is outlined: it shows your hour${hereMin % 60 ? ', give or take half an hour' : ', a day apart'}.`;
@@ -250,7 +252,7 @@ function renderWorld() {
   w.append(Object.assign(document.createElement('span'), { className: 'row-label', textContent: 'UTC' }));
   for (const c of worldStrip('calm', at)) {
     const t = document.createElement('span'); t.className = 'tick' + (c.offset === hereOffset ? ' here' : '');
-    t.textContent = c.offset % 3 === 0 || c.offset === hereOffset ? fmtOff(c.offset) : '';
+    t.textContent = labelled(c.offset) ? fmtOff(c.offset) : '';
     w.append(t);
   }
   for (const m of MOODS) {
@@ -266,7 +268,7 @@ function renderWorld() {
   }
   w.append(Object.assign(document.createElement('span'), { className: 'row-label', textContent: 'HOUR' }));
   for (const c of worldStrip('calm', at)) {
-    w.append(Object.assign(document.createElement('span'), { className: 'tick' + (c.offset === hereOffset ? ' here' : ''), textContent: c.offset % 3 === 0 || c.offset === hereOffset ? String(c.hour) : '' }));
+    w.append(Object.assign(document.createElement('span'), { className: 'tick' + (c.offset === hereOffset ? ' here' : ''), textContent: labelled(c.offset) ? String(c.hour) : '' }));
   }
   const strip = worldStrip(stripMood, at);
   const day = strip.filter((c) => c.light > 0).length;
