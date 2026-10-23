@@ -218,7 +218,7 @@ export function play(event, el, opts = {}) {
   if (!hasDoc() || document.hidden || typeof el?.animate !== 'function') return Promise.resolve(null);
   const p = plan(event, { ...opts, reduced: opts.reduced ?? prefersReduced() });
   clear(el, event);
-  const was = { o: el.style.transformOrigin, v: el.style.overflow }, made = [], runs = [];
+  const was = { o: el.style.transformOrigin, v: el.style.overflow, i: el.style.isolation }, made = [], runs = [];
   if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
   const timing = (l) => ({ duration: p.duration, easing: l.ease, fill: l.fill || (l.keep ? 'forwards' : 'none') });
   const add = (tag, l, style) => {
@@ -229,7 +229,9 @@ export function play(event, el, opts = {}) {
   for (const l of p.layers) {
     if (l.kind === 'self') { if (l.origin) el.style.transformOrigin = l.origin; runs.push(el.animate(l.keys, timing(l))); }
     else if (l.kind === 'tint') {
-      const look = l.style === 'outline' ? { inset: 0, border: `3px solid ${l.color}` } : { inset: 0, background: l.color, ...(l.style === 'edge' && { width: '6px' }) };
+      // A fill sits under the element's text (z-index -1 inside an isolated element), so words stay readable.
+      const look = l.style === 'outline' ? { inset: 0, border: `3px solid ${l.color}` } : { inset: 0, background: l.color, ...(l.style === 'edge' ? { width: '6px' } : { zIndex: -1 }) };
+      if (!l.style) el.style.isolation = 'isolate';
       const n = add('span', l, { ...look, transformOrigin: l.origin || '' });
       const tf = l.scale ? (i) => `scaleX(${l.scale[i]})` : l.slide ? (i) => `translateX(${i ? 100 : -100}%)` : null;
       if (l.slide) el.style.overflow = 'hidden';
@@ -257,7 +259,7 @@ export function play(event, el, opts = {}) {
   document.addEventListener('visibilitychange', hide);
   return Promise.all(runs.map((a) => a.finished.catch(() => {}))).then(() => {
     document.removeEventListener('visibilitychange', hide);
-    made.forEach((n) => n.remove()); el.style.transformOrigin = was.o; el.style.overflow = was.v;
+    made.forEach((n) => n.remove()); el.style.transformOrigin = was.o; el.style.overflow = was.v; el.style.isolation = was.i;
     return p;
   });
 }
