@@ -130,3 +130,25 @@ test('plate prompts: scripts/plates/batch/pmm-brand.json is well-formed', () => 
     if (p.og) assert.match(p.og, /^public\/images\/pmm\/brand\/[a-z0-9-]+-og\.png$/);
   }
 });
+
+test('offline: every image the precached brand page shows is precached too', () => {
+  const sw = read(join(PUB, 'pmm/sw.js'));
+  const files = new Set([.../const FILES = \[([^\]]*)\]/.exec(sw)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
+  assert.ok(files.has('/pmm/brand/'), 'the brand page is precached');
+  const html = read(join(BRAND, 'index.html')).replace(/<noscript>[\s\S]*?<\/noscript>/g, '');
+  const srcs = [...html.matchAll(/\ssrc="([^"]+)"/g)].map((m) => new URL(m[1], 'https://x/pmm/brand/').pathname);
+  assert.ok(srcs.length >= 10, `${srcs.length} images`);
+  for (const u of srcs) assert.ok(files.has(u), `${u} is shown on /pmm/brand/ but not in sw.js FILES`);
+});
+
+test('chat tint: the worst-case ground in the contrast table is the tint style.css really uses', () => {
+  const css = read(join(PUB, 'pmm/style.css'));
+  const pct = [...(/\.scroll \{[^}]*\}/.exec(css)[0]).matchAll(/var\(--mood-(?:me|them)\) (\d+)%/g)].map((m) => Number(m[1]));
+  assert.equal(pct.length, 2);
+  const p = Math.max(...pct) / 100;
+  const ch = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const worst = '#' + ch('#F5D142').map((v, i) => Math.round(v * p + ch(FIELD)[i] * (1 - p)).toString(16).padStart(2, '0')).join('').toUpperCase();
+  const html = read(join(BRAND, 'index.html'));
+  for (const fg of ['#BDB4F0', '#F5D142']) assert.match(html, new RegExp(`data-fg="${fg}" data-bg="${worst}"`), `${fg} on the sunny ${pct}% tint (${worst}) is in the table`);
+  assert.match(css, /\.meta \.ok, \.meta \.bad \{ background: var\(--field-2\)/, 'ticks sit on a field-2 chip, not the tint');
+});
