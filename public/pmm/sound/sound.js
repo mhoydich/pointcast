@@ -4,8 +4,8 @@
    so tests/pmm-sound.test.mjs drives them in Node; the engine below plays them in a browser.
    Design notes and the spec table: docs/design-sprints/2026-10-23-pmm-sound.md. */
 
-// TEMP until PR #1533 merges: then import from '../moods/moods.js' and delete moods-temp.js.
-import { MOOD_IDS, mood, freq, schedule } from './moods-temp.js';
+// The Mood Atlas (/pmm/moods/) owns the eight moods and their motifs; every earcon builds on them.
+import { MOOD_IDS, mood, freq, schedule } from '../moods/moods.js';
 
 export { MOOD_IDS };
 

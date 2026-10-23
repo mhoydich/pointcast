@@ -118,5 +118,5 @@ test('sound.js stays under 20 KB and asks the network for nothing', () => {
   assert.ok(statSync(path).size < 20 * 1024, `${statSync(path).size} bytes`);
   const src = readFileSync(path, 'utf8');
   assert.doesNotMatch(src, /\bfetch\(|XMLHttpRequest|new Audio\(|['"][^'"]*\.(mp3|wav|ogg)['"]|https?:\/\//);
-  assert.deepEqual([...src.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]), ['./moods-temp.js']);
+  assert.deepEqual([...src.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]), ['../moods/moods.js']);
 });
