@@ -18,7 +18,7 @@
 const VERSION = 'pmm-2026-10-23b';
 // Hash of the files in FILES, kept current by tests/pmm-offline-digest.test.mjs. Any change to it
 // changes this file's bytes, so browsers reinstall the worker and re-precache at once. No VERSION bump needed.
-const DIGEST = '1cf44cd606b2604d';
+const DIGEST = '302253ad2a1fbc53';
 const FILES = [
   '/pmm/',
   '/pmm/style.css',
