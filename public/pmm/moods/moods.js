@@ -50,8 +50,8 @@ export const BREAKWATER_LABELS = Object.freeze(['DAWN', 'FLOW', 'RUSH', 'DRIFT']
 export const NOGGLE_COLORS = Object.freeze(['yellow', 'red', 'green', 'blue', 'pink', 'cool', 'warm', 'ink']);
 
 const PMM_TO_SITE = Object.freeze({ calm: 'chill', hyped: 'hype', soft: 'flow', sunny: 'hype', salty: 'focus', tired: 'quiet', curious: 'curious', low: 'quiet' });
-// Where two PMM moods share a site slug, the reverse picks the nearer one; focus has no PMM twin, so it reads as calm.
-const SITE_TO_PMM = Object.freeze({ chill: 'calm', hype: 'hyped', focus: 'calm', flow: 'soft', curious: 'curious', quiet: 'tired' });
+// Where two PMM moods share a site slug, the reverse picks the nearer one: hype is hyped, quiet is tired.
+const SITE_TO_PMM = Object.freeze({ chill: 'calm', hype: 'hyped', focus: 'salty', flow: 'soft', curious: 'curious', quiet: 'tired' });
 const PMM_TO_NOGGLE = Object.freeze({ calm: 'blue', hyped: 'red', soft: 'pink', sunny: 'yellow', salty: 'green', tired: 'cool', curious: 'warm', low: 'ink' });
 
 export const toSiteMood = (id) => PMM_TO_SITE[mood(id).id];
@@ -87,8 +87,9 @@ export function atmosphere(me, them, at = new Date()) {
 
 /* ---------- the world strip ----------
    One mood, 24 zones (UTC-11 to UTC+12), each cell its local hour now and the mood's colour
-   dimmed toward the screen at night. Drawn from the visitor's choice and the clock only:
-   PMM keeps no record of anyone's mood, so there is no one else's to show. */
+   dimmed toward the screen at night. Drawn from the visitor's choice and the clock only. PMM has
+   no mood server to draw others from: in a chat a mood goes phone to phone. The one copy a server
+   keeps is the SI line's: each SEND posts mood, hour, zone and place to /api/ping with the message. */
 export const FIELD = '#40318D';
 export const NIGHT = '#1A1440';
 export const ZONES = Object.freeze(Array.from({ length: 24 }, (_, i) => i - 11));

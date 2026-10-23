@@ -82,6 +82,7 @@ th { color: var(--ink-2); font-size: 12px; letter-spacing: .1em; }
 .tablewrap { overflow-x: auto; }
 .chip { display:inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: middle; border: 1px solid var(--ink-2); }
 code { color: var(--r3); }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .note { border: 2px dashed var(--ink-2); padding: 10px 12px; }
 .sig { color: var(--ink-2); font-size: 12px; letter-spacing: .1em; margin-top: 40px; }
 @media (prefers-reduced-motion: reduce) { .prompt::after { animation: none; } .key:active { transform: none; } }
@@ -112,7 +113,8 @@ code { color: var(--r3); }
     <label for="them-tz">Where</label><select id="them-tz"></select>
   </fieldset>
 </div>
-<div class="chat" id="chat" aria-live="polite">
+<p class="vh" id="chat-status" role="status"></p>
+<div class="chat" id="chat">
   <div class="band" id="chat-band" aria-hidden="true"></div>
   <p class="line" id="chat-line"></p>
   <div class="pane" id="chat-pane">
@@ -123,12 +125,12 @@ code { color: var(--r3); }
 <p class="hint">In PMM the line sits directly on the gradient. Here the words sit on a plain strip under it so every pairing stays readable.</p>
 
 <h2 id="international">3. International mood</h2>
-<p>Your mood, everywhere, right now. Each column is one time zone from UTC−11 to UTC+12, showing its local hour. A mood is bright where it is day and sinks toward the night screen where it is not. Your row is the tall one, and your own zone is outlined.</p>
+<p>Your mood, everywhere, right now. Each column is one time zone from UTC−11 to UTC+12, showing its local hour. A mood is bright where it is day and sinks toward the night screen where it is not. Your row is the tall one. <span id="here-note"></span></p>
 <div class="pick" id="world-pick" role="group" aria-label="Choose the mood for the strip"></div>
 <div class="world" id="world" role="img"></div>
 <p class="legend"><span>NIGHT</span><i id="legend-bar"></i><span>NOON</span></p>
 <p class="strip-read" id="strip-read"></p>
-<p class="note"><b>No one else is on this strip.</b> PMM has no mood server. A mood travels only inside a chat, phone to phone, and nothing counts or stores anyone's mood. Everything on this page is drawn from what you choose here and from your clock, and stays on this device.</p>
+<p class="note"><b>No one else is on this strip.</b> PMM has no mood server to draw it from. In a chat your mood goes phone to phone and no server keeps it. The SI line is the one exception: each SEND there posts your mood, hour, zone and place to <code>/api/ping</code>, where the Desk keeps it. Everything on this page is drawn from what you choose here and from your clock, and stays on this device.</p>
 
 <h2 id="vocabulary">4. One mood, three vocabularies</h2>
 <p>PointCast speaks mood three ways. The site-wide chip at the top of pointcast.xyz keeps one of six slugs (<code>pc:mood</code>). Breakwater reads that slug to start the game and writes one back when you leave. Nouns Messenger has no moods: each person wears a noggle colour, so the nearest translation is a colour. The map below is in <a href="moods.js">moods.js</a>, so other pages can translate the same way.</p>
@@ -136,7 +138,7 @@ code { color: var(--r3); }
 <thead><tr><th>PMM</th><th>pointcast.xyz (pc:mood)</th><th>Back to PMM</th><th>Breakwater label</th><th>Nouns Messenger noggle</th></tr></thead>
 <tbody></tbody>
 </table></div>
-<p class="hint">Two PMM moods share a site slug in places (sunny and hyped both read as hype; tired and low both read as quiet), so a round trip comes back to the nearer one. The site's focus has no PMM twin and reads as calm.</p>
+<p class="hint">Two PMM moods share a site slug in places (sunny and hyped both read as hype; tired and low both read as quiet), so a round trip comes back to the nearer one. The site's focus comes back as salty.</p>
 
 <p class="sig">MADE IN EL SEGUNDO, OCTOBER 2026. — MIKE</p>
 </main>
@@ -226,12 +228,19 @@ function renderChat() {
   const meta = (p) => `${hourIn(p.tz)} <b style="background:${mood(p.mood).color};color:${inkOn(mood(p.mood).color)}">${p.mood}</b>`;
   $('them-meta').innerHTML = meta(them); $('me-meta').innerHTML = meta(me);
 }
-['me-mood', 'me-tz', 'them-mood', 'them-tz'].forEach((id) => $(id).addEventListener('change', renderChat));
+// Only a change the visitor makes is announced; the once-a-minute redraw stays quiet.
+['me-mood', 'me-tz', 'them-mood', 'them-tz'].forEach((id) => $(id).addEventListener('change', () => { renderChat(); $('chat-status').textContent = $('chat-line').textContent; }));
 
 /* ---------- world strip ---------- */
 let stripMood = mine;
-const hereOffset = Math.round(-new Date().getTimezoneOffset() / 60);
+// Your real offset in minutes, and the column that shows your hour: the nearest whole hour, with
+// UTC+13 and +14 folded onto −11 and −10 (the same clock hour, a day apart).
+const hereMin = -new Date().getTimezoneOffset();
+const hereOffset = ((Math.round(hereMin / 60) + 11) % 24 + 24) % 24 - 11;
+const exact = hereMin % 60 === 0 && hereMin / 60 === hereOffset;
 const fmtOff = (o) => (o === 0 ? 'UTC' : (o > 0 ? '+' : '−') + Math.abs(o));
+const fmtMin = (m) => (m === 0 ? 'UTC' : `UTC${m > 0 ? '+' : '−'}${Math.floor(Math.abs(m) / 60)}${Math.abs(m) % 60 ? ':' + String(Math.abs(m) % 60).padStart(2, '0') : ''}`);
+$('here-note').textContent = exact ? 'Your own zone is outlined.' : `The column nearest your zone (${fmtMin(hereMin)}) is outlined: it shows your hour${hereMin % 60 ? ', give or take half an hour' : ', a day apart'}.`;
 for (const m of MOODS) {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'key'; b.textContent = m.id;
   b.style.setProperty('--m', m.color); b.style.setProperty('--mi', inkOn(m.color)); b.dataset.mood = m.id;
@@ -265,7 +274,7 @@ function renderWorld() {
   const strip = worldStrip(stripMood, at);
   const day = strip.filter((c) => c.light > 0).length;
   w.setAttribute('aria-label', `${stripMood} across 24 time zones: daylight in ${day} of them right now.`);
-  $('strip-read').textContent = `${stripMood.toUpperCase()} right now: day in ${day} of 24 zones, night in ${24 - day}. Your zone, ${fmtOff(hereOffset)}, is at ${hourIn(hereTz)}.`;
+  $('strip-read').textContent = `${stripMood.toUpperCase()} right now: day in ${day} of 24 zones, night in ${24 - day}. Your zone, ${fmtMin(hereMin)}, is at ${hourIn(hereTz)}.`;
   $('legend-bar').style.background = `linear-gradient(90deg, ${NIGHT}, ${mood(stripMood).color})`;
   for (const b of $('world-pick').children) b.setAttribute('aria-pressed', String(b.dataset.mood === stripMood));
 }

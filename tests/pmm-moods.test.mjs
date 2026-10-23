@@ -71,9 +71,9 @@ test('vocabulary: every PMM mood maps to a site slug and a noggle, and every slu
   for (const slug of SITE_MOODS) assert.ok(MOOD_IDS.includes(fromSiteMood(slug)), slug);
   assert.equal(fromSiteMood('not-a-slug'), 'calm');
   // A mood that owns its slug survives the round trip.
-  for (const id of ['calm', 'hyped', 'soft', 'curious', 'tired']) assert.equal(fromSiteMood(toSiteMood(id)), id);
-  // Every site slug that comes back to PMM goes out to the same slug, except focus, which PMM has no twin for.
-  for (const slug of SITE_MOODS.filter((s) => s !== 'focus')) assert.equal(toSiteMood(fromSiteMood(slug)), slug);
+  for (const id of ['calm', 'hyped', 'soft', 'salty', 'curious', 'tired']) assert.equal(fromSiteMood(toSiteMood(id)), id);
+  // Every site slug comes back to a PMM mood that goes out to the same slug.
+  for (const slug of SITE_MOODS) assert.equal(toSiteMood(fromSiteMood(slug)), slug);
 });
 
 test('vocabulary: the noggles named here are the ones Nouns Messenger has', () => {
@@ -127,25 +127,45 @@ test('the atlas page is linked from PMM settings and the brand page, and loads t
   assert.match(html, /from '\.\/moods\.js'/);
   assert.match(html, /prefers-reduced-motion/);
   assert.ok(!/autoplay/i.test(html), 'no autoplay');
-  // The AudioContext is made inside play(), which only a click calls.
-  assert.equal([...html.matchAll(/new A\(\)/g)].length, 1);
-  assert.match(html, /function play\(/);
-  assert.match(html, /No one else is on this strip/);
+  // The AudioContext is made inside play(), and only a click handler calls play().
+  const body = /function play\([^)]*\) \{([\s\S]*?)\n\}/.exec(html)?.[1] || '';
+  assert.match(body, /new A\(\)/, 'play() makes the AudioContext');
+  assert.ok(!/new A\(\)|AudioContext/.test(html.replace(body, '')), 'nothing outside play() touches AudioContext');
+  assert.equal([...html.matchAll(/(?<!function )\bplay\(m, /g)].length, 1, 'play() is called from one place');
+  assert.match(html, /addEventListener\('click', \(\) => \(btn\.getAttribute\('aria-pressed'\) === 'true' && playing \? playing\.stop\(\) : play\(m, btn, svg\)\)\)/);
+  // The minute redraw must not re-announce the chat: only the change handler writes the status line.
+  assert.ok(!/id="chat"[^>]*aria-live/.test(html));
+  assert.equal([...html.matchAll(/\$\('chat-status'\)\.textContent =/g)].length, 1);
 });
 
-test('image batch: one plate per mood, an atlas hero and an OG card', () => {
+test('the no-server claim names the one exception the app has: the SI line posts mood to /api/ping', () => {
+  const app = read('public/pmm/app.js');
+  assert.match(app, /const PING = '\/api\/ping'/);
+  assert.ok(app.includes('mood: ${m.mood}\\nlocal time: ${m.lt} (${m.tz})\\nplace:'), 'the SI SEND body carries mood, hour, zone and place');
+  const note = /<p class="note"><b>No one else([\s\S]*?)<\/p>/.exec(read('public/pmm/moods/index.html'))[1];
+  assert.match(note, /^ is on this strip/);
+  assert.match(note, /SI line is the one exception/);
+  assert.match(note, /\/api\/ping/);
+  assert.ok(!/nothing counts or stores/.test(note));
+});
+
+test('image batch: one plate per mood, and an atlas hero with its OG crop', () => {
   const batch = JSON.parse(read('scripts/plates/batch/pmm-moods.json'));
   assert.ok(Array.isArray(batch));
   const outs = batch.map((b) => b.out);
   for (const id of MOOD_IDS) assert.ok(outs.includes(`public/images/pmm/moods/${id}.png`), id);
-  assert.ok(outs.includes('public/images/pmm/moods/atlas-hero.png'));
-  assert.ok(outs.includes('public/images/pmm/moods/og.png'));
-  assert.equal(batch.length, 10);
+  const hero = batch.find((b) => b.out === 'public/images/pmm/moods/atlas-hero.png');
+  assert.ok(hero);
+  assert.equal(hero.og, 'public/images/pmm/moods/atlas-og.png');
+  assert.equal(batch.length, 9);
   for (const b of batch) {
-    assert.deepEqual(Object.keys(b).sort(), ['aspect', 'out', 'prompt', 'quality']);
+    const keys = Object.keys(b).filter((k) => k !== 'og').sort();
+    assert.deepEqual(keys, ['aspect', 'out', 'prompt', 'quality']);
     assert.equal(b.quality, 'high');
     assert.ok(['square', 'landscape'].includes(b.aspect));
     assert.ok(b.prompt.length > 200, b.out);
+    // The prompt describes the shape the runner renders.
+    assert.ok(b.prompt.includes(`flat ${b.aspect} plate`), `${b.out} says ${b.aspect}`);
     assert.ok(!existsSync(resolve(ROOT, b.out)) || b.out.endsWith('.png'));
   }
   for (const m of MOODS) assert.ok(batch.find((b) => b.out.endsWith(`/${m.id}.png`)).prompt.includes(m.color), `${m.id} prompt names its colour`);

@@ -18,7 +18,7 @@
 const VERSION = 'pmm-2026-10-23';
 // Hash of the files in FILES, kept current by tests/pmm-offline-digest.test.mjs. Any change to it
 // changes this file's bytes, so browsers reinstall the worker and re-precache at once. No VERSION bump needed.
-const DIGEST = '7a582a274b063634';
+const DIGEST = '993926b6adbbccb0';
 const FILES = [
   '/pmm/',
   '/pmm/style.css',
@@ -51,14 +51,14 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-// A navigation to /pmm/, /pmm/index.html, /pmm/brand/ or /pmm/moods/ (with any query string) is
-// served from the one cached copy of that page; anything else is not ours.
+// A navigation to /pmm/, /pmm/brand/ or /pmm/moods/ (or its index.html, with any query string) is
+// served from the one cached copy of that page; anything else is not ours. A URL without its
+// trailing slash is left to the host's redirect: answered here, the page's relative URLs would
+// resolve against /pmm/ and its module and images would 404.
+const PAGES = ['/pmm/', '/pmm/brand/', '/pmm/moods/'];
 function pageKey(pathname) {
   const p = pathname.replace(/index\.html$/, '');
-  if (p === '/pmm/') return '/pmm/';
-  if (p === '/pmm/brand' || p === '/pmm/brand/') return '/pmm/brand/';
-  if (p === '/pmm/moods' || p === '/pmm/moods/') return '/pmm/moods/';
-  return null;
+  return PAGES.includes(p) ? p : null;
 }
 
 self.addEventListener('fetch', (event) => {
