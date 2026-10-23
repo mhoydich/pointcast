@@ -15,10 +15,10 @@
    keyed by it and activate() drops every older PMM cache. */
 'use strict';
 
-const VERSION = 'pmm-2026-10-22b';
+const VERSION = 'pmm-2026-10-23a';
 // Hash of the files in FILES, kept current by tests/pmm-offline-digest.test.mjs. Any change to it
 // changes this file's bytes, so browsers reinstall the worker and re-precache at once. No VERSION bump needed.
-const DIGEST = '82d42959e39c1dfd';
+const DIGEST = '06740e9a4a8847b5';
 const FILES = [
   '/pmm/',
   '/pmm/style.css',
@@ -30,6 +30,7 @@ const FILES = [
   '/pmm/apple-touch-icon.png',
   '/pmm/brand/',
   '/pmm/brand/wordmark.svg',
+  '/pmm/brand/sigil.js',
   '/pmm/vendor/qrcode.js',
 ];
 
