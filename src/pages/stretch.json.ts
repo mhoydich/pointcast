@@ -2,7 +2,7 @@
  * /stretch.json - machine-readable mirror of /stretch (Stretch with Claude).
  */
 import type { APIRoute } from 'astro';
-import { GUIDE, MOODS, POSES, SAFETY, SESSIONS, STORAGE_KEY, buildTimeline, getPose } from '../lib/stretch.mjs';
+import { GUIDE, MIN_LOGGED_SECONDS, MOODS, POSES, SAFETY, SESSIONS, STORAGE_KEY, buildTimeline, getPose } from '../lib/stretch.mjs';
 
 export const GET: APIRoute = async () => {
   const payload = {
@@ -35,6 +35,7 @@ export const GET: APIRoute = async () => {
       instruction: p.instruction,
       breath: p.breath,
       breathPattern: { inhale: p.pattern[0], hold: p.pattern[1], exhale: p.pattern[2], holdAfter: p.pattern[3] },
+      ...(p.sides ? { sides: 'first side, then the other side for the second half of the hold' } : {}),
       easeOffIf: p.easeOff,
       ...(p.optional ? { optional: p.optional } : {}),
       plannedImage: `https://pointcast.xyz/images/stretch/${p.id}.png`,
@@ -43,10 +44,12 @@ export const GET: APIRoute = async () => {
     moods: MOODS,
     storage: {
       localStorageKey: STORAGE_KEY,
-      stores: ['sound on or off', 'finished session count', 'finished seconds', 'last ten sessions with before and after mood'],
+      stores: ['sound on or off', 'logged session count', 'seconds actually stretched (skipped poses do not count)', 'last ten sessions with before and after mood'],
+      minimumLoggedSeconds: MIN_LOGGED_SECONDS,
       optional: 'pc:mood is written only if the visitor opts in after a session, and only for moods with a plain site match (calm, hyped, curious, tired, low).',
       serverPersistence: false,
     },
+    timing: 'The clock keeps running in a background tab or while the phone app is switched away, until you pause.',
     controls: { space: 'pause or resume', arrowRight: 'next pose', arrowLeft: 'previous pose (or restart this one)', m: 'sound on or off' },
     related: [
       { label: 'Ocean Meditation', url: 'https://pointcast.xyz/meditate' },

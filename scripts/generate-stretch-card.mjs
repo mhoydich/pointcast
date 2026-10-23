@@ -2,11 +2,13 @@
 /**
  * Writes public/images/stretch/stretch-card.svg (1200 x 630) from the same
  * pixel figure /stretch draws on canvas, so the card and the room match.
- * The OG PNG at public/images/og/stretch.png is a screenshot of this SVG.
+ * The OG PNG at public/images/og/stretch.png is a screenshot of this SVG; CI
+ * only checks the SVG, so redo the PNG by hand (headless Chromium, 1200 x 630)
+ * whenever the SVG changes.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { frameAt, getPose, moodColor, rasterize } from '../src/lib/stretch.mjs';
+import { frameAt, getPose, moodColor, rasterize, stillMix } from '../src/lib/stretch.mjs';
 
 const out = resolve(import.meta.dirname, '../public/images/stretch/stretch-card.svg');
 const W = 1200;
@@ -16,7 +18,7 @@ const rects = [];
 function figure(poseId, mood, x0, y0, px) {
   const p = getPose(poseId);
   rects.push(`<rect x="${x0}" y="${y0}" width="${48 * px}" height="${48 * px}" fill="#140f33"/>`);
-  for (const [k, layer] of rasterize(frameAt(p, 1), p.setting)) {
+  for (const [k, layer] of rasterize(frameAt(p, stillMix(p)), p.setting)) {
     const [x, y] = k.split(',').map(Number);
     const fill = layer === 'prop' ? '#5a4bb0' : layer === 'head' ? '#F2F0FF' : moodColor(mood);
     rects.push(`<rect x="${x0 + x * px}" y="${y0 + y * px}" width="${px}" height="${px}" fill="${fill}"/>`);

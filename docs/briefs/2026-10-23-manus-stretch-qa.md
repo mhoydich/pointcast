@@ -33,8 +33,10 @@ None. Use a phone (iPhone Safari and Android Chrome) and a desktop browser
    two minutes. On Android Chrome and iOS 16.4+ the screen should stay on
    while running. Pause: the screen may sleep again. Older iOS: no error,
    the screen just sleeps.
-4. **Background tab.** Start a session, switch apps for 30 seconds, come back.
-   The clock should have moved on by about 30 seconds, not frozen.
+4. **Background tab and app switch.** Start a session, switch to another app
+   (iPhone: swipe home; Android: open another app) for 30 seconds, come back.
+   The clock should have moved on by about 30 seconds, not frozen. Pausing
+   first should keep it where it was.
 5. **Desktop keyboard only.** Tab to a session, press Enter. Space pauses and
    resumes (even with focus on NEXT, Space should only pause). Right arrow
    goes to the next pose, Left arrow restarts the pose or, in its first two
@@ -51,8 +53,15 @@ None. Use a phone (iPhone Safari and Android Chrome) and a desktop browser
    PointCast; tick it, open the home page, and the page tint should match
    (calm → chill, hyped → hype, curious → curious, tired/low → quiet). For
    SOFT, SUNNY or SALTY there should be no checkbox.
+   Pressing END within the first 30 seconds, or tapping NEXT straight to the
+   end, should say the break was too short to log; the tally should not grow.
 8. **Storage blocked.** In Safari private browsing, or with site data
    blocked, the page should still run and finish with no errors.
+9. **Neck tilt and seated twist.** The figure sits upright on the breath in,
+   leans or turns on the breath out, and switches to the other side halfway
+   through the pose (OTHER SIDE appears top right, with a blip).
+10. **Contrast.** Pick SUNNY, CURIOUS and SALTY in turn: the PAUSE / RESUME /
+    AGAIN key text and the selected chip text should be easy to read.
 
 ## Capture
 

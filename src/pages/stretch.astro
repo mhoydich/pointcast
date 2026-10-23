@@ -9,7 +9,10 @@
  * live in src/lib/stretch.mjs, shared with /stretch.json and the tests.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-import { GUIDE, MOODS, POSES, SAFETY, SESSIONS, getPose } from '../lib/stretch.mjs';
+import { CHIP_MIX, FIELD, GUIDE, MOODS, POSES, SAFETY, SESSIONS, getPose, inkOn, mixHex } from '../lib/stretch.mjs';
+
+// Ink for a selected chip, picked so it reads on that mood's tint (tests/stretch.test.mjs checks AA).
+const chipInk = (color) => inkOn(mixHex(color, FIELD, CHIP_MIX));
 
 const title = 'Stretch with Claude';
 const description =
@@ -73,7 +76,7 @@ const jsonLd = {
         <h2 class="label" id="st-before-label">{GUIDE.pick}</h2>
         <div class="moods" role="radiogroup" aria-labelledby="st-before-label" data-moods="before">
           {MOODS.map((m) => (
-            <button type="button" class="mood" role="radio" aria-checked="false" data-mood={m.id} style={`--c: ${m.color}`}>
+            <button type="button" class="mood" role="radio" aria-checked="false" data-mood={m.id} style={`--c: ${m.color}; --on: ${chipInk(m.color)}`}>
               <span class="sw" aria-hidden="true"></span>{m.id}
             </button>
           ))}
@@ -109,6 +112,7 @@ const jsonLd = {
             <span class="breath__bar"><i id="st-breath-bar"></i></span>
           </div>
           <span class="clock" id="st-step-left" aria-hidden="true">0:00</span>
+          <span class="side" id="st-side" aria-live="polite"></span>
           <span class="paused" id="st-paused" hidden>PAUSED</span>
         </div>
 
@@ -139,7 +143,7 @@ const jsonLd = {
         <h2 class="label" id="st-after-label">{GUIDE.after}</h2>
         <div class="moods" role="radiogroup" aria-labelledby="st-after-label" data-moods="after">
           {MOODS.map((m) => (
-            <button type="button" class="mood" role="radio" aria-checked="false" data-mood={m.id} style={`--c: ${m.color}`}>
+            <button type="button" class="mood" role="radio" aria-checked="false" data-mood={m.id} style={`--c: ${m.color}; --on: ${chipInk(m.color)}`}>
               <span class="sw" aria-hidden="true"></span>{m.id}
             </button>
           ))}
@@ -191,8 +195,9 @@ const jsonLd = {
 
 <script>
   import {
-    STORAGE_KEY, buildTimeline, breathAt, formatClock, frameAt, getPose, getSession,
-    locate, moodColor, moodLine, parseStore, rasterize, recordSession, siteMoodFor, startOf, suggestFor, validMood,
+    FIELD, KEY_MIX, MIN_LOGGED_SECONDS, STORAGE_KEY, buildTimeline, breathAt, countable, formatClock, frameAt,
+    getPose, getSession, inkOn, locate, mixHex, moodColor, moodLine, parseStore, rasterize, recordSession,
+    secondSide, siteMoodFor, startOf, stillMix, suggestFor, validMood,
   } from '../lib/stretch.mjs';
 
   const $ = (id) => document.getElementById(id);
@@ -207,10 +212,13 @@ const jsonLd = {
   let sessionId = null;
   let timeline = null;
   let elapsed = 0;
+  // Seconds the clock actually ran; skipped poses don't count as stretching.
+  let ranSeconds = 0;
   let running = false;
   let lastTs = 0;
   let lastIndex = -1;
   let lastPhase = '';
+  let lastSide = false;
   let raf = 0;
   let lock = null;
   let gestured = false;
@@ -277,7 +285,10 @@ const jsonLd = {
     } catch { lock = null; }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && running) wake(true);
+    if (!running || !timeline) return;
+    advance(performance.now());
+    if (locate(timeline, elapsed).done) return finish();
+    if (document.visibilityState === 'visible') wake(true);
   });
 
   /* ---------- views and moods ---------- */
@@ -287,7 +298,9 @@ const jsonLd = {
     $('st-prompt').textContent = view === 'run' ? (running ? 'RUN' : 'PAUSED.') : 'READY.';
   }
   function tint(mood) {
-    root.style.setProperty('--mood', moodColor(mood || 'calm'));
+    const c = moodColor(mood || 'calm');
+    root.style.setProperty('--mood', c);
+    root.style.setProperty('--mood-ink', inkOn(mixHex(c, FIELD, KEY_MIX)));
   }
   function pickMood(group, mood) {
     for (const b of root.querySelectorAll(`[data-moods="${group}"] .mood`)) {
@@ -345,8 +358,8 @@ const jsonLd = {
     const ch = (v) => Math.round(v + (255 - v) * k);
     return `rgb(${ch(n >> 16)}, ${ch((n >> 8) & 255)}, ${ch(n & 255)})`;
   };
-  function draw(pose, mix, t) {
-    const cells = rasterize(frameAt(pose, mix), pose.setting);
+  function draw(pose, mix, t, mirror) {
+    const cells = rasterize(frameAt(pose, mix, mirror), pose.setting);
     const mood = getComputedStyle(root).getPropertyValue('--mood').trim() || '#2F86D8';
     const color = lift(/^#[0-9a-f]{6}$/i.test(mood) ? mood : '#2F86D8', 0.2);
     g.fillStyle = BG;
@@ -396,8 +409,10 @@ const jsonLd = {
     const s = getSession(id);
     timeline = buildTimeline(s);
     elapsed = 0;
+    ranSeconds = 0;
     lastIndex = -1;
     lastPhase = '';
+    lastSide = false;
     $('st-session-name').textContent = `${s.name.toUpperCase()} · ${s.minutes} MIN`;
     buildSteps();
     show('run');
@@ -453,6 +468,10 @@ const jsonLd = {
     }
     if (running && br.phase !== lastPhase && (br.phase === 'in' || br.phase === 'out')) sounds[br.phase]();
     lastPhase = br.phase;
+    const side2 = secondSide(pose, at.inStep, at.step.seconds);
+    if (side2 !== lastSide && side2 && running && !quiet) sounds.step();
+    lastSide = side2;
+    $('st-side').textContent = pose.sides ? (side2 ? 'OTHER SIDE' : 'FIRST SIDE') : '';
     [...$('st-segs').children].forEach((seg, i) => {
       const s = timeline.steps[i];
       const k = Math.max(0, Math.min(1, (elapsed - s.start) / s.seconds));
@@ -462,27 +481,34 @@ const jsonLd = {
     $('st-step-left').textContent = formatClock(at.stepLeft);
     $('st-breath').textContent = br.count ? `${br.label} · ${br.count}` : br.label;
     $('st-breath-bar').style.width = `${Math.round(br.progress * 100)}%`;
-    // Reduced motion holds the inhale frame still; otherwise the figure breathes.
-    draw(pose, reduce.matches ? 1 : br.mix, reduce.matches ? null : at.inStep);
+    // Reduced motion holds one still frame per pose (and side); otherwise the figure breathes.
+    draw(pose, reduce.matches ? stillMix(pose) : br.mix, reduce.matches ? null : at.inStep, side2);
     return at;
+  }
+
+  // rAF timestamps can trail a performance.now() taken in an input handler,
+  // so a negative step is dropped rather than running the clock backwards.
+  function advance(now) {
+    if (!running) return;
+    const dt = Math.max(0, (now - lastTs) / 1000);
+    lastTs = Math.max(lastTs, now);
+    const room = timeline ? Math.max(0, timeline.total - elapsed) : 0;
+    elapsed += dt;
+    ranSeconds += Math.min(dt, room);
   }
 
   function frame(now) {
     if (root.dataset.view !== 'run') return;
-    if (running) {
-      elapsed += Math.min(5, (now - lastTs) / 1000);
-      lastTs = now;
-    }
+    advance(now);
     const at = render();
     if (at.done) return finish();
     raf = requestAnimationFrame(frame);
   }
-  // rAF stops in a background tab; this keeps the clock honest when it does.
+  // rAF stops in a background tab; this keeps the clock going where timers
+  // still run, and visibilitychange folds in any gap where they didn't.
   setInterval(() => {
     if (document.visibilityState === 'hidden' && running && timeline) {
-      const now = performance.now();
-      elapsed += (now - lastTs) / 1000;
-      lastTs = now;
+      advance(performance.now());
       if (locate(timeline, elapsed).done) finish();
     }
   }, 1000);
@@ -504,8 +530,12 @@ const jsonLd = {
     $('st-done-title').focus();
   }
   function finishRecord() {
-    // One log entry per finished session; picking an after-mood updates it.
-    const seconds = Math.round(Math.min(elapsed, timeline ? timeline.total : 0));
+    // One log entry per session that actually ran; picking an after-mood updates it.
+    const seconds = Math.round(ranSeconds);
+    if (!countable(seconds)) {
+      $('st-tally').textContent = `Under ${MIN_LOGGED_SECONDS} seconds of stretching, so this one is not logged. ${store.sessions} logged here so far, saved only in this browser.`;
+      return;
+    }
     if (!recorded) {
       store = recordSession(store, { session: sessionId, before, after, seconds, at: new Date().toISOString() });
       recorded = true;
@@ -522,6 +552,8 @@ const jsonLd = {
     const site = siteMoodFor(after);
     if (!e.target.checked || !site) return;
     try { localStorage.setItem('pc:mood', site); } catch {}
+    // Same signal MoodChip sends, so a signed-in account adopts the new mood instead of restoring the old one.
+    try { window.dispatchEvent(new CustomEvent('pc:me-state-legacy-write', { detail: { key: 'pc:mood' } })); } catch {}
     document.documentElement.setAttribute('data-pc-mood', site);
     try { window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: site } })); } catch {}
   });
@@ -540,8 +572,10 @@ const jsonLd = {
   });
   $('st-sound').addEventListener('click', () => { gestured = true; toggleSound(); });
 
+  // Keys belong to the room only when focus is in it, or nowhere in particular.
+  const ours = (t) => root.contains(t) || t === document.body || t === document.documentElement;
   document.addEventListener('keydown', (e) => {
-    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || !ours(e.target)) return;
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
     if (e.key === 'm' || e.key === 'M') { toggleSound(); return; }
@@ -559,7 +593,7 @@ const jsonLd = {
   });
   // Space on a focused button would also click it on keyup; in a session Space only pauses.
   document.addEventListener('keyup', (e) => {
-    if (root.dataset.view === 'run' && (e.key === ' ' || e.key === 'Spacebar')) e.preventDefault();
+    if (root.dataset.view === 'run' && ours(e.target) && (e.key === ' ' || e.key === 'Spacebar')) e.preventDefault();
   });
 
   // Arriving with a mood already set elsewhere on PointCast? Use the last
@@ -629,7 +663,7 @@ const jsonLd = {
   h1 { margin: 0; font-size: clamp(24px, 6vw, 34px); line-height: 1.1; letter-spacing: 0.02em; color: var(--ink); }
   .big { margin: 0; font-size: 34px; }
   .guide { margin: 0; color: var(--ink); }
-  .who { color: var(--mood); font-weight: 800; filter: brightness(1.3); }
+  .who { color: #F5D142; font-weight: 800; }
   .label { margin: 6px 0 0; font-size: 12px; letter-spacing: 0.14em; color: var(--ink-2); font-weight: 700; text-transform: uppercase; }
   .hint { margin: 0; min-height: 1.4em; color: var(--ink-2); font-size: 14px; }
   .safety, .tally { margin: 0; color: var(--ink-2); font-size: 13px; }
@@ -649,7 +683,8 @@ const jsonLd = {
   }
   .key:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
   .key.small { min-height: 40px; font-size: 12px; padding: 0 10px; }
-  .key.primary { background: color-mix(in srgb, var(--mood) 55%, var(--field)); }
+  /* 30% keeps light or dark ink at 4.5:1 or better for every mood (tests/stretch.test.mjs). */
+  .key.primary { background: color-mix(in srgb, var(--mood) 30%, var(--field)); color: var(--mood-ink, var(--ink)); }
   .key.ghost { border-color: var(--ink-2); color: var(--ink-2); box-shadow: 3px 3px 0 var(--ink-2); }
 
   .moods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
@@ -668,7 +703,7 @@ const jsonLd = {
     cursor: pointer;
   }
   .mood .sw { width: 12px; height: 12px; background: var(--c); flex: none; }
-  .mood[aria-checked="true"] { background: color-mix(in srgb, var(--c) 45%, var(--field)); box-shadow: inset 0 0 0 2px var(--ink); }
+  .mood[aria-checked="true"] { background: color-mix(in srgb, var(--c) 30%, var(--field)); color: var(--on, var(--ink)); box-shadow: inset 0 0 0 2px var(--ink); }
 
   .sessions { display: grid; gap: 12px; }
   .session { display: grid; gap: 4px; text-align: left; text-transform: none; letter-spacing: 0.02em; font-weight: 400; padding: 12px 14px; }
@@ -691,6 +726,7 @@ const jsonLd = {
   .breath__bar { width: 110px; height: 6px; background: var(--field-2); border: 1px solid var(--border); }
   .breath__bar i { display: block; height: 100%; width: 0; background: var(--mood); }
   .clock { position: absolute; right: 10px; top: 10px; font-size: 22px; font-weight: 800; }
+  .side { position: absolute; right: 10px; top: 42px; font-size: 12px; letter-spacing: 0.12em; color: #F5D142; }
   .paused { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--field); padding: 2px 8px; font-weight: 800; letter-spacing: 0.14em; }
   .paused[hidden] { display: none; }
 

@@ -58,7 +58,8 @@ export const POSES = [
     breath: 'Breathe in at the middle. Breathe out as you tilt.',
     easeOff: 'Ease off if you feel tingling or a sharp pull down your arm.',
     pattern: [4, 0, 4, 0],
-    frames: [pose(SEATED, { head: [20, 11] }), pose(SEATED, { head: [28, 11] })],
+    sides: true,
+    frames: [SEATED, pose(SEATED, { head: [20, 11] })],
   },
   {
     id: 'chin-tuck',
@@ -105,9 +106,10 @@ export const POSES = [
     breath: 'Breathe in to get taller. Breathe out to turn a little more.',
     easeOff: 'Ease off if your lower back pinches. Turn from the ribs, not the neck.',
     pattern: [4, 0, 5, 0],
+    sides: true,
     frames: [
+      pose(SEATED, { head: [24, 9], neck: [24, 14] }),
       pose(SEATED, { head: [22, 10], neck: [23, 15], lSh: [21, 16], rSh: [27, 16], lEl: [17, 22], lHa: [19, 29], rEl: [25, 23], rHa: [20, 31] }),
-      pose(SEATED, { head: [26, 10], neck: [25, 15], lSh: [21, 16], rSh: [27, 16], rEl: [31, 22], rHa: [29, 29], lEl: [23, 23], lHa: [28, 31] }),
     ],
   },
   {
@@ -329,15 +331,58 @@ export function recordSession(store, { session, before, after, seconds, at }) {
   return s;
 }
 
+/** Sessions shorter than this, in seconds actually run, are not logged. */
+export const MIN_LOGGED_SECONDS = 30;
+export const countable = (ranSeconds) => (Number(ranSeconds) || 0) >= MIN_LOGGED_SECONDS;
+
+/** Two-sided poses do the first side, then mirror for the second half of the step. */
+export const secondSide = (p, inStep, seconds) => !!p.sides && inStep >= seconds / 2;
+
+/** The still frame under reduced motion: the stretch shape for one-sided poses, the inhale shape otherwise. */
+export const stillMix = (p) => (p.sides ? 0 : 1);
+
+/* ---------- colour: mood surfaces and the ink that reads on them ---------- */
+
+export const FIELD = '#40318D';
+export const INK_LIGHT = '#F2F0FF';
+export const INK_DARK = '#140f33';
+export const KEY_MIX = 0.3; // .key.primary: mood over the field
+export const CHIP_MIX = 0.3; // a selected mood chip
+export const WHO = '#F5D142'; // the fixed CLAUDE> label colour
+
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const toHex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase();
+/** Same arithmetic as CSS color-mix(in srgb, a k, b). */
+export const mixHex = (a, b, k) => toHex(rgb(a).map((v, i) => v * k + rgb(b)[i] * (1 - k)));
+function luminance(hex) {
+  const [r, g, b] = rgb(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+export function contrast(a, b) {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+/** Light or dark ink, whichever reads better on `bg`. */
+export const inkOn = (bg) => (contrast(INK_LIGHT, bg) >= contrast(INK_DARK, bg) ? INK_LIGHT : INK_DARK);
+
 /* ---------- the pixel figure ---------- */
 
 const lerp = (a, b, k) => [Math.round(a[0] + (b[0] - a[0]) * k), Math.round(a[1] + (b[1] - a[1]) * k)];
 
-/** Joint positions for a pose at breath `mix` (1 = frame a, 0 = frame b). */
-export function frameAt(p, mix) {
+/**
+ * Joint positions for a pose at breath `mix` (1 = frame a, 0 = frame b).
+ * `mirror` flips the figure left to right, for the second side.
+ */
+export function frameAt(p, mix, mirror = false) {
   const [a, b] = p.frames;
   const out = {};
-  for (const k of Object.keys(a)) out[k] = lerp(b[k] || a[k], a[k], Math.max(0, Math.min(1, mix)));
+  for (const k of Object.keys(a)) {
+    const [x, y] = lerp(b[k] || a[k], a[k], Math.max(0, Math.min(1, mix)));
+    out[k] = mirror ? [48 - x, y] : [x, y];
+  }
   return out;
 }
 

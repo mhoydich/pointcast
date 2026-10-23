@@ -1,9 +1,12 @@
 // Stretch with Claude: session shape, timing, breath phases, mood lines, and the stretch:v1 record.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
-  MOODS, POSES, SESSIONS, buildTimeline, breathAt, formatClock, frameAt, getPose, getSession, locate,
-  moodLine, parseStore, rasterize, recordSession, siteMoodFor, startOf, suggestFor,
+  CHIP_MIX, FIELD, INK_LIGHT, KEY_MIX, MIN_LOGGED_SECONDS, MOODS, POSES, SESSIONS, WHO, buildTimeline, breathAt,
+  contrast, countable, formatClock, frameAt, getPose, getSession, inkOn, locate, mixHex, moodLine, parseStore,
+  rasterize, recordSession, secondSide, siteMoodFor, startOf, stillMix, suggestFor,
 } from '../src/lib/stretch.mjs';
 
 test('three sessions of 2, 5 and 8 minutes, each 5 to 9 known poses that add up exactly', () => {
@@ -137,4 +140,48 @@ test('the pixel figure stays on its 48 x 48 grid and changes with the breath', (
     }
     assert.notDeepEqual([...a.keys()].sort(), [...b.keys()].sort(), `${p.id} frames look identical`);
   }
+});
+
+test('two-sided poses breathe in upright, stretch on the breath out, and switch sides halfway', () => {
+  const sided = POSES.filter((p) => p.sides).map((p) => p.id).sort();
+  assert.deepEqual(sided, ['neck-tilt', 'seated-twist']);
+  for (const id of sided) {
+    const p = getPose(id);
+    const up = frameAt(p, 1);
+    assert.equal(up.head[0], up.neck[0], `${id}: frame a (breath in) is upright`);
+    assert.notEqual(frameAt(p, 0).head[0], up.head[0], `${id}: frame b (breath out) leans`);
+    const right = frameAt(p, 0).head[0] - 24;
+    const left = frameAt(p, 0, true).head[0] - 24;
+    assert.equal(left, -right, `${id}: the second side mirrors the first`);
+    assert.equal(secondSide(p, 9.9, 20), false);
+    assert.equal(secondSide(p, 10, 20), true);
+    assert.equal(stillMix(p), 0, `${id}: reduced motion holds the stretch, not the neutral frame`);
+  }
+  assert.equal(secondSide(getPose('chin-tuck'), 19, 20), false);
+  assert.equal(stillMix(getPose('chest-opener')), 1);
+});
+
+test('only time actually run is logged, and only past the minimum', () => {
+  assert.equal(MIN_LOGGED_SECONDS, 30);
+  assert.equal(countable(0.3), false);
+  assert.equal(countable(29.9), false);
+  assert.equal(countable(30), true);
+  assert.equal(countable('x'), false);
+});
+
+test('mood-tinted keys and chips keep text at WCAG AA (4.5:1) for all eight moods', () => {
+  for (const m of MOODS) {
+    for (const [what, k] of [['key', KEY_MIX], ['chip', CHIP_MIX]]) {
+      const bg = mixHex(m.color, FIELD, k);
+      const c = contrast(inkOn(bg), bg);
+      assert.ok(c >= 4.5, `${m.id} ${what}: ${inkOn(bg)} on ${bg} is ${c.toFixed(2)}`);
+    }
+  }
+  assert.ok(contrast(WHO, FIELD) >= 4.5, 'the CLAUDE> label');
+  assert.ok(contrast(INK_LIGHT, FIELD) >= 4.5);
+  assert.equal(mixHex('#FFFFFF', '#000000', 0.5), '#808080');
+  // The page's CSS mixes must be the ones checked above.
+  const page = readFileSync(resolve(import.meta.dirname, '../src/pages/stretch.astro'), 'utf8');
+  assert.match(page, new RegExp(`\\.key\\.primary \\{ background: color-mix\\(in srgb, var\\(--mood\\) ${KEY_MIX * 100}%`));
+  assert.match(page, new RegExp(`aria-checked="true"\\] \\{ background: color-mix\\(in srgb, var\\(--c\\) ${CHIP_MIX * 100}%`));
 });
