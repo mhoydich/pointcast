@@ -9,7 +9,7 @@ import vm from 'node:vm';
 
 const PUBLIC = resolve(import.meta.dirname, '../public');
 const APPS = [
-  { dir: 'pmm', prefix: 'pmm-', pages: ['/pmm/', '/pmm/brand/'] },
+  { dir: 'pmm', prefix: 'pmm-', pages: ['/pmm/', '/pmm/brand/', '/pmm/moods/'] },
   { dir: 'nouns-messenger', prefix: 'nouns-messenger-', pages: ['/nouns-messenger/'] },
 ];
 
