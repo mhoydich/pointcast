@@ -74,14 +74,17 @@ export function hourIn(tz, at = new Date()) {
 
 export const placeOf = (tz) => (tz ? tz.split('/').pop().replace(/_/g, ' ') : 'somewhere');
 
+// The mood washes in /pmm/style.css (brand v2 caps them so ink stays above 4.5:1 under sunny).
+export const WASH = Object.freeze({ line: 0.3, pane: 0.08 });
+
 export function atmosphere(me, them, at = new Date()) {
   const a = mood(me.mood), b = mood(them.mood);
   const side = (p, m) => `${p.name}: ${m.id} · ${p.tz ? `${hourIn(p.tz, at)} ${p.place || placeOf(p.tz)}` : 'somewhere'}`;
   return {
     line: `${side({ ...me, name: 'YOU' }, a)}   ·   ${side(them, b)}`,
-    // .atmo mixes each mood 40% into the screen colour; the chat pane behind it mixes 14%.
-    line_gradient: `linear-gradient(90deg, ${mix(a.color, FIELD, 0.4)}, ${mix(b.color, FIELD, 0.4)})`,
-    pane_gradient: `linear-gradient(180deg, ${mix(b.color, FIELD, 0.14)}, ${FIELD} 40%, ${mix(a.color, FIELD, 0.14)})`,
+    // .atmo washes each mood WASH.line into the screen colour; the chat pane behind it, WASH.pane.
+    line_gradient: `linear-gradient(90deg, ${mix(a.color, FIELD, WASH.line)}, ${mix(b.color, FIELD, WASH.line)})`,
+    pane_gradient: `linear-gradient(180deg, ${mix(b.color, FIELD, WASH.pane)}, ${FIELD} 40%, ${mix(a.color, FIELD, WASH.pane)})`,
   };
 }
 

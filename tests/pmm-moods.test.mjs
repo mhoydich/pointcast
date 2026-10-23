@@ -7,7 +7,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   MOODS, MOOD_IDS, mood, SITE_MOODS, BREAKWATER_LABELS, NOGGLE_COLORS, toSiteMood, fromSiteMood, toNoggle, fromBreakwater,
-  atmosphere, worldStrip, ZONES, daylight, mix, contrast, inkOn, freq, schedule, FIELD,
+  atmosphere, worldStrip, ZONES, WASH, daylight, mix, contrast, inkOn, freq, schedule, FIELD,
 } from '../public/pmm/moods/moods.js';
 import { siteMoodFromLabel, dialFromSiteMood } from '../src/lib/breakwater/mood.mjs';
 
@@ -92,10 +92,23 @@ test('atmosphere: both moods and both local hours on one line, gradient from you
   const at = new Date('2026-10-23T16:30:00Z');
   const a = atmosphere({ mood: 'sunny', tz: 'America/Los_Angeles', place: 'El Segundo' }, { name: 'ANA', mood: 'tired', tz: 'Europe/Lisbon' }, at);
   assert.equal(a.line, 'YOU: sunny · 9:30 AM El Segundo   ·   ANA: tired · 5:30 PM Lisbon');
-  assert.equal(a.line_gradient, `linear-gradient(90deg, ${mix('#F5D142', FIELD, 0.4)}, ${mix('#8A86A8', FIELD, 0.4)})`);
+  assert.equal(a.line_gradient, `linear-gradient(90deg, ${mix('#F5D142', FIELD, WASH.line)}, ${mix('#8A86A8', FIELD, WASH.line)})`);
   assert.match(a.pane_gradient, /^linear-gradient\(180deg, #[0-9A-F]{6}, #40318D 40%, #[0-9A-F]{6}\)$/);
   const b = atmosphere({ mood: 'x' }, { name: 'B', mood: 'low' }, at);
   assert.equal(b.line, 'YOU: calm · somewhere   ·   B: low · somewhere');
+});
+
+test('atmosphere: the washes are the ones /pmm/style.css uses, and ink reads on every one', () => {
+  const css = read('public/pmm/style.css');
+  const atmo = /\.atmo \{[\s\S]*?\}/.exec(css)[0];
+  assert.deepEqual([...atmo.matchAll(/var\(--mood-(?:me|them)\) (\d+)%/g)].map((m) => Number(m[1]) / 100), [WASH.line, WASH.line]);
+  const pane = [...css.matchAll(/linear-gradient\(180deg, color-mix\(in srgb, var\(--mood-them\) (\d+)%[^;]*var\(--mood-me\) (\d+)%/g)];
+  assert.equal(pane.length, 1);
+  assert.deepEqual(pane[0].slice(1).map((v) => Number(v) / 100), [WASH.pane, WASH.pane]);
+  for (const m of MOODS) {
+    assert.ok(contrast('#F2F0FF', mix(m.color, FIELD, WASH.line)) >= 4.5, `ink on the ${m.id} line wash`);
+    assert.ok(contrast('#BDB4F0', mix(m.color, FIELD, WASH.pane)) >= 4.5, `ink-2 on the ${m.id} pane tint`);
+  }
 });
 
 test('world strip: 24 zones, the right hours, bright at noon and dark at night', () => {
