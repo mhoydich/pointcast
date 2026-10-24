@@ -637,6 +637,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/houseplants.json', 'weekly', '0.7'],
   ['https://pointcast.xyz/meditate', 'weekly', '0.7'],
   ['https://pointcast.xyz/meditate.json', 'weekly', '0.7'],
+  ['https://pointcast.xyz/stretch', 'weekly', '0.7'],
+  ['https://pointcast.xyz/stretch.json', 'weekly', '0.7'],
   ['https://pointcast.xyz/play', 'daily', '0.8'],
   ['https://pointcast.xyz/play.json', 'daily', '0.8'],
   ['https://pointcast.xyz/passport', 'weekly', '0.7'],

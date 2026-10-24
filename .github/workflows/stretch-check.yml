@@ -1,0 +1,47 @@
+name: Stretch with Claude checks
+# /stretch shares its sessions and timing with /stretch.json through src/lib/stretch.mjs.
+# The tests import only that module, so no install and no site build. The card SVG is
+# regenerated and diffed; public/images/og/stretch.png is its screenshot and is redone by hand.
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/stretch.mjs'
+      - 'src/pages/stretch.astro'
+      - 'src/pages/stretch.json.ts'
+      - 'tests/stretch.test.mjs'
+      - 'scripts/generate-stretch-card.mjs'
+      - 'public/images/stretch/**'
+      - 'public/images/og/stretch.png'
+      - '.github/workflows/stretch-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/stretch.mjs'
+      - 'src/pages/stretch.astro'
+      - 'src/pages/stretch.json.ts'
+      - 'tests/stretch.test.mjs'
+      - 'scripts/generate-stretch-card.mjs'
+      - 'public/images/stretch/**'
+      - 'public/images/og/stretch.png'
+      - '.github/workflows/stretch-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stretch-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node --test tests/stretch.test.mjs
+      - run: node scripts/generate-stretch-card.mjs && git diff --exit-code public/images/stretch/stretch-card.svg
