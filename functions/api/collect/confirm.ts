@@ -19,7 +19,7 @@ import {
 } from './_shared.ts';
 
 function redirect(request: Request, key: string, value: string): Response {
-  const target = new URL('/collect', request.url);
+  const target = new URL('/collect/kennel', request.url);
   target.searchParams.set(key, value);
   return Response.redirect(target.toString(), 302);
 }
@@ -57,7 +57,7 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
       WHERE email = ?
     `).bind(user.userId, new Date().toISOString(), state.email).run();
     const session = await issueSession(env, user.userId);
-    const target = new URL('/collect', request.url);
+    const target = new URL('/collect/kennel', request.url);
     target.searchParams.set('confirmed', '1');
     target.searchParams.set('claim', '1');
     return withSessionCookie(Response.redirect(target.toString(), 302), session);

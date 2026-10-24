@@ -203,6 +203,7 @@ test('collect subscription is double opt-in, rate-limited storage-backed, and ne
   });
   assert.equal(confirmed.status, 302);
   assert.match(confirmed.headers.get('set-cookie'), /^pc_session=pcs_/);
+  assert.equal(new URL(confirmed.headers.get('location')).pathname, '/collect/kennel');
   assert.match(confirmed.headers.get('location'), /confirmed=1&claim=1/);
   assert.equal(env.AUTH_DB.subscribers.get('dog@example.com').status, 'confirmed');
   assert.ok(env.AUTH_DB.identities.has('email:dog@example.com'));
@@ -211,6 +212,7 @@ test('collect subscription is double opt-in, rate-limited storage-backed, and ne
     request: new Request(`https://pointcast.xyz/api/collect/confirm?token=${token}`),
     env,
   });
+  assert.equal(new URL(replay.headers.get('location')).pathname, '/collect/kennel');
   assert.match(replay.headers.get('location'), /confirmation-expired-or-used/);
 });
 
@@ -233,7 +235,7 @@ test('daily email token signs the confirmed email identity in and lands on an im
   });
   assert.equal(response.status, 302);
   assert.match(response.headers.get('set-cookie'), /^pc_session=pcs_/);
-  assert.match(response.headers.get('location'), /\/collect\?claim=1&from=daily-email/);
+  assert.match(response.headers.get('location'), /\/collect\/kennel\?claim=1&from=daily-email/);
   assert.ok(db.identities.has('email:ready@example.com'));
 
   const replay = await enterToday({
@@ -241,6 +243,7 @@ test('daily email token signs the confirmed email identity in and lands on an im
     env: { AUTH_DB: db },
   });
   assert.equal(replay.headers.get('set-cookie'), null);
+  assert.equal(new URL(replay.headers.get('location')).pathname, '/collect/kennel');
   assert.match(replay.headers.get('location'), /daily-link-invalid/);
 
   const unsubscribeTokenAsLogin = await enterToday({
@@ -283,7 +286,7 @@ test('daily mail content and worker contract are binding-native, idempotent, and
     readFile(new URL('workers/kennel-daily/src/index.ts', root), 'utf8'),
     readFile(new URL('workers/kennel-daily/wrangler.toml', root), 'utf8'),
     readFile(new URL('migrations/auth/0004_collect_subscribers.sql', root), 'utf8'),
-    readFile(new URL('src/pages/collect.astro', root), 'utf8'),
+    readFile(new URL('src/pages/collect/kennel.astro', root), 'utf8'),
     readFile(new URL('src/pages/agents.json.ts', root), 'utf8'),
   ]);
   assert.match(worker, /UPDATE subscribers SET last_sent_day = \?/);

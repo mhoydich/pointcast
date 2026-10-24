@@ -478,7 +478,7 @@ test('migration, APIs, Worker config, presence bus, and v2 path are explicit', a
     readFile(new URL('docs/decisions/2026-09-03-streak-seals.md', root), 'utf8'),
     readFile(new URL('functions/api/collect/me.ts', root), 'utf8'),
     readFile(new URL('functions/api/me/_holdings.ts', root), 'utf8'),
-    readFile(new URL('src/pages/collect.astro', root), 'utf8'),
+    readFile(new URL('src/pages/collect/kennel.astro', root), 'utf8'),
     readFile(new URL('src/pages/me.astro', root), 'utf8'),
   ]);
   assert.match(migration, /UNIQUE \(claim_id, kind\)/);
