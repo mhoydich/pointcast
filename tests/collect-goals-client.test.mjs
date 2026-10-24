@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { createContext, runInContext } from 'node:vm';
 import { JSDOM } from 'jsdom';
 import { mountCollect } from '../src/scripts/collect-goals-client.mjs';
 import { STORAGE_KEY, emptyDraft, exportDraft, parseDraft } from '../src/lib/collect-goals.mjs';
@@ -227,5 +228,32 @@ test('a stale tab preserves the newer saved draft and keeps its own edits export
     URL.createObjectURL=originalCreate;
     h.dom.window.HTMLAnchorElement.prototype.click=originalClick;
     h.close();
+  }
+});
+
+
+test('legacy claim/error queries and Kennel hashes forward intact while ordinary notebook links stay on Collect',()=>{
+  const inline=source.match(/<script is:inline>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(inline,'Collect must provide its legacy-link bridge.');
+  const cases=[
+    ['?claim=1&t=opaque%2Bvalue&from=daily-email','#collection-title',true],
+    ['?confirmed=1&claim=1','#collect-title',true],
+    ['?collect_error=daily-link-invalid&from=daily-email','#detail',true],
+    ['','#collect-title',true],
+    ['','#collection-title',true],
+    ['?source=old-bookmark','#collection-title',true],
+    ['','#notebook',false],
+    ['?source=wishlist','#notebook',false],
+    ['','#dossier',false],
+    ['','',false],
+  ];
+  for(const [search,hash,redirect] of cases){
+    const destinations=[];
+    const context=createContext({URLSearchParams,location:{search,hash,replace:value=>destinations.push(value)}});
+    // Reusing the same context also guards the IIFE against lexical redeclaration
+    // if a client router executes this inline bridge on a repeated visit.
+    runInContext(inline,context);
+    runInContext(inline,context);
+    assert.deepEqual(destinations,redirect?Array(2).fill('/collect/kennel'+search+hash):[],search+hash);
   }
 });
