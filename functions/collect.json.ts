@@ -33,7 +33,7 @@ export const onRequestGet: PagesFunction = async () => {
   }
   const payload = {
     spec: 'pointcast.collect/v1',
-    canonical: 'https://pointcast.xyz/collect',
+    canonical: 'https://pointcast.xyz/collect/kennel',
     privacy: 'No subscriber email, user identity, or private session data is exposed here.',
     resolvedAt: 'request',
     todayUrl: 'https://pointcast.xyz/api/kennel-club/today',
@@ -44,7 +44,7 @@ export const onRequestGet: PagesFunction = async () => {
       breed: today.breed,
       title: today.title,
       image: `https://pointcast.xyz${today.image.png}`,
-      claim: 'https://pointcast.xyz/collect?claim=1',
+      claim: 'https://pointcast.xyz/collect/kennel?claim=1',
       price: 'free',
       minted,
     },

@@ -211,7 +211,7 @@ test('Pages headers detach the today API and both live twins from the site-wide 
 test('every prerendered Kennel Club surface ships the request-time hydration hooks', async () => {
   const surfaces = {
     'src/pages/kennel-club.astro': ['data-kennel-today="image"', 'data-kennel-text="Today · token {tokenId}"'],
-    'src/pages/collect.astro': ['data-kennel-today="cell"', 'data-kennel-attr="data-today-token"'],
+    'src/pages/collect/kennel.astro': ['data-kennel-today="cell"', 'data-kennel-attr="data-today-token"'],
     'src/pages/kennel-club/[slug].astro': ['data-kennel-today="badge"'],
     'src/pages/send/kennel-club.astro': ['data-kennel-today="text href"'],
     'src/components/HomeRoomsShelf.astro': ['data-kennel-today="text"'],

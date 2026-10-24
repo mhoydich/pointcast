@@ -12,7 +12,7 @@ import {
 } from '../api/collect/_shared.ts';
 
 function collectRedirect(request: Request, key?: string, value?: string): Response {
-  const target = new URL('/collect', request.url);
+  const target = new URL('/collect/kennel', request.url);
   target.searchParams.set('claim', '1');
   if (key && value) target.searchParams.set(key, value);
   return Response.redirect(target.toString(), 302);

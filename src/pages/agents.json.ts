@@ -1232,7 +1232,7 @@ export const GET: APIRoute = async () => {
         tzkt: kennelClub ? `https://tzkt.io/${kennelClub}` : null,
         mintState: kennelClub ? 'https://pointcast.xyz/api/kennel-club/mint' : null,
         freeClaim: kennelClub ? 'https://pointcast.xyz/api/kennel-club/claim' : null,
-        collectingDesk: 'https://pointcast.xyz/collect',
+        collectingDesk: 'https://pointcast.xyz/collect/kennel',
         collectingDeskJson: 'https://pointcast.xyz/collect.json',
         dailyStatus: 'https://pointcast.xyz/api/kennel-club/daily/status',
         description: 'Kennel Club September Sitting daily editions. The edge-cached mint-state API reads TzKT for current paused, window, and minted state.',

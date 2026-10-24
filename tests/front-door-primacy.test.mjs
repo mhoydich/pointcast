@@ -7,7 +7,7 @@ test('front door chooses exactly one next door in the agreed priority order', ()
     href: '/bench', label: 'Sit at the bench', reason: 'First visit',
   });
   assert.deepEqual(chooseFrontDoorNextDoor({ claimedDays: [1, 4], hasHandle: true, streak: 8 }), {
-    href: '/collect', label: 'See your collection', reason: 'Your dogs',
+    href: '/collect/kennel', label: 'See your collection', reason: 'Your dogs',
   });
   assert.deepEqual(chooseFrontDoorNextDoor({ claimedDays: [1, 2, 3, 4], hasHandle: false, streak: 3 }), {
     href: '/drum', label: 'Play the drum', reason: 'Keep the streak moving',

@@ -47,7 +47,7 @@ test('the runtime OG Function resolves a fake preview date before choosing its s
 test('today surfaces point to runtime PNGs and retain detached five-minute caches', async () => {
   const [kennel, collect, headers] = await Promise.all([
     read('src/pages/kennel-club.astro'),
-    read('src/pages/collect.astro'),
+    read('src/pages/collect/kennel.astro'),
     read('public/_headers'),
   ]);
   assert.match(kennel, /image="\/og\/kennel-club\/today\.png"/);
