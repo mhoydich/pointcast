@@ -2,7 +2,7 @@
 
 **Owner:** Claude Code, acting product manager (assigned by Mike, 2026-10-22).
 **Director:** Mike, El Segundo.
-**Status:** v0 shipping in this PR at `/pmm/`. Brand at `/pmm/brand/`.
+**Status:** live at `/pmm/`: v0, v0.1, v0.2 (relay, off until configured) and v0.3 (rooms). Brand at `/pmm/brand/`.
 **Review:** Mike asked for no review round on this one. Codex is not requested.
 **Source:** Mike, in chat, 2026-10-22, early morning Pacific: "peer to peer, fast, easy load, easy auth, file sharing, streaming, transact, trust, emotion, mood, informative, current, style, leading, researched, intelligent, measured, easy to connect with friends, make pointcast mobile messaging, pmm, create a brand very atari commodore, and no review you are now assigned as product manager, set goals", and earlier the same morning, "signed mike in el segundo". The goal column below quotes those words; the sign-off on the pages is what he asked for.
 
@@ -80,7 +80,7 @@ Paste mode link for a full offer: 621 characters. Real-device numbers come from 
   mints a four-hour Cloudflare Calls credential for the site's own pages and the phones add the relay.
   Until the two secrets are set on the Pages project (Manus brief, step 1b) the
   app is STUN-only and two phones behind strict carrier NAT cannot connect.
-- **Group chats.** Two people first. Mesh for three to five is v0.3.
+- **Group chats.** Two people first. Rooms of three to five shipped in v0.3 (below), texts only.
 - **Money.** TAB is a ledger, not a payment. Tezos settle is v0.4, after the
   wallet code in `/messages` is reused rather than copied.
 - **Push notifications.** Peer to peer means nobody is awake to push. Needs a
@@ -144,9 +144,110 @@ as the SI line:
 - v0.2.1 (shipped): QR on every link, an in-app scanner where the browser has
   BarcodeDetector, and answer links that go to the waiting tab.
 - v0.2.2 (shipped): `/api/pmm/stat` measures the connect goal. It records one anonymous RUN or FAIL per handshake that reached FOUND, sent only by the phone that pressed LOAD, along with the flow, how the answer arrived (store, paste, scan, tab, link), the path (direct or relay) and the time to RUN. A FAIL carries its reason: timeout, ice, abandoned (the person gave up after FOUND) or hello (the line opened without a verified hello). Nothing identifying is stored with an outcome. The rate limit holds a salted hash of the address for about a minute. DNT and GPC browsers send nothing. Reports are unauthenticated, so the numbers are a guide, not an audit.
-- v0.3: three to five person mesh.
+- v0.3 (shipped): ROOM, three to five friends in a full mesh. See the section below.
 - v0.4: Tezos settle for TAB, reusing `/messages` wallet code.
 - v0.5: thin push relay for "your friend is on".
+
+## v0.3: ROOM, three to five friends (shipped 2026-10-22)
+
+**What it does.**
+
+- `ROOM · 3 TO 5 FRIENDS` in the lobby makes a room you host and opens the same invite
+  screen as a two-person line: a six-letter code through `/api/pmm/signal`, or paste mode
+  with no server. The invite opens a WebRTC data channel labelled `pmm-room`; the friend's
+  app sees the label and joins the room instead of opening a two-person chat. INVITE in the
+  room panel brings in the next friend. Five members, host included, is the cap: at five the
+  button reads RE-INVITE (for a member whose line dropped) and goes grey once all five are on a
+  line; a new sixth phone that answers anyway is told ROOM FULL and never hears the room.
+- **Full mesh.** Every member holds its own line to every other member. A new member meets
+  the others through the host: the host sends a roster it signs (every member's public key,
+  name, mood and zone, ordered by time so an old roster cannot be replayed), and for each pair
+  without a line the member with the lower sigil id writes a fresh offer signed to the other.
+  The host carries that offer, and the answer back, across lines it already has open. No new
+  endpoint and no change to `/api/pmm/signal`.
+- **Every line is authenticated the same way.** The invite line and every mesh line open with
+  the v0 hello, signed over that line's own DTLS fingerprint. A mesh line must prove the exact
+  key the roster named for that member, so the host cannot sit in the middle of a line it
+  carried: it cannot sign another member's hello.
+- **Signatures cannot be re-split.** Every room signature (hello, roster, join, offer and answer,
+  text, goodbye) covers a JSON tuple whose first element names its kind and version, and fields
+  are checked for type before verifying. The `|`-joined form of two-person lines is never used in
+  a room, so a relay cannot move characters from one field into another.
+- **Seats.** Each time the host seats someone it gives them a fresh seat id, carried in the signed
+  roster. The member signs a join for this room, this host and that seat, and the host carries it
+  in the roster. A member the roster names without a join for their current seat shows UNCONFIRMED
+  until a direct line proves them, so a host cannot quietly seat a stranger under a friend's key,
+  and a join from an earlier seat vouches for nothing.
+- **Texts name their recipients.** The members a text is for, as the author's phone saw the room
+  when it was written, are inside the signature. A text goes, and is passed on, only to them, and
+  waits on the author's phone for each of them in turn; someone seated after it was written never
+  gets it, and a member a text does not name drops it.
+- **Texts are signed by their author** over the room id, the host, the text, the mood, the local
+  hour and the recipients, and verified by every member against the author's key. Each member passes a new text
+  on once to its other lines, so a text still lands when a mesh line cannot form (strict NAT,
+  no relay). A copy changed in transit fails the author's signature and is dropped: never
+  shown, never passed on. A text that came the long way says `SIGNED · PASSED ON`.
+- **Header and atmosphere.** The room header shows every member's sigil, lit green when this
+  phone has a direct line to them, with the host's marked. The atmosphere line lists every
+  member's mood and local hour and blends all their mood colors. Mood changes travel to every
+  member.
+- **Measured like a two-person line.** Each room invite that reaches FOUND sends one outcome to
+  `/api/pmm/stat` from the host, through the same pending handshake record: RUN with its path once
+  the guest's hello verifies, or FAIL as timeout, ice, abandoned (ESC or leaving the page) or hello
+  (the line opened and no verified hello came). Mesh lines between members are not counted: no
+  person started them, and the periodic retry would swamp the numbers.
+- A mesh line that drops or never opens is tried again: every fifteen seconds each member
+  checks for missing pairs while it has a line to the host.
+- The two-person flow is unchanged: code flow, paste mode, signed hello, signed texts and
+  tabs, files, voice, mood, TAB, LINK and the relay all work as in v0.2, and a room and a
+  two-person line can be open at the same time.
+
+**What it does not do (yet).**
+
+- Texts only. No files, voice notes, TAB, reactions or live typing in a room.
+- No history. A member sees what was said while they were in the room; nothing earlier is
+  sent to them, and each phone keeps its own copy (last 500 per room).
+- The host is the room's switchboard. Only the host invites, and only through the host do new
+  members find the others. If the host's tab closes, existing mesh lines carry on but nobody
+  new can join, and after a reload the host invites each member again (same room, same seats).
+- The roster is the host's word. Names and moods in it are what the host says; keys are
+  checked against sigils. Read sigils aloud to verify, as with two people.
+- Texts are signed, not encrypted beyond what WebRTC already does per line. A member who passes
+  a text on can read it; that is everyone in the room anyway.
+- LEAVE removes the room from your phone and sends a goodbye you sign over your seat. Every member
+  passes it on and drops that seat; the host frees it. Members remember the seats they saw leave:
+  they hand those goodbyes to a host that was away before taking its roster, and never take a gone
+  seat back from a stale roster. A goodbye ends only the seat it names, so a member who rejoins
+  (a new seat) cannot be removed by an old one, and no phone compares its clock with another's.
+  When the host leaves, members see HOST LEFT and nobody new can join. There is no kick.
+- A phone on the app from before rooms that opens a room invite is not seated. A room hello carries
+  no two-person signature, so the old app refuses the line (HELLO NOT SIGNED) and sends nothing into
+  it; any note it had waiting for the host stays waiting. The host shows THEIR PMM IS OUT OF DATE
+  (or, if the old phone hung up first, "no room hello came back").
+- Limits against a hostile member or host: at most three half-open mesh lines per room, one offer
+  answered at a time per member, offers and answers relayed at most twelve a minute per pair, at most
+  one roster a second per line, and no more than 64 messages waiting per line.
+
+**Measured, 2026-10-22, headless Chromium, phones as separate browser contexts on one machine,
+the real `/api/pmm/signal` handler over an in-memory KV.**
+
+| Measure | Result |
+| --- | --- |
+| Invite to in the room, code flow | about 1.5 s each |
+| Three phones, every pair on a direct line | yes, all three lines lit on each phone |
+| Five phones, every pair on a direct line | yes, ten lines |
+| Sixth phone answering a five-member room | refused, ROOM FULL |
+| Text when one pair has no line (offers blocked on purpose) | arrives via the host, `SIGNED · PASSED ON` |
+| Text altered by the host while passing it on | dropped on the receiving phone, never shown |
+| Text re-split across fields by the host (`ts` takes the text up to a `\|`) | dropped, never shown |
+| Guest on the app from before rooms | not seated; its app refuses the line (HELLO NOT SIGNED) and a waiting two-person note stays waiting; host shows ?VERSION MISMATCH ERROR |
+| C leaves while the host is away; the host comes back with a stale roster | C stays gone on every phone (3, 3, 3 seats) |
+| An old goodbye replayed after the member rejoined | ignored; the member keeps their seat and their texts arrive |
+| Host text queued while A and B were away, then C invited | C never gets it; A gets it on rejoin |
+| Member reloads, host re-invites | back in the room, all three lines lit again; the host's text queued meanwhile arrives |
+| LEAVE | host and the other member drop the seat; the room is gone from the leaver's phone |
+| Missing pair after offers unblocked | line formed in 5 to 16 s by the periodic check |
+| Two-person code flow and paste mode, re-run | text, signature, read receipt, tab, file, mood, LINK all pass |
 
 ## Manus follow-up
 
