@@ -28,8 +28,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   ],
   scenes: SCENES.map(({ id, title, character, role, nodes }) => ({ id, title, character, role, endings: Object.values(nodes).filter(node => node.ending).map(node => node.ending) })),
   controls: {
-    characters: ['Choose a scene', 'Tune in', 'Tap reply one or two', 'Toggle browser narration', 'Stop or repeat narration', 'Optional microphone: say one or two', 'Restart a scene', 'Download transcript and note'],
-    worksheets: ['Choose an exercise', 'Type or optionally dictate your own answer', 'Hear an authored prompt', 'Move between prompts', 'Review the outline assembled from your answers', 'Rehearse with a quiet timer', 'Use the self-review checklist', 'Download Markdown', 'Clear this exercise'],
+    characters: ['Choose a scene', 'Tune in', 'Tap reply one or two', 'Toggle browser narration', 'Stop or repeat narration', 'Choose a device voice in Voice settings', 'Optional microphone: say one or two', 'Restart a scene', 'Download transcript and note'],
+    worksheets: ['Choose an exercise', 'Type or optionally dictate your own answer', 'Hear an authored prompt', 'Choose a device voice in Voice settings', 'Move between prompts', 'Review the outline assembled from your answers', 'Rehearse with a quiet timer', 'Use the self-review checklist', 'Download Markdown', 'Clear this exercise'],
   },
   provider: {
     current: 'Authored dialogue and prompts, user-written answers, optional browser speech synthesis and recognition',
@@ -43,7 +43,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     worksheets: 'Drafts use sessionStorage in this browser tab and survive reloads. Browser session restoration may retain them. Clear an exercise to remove its draft; download Markdown to keep a separate copy.',
     storageUnavailable: 'Worksheet drafts fall back to page memory when browser storage is unavailable.',
     microphone: 'Only on explicit click. Browser speech recognition may send audio to its speech service. PointCast does not record audio.',
-    narration: 'Optional browser speech synthesis reads authored dialogue or prompts. Available voices depend on the browser and device.',
+    narration: 'Optional browser speech synthesis reads authored dialogue or prompts. Voice settings lists available English voices, refreshes when voices load, and prefers the device default or voices labeled Premium, Natural, Neural, or Enhanced over novelty voices. Natural pitch and pace are retained. Available voices depend on the browser and device.',
     rehearsal: 'The timer does not record or evaluate your voice.',
   },
   limitations: [

@@ -4,8 +4,9 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { JSDOM } from 'jsdom';
 import { WORKSHOPS, buildOutline, getProgress } from '../public/open-channel/workshops.mjs';
+import { createNarrator } from '../public/open-channel/narrator.mjs';
 
-async function controller({ mode = 'pitch', saved, storageFails = false } = {}) {
+async function controller({ mode = 'pitch', saved, storageFails = false, recordings = false, browserSpeech = true } = {}) {
   const page = await readFile(new URL('../src/pages/open-channel/[mode].astro', import.meta.url), 'utf8');
   const html = page.slice(page.indexOf('<!doctype')).replace('data-workshop={workshopId}', `data-workshop="${mode}"`);
   const dom = new JSDOM(html, { runScripts: 'outside-only', url: `https://pointcast.xyz/open-channel/${mode === 'pitch' ? 'pitch-room' : 'story-booth'}/` });
@@ -13,11 +14,21 @@ async function controller({ mode = 'pitch', saved, storageFails = false } = {}) 
   const storageKey = `pointcast-open-channel-${mode}-v1`;
   if (saved !== undefined) window.sessionStorage.setItem(storageKey, typeof saved === 'string' ? saved : JSON.stringify(saved));
   if (storageFails) Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('Storage blocked'); } });
-  const utterances = [], recognitions = [], downloads = [], links = [];
+  const utterances = [], recognitions = [], downloads = [], links = [], audios = [];
   class Speech { constructor(text) { this.text = text; } }
   class Recognition { constructor() { recognitions.push(this); } start() { this.onstart?.(); } abort() { this.aborted = true; } }
-  window.speechSynthesis = { cancel() {}, getVoices() { return []; }, speak(utterance) { utterances.push(utterance); utterance.onstart?.(); } };
-  window.SpeechSynthesisUtterance = Speech;
+  const synthesis = new window.EventTarget();
+  Object.assign(synthesis, { cancel() {}, getVoices() { return [{ voiceURI: 'natural', name: 'Natural voice', lang: 'en-US', localService: false }]; }, speak(utterance) { utterances.push(utterance); utterance.onstart?.(); } });
+  if (browserSpeech) { window.speechSynthesis = synthesis; window.SpeechSynthesisUtterance = Speech; }
+  class Recording extends window.EventTarget {
+    constructor(url = '') { super(); this.src = url; this.paused = true; this.currentTime = 0; audios.push(this); }
+    play() { this.paused = false; this.emit('playing'); return Promise.resolve(); }
+    pause() { this.paused = true; }
+    load() {}
+    removeAttribute(name) { this[name] = ''; }
+    emit(type) { const event = new window.Event(type); this.dispatchEvent(event); this[`on${type}`]?.(event); }
+  }
+  window.Audio = Recording;
   window.SpeechRecognition = Recognition;
   window.Blob = Blob;
   window.URL.createObjectURL = blob => { downloads.push(blob); return 'blob:test'; };
@@ -40,7 +51,12 @@ async function controller({ mode = 'pitch', saved, storageFails = false } = {}) 
     }
     now = end;
   }
-  Object.assign(window, { WORKSHOPS, buildOutline, getProgress });
+  Object.assign(window, { WORKSHOPS, buildOutline, getProgress,
+    createNarrator: options => createNarrator({ ...options, window }),
+    RECORDINGS_READY: recordings, getNarrationClip: key => recordings ? `/open-channel/audio/${key}.mp3` : null,
+  });
+  const preferences = (await readFile(new URL('../public/open-channel/voice-settings.mjs', import.meta.url), 'utf8')).replace(/^export /gm, '');
+  vm.runInContext(preferences, dom.getInternalVMContext());
   const source = (await readFile(new URL('../public/open-channel/workshop-app.mjs', import.meta.url), 'utf8')).replace(/^import .*;\n/gm, '');
   vm.runInContext(source, dom.getInternalVMContext());
   const $ = id => window.document.getElementById(id);
@@ -49,7 +65,7 @@ async function controller({ mode = 'pitch', saved, storageFails = false } = {}) 
     const result = [{ transcript }]; result.isFinal = isFinal;
     return { resultIndex: 0, results: [result] };
   }
-  return { dom, $, type, dictate, utterances, recognitions, downloads, links, advance, saved: () => window.sessionStorage.getItem(storageKey) };
+  return { dom, $, type, dictate, utterances, recognitions, downloads, links, audios, advance, saved: () => window.sessionStorage.getItem(storageKey) };
 }
 
 test('answers and review choices survive step changes, exercise changes, and a page reload', async () => {
@@ -142,9 +158,10 @@ test('dictation appends only final words and ignores cancelled results after a s
 
 test('leaving the page stops dictation and narration and prevents late callbacks from changing a new prompt', async () => {
   const c = await controller(); const { $, dom } = c;
-  $('hear-prompt').click(); const previousSpeech = c.utterances[0];
+  $('hear-prompt').click(); const previousSpeech = c.utterances[0]; const oldEnd = previousSpeech.onend;
+  assert.equal(previousSpeech.pitch, 1); assert.equal(previousSpeech.rate, 1);
   $('next').click(); $('hear-prompt').click();
-  previousSpeech.onend(); assert.equal($('stop-voice').disabled, false);
+  oldEnd(); assert.equal($('stop-voice').disabled, false);
   $('dictate').click(); assert.equal($('stop-voice').disabled, true);
   const capture = c.recognitions[0];
   Object.defineProperty(dom.window.document, 'hidden', { configurable: true, value: true });
@@ -166,5 +183,33 @@ test('the rehearsal timer pauses, resumes, finishes, and resets without invoking
   $('timer-toggle').click(); c.advance(5000); dom.window.dispatchEvent(new dom.window.Event('pagehide'));
   const paused = $('timer').textContent; c.advance(30000); assert.equal($('timer').textContent, paused);
   assert.equal(c.recognitions.length, 0); assert.equal(c.utterances.length, 0);
+  dom.window.close();
+});
+
+test('recorded prompts work without browser speech, leave answers untouched, and stop on navigation or dictation', async () => {
+  const c = await controller({ mode: 'story', recordings: true, browserSpeech: false }); const { $, dom } = c;
+  c.type('My own story words must remain private to the draft.');
+  $('hear-prompt').click(); const first = c.audios[0];
+  assert.equal(c.utterances.length, 0); assert.equal($('stop-voice').disabled, false);
+  assert.match(first.src, /story\/short-story\/character\.mp3$/);
+  assert.equal($('answer').value, 'My own story words must remain private to the draft.');
+  $('next').click(); assert.equal(first.paused, true); assert.equal($('hear-prompt').disabled, false);
+  $('hear-prompt').click(); first.emit('ended'); assert.equal($('stop-voice').disabled, false);
+  $('dictate').click(); assert.equal(c.audios[1].paused, true); assert.equal($('stop-voice').disabled, true);
+  assert.equal(c.recognitions.length, 1);
+  dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+  assert.equal(c.recognitions[0].aborted, true);
+  dom.window.close();
+});
+
+test('prompt voice settings stop narration without changing the draft or automatically replaying', async () => {
+  const c = await controller({ recordings: true }); const { $, dom } = c;
+  c.type('A draft worth keeping.'); $('hear-prompt').click();
+  $('voice-mode').value = 'browser'; $('voice-mode').dispatchEvent(new dom.window.Event('change'));
+  assert.equal(c.audios[0].paused, true); assert.equal(c.utterances.length, 0);
+  assert.equal($('answer').value, 'A draft worth keeping.');
+  assert.equal($('hear-prompt').disabled, false); assert.equal($('stop-voice').disabled, true);
+  $('hear-prompt').click(); assert.equal(c.utterances.length, 1);
+  assert.equal(c.utterances[0].pitch, 1); assert.equal(c.utterances[0].rate, 1);
   dom.window.close();
 });

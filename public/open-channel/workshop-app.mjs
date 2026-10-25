@@ -1,4 +1,7 @@
 import { WORKSHOPS, buildOutline, getProgress } from './workshops.mjs';
+import { createNarrator } from './narrator.mjs';
+import { getNarrationClip, RECORDINGS_READY } from './narration-catalog.mjs';
+import { setupVoiceSettings } from './voice-settings.mjs';
 
 const config = WORKSHOPS[document.body.dataset.workshop];
 const $ = id => document.getElementById(id);
@@ -129,29 +132,20 @@ $('download').addEventListener('click', () => {
 });
 
 // Narration starts only on a button press and is cancelled when its prompt changes.
-const synthesis = window.speechSynthesis;
-let speechGeneration = 0;
-let speechTimeout;
-function stopSpeech() {
-  speechGeneration++; clearTimeout(speechTimeout); synthesis?.cancel();
-  $('hear-prompt').disabled = !synthesis || !window.SpeechSynthesisUtterance;
-  $('stop-voice').disabled = true;
-}
+const narrator = createNarrator({ onState(state) {
+  const busy = ['loading', 'speaking'].includes(state.status);
+  $('hear-prompt').disabled = busy; $('stop-voice').disabled = !busy;
+  if (state.status === 'loading') feedback(state.source === 'recording' ? 'Loading the recorded prompt…' : 'Starting the device voice…');
+  if (state.status === 'speaking') feedback(state.source === 'recording' ? 'Playing the recorded prompt.' : 'Reading the prompt with your selected device voice.');
+  if (state.status === 'ended') feedback('Prompt finished. Your answer is ready to edit.');
+  if (state.status === 'error') feedback(state.source === 'recording' ? 'The recording could not play. Try again, or choose Device voice in Voice settings.' : 'The device voice could not play. Choose another voice or read the prompt above.');
+} });
+const voiceSettings = setupVoiceSettings(narrator, { recordingsReady: RECORDINGS_READY, onChange() { feedback('Voice changed. Press Hear prompt to listen.'); } });
+function stopSpeech() { narrator.stop(); }
 $('hear-prompt').addEventListener('click', () => {
   stopRecognition(); stopSpeech();
-  if (!synthesis || !window.SpeechSynthesisUtterance) return;
-  const generation = speechGeneration;
-  const utterance = new window.SpeechSynthesisUtterance(`${prompt().question} ${prompt().hint}`);
-  const voices = synthesis.getVoices();
-  utterance.voice = voices.find(voice => voice.localService && /^en/i.test(voice.lang)) || voices.find(voice => /^en/i.test(voice.lang)) || null;
-  utterance.lang = 'en-US'; utterance.rate = 0.95;
-  $('hear-prompt').disabled = true; $('stop-voice').disabled = false;
-  const finish = message => { if (generation !== speechGeneration) return; stopSpeech(); if (message) feedback(message); };
-  utterance.onstart = () => { if (generation !== speechGeneration) return; clearTimeout(speechTimeout); feedback('Reading the current prompt.'); };
-  utterance.onend = () => finish('Prompt finished. Your answer is ready to edit.');
-  utterance.onerror = () => finish('The browser voice could not play. You can read the prompt above.');
-  speechTimeout = setTimeout(() => finish('The browser voice did not start. Try again or read the prompt above.'), 8000);
-  try { synthesis.speak(utterance); } catch { finish('The browser voice is unavailable. You can read the prompt above.'); }
+  const text = `${prompt().question} ${prompt().hint}`;
+  narrator.play({ text, audioUrl: getNarrationClip(`${config.id}/${activeId}/${prompt().id}`, text), ...voiceSettings.getOptions() });
 });
 $('stop-voice').addEventListener('click', () => { stopSpeech(); feedback('Voice stopped.'); });
 
@@ -204,7 +198,6 @@ $('dictate').addEventListener('click', () => {
 const dictationPanel = document.querySelector('.dictation');
 dictationPanel.addEventListener('toggle', () => { if (!dictationPanel.open) stopRecognition(); });
 if (!Recognition) { $('dictate').disabled = true; $('voice-status').textContent = 'Dictation is unavailable in this browser. You can type every answer.'; }
-if (!synthesis || !window.SpeechSynthesisUtterance) { $('hear-prompt').disabled = true; $('hear-prompt').textContent = 'Browser voice unavailable'; }
 
 // A silent local timer; no microphone or recording is tied to rehearsal.
 let remainingMs = config.timerSeconds * 1000;
