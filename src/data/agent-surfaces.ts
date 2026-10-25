@@ -5,6 +5,8 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    openChannel: 'https://pointcast.xyz/open-channel/',
+    openChannelData: 'https://pointcast.xyz/open-channel.json',
     puzzles: 'https://pointcast.xyz/puzzles/',
     puzzleShelf: 'https://pointcast.xyz/shop/puzzles/',
     puzzleBusiness: 'https://pointcast.xyz/puzzles/business/',
