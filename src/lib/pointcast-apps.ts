@@ -29,8 +29,8 @@ function chainShelfApp(a: ChainApp): PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
-    slug: 'open-channel', name: 'Open Channel', kicker: 'VOICE PLAYGROUND · SCRIPTED DEMO',
-    description: 'Three original characters, twelve endings, optional browser narration and numbered voice choices. Save your transcript. Inspired by Dessa; no Dessa connection or generated replies.',
+    slug: 'open-channel', name: 'Open Channel', kicker: 'CHARACTERS · PITCH ROOM · STORY BOOTH',
+    description: 'Play authored character stories, practice a pitch, or shape a story. Write or dictate your own answers; guided worksheets assemble a downloadable outline. Optional browser speech. Inspired by Dessa; no Dessa connection or AI-generated replies.',
     url: 'https://pointcast.xyz/open-channel/', path: '/open-channel/',
     repo: 'https://github.com/mhoydich/pointcast', channel: 'CH.FD', kind: 'pointcast',
   },
