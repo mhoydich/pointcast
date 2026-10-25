@@ -670,6 +670,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/poll/site-pet-name', 'weekly', '0.68'],
   ['https://pointcast.xyz/zen-cats', 'daily', '0.7'],
   ['https://pointcast.xyz/zen-cats.json', 'daily', '0.7'],
+  ['https://pointcast.xyz/pantone/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/ues/pantone/', 'monthly', '0.7'],
   ['https://pointcast.xyz/BLOCKS.md', 'weekly', '0.7'],
 ];
 
