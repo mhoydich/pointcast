@@ -9,8 +9,6 @@ export const SCENES = [
     tagline: 'One tower. One last transmission.',
     description: 'A desert station is closing at dawn. Help Mara decide what its last signal should carry.',
     color: '#d7eaa6',
-    rate: 0.92,
-    pitch: 0.93,
     nodes: {
       start: {
         text: 'This is Mara, at the end of the dial. They take the tower down at sunrise. I have time for one last dedication. Who are we speaking to?',
@@ -64,8 +62,6 @@ export const SCENES = [
     tagline: 'A little room for something alive.',
     description: 'Jun has one spare growing tray on a lunar outpost. Choose what this small garden will become.',
     color: '#bdcaff',
-    rate: 0.94,
-    pitch: 1.04,
     nodes: {
       start: {
         text: 'Jun here. All the useful crops are accounted for. This last tray is ours. I found two seed envelopes in a coat from Earth: a tiny tomato, and a flower that opens after dark.',
@@ -119,8 +115,6 @@ export const SCENES = [
     tagline: 'Some things arrive without an owner.',
     description: 'At closing time, Ivo finds two unclaimed objects in a seaside lost-and-found. Give one a new destination.',
     color: '#a9dfdb',
-    rate: 0.9,
-    pitch: 0.88,
     nodes: {
       start: {
         text: 'Ivo, harbor returns desk. The last ferry has gone. Two things remain on my counter: a brass compass, and a letter addressed to Whoever needs a place. Which one should we deal with before closing?',

@@ -1,27 +1,29 @@
 import { SCENES } from './scenes.mjs';
+import { createNarrator } from './narrator.mjs';
+import { getNarrationClip, RECORDINGS_READY } from './narration-catalog.mjs';
+import { setupVoiceSettings } from './voice-settings.mjs';
 import { createSession, startSession, chooseReply, parseVoiceChoice, exportSession } from './engine.mjs';
 const $ = (id) => document.getElementById(id);
 const sessions = new Map(SCENES.map(scene => [scene.id, createSession(scene)]));
 let scene = SCENES[0];
 let narration = false;
-let speechGeneration = 0;
 let micGeneration = 0;
 let recognition = null;
-let speechStartTimer = null;
-const synth = window.speechSynthesis;
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const session = () => sessions.get(scene.id);
 const node = () => scene.nodes[session().nodeId];
 const stateLabel = () => !session().nodeId ? 'READY TO TUNE IN' : node()?.ending ? 'SCENE COMPLETE' : 'YOUR TURN';
 function setStatus(message) { $('status').textContent = message; }
-function stopSpeech() {
-  speechGeneration++;
-  clearTimeout(speechStartTimer);
-  if (synth) synth.cancel();
-  $('console').classList.remove('speaking');
-  $('interrupt').disabled = true;
-  setStatus(stateLabel());
-}
+const narrator = createNarrator({ onState(state) {
+  $('console').classList.toggle('speaking', state.status === 'speaking');
+  $('interrupt').disabled = !['loading', 'speaking'].includes(state.status);
+  if (state.status === 'loading') setStatus(state.source === 'recording' ? 'LOADING RECORDED VOICE' : 'STARTING DEVICE VOICE');
+  else if (state.status === 'speaking') setStatus(state.source === 'recording' ? 'RECORDED VOICE PLAYING' : 'DEVICE VOICE SPEAKING');
+  else if (state.status === 'error') setStatus(state.source === 'recording' ? 'RECORDING UNAVAILABLE · TRY AGAIN OR CHOOSE A DEVICE VOICE' : 'DEVICE VOICE UNAVAILABLE · READ ALONG');
+  else setStatus(stateLabel());
+} });
+const voiceSettings = setupVoiceSettings(narrator, { recordingsReady: RECORDINGS_READY, onChange() { setStatus('VOICE CHANGED · TAP HEAR LINE TO LISTEN'); } });
+function stopSpeech() { narrator.stop(); }
 function stopMic(message = '') {
   micGeneration++;
   const old = recognition;
@@ -32,23 +34,9 @@ function stopMic(message = '') {
 }
 function speak() {
   stopSpeech();
-  if (!narration || !node() || !synth || !window.SpeechSynthesisUtterance) return;
+  if (!narration || !node()) return;
   stopMic();
-  const generation = speechGeneration;
-  const utterance = new SpeechSynthesisUtterance(node().text);
-  const voices = synth.getVoices().filter(voice => voice.lang.toLowerCase().startsWith('en'));
-  const voice = voices.find(voice => voice.localService) || voices[0];
-  if (voice) utterance.voice = voice;
-  utterance.lang = voice?.lang || 'en-US';
-  utterance.rate = scene.rate || .95;
-  utterance.pitch = scene.pitch || 1;
-  setStatus('STARTING BROWSER VOICE');
-  $('interrupt').disabled = false;
-  utterance.onstart = () => { if (generation !== speechGeneration) return; clearTimeout(speechStartTimer); $('console').classList.add('speaking'); setStatus('BROWSER VOICE SPEAKING'); };
-  utterance.onend = () => { if (generation === speechGeneration) { clearTimeout(speechStartTimer); $('console').classList.remove('speaking'); $('interrupt').disabled = true; setStatus(stateLabel()); } };
-  utterance.onerror = () => { if (generation === speechGeneration) { clearTimeout(speechStartTimer); $('console').classList.remove('speaking'); $('interrupt').disabled = true; setStatus('VOICE UNAVAILABLE · READ ALONG'); } };
-  speechStartTimer = setTimeout(() => { if (generation === speechGeneration && !$('console').classList.contains('speaking')) { stopSpeech(); setStatus('VOICE DID NOT START · READ ALONG'); } }, 6000);
-  synth.speak(utterance);
+  narrator.play({ text: node().text, audioUrl: getNarrationClip(`characters/${scene.id}/${session().nodeId}`, node().text), ...voiceSettings.getOptions() });
 }
 function renderChannels() {
   $('channel-list').replaceChildren(...SCENES.map(item => {
@@ -101,7 +89,7 @@ function render() {
   }));
   $('note').value = session().note;
   $('restart').disabled = !current;
-  $('replay').disabled = !current || !narration || !synth;
+  $('replay').disabled = !current || !narration;
   $('mic').disabled = !Recognition || !(current?.choices?.length);
   setStatus(stateLabel());
   renderTranscript();
@@ -122,7 +110,7 @@ $('narration').addEventListener('click', () => {
   narration = !narration;
   $('narration').setAttribute('aria-pressed', String(narration));
   $('narration').textContent = narration ? '◖)) Voice on' : '◖)) Voice off';
-  $('replay').disabled = !node() || !narration || !synth;
+  $('replay').disabled = !node() || !narration;
   if (narration) speak(); else stopSpeech();
 });
 $('replay').addEventListener('click', speak);
@@ -172,7 +160,6 @@ $('save').addEventListener('click', () => {
 for (let i = 0; i < 27; i++) {
   const bar = document.createElement('i'); bar.style.setProperty('--height', `${5 + ((i * 13) % 25)}px`); bar.style.setProperty('--delay', `${-(i % 7) / 7}s`); $('wave').append(bar);
 }
-if (!synth || !window.SpeechSynthesisUtterance) { $('narration').disabled = true; $('narration').textContent = 'Voice unavailable'; }
 document.addEventListener('visibilitychange', () => { if (document.hidden) { stopSpeech(); stopMic('Microphone stopped while this tab was hidden.'); } });
 window.addEventListener('pagehide', () => { stopSpeech(); stopMic(); });
 renderChannels(); render(); stopMic();
