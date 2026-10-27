@@ -71,8 +71,9 @@ and subject to Astra’s architecture review; they do not lock a schema. This is
 not an endpoint or a claim that any event has been delivered or verified. A
 minimal envelope might contain `version: 1`, an opaque producer-scoped
 `event_id`, a constrained `event_type`, a UTC `observed_at`, and an optional
-`receipt_ref` with `network`, `genesis`, `tx_hash` and optional reported
-`block_height`. A digest should be optional and only cover explicitly public,
+`receipt_ref` with chain ID, genesis and transaction hash. An inclusion
+observation also names the reported block height and block hash; all of those
+remain unverified node claims until checked. A digest should be optional and only cover explicitly public,
 canonical bytes after the canonicalization is specified; even a hash of
 low-entropy or private data can leak information. Do not include raw payloads,
 headers, URL queries, IP addresses, keys or personal data.
@@ -121,8 +122,8 @@ The practice card is a downloadable local example, containing a fixed scenario
 and explicitly unperformed evidence dimensions. It has no publication Block
 ID, no chain transaction and no private learner data; its small local file
 format is not a webhook standard. Existing publication Block IDs and revision
-history are unchanged. A real published artifact must keep its stable ID and
-use a new revision digest, not assign an old ID to a different artifact.
+history are unchanged. A real published artifact keeps its stable ID while
+each revision gets its own digest. Retired IDs are never reassigned.
 
 The live example shows the node-reported transaction and block hashes, chain
 ID and pinned genesis. The page itself performs no signature check, replay or
