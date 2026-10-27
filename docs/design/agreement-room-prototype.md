@@ -1,6 +1,6 @@
-# Agreement Room: local specimen and capability gaps
+# PointCast Mist V2: Agreement Room specimen and capability gaps
 
-This is a synthetic no-money application experiment. It has no signing, real identities, shared database, live invitations, publication, blockchain operations or legal force. All state is in the current tab; reload resets it. The two participants, their feedback, the studio bot and review desk are fixtures. A review is advice only: it cannot override either participant's approval.
+PointCast Mist V2 is a working product name, distinct from the current read-only Mist explorer and the existing devnet identity. This is a synthetic no-money application experiment. It has no signing, real identities, shared database, live invitations, publication, blockchain operations or legal force. All state is in the current tab; reload resets it. The two participants, their feedback, the studio bot and review desk are fixtures. A review is advice only: it cannot override either participant's approval.
 
 ## Lifecycle
 
