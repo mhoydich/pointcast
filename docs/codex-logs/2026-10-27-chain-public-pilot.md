@@ -93,8 +93,8 @@ lesson completion is not a credential or proof of learning; agent attribution
 is a claim until independently verified. Do not put private learner information
 on chain. The current devnet can demonstrate receipt inspection without a new
 protocol; durable recovery, operator independence and a true owner-controlled
-genesis may require infrastructure or protocol decisions later. Wait for the
-independent Astra review before choosing any V2 protocol or event schema.
+genesis may require infrastructure or protocol decisions later. Astra’s review recommends the existing product primitives; no new protocol or
+event schema is selected. The separate webhook task owns its contract.
 
 ## Agent and learner boundaries
 
@@ -114,3 +114,18 @@ verified identity or an on-chain record. The UES practice example is entirely
 simulated and does not read or publish that receipt. Any future public
 completion flow must be separate, explicitly opt-in, and must not imply
 accreditation or reveal learner data by default.
+
+## Artifact and evidence follow-up
+
+The practice card is a downloadable local example, containing a fixed scenario
+and explicitly unperformed evidence dimensions. It has no publication Block
+ID, no chain transaction and no private learner data; its small local file
+format is not a webhook standard. Existing publication Block IDs and revision
+history are unchanged. A real published artifact must keep its stable ID and
+use a new revision digest, not assign an old ID to a different artifact.
+
+The live example shows the node-reported transaction and block hashes, chain
+ID and pinned genesis. The page itself performs no signature check, replay or
+external-anchor verification; those dimensions are shown as not checked.
+The existing verifier is separately available, subject to its stated limits.
+No result here implies the truth of an event, identity, authorship or finality.
