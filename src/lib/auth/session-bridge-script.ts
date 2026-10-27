@@ -13,6 +13,8 @@
 export const POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT = String.raw`
 (() => {
   const bridgeWindow = window;
+  const isIsolated = () => document.documentElement.dataset.pcIsolated === 'true';
+  if (isIsolated()) return;
   if (bridgeWindow.__pointCastTezosBridgeInstalled) {
     if (typeof bridgeWindow.__pointCastReconcileTezosSession === 'function') {
       void bridgeWindow.__pointCastReconcileTezosSession();
@@ -71,6 +73,7 @@ export const POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT = String.raw`
   }
 
   async function runReconciliation() {
+    if (isIsolated()) return;
     try {
       const response = await fetch('/api/auth/session', {
         credentials: 'include',
@@ -78,8 +81,10 @@ export const POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT = String.raw`
         headers: { accept: 'application/json' },
       });
 
+      if (isIsolated()) return;
       if (response.ok) {
         const payload = await response.json();
+        if (isIsolated()) return;
         const user = payload && payload.user ? payload.user : null;
         const identities = Array.isArray(user?.identities)
           ? user.identities.filter((item) => item && item.provider === 'kukai' && typeof item.id === 'string')
@@ -101,6 +106,7 @@ export const POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT = String.raw`
         throw new Error('session-service-unavailable');
       }
     } catch {
+      if (isIsolated()) return;
       const address = storedActiveAddress();
       emitState(address ? 'wallet-only' : 'unavailable', address, null);
       return;

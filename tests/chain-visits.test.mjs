@@ -1,6 +1,6 @@
 // Visits to /chain/* are counted and show on the register, and the MCP apps shelf lists the chain
 // truthfully. What this suite holds:
-//   - every Astro page under /chain mounts the pageview beacon (BlockLayout, never `isolated`);
+//   - chain Astro pages mount the beacon, except the intentionally isolated Agreement Room;
 //   - every static page under public/chain/ loads /js/pc-pageview.js, the same path-only beacon,
 //     which reports `/chain/yard` (no trailing slash) to this site's /api/analytics and nothing else;
 //   - no third-party tracker anywhere in those pages;
@@ -27,12 +27,13 @@ const BEACON = 'public/js/pc-pageview.js';
 const TAG = '<script src="/js/pc-pageview.js" defer></script>';
 const TRACKERS = /google-analytics|googletagmanager|gtag\(|plausible|segment\.(io|com)|mixpanel|hotjar|clarity\.ms|fullstory|amplitude|posthog|matomo|umami|facebook\.net|connect\.facebook|doubleclick|cloudflareinsights/i;
 
-test('every Astro page under /chain mounts the beacon: BlockLayout, never isolated', () => {
+test('chain Astro pages mount the beacon except the isolated Agreement Room', () => {
   assert.ok(ASTRO_PAGES.length >= 18, ASTRO_PAGES.length + ' pages');
   for (const f of ASTRO_PAGES) {
     const s = read(f);
     assert.match(s, /import BlockLayout from '[./]+layouts\/BlockLayout\.astro';/, f);
-    assert.doesNotMatch(s, /<BlockLayout[^>]*\bisolated\b/, f + ' would drop the beacon');
+    if (f === 'src/pages/chain/agreement.astro') assert.match(s, /<BlockLayout[^>]*\bisolated\b/, 'the local simulation stays isolated');
+    else assert.doesNotMatch(s, /<BlockLayout[^>]*\bisolated\b/, f + ' would drop the beacon');
   }
   const layout = read('src/layouts/BlockLayout.astro');
   assert.match(layout, /\{!isolated && <PageviewBeacon \/>\}/);

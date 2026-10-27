@@ -47,7 +47,7 @@ export const GET: APIRoute = async () => {
     site: 'https://pointcast.xyz',
     version: 'v1',
     status: 'local-prototype',
-    notice: 'Historical proposals; local choices are not signed, submitted, tallied or executed.',
+    notice: 'This historical feed contains three of the five proposals shown on /dao; local choices are not signed, submitted, tallied or executed.',
     designPrinciples: [
       'author-curated proposals — zero free-text submission surface',
       'new choices are stored locally without a wallet; they are not signed or submitted; earlier browser records may contain an address',

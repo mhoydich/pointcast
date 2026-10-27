@@ -39,3 +39,16 @@ test('blocked storage reports that the choice was not saved', () => {
   assert.equal(dom.window.document.querySelector('[data-vote-status]').textContent, 'NO LOCAL CHOICE');
   dom.window.close();
 });
+
+test('malformed saved records are ignored without preventing other choices', () => {
+  const dom = page({ 'PC-0001': { vote: { toString: null }, ts: '2026-10-27T12:00:00Z' } });
+  assert.equal(dom.window.document.querySelector('[data-vote-status]').textContent, 'NO LOCAL CHOICE');
+  dom.window.document.querySelector('button').click();
+  assert.match(dom.window.document.querySelector('[data-vote-status]').textContent, /LOCAL CHOICE · FOR/);
+  dom.window.close();
+  for (const record of [{ vote: 'MAYBE', ts: '2026-10-27T12:00:00Z' }, { vote: 'FOR', ts: { toString: null } }, { vote: 'FOR', ts: 'not-a-date' }]) {
+    const other = page({ 'PC-0001': record });
+    assert.equal(other.window.document.querySelector('[data-vote-status]').textContent, 'NO LOCAL CHOICE');
+    other.window.close();
+  }
+});
