@@ -89,6 +89,7 @@ export const GET: APIRoute = async () => {
   const contractSources = buildContractRegistry();
 
   const payload = {
+    webhookFieldGuide: { page: 'https://pointcast.xyz/webhooks/', catalog: 'https://pointcast.xyz/webhooks.json', status: '100 planned contracts; zero live connections' },
     capabilityIndex: 'https://pointcast.xyz/api/capabilities',
     capabilitiesPage: 'https://pointcast.xyz/capabilities',
     $schema: 'https://pointcast.xyz/BLOCKS.md',
