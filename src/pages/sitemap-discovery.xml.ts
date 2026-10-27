@@ -22,6 +22,8 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/bot-beacon/', 'daily', '0.7'],
+  ['https://pointcast.xyz/agent-welcome.md', 'monthly', '0.7'],
   ['https://pointcast.xyz/sunset-downs/', 'daily', '0.85'],
   ['https://pointcast.xyz/sunset-downs/money/', 'monthly', '0.7'],
   ['https://pointcast.xyz/sunset-downs/agents/', 'weekly', '0.7'],
@@ -724,12 +726,11 @@ export const GET: APIRoute = async () => {
   const urls = [...staticUrls, ...dynamicUrls]
     .map(([loc, changefreq, priority]) => [canonicalSitemapUrl(loc), changefreq, priority] as SitemapEntry)
     .filter(([loc]) => !isNoindexPath(new URL(loc).pathname));
-  const today = new Date().toISOString().slice(0, 10);
+  // Only include lastmod when a reliable per-page modification date is known.
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map(([loc, changefreq, priority]) => `  <url>
     <loc>${xmlEscape(loc)}</loc>
-    <lastmod>${today}</lastmod>
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
   </url>`).join('\n')}
