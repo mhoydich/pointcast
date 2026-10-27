@@ -10,7 +10,11 @@ verified. This branch excludes held PRs #1556 and #1558. It adds a guided first 
 `/chain-pilot/`: a local, explicitly simulated action, then a read-only example
 from the public devnet with manual paths to the existing Receipt Desk and block
 verifier. It creates no keys, accounts, writes, payments or persistent visitor
-records. A block check does not alone prove a particular hash was included.
+records from the practice action. The existing site layout can send a pageview
+event; its analytics handler can store a coarse IP hint. HTTP request metadata
+may include a referrer under the existing global policy, so this is not a
+claim of anonymous access. The practice scenario is not sent in that event.
+A block check does not alone prove a particular hash was included.
 
 ## Observed and unknown
 
@@ -91,3 +95,22 @@ on chain. The current devnet can demonstrate receipt inspection without a new
 protocol; durable recovery, operator independence and a true owner-controlled
 genesis may require infrastructure or protocol decisions later. Wait for the
 independent Astra review before choosing any V2 protocol or event schema.
+
+## Agent and learner boundaries
+
+The published chain design says `clear_mandate` returns an agent to legacy
+unscoped behavior; the shipped `public/chain/bots/pcv.py` replay deletes the
+mandate and checks some scope only when a mandate exists. This does not mean
+every action is unrestricted: its `spend_allowance` rejects a missing mandate.
+The private live Worker source and current backend enforcement cannot be
+verified in this workspace. Do not treat clear_mandate as universal revocation.
+A future webhook dispatcher must default-deny and revoke at its own authorization
+and queue boundaries; arbitrary incoming events must never directly reach
+native signing or MCP. Verify live behavior in isolation before any write pilot.
+
+`src/lib/ues-completion-receipt-schema.mjs` describes a private, learner-
+downloaded, self-attested completion record: not academic credit, accreditation,
+verified identity or an on-chain record. The UES practice example is entirely
+simulated and does not read or publish that receipt. Any future public
+completion flow must be separate, explicitly opt-in, and must not imply
+accreditation or reveal learner data by default.
