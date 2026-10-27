@@ -8,7 +8,7 @@
  * Function actually gets the route.
  */
 import contracts from '../src/data/contracts.json';
-import { collectSitting, kennelGrid } from '../src/lib/collect-desk';
+import { collectDay, collectSitting, kennelGrid } from '../src/lib/collect-desk';
 import { getKennelClubMintSnapshot } from '../src/lib/kennel-club-mint';
 
 const HEADERS = {
@@ -24,7 +24,12 @@ export const onRequestOptions: PagesFunction = () => new Response(null, {
 });
 
 export const onRequestGet: PagesFunction = async () => {
-  const today = collectSitting();
+  // Resolve both the displayed sitting and its window from the same instant.
+  // Outside the September series collectSitting returns the nearest plate;
+  // it must not be advertised as claimable on that later date.
+  const now = new Date();
+  const today = collectSitting(now);
+  const inSeason = today.mintDate === collectDay(now);
   let minted: number | null = null;
   try {
     minted = (await getKennelClubMintSnapshot(today.tokenId)).today.minted;
@@ -44,11 +49,17 @@ export const onRequestGet: PagesFunction = async () => {
       breed: today.breed,
       title: today.title,
       image: `https://pointcast.xyz${today.image.png}`,
-      claim: 'https://pointcast.xyz/collect/kennel?claim=1',
+      claim: inSeason ? 'https://pointcast.xyz/collect/kennel?claim=1' : null,
       price: 'free',
-      minted,
+      // This is the token's cumulative on-chain supply, not today's mints.
+      tokenSupply: minted,
+      minted: null,
+      inSeason,
+      claimAvailability: inSeason ? 'unverified' : 'closed',
     },
-    counts: { sittings: 30, availableToday: 1, mintedToday: minted },
+    // The calendar alone cannot establish that the claim service or quota is
+    // available. Null means unverified; zero means the date window is closed.
+    counts: { sittings: 30, availableToday: inSeason ? null : 0, mintedToday: null },
     contracts: {
       kennelClub: contracts.kennel_club.mainnet,
       profileObjects: contracts.profile_objects.mainnet,

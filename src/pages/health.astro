@@ -17,6 +17,11 @@ const inspectedLabel = inspected.toISOString().slice(0, 16).replace('T', ' · ')
 const ageLabel = `${freshness.ageDays} day${freshness.ageDays === 1 ? '' : 's'} old`;
 const clean = report.verdict === 'clean';
 const passCount = report.claims.filter((c) => c.ok).length;
+// Older committed reports predate method-aware door categories.
+type DoorNote = { url: string; status: number; reason: string };
+const doorDetails = report.doors as typeof report.doors & { expected?: DoorNote[]; unavailable?: DoorNote[] };
+const expected = doorDetails.expected ?? [];
+const unavailable = doorDetails.unavailable ?? [];
 ---
 
 <BlockLayout title={title} description={description} alternates={alternates}>
@@ -40,6 +45,8 @@ const passCount = report.claims.filter((c) => c.ok).length;
       </p>
       <p class:list={['verdict', clean ? 'verdict--clean' : 'verdict--drift']}>
         {clean ? 'CLEAN' : 'DRIFT'} — {report.doors.open}/{report.doors.checked} doors open ·
+        {expected.length > 0 && <>{expected.length} documented responses · </>}
+        {unavailable.length > 0 && <>{unavailable.length} unavailable · </>}
         {passCount}/{report.claims.length} claims verified
       </p>
       {freshness.stale && (
@@ -64,6 +71,21 @@ const passCount = report.claims.filter((c) => c.ok).length;
         ))}
       </ul>
     </section>
+
+    {unavailable.length > 0 && (
+      <section aria-label="Unavailable doors">
+        <h2>Unavailable doors</h2>
+        <ul class="doors">{unavailable.map((d) => <li><code>{d.status || 'ERR'}</code><span>{d.url.replace('https://pointcast.xyz', '')} · {d.reason}</span></li>)}</ul>
+      </section>
+    )}
+
+    {expected.length > 0 && (
+      <section aria-label="Documented responses">
+        <h2>Documented responses</h2>
+        <p>These doors require authentication or return a documented response. For POST-only doors, the capability service's safe probe is reported separately from the observed GET.</p>
+        <ul class="doors">{expected.map((d) => <li><code>{d.status || 'ERR'}</code><span>{d.url.replace('https://pointcast.xyz', '')} · {d.reason}</span></li>)}</ul>
+      </section>
+    )}
 
     {report.doors.broken.length > 0 && (
       <section aria-label="Broken doors">

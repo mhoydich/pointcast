@@ -41,12 +41,13 @@ const description = 'Eight moods. Ambient generated tones. Any Spotify link. WAR
         <button class="bath__mood" data-m="ocean"    aria-pressed="false"><span class="bath__mood-dot"></span><span class="bath__mood-name">OCEAN</span></button>
       </nav>
       <div class="bath__audio">
-        <button class="bath__sound-btn" id="bath-sound-btn" data-on="0">SOUND OFF</button>
-        <span class="bath__sound-note" id="bath-sound-note">generated drone · no network</span>
+        <button class="bath__sound-btn" id="bath-sound-btn" data-on="0" aria-pressed="false">SOUND OFF</button>
+        <span class="bath__sound-note" id="bath-sound-note" role="status">generated drone · no network</span>
+        <label class="bath__volume" for="bath-volume">VOLUME <input id="bath-volume" type="range" min="0" max="100" value="50" /></label>
       </div>
       <section class="bath__spotify" aria-label="Spotify">
         <div class="bath__input-row">
-          <input class="bath__spotify-input" id="bath-spotify-input" type="url" placeholder="paste any spotify link..." autocomplete="off" spellcheck="false" />
+          <input class="bath__spotify-input" id="bath-spotify-input" aria-label="Spotify link" type="url" placeholder="paste any spotify link..." autocomplete="off" spellcheck="false" />
           <button class="bath__clear-btn" id="bath-clear-btn" style="display:none" aria-label="Clear">x</button>
         </div>
         <div id="bath-embed"></div>
@@ -74,7 +75,7 @@ const description = 'Eight moods. Ambient generated tones. Any Spotify link. WAR
   'use strict';
   var NOTES={warm:'amber · coral · gold · the warm side of morning',cool:'teal · sapphire · mist · the clear side of afternoon',electric:'magenta · cyan · arc · the lit side of midnight',earth:'sage · ochre · loam · the slow side of dusk',void:'charcoal · silver · pitch · the deep side of nothing',dawn:'peach · rose · lilac · the soft side of waking',neon:'green · yellow · shock · the loud side of alive',ocean:'cerulean · navy · deep · the still side of the sea'};
   var TONES={warm:{freqs:[220,440,329.6],g:.056,lpf:800},cool:{freqs:[220,293.7,440],g:.048,lpf:580},electric:{freqs:[277.2,369.9,554.4],g:.06,lpf:1200},earth:{freqs:[130.8,196,261.6],g:.058,lpf:480},void:{freqs:[55,110,164.8],g:.07,lpf:260},dawn:{freqs:[261.6,392,523.3],g:.048,lpf:900},neon:{freqs:[440,554.4,659.3],g:.055,lpf:1800},ocean:{freqs:[138.6,207.7,277.2],g:.064,lpf:400}};
-  var ctx=null,mGain=null,nodes=[],soundOn=false,mood='warm',spot=null;
+  var ctx=null,mGain=null,nodes=[],soundOn=false,mood='warm',spot=null,stopTimer=null,volume=0.5;
   function stopNodes(){nodes.forEach(function(n){try{n.o.stop()}catch(e){}try{n.l.stop()}catch(e){}});nodes=[];}
   function startDrone(m){
     if(!ctx||!soundOn)return;
@@ -91,28 +92,31 @@ const description = 'Eight moods. Ambient generated tones. Any Spotify link. WAR
   }
   function toggleSound(){
     var AC=window.AudioContext||window.webkitAudioContext;
-    if(!AC)return;
+    if(!AC){var note=document.getElementById('bath-sound-note');if(note)note.textContent='audio is unavailable in this browser';return;}
     if(!ctx){ctx=new AC();mGain=ctx.createGain();mGain.gain.value=0;mGain.connect(ctx.destination);}
     soundOn=!soundOn;
+    if(stopTimer){clearTimeout(stopTimer);stopTimer=null;}
     var btn=document.getElementById('bath-sound-btn'),sn=document.getElementById('bath-sound-note');
-    if(soundOn){mGain.gain.setTargetAtTime(0.85,ctx.currentTime,0.6);startDrone(mood);if(btn)btn.textContent='SOUND ON';if(btn)btn.setAttribute('data-on','1');if(sn)sn.textContent='generated drone · '+mood+' · web audio';}
-    else{mGain.gain.setTargetAtTime(0,ctx.currentTime,0.4);setTimeout(stopNodes,1800);if(btn)btn.textContent='SOUND OFF';if(btn)btn.setAttribute('data-on','0');if(sn)sn.textContent='generated drone · no network';}
+    if(soundOn){if(ctx.state==='suspended')ctx.resume();mGain.gain.setTargetAtTime(volume,ctx.currentTime,0.6);startDrone(mood);if(btn){btn.textContent='SOUND ON';btn.setAttribute('data-on','1');btn.setAttribute('aria-pressed','true');}if(sn)sn.textContent='generated drone · '+mood+' · web audio';}
+    else{mGain.gain.setTargetAtTime(0,ctx.currentTime,0.4);stopTimer=setTimeout(function(){stopNodes();stopTimer=null;},1800);if(btn){btn.textContent='SOUND OFF';btn.setAttribute('data-on','0');btn.setAttribute('aria-pressed','false');}if(sn)sn.textContent='generated drone · no network';}
   }
-  function setMood(m){
+  function setMood(m,remember){
+    if(!Object.prototype.hasOwnProperty.call(NOTES,m))return;
     mood=m;
+    if(remember){try{localStorage.setItem('pc:bath:mood',m);}catch(e){}}
     var el=document.getElementById('bath-main');if(el)el.dataset.mood=m;
     var n=document.getElementById('bath-note');if(n)n.textContent=NOTES[m]||'';
     document.querySelectorAll('.bath__mood').forEach(function(b){var on=b.dataset.m===m;b.setAttribute('aria-pressed',on?'true':'false');b.classList.toggle('bath__mood--active',on);});
     if(soundOn&&ctx){startDrone(m);var sn=document.getElementById('bath-sound-note');if(sn)sn.textContent='generated drone · '+m+' · web audio';}
   }
-  function clockMood(){var h=new Date().getHours();if(h<5)return'void';if(h<8)return'dawn';if(h<11)return'warm';if(h<16)return'cool';if(h<19)return'earth';if(h<22)return'electric';return'ocean';}
+  function clockMood(){var h=Number(new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',hour:'numeric',hourCycle:'h23'}).format(new Date()));if(h<5)return'void';if(h<8)return'dawn';if(h<11)return'warm';if(h<16)return'cool';if(h<19)return'earth';if(h<22)return'electric';return'ocean';}
   function parseSpot(raw){var m=raw.match(/open\.spotify\.com\/(track|playlist|album|episode)\/([A-Za-z0-9]{22})/);return m?{type:m[1],id:m[2]}:null;}
-  function updateWallet(){var el=document.getElementById('bath-wallet-note');if(!el)return;var a=localStorage.getItem('pc:wallet-active');el.textContent=a?'saves to '+a.slice(0,6)+'...'+a.slice(-4):'connect wallet (footer) to link to your address';}
+  function updateWallet(){var el=document.getElementById('bath-wallet-note');if(!el)return;var a=null;try{a=localStorage.getItem('pc:wallet-active');}catch(e){}el.textContent=a?'saves to '+a.slice(0,6)+'...'+a.slice(-4):'connect wallet (footer) to link to your address';}
   function handleInput(val){
     var p=parseSpot(val.trim()),em=document.getElementById('bath-embed'),sr=document.getElementById('bath-save-row'),cb=document.getElementById('bath-clear-btn');
     if(cb)cb.style.display=val.length?'flex':'none';
     spot=p;
-    if(em){if(p){var h=p.type==='track'?'152':'352';em.innerHTML='<iframe src="https://open.spotify.com/embed/'+p.type+'/'+p.id+'?utm_source=pointcast" width="100%" height="'+h+'" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" style="display:block;border-radius:10px;margin-top:10px;box-shadow:0 4px 28px rgba(0,0,0,.45)"></iframe>';}else{em.innerHTML='';}}
+    if(em){if(p){var h=p.type==='track'?'152':'352';em.innerHTML='<iframe title="Spotify player" src="https://open.spotify.com/embed/'+p.type+'/'+p.id+'?utm_source=pointcast" width="100%" height="'+h+'" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" style="display:block;border-radius:10px;margin-top:10px;box-shadow:0 4px 28px rgba(0,0,0,.45)"></iframe>';}else{em.innerHTML='';}}
     if(sr)sr.style.display=p?'flex':'none';
     if(p)updateWallet();
   }
@@ -120,19 +124,23 @@ const description = 'Eight moods. Ambient generated tones. Any Spotify link. WAR
     if(!spot)return;
     var btn=document.getElementById('bath-save-btn');
     if(btn){btn.textContent='SAVING...';btn.disabled=true;}
-    var addr=localStorage.getItem('pc:wallet-active')||undefined;
+    var addr;try{addr=localStorage.getItem('pc:wallet-active')||undefined;}catch(e){}
     var entry={spotify_url:'https://open.spotify.com/'+spot.type+'/'+spot.id,spotify_type:spot.type,spotify_id:spot.id,mood:mood,address:addr,timestamp:new Date().toISOString()};
-    try{var prev=JSON.parse(localStorage.getItem('pc:bath:saves')||'[]');localStorage.setItem('pc:bath:saves',JSON.stringify([entry].concat(prev.filter(function(e){return e.spotify_id!==entry.spotify_id})).slice(0,50)));}catch(e){}
-    fetch('/api/bath',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)}).then(function(r){return r.json();}).then(function(d){if(btn){btn.textContent=d.ok?'SAVED':'SAVED LOCALLY';btn.disabled=false;setTimeout(function(){btn.textContent='SAVE TO BATH';},2500);}}).catch(function(){if(btn){btn.textContent='SAVED LOCALLY';btn.disabled=false;setTimeout(function(){btn.textContent='SAVE TO BATH';},2500);}});
+    var localSaved=false;
+    try{var prev=JSON.parse(localStorage.getItem('pc:bath:saves')||'[]');if(!Array.isArray(prev))prev=[];localStorage.setItem('pc:bath:saves',JSON.stringify([entry].concat(prev.filter(function(e){return e.spotify_id!==entry.spotify_id})).slice(0,50)));localSaved=true;}catch(e){}
+    function finished(remoteSaved){if(btn){btn.textContent=remoteSaved?'SAVED':localSaved?'SAVED LOCALLY':'SAVE FAILED';btn.disabled=false;setTimeout(function(){btn.textContent='SAVE TO BATH';},2500);}}
+    fetch('/api/bath',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry)}).then(function(r){if(!r.ok)throw new Error('save failed');return r.json();}).then(function(d){finished(!!d.ok);}).catch(function(){finished(false);});
   }
-  function tick(){var el=document.getElementById('bath-clock');if(!el)return;var n=new Date();el.textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+' PT';}
-  document.querySelectorAll('.bath__mood').forEach(function(b){b.addEventListener('click',function(){setMood(b.dataset.m);});});
+  function tick(){var el=document.getElementById('bath-clock');if(!el)return;el.textContent=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date())+' PT';}
+  document.querySelectorAll('.bath__mood').forEach(function(b){b.addEventListener('click',function(){setMood(b.dataset.m,true);});});
   var sb=document.getElementById('bath-sound-btn');if(sb)sb.addEventListener('click',toggleSound);
+  var slider=document.getElementById('bath-volume');if(slider)slider.addEventListener('input',function(){volume=Number(slider.value)/100;if(soundOn&&ctx)mGain.gain.setTargetAtTime(volume,ctx.currentTime,0.05);});
   var inp=document.getElementById('bath-spotify-input');
   if(inp){inp.addEventListener('input',function(){handleInput(inp.value);});inp.addEventListener('paste',function(){setTimeout(function(){handleInput(inp.value);},0);});}
   var clr=document.getElementById('bath-clear-btn');if(clr)clr.addEventListener('click',function(){if(inp)inp.value='';handleInput('');});
   var sv=document.getElementById('bath-save-btn');if(sv)sv.addEventListener('click',saveToBath);
-  setMood(clockMood());tick();setInterval(tick,60000);
+  var savedMood;try{savedMood=localStorage.getItem('pc:bath:mood');}catch(e){}
+  setMood(savedMood&&Object.prototype.hasOwnProperty.call(NOTES,savedMood)?savedMood:clockMood());tick();setInterval(tick,60000);
 })();
 </script>
 
@@ -181,7 +189,9 @@ const description = 'Eight moods. Ambient generated tones. Any Spotify link. WAR
   [data-m="neon"]     .bath__mood-dot{background:#39FF14;box-shadow:0 0 7px #39FF14}
   [data-m="ocean"]    .bath__mood-dot{background:#00B4D8;box-shadow:0 0 7px #00B4D8}
   .bath__mood-name{font-size:8px;font-weight:700;letter-spacing:.16em;opacity:.82}
-  .bath__audio{display:flex;align-items:center;gap:10px;margin:0 0 14px}
+  .bath__audio{display:flex;align-items:center;gap:10px;margin:0 0 14px;flex-wrap:wrap}
+  .bath__volume{display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:.12em;margin-left:auto}
+  .bath__volume input{width:90px;accent-color:var(--a)}
   .bath__sound-btn{font-family:'JetBrains Mono Variable',monospace;font-size:9px;font-weight:700;letter-spacing:.18em;padding:6px 14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:1px;color:inherit;cursor:pointer;white-space:nowrap;transition:background .18s ease,border-color .18s ease}
   .bath__sound-btn:hover{background:rgba(255,255,255,.14)}
   .bath__sound-btn[data-on="1"]{border-color:rgba(255,255,255,.38);background:rgba(255,255,255,.16)}
@@ -206,4 +216,5 @@ const description = 'Eight moods. Ambient generated tones. Any Spotify link. WAR
   .bath__foot{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;letter-spacing:.18em;padding-top:14px;border-top:1px dashed rgba(255,255,255,.12);opacity:.52}
   @media(max-width:520px){.bath{padding:28px 12px 44px}.bath__frame{padding:20px 14px 18px}.bath__title{font-size:28px}}
   @media(max-width:380px){.bath__moods{grid-template-columns:repeat(2,1fr)}}
+  @media (prefers-reduced-motion: reduce){.bath__blob{animation:none}.bath,.bath__blob{transition:none}}
 </style>

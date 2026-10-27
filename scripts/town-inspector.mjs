@@ -33,6 +33,7 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { assessDoor } from './door-assessment.mjs';
 
 const args = process.argv.slice(2);
 const BASE = (args.includes('--base') ? args[args.indexOf('--base') + 1] : 'https://pointcast.xyz').replace(/\/$/, '');
@@ -110,14 +111,28 @@ if (manifestRes.status !== 200) {
 }
 const manifest = JSON.parse(manifestRes.text);
 
-// 2 — walk every advertised door.
+// 2 — walk every advertised door. The capability index performs safe,
+// method-aware probes; a GET 404 alone does not establish that a POST is broken.
+const capabilityRes = await probe(`${BASE}/api/capabilities`, { readBody: true });
+let capabilities = [];
+let capabilityWarning = null;
+try {
+  if (capabilityRes.status !== 200) throw new Error(`status ${capabilityRes.status}`);
+  const index = JSON.parse(capabilityRes.text);
+  if (!Array.isArray(index.capabilities)) throw new Error('missing capabilities');
+  capabilities = index.capabilities;
+} catch (err) {
+  capabilityWarning = `Capability index unavailable (${String(err.message).slice(0, 100)}); non-200 doors are assessed without its probes.`;
+}
 const doors = [...collectDoors(manifest.endpoints)].sort();
 console.log(`walking ${doors.length} advertised doors…`);
 const doorResults = await pooled(doors, async (url) => ({ url, ...(await probe(url)) }));
-const broken = doorResults
-  .filter((r) => r.status !== 200)
-  .map((r) => ({ url: r.url, status: r.status, ...(r.error ? { error: r.error } : {}) }));
-console.log(`${doors.length - broken.length}/${doors.length} doors open\n`);
+const assessments = doorResults.map((r) => assessDoor(r, BASE, capabilities));
+const broken = assessments.filter((r) => r.kind === 'broken').map((r) => r.entry);
+const expected = assessments.filter((r) => r.kind === 'expected').map((r) => r.entry);
+const unavailable = assessments.filter((r) => r.kind === 'unavailable').map((r) => r.entry);
+const open = assessments.filter((r) => r.kind === 'open').length;
+console.log(`${open}/${doors.length} doors open · ${expected.length} documented responses · ${unavailable.length} unavailable\n`);
 
 // 3 — the specific claims the manifest makes.
 
@@ -244,7 +259,7 @@ for (const [id, url] of [
 
 // Orientation files: the short one should be the short one. A note, not a
 // failure — the manifest never promises it, but agents pay for the tokens.
-const notes = [];
+const notes = capabilityWarning ? [capabilityWarning] : [];
 {
   const short = await probe(`${BASE}/llms.txt`, { readBody: true });
   const full = await probe(`${BASE}/llms-full.txt`, { readBody: true });
@@ -266,15 +281,19 @@ const report = {
   base: BASE,
   doors: {
     checked: doors.length,
-    open: doors.length - broken.length,
+    open,
+    expected,
+    unavailable,
     broken,
   },
   claims,
   notes,
-  verdict: broken.length === 0 && failedClaims.length === 0 ? 'clean' : 'drift',
+  verdict: broken.length === 0 && unavailable.length === 0 && failedClaims.length === 0 ? 'clean' : 'drift',
 };
 
 console.log(`\ndoors: ${report.doors.open}/${report.doors.checked} open · claims: ${claims.length - failedClaims.length}/${claims.length} pass · verdict: ${report.verdict}`);
+for (const d of unavailable) console.log(`  unavailable ${d.status}: ${d.url} (${d.reason})`);
+for (const d of expected) console.log(`  expected ${d.status}: ${d.url} (${d.reason})`);
 for (const b of broken) console.log(`  broken ${b.status}: ${b.url}`);
 for (const n of notes) console.log(`  note: ${n}`);
 
