@@ -6,8 +6,10 @@ export function mountPilot(root, net = makeNet(root.dataset.api)) {
   const get = (name) => root.querySelector(`[data-${name}]`);
   const find = get('find'), status = get('status'), example = get('example');
   let generation = 0;
+  const examples = { agent: 'creative agent publishing', ues: 'UES lesson completion', local: 'neighborhood event' };
   get('practice').addEventListener('click', () => {
-    get('practice-result').textContent = 'PRACTICE ONLY · Status: simulated · Network: none · Transaction: none · Value: none. No transaction was sent. A real receipt would name a transaction and its reported block.';
+    const example = examples[get('scenario').value] || examples.agent;
+    get('practice-result').textContent = `PRACTICE ONLY · Example: ${example} · Status: simulated · Network: none · Transaction: none · Value: none. No transaction was sent. A real receipt would name a transaction and its reported block.`;
   });
   get('copy').addEventListener('click', async () => {
     const hash = get('hash').textContent;

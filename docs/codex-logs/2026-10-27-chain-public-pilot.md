@@ -60,7 +60,8 @@ held in #1558. This page uses no query-bearing link to Receipt Desk.
 
 ## Proposed V1 event envelope for a later integration
 
-The separate webhook task owns implementation. This is a proposed interface,
+The separate webhook task owns implementation. The fields below are illustrative
+and subject to Astra’s architecture review; they do not lock a schema. This is a proposed interface,
 not an endpoint or a claim that any event has been delivered or verified. A
 minimal envelope might contain `version: 1`, an opaque producer-scoped
 `event_id`, a constrained `event_type`, a UTC `observed_at`, and an optional
@@ -77,3 +78,14 @@ check succeeds. Delivery, a digest or a node's inclusion report is not proof
 of truth, independent inclusion, finality, ownership or source authenticity.
 If no real transaction exists, omit `receipt_ref`; never promote a local
 practice record into an on-chain receipt.
+
+## V2 direction for review
+
+Start with creative agent publishing and provenance, playful zero-value
+interactions, self-reported UES completion, and local projects. A simulated
+lesson completion is not a credential or proof of learning; agent attribution
+is a claim until independently verified. Do not put private learner information
+on chain. The current devnet can demonstrate receipt inspection without a new
+protocol; durable recovery, operator independence and a true owner-controlled
+genesis may require infrastructure or protocol decisions later. Wait for the
+independent Astra review before choosing any V2 protocol or event schema.
