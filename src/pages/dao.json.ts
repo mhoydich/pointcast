@@ -50,7 +50,7 @@ export const GET: APIRoute = async () => {
     notice: 'Historical proposals; local choices are not signed, submitted, tallied or executed.',
     designPrinciples: [
       'author-curated proposals — zero free-text submission surface',
-      'choices are stored locally with a connected wallet address; they are not signed or submitted',
+      'new choices are stored locally without a wallet; they are not signed or submitted; earlier browser records may contain an address',
       'historical FOR/AGAINST/ABSTAIN choices do not create binding outcomes or a shared tally',
       'proposed eligibility is not currently checked',
       'no-moderation by construction',

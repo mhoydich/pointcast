@@ -1,11 +1,10 @@
 ---
 /**
  * /dao — historical proposals and a local-only choice prototype.
- * Choices may be associated with a connected wallet address but are not
- * signed, submitted, tallied, eligibility-checked or executed.
+ * Choices are stored on this device and are not signed, submitted,
+ * tallied, eligibility-checked or executed.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-import WalletChip from '../components/WalletChip.astro';
 import contracts from '../data/contracts.json';
 
 const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
@@ -149,6 +148,8 @@ const jsonLd = {
 
 <BlockLayout
   title="DAO"
+  isolated
+  includeManifest={false}
   description="PointCast DAO — historical proposals and a local-only choice prototype."
   image="/images/og/dao.png"
   jsonLd={jsonLd}
@@ -173,12 +174,11 @@ const jsonLd = {
     <header class="hero">
       <div class="hero__kicker-row">
         <p class="kicker">DAO · LOCAL PROTOTYPE</p>
-        <WalletChip />
       </div>
       <h1 class="display">Explore the proposals.</h1>
       <p class="dek">
         These historical proposals are a prototype. You can record a choice on
-        this device after connecting a wallet, but it is not signed or sent to
+        this device without connecting a wallet, but it is not signed or sent to
         PointCast. There is no shared tally, eligibility check, or automatic action.
       </p>
       <dl class="facts">
@@ -195,7 +195,7 @@ const jsonLd = {
           <header class="prop__head">
             <span class="prop__id mono">{p.id}</span>
             <span class={`prop__kind mono prop__kind--${p.kind}`}>{p.kind.toUpperCase()}</span>
-            <span class="prop__window mono">CLOSES · {fmtDate(p.closesAt)}</span>
+            <span class="prop__window mono">PROPOSED WINDOW ENDED · {fmtDate(p.closesAt)}</span>
           </header>
           <h2 class="prop__title">{p.title}</h2>
           <p class="prop__summary">{p.summary}</p>
@@ -216,7 +216,7 @@ const jsonLd = {
                 data-consequence={o.consequence}
               >
                 <span class="prop__option-label">{o.label}</span>
-                <span class="prop__option-consequence">{o.consequence}</span>
+                <span class="prop__option-consequence">Proposed outcome: {o.consequence}</span>
               </button>
             ))}
           </div>
@@ -227,9 +227,10 @@ const jsonLd = {
 
     <section class="principles">
       <p class="kicker">HOW THIS WORKS</p>
+      <p id="dao-storage-status" role="status" aria-live="polite"></p>
       <ol class="principles__list">
         <li><strong>These are historical proposals.</strong> The dates and potential outcomes below describe proposals, not decisions made by this page.</li>
-        <li><strong>Choices stay on this device.</strong> The page may connect a wallet and save its address with your choice in browser storage. It does not request a signature or send the choice.</li>
+        <li><strong>Choices stay on this device.</strong> New choices do not need a wallet and stay in browser storage. Earlier saved choices may still contain a wallet address. The page does not request a signature or send the choice.</li>
         <li><strong>Eligibility is not checked.</strong> The eligibility listed on each proposal is an idea for a future process, not a current requirement enforced here.</li>
         <li><strong>There is no shared tally or automatic execution.</strong> A local choice does not cast a binding vote, allocate funds, change a schema, or authorize an action.</li>
       </ol>
@@ -254,12 +255,12 @@ const jsonLd = {
       const STORAGE_KEY = 'pc:dao:votes';
 
       function readVotes() {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+        try { const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {}; }
         catch { return {}; }
       }
 
       function writeVotes(v) {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); } catch {}
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); return true; } catch { return false; }
       }
 
       function renderStatus() {
@@ -277,34 +278,8 @@ const jsonLd = {
         });
       }
 
-      async function signVote(proposalId, vote) {
-        const { connectKukai, getActiveAddress } = await import('/src/lib/tezos.ts').catch(async () => await import('../lib/tezos'));
-        let addr;
-        try {
-          addr = await getActiveAddress();
-          if (!addr) addr = await connectKukai();
-        } catch (err) {
-          alert('Wallet connection was not completed; no local choice was saved.');
-          return null;
-        }
-
-        const payload = {
-          type: 'pc-dao-vote',
-          proposal: proposalId,
-          vote,
-          timestamp: new Date().toISOString(),
-          address: addr,
-        };
-
-        // For v1 we don't actually call client.requestSignPayload —
-        // that's v1.1 when we wire the tally backend. For now we just
-        // record that the wallet was connected and a local choice was selected.
-        // The signature step is a stub that records intent.
-        return payload;
-      }
-
       document.querySelectorAll('[data-vote]').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
+        btn.addEventListener('click', function () {
           const pid = btn.getAttribute('data-proposal');
           const vote = btn.getAttribute('data-vote');
           if (!pid || !vote) return;
@@ -313,18 +288,16 @@ const jsonLd = {
           if (current[pid] && current[pid].vote === vote) {
             // Tapping same option again — treat as cancel.
             delete current[pid];
-            writeVotes(current);
+            if (!writeVotes(current)) { document.getElementById('dao-storage-status').textContent = 'Browser storage is unavailable; your choice was not changed.'; return; }
+            document.getElementById('dao-storage-status').textContent = 'Local choice cleared.';
             renderStatus();
             return;
           }
 
-          const payload = await signVote(pid, vote);
-          if (!payload) return;
-
-          current[pid] = { vote, ts: payload.timestamp, address: payload.address };
-          writeVotes(current);
+          current[pid] = { vote, ts: new Date().toISOString() };
+          if (!writeVotes(current)) { document.getElementById('dao-storage-status').textContent = 'Browser storage is unavailable; your choice was not saved.'; return; }
+          document.getElementById('dao-storage-status').textContent = 'Local choice saved on this device.';
           renderStatus();
-          console.info('[pc-dao] local choice recorded', payload);
         });
       });
 
