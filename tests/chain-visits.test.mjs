@@ -151,7 +151,8 @@ test('built Receipt Desk sets an early referrer policy and its one shared beacon
   const policy = doc.querySelectorAll('meta[name="referrer"]');
   assert.equal(policy.length, 1);
   assert.equal(policy[0].getAttribute('content'), 'no-referrer');
-  const firstResourceOrPolicy = doc.querySelector('meta[name="referrer"], script, link[href], img[src], iframe[src]');
+  // Canonical/alternate metadata links do not fetch a resource on page load.
+  const firstResourceOrPolicy = doc.querySelector('meta[name="referrer"], script, link[rel~="stylesheet"], link[rel~="preload"], link[rel~="modulepreload"], link[rel~="prefetch"], img[src], iframe[src]');
   assert.equal(firstResourceOrPolicy, policy[0], 'document policy precedes resources and scripts');
   const beacons = [...doc.querySelectorAll('script')].filter((s) => s.textContent.includes('/api/analytics'));
   assert.equal(beacons.length, 1, 'one analytics sender in the compiled page');
