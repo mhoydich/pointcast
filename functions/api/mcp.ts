@@ -205,6 +205,7 @@ import {
   findNounsBattlerAgentTask,
 } from '../../src/lib/nouns-battler-agent-bench';
 import { TUG_PULL_TOOL, dispatchTugPull } from '../../src/lib/tug-mcp';
+import { PRAYER_OVERVIEW_TOOL, dispatchPrayerOverview } from '../../src/lib/prayer-mcp';
 import {
   BENCH_TOOL_DEFINITIONS,
   BENCH_WRITE_TOOL_NAMES,
@@ -1554,6 +1555,7 @@ const TOOL_DEFINITIONS = [
 const TOOLS = [
   ...TOOL_DEFINITIONS,
   TUG_PULL_TOOL,
+  PRAYER_OVERVIEW_TOOL,
   ...BENCH_TOOL_DEFINITIONS,
   ...STATION_TOOL_DEFINITIONS,
   ...WILD_TOOL_DEFINITIONS,
@@ -2024,6 +2026,8 @@ async function dispatchTool(
   sessionId: string,
 ): Promise<{ content: Array<{ type: string; text?: string }>; isError?: boolean }> {
   switch (name) {
+    case 'prayer_overview':
+      return dispatchPrayerOverview(base);
     case 'real_estate_study':
     case 'real_estate_scenario':
     case 'real_estate_feed': {
