@@ -1,0 +1,786 @@
+---
+/**
+ * /stretch - Stretch with Claude.
+ *
+ * A short guided stretch and yoga break for people who live on their phones
+ * and at desks: three sessions (2, 5, 8 minutes), a before-and-after PMM mood
+ * check-in kept in the browser, and a pixel figure drawn on canvas. The guide
+ * copy is written by Claude in the house voice, not Mike's. Data and timing
+ * live in src/lib/stretch.mjs, shared with /stretch.json and the tests.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHIP_MIX, FIELD, GUIDE, MOODS, POSES, SAFETY, SESSIONS, getPose, inkOn, mixHex } from '../lib/stretch.mjs';
+
+// Ink for a selected chip, picked so it reads on that mood's tint (tests/stretch.test.mjs checks AA).
+const chipInk = (color) => inkOn(mixHex(color, FIELD, CHIP_MIX));
+
+const title = 'Stretch with Claude';
+const description =
+  'A short guided stretch and yoga break for phone necks and desk backs: 2, 5, or 8 minutes, a pixel figure to follow, and a mood check-in that stays in your browser.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/stretch',
+  name: 'Stretch with Claude',
+  description,
+  url: 'https://pointcast.xyz/stretch',
+  applicationCategory: 'HealthApplication',
+  operatingSystem: 'Web',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  featureList: [
+    'Phone neck (2 min), Desk reset (5 min), Evening unwind (8 min)',
+    'Pixel figure for every pose, with still frames under reduced motion',
+    'Before and after mood check-in stored only in the browser',
+    'Chip-tune cues after a tap, screen wake lock where supported',
+    'Full keyboard control',
+  ],
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/og/stretch.png"
+  jsonLd={jsonLd}
+  themeColor="#40318D"
+  immersive
+  alternates={[{ type: 'application/json', href: '/stretch.json', title: 'Stretch with Claude sessions (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/og/stretch.png',
+    buttons: [
+      { label: 'Stretch with Claude', action: 'link', target: 'https://pointcast.xyz/stretch' },
+      { label: 'Ocean Meditation', action: 'link', target: 'https://pointcast.xyz/meditate' },
+    ],
+  }}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>stretch</span>
+    </nav>
+
+    <div class="crt" id="st" data-view="pick" style="--mood: #2F86D8">
+      <header class="bar">
+        <span class="wordmark"><span class="fuji" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span><b>STRETCH</b></span>
+        <p class="prompt" id="st-prompt">READY.</p>
+        <button class="key small" id="st-sound" type="button" aria-pressed="true" title="Sound (M)">SND ON</button>
+      </header>
+
+      <!-- PICK -->
+      <section class="pane" data-pane="pick" aria-labelledby="st-title">
+        <h1 id="st-title">Stretch with Claude</h1>
+        <p class="guide"><span class="who">CLAUDE&gt;</span> {GUIDE.hello}</p>
+
+        <h2 class="label" id="st-before-label">{GUIDE.pick}</h2>
+        <div class="moods" role="radiogroup" aria-labelledby="st-before-label" data-moods="before">
+          {MOODS.map((m) => (
+            <button type="button" class="mood" role="radio" aria-checked="false" data-mood={m.id} style={`--c: ${m.color}; --on: ${chipInk(m.color)}`}>
+              <span class="sw" aria-hidden="true"></span>{m.id}
+            </button>
+          ))}
+        </div>
+        <p class="hint" id="st-suggest" aria-live="polite"></p>
+
+        <h2 class="label">Pick a length</h2>
+        <div class="sessions">
+          {SESSIONS.map((s) => (
+            <button type="button" class="key session" data-session={s.id}>
+              <span class="session__top"><b>{s.name}</b><span>{s.minutes} MIN</span></span>
+              <span class="session__for">{s.for}</span>
+              <span class="session__n">{s.steps.length} POSES</span>
+            </button>
+          ))}
+        </div>
+        <p class="safety">{SAFETY}</p>
+      </section>
+
+      <!-- RUN -->
+      <section class="pane" data-pane="run" aria-label="Stretch session" hidden>
+        <div class="run-head">
+          <span id="st-session-name">—</span>
+          <span id="st-step-count" aria-live="polite">—</span>
+          <span id="st-left" aria-label="Time left in session">0:00</span>
+        </div>
+        <div class="segs" id="st-segs" aria-hidden="true"></div>
+
+        <div class="stage">
+          <canvas id="st-canvas" width="48" height="48" role="img" aria-label="Pixel figure showing the pose"></canvas>
+          <div class="breath" aria-hidden="true">
+            <b id="st-breath">BREATHE IN</b>
+            <span class="breath__bar"><i id="st-breath-bar"></i></span>
+          </div>
+          <span class="clock" id="st-step-left" aria-hidden="true">0:00</span>
+          <span class="side" id="st-side" aria-live="polite"></span>
+          <span class="paused" id="st-paused" hidden>PAUSED</span>
+        </div>
+
+        <div class="cue">
+          <h2 id="st-pose-name" aria-live="polite">—</h2>
+          <p id="st-instruction"></p>
+          <p class="cue__breath" id="st-breath-cue"></p>
+          <p class="cue__opt" id="st-optional" hidden></p>
+          <p class="cue__ease" id="st-ease"></p>
+        </div>
+
+        <div class="controls">
+          <button type="button" class="key" id="st-prev" aria-label="Previous pose (Left arrow)">◀ BACK</button>
+          <button type="button" class="key primary" id="st-pause" aria-label="Pause (Space)">PAUSE</button>
+          <button type="button" class="key" id="st-next" aria-label="Next pose (Right arrow)">NEXT ▶</button>
+        </div>
+        <button type="button" class="key ghost end" id="st-end">END SESSION</button>
+        <p class="keys-hint">SPACE pause · ← → step · M sound</p>
+
+        <h2 class="label">The plan</h2>
+        <ol class="steps" id="st-steps"></ol>
+      </section>
+
+      <!-- DONE -->
+      <section class="pane" data-pane="done" aria-labelledby="st-done-title" hidden>
+        <h2 class="big" id="st-done-title" tabindex="-1">Done.</h2>
+        <p class="guide"><span class="who">CLAUDE&gt;</span> {GUIDE.thanks}</p>
+        <h2 class="label" id="st-after-label">{GUIDE.after}</h2>
+        <div class="moods" role="radiogroup" aria-labelledby="st-after-label" data-moods="after">
+          {MOODS.map((m) => (
+            <button type="button" class="mood" role="radio" aria-checked="false" data-mood={m.id} style={`--c: ${m.color}; --on: ${chipInk(m.color)}`}>
+              <span class="sw" aria-hidden="true"></span>{m.id}
+            </button>
+          ))}
+        </div>
+        <p class="moodline" id="st-moodline" aria-live="polite"></p>
+        <label class="carry" id="st-carry-wrap" hidden>
+          <input type="checkbox" id="st-carry" />
+          <span>Carry this mood around PointCast (sets the site mood to <b id="st-carry-mood"></b>)</span>
+        </label>
+        <p class="tally" id="st-tally"></p>
+        <div class="controls two">
+          <button type="button" class="key primary" id="st-again">AGAIN</button>
+          <button type="button" class="key" id="st-home">PICK ANOTHER</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="plans" aria-labelledby="plans-title">
+      <h2 id="plans-title">Every session, step by step</h2>
+      <p class="plans__dek">The same plan the guide follows, in case you would rather read it and go at your own pace.</p>
+      <div class="plans__grid">
+        {SESSIONS.map((s) => (
+          <article class="plan">
+            <h3>{s.name} <span class="mono">{s.minutes} MIN</span></h3>
+            <ol>
+              {s.steps.map(([id, sec]) => {
+                const p = getPose(id);
+                return (
+                  <li>
+                    <b>{p.name}</b> <span class="mono">{sec}s</span>
+                    <span class="plan__how">{p.instruction}</span>
+                    <span class="plan__ease">{p.easeOff}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </article>
+        ))}
+      </div>
+      <p class="plans__safety">{SAFETY}</p>
+      <p class="plans__more">
+        Quieter rooms: <a href="/meditate">Ocean Meditation</a> · <a href="/breathe-california">Breathe California</a> ·
+        <a href="/drum-meditate">Drum Meditate</a> · <a href="/moods">Moods</a>. For agents: <a href="/stretch.json">/stretch.json</a>.
+        The guide here is Claude, writing for PointCast. {POSES.length} poses, no account, nothing leaves your browser.
+      </p>
+    </section>
+  </div>
+</BlockLayout>
+
+<script>
+  import {
+    FIELD, KEY_MIX, MIN_LOGGED_SECONDS, STORAGE_KEY, buildTimeline, breathAt, countable, formatClock, frameAt,
+    getPose, getSession, inkOn, locate, mixHex, moodColor, moodLine, parseStore, rasterize, recordSession,
+    secondSide, siteMoodFor, startOf, stillMix, suggestFor, validMood,
+  } from '../lib/stretch.mjs';
+
+  const $ = (id) => document.getElementById(id);
+  const root = $('st');
+  const canvas = $('st-canvas');
+  const g = canvas.getContext('2d');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  let store = load();
+  let before = null;
+  let after = null;
+  let sessionId = null;
+  let timeline = null;
+  let elapsed = 0;
+  // Seconds the clock actually ran; skipped poses don't count as stretching.
+  let ranSeconds = 0;
+  let running = false;
+  let lastTs = 0;
+  let lastIndex = -1;
+  let lastPhase = '';
+  let lastSide = false;
+  let raf = 0;
+  let lock = null;
+  let gestured = false;
+  let ac = null;
+
+  function load() {
+    try { return parseStore(localStorage.getItem(STORAGE_KEY)); } catch { return parseStore(null); }
+  }
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch {}
+  }
+
+  /* ---------- sound: square and triangle blips, only after a tap ---------- */
+  function blip(notes, type = 'square', vol = 0.05) {
+    if (!store.sound || !gestured) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
+      let t = ac.currentTime;
+      for (const f of notes) {
+        const o = ac.createOscillator();
+        const v = ac.createGain();
+        o.type = type;
+        o.frequency.value = f;
+        v.gain.setValueAtTime(vol, t);
+        v.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+        o.connect(v).connect(ac.destination);
+        o.start(t);
+        o.stop(t + 0.13);
+        t += 0.09;
+      }
+    } catch {}
+  }
+  const sounds = {
+    start: () => blip([523, 659, 784]),
+    step: () => blip([659, 880]),
+    back: () => blip([880, 659]),
+    done: () => blip([523, 659, 784, 1047]),
+    in: () => blip([392], 'triangle', 0.035),
+    out: () => blip([294], 'triangle', 0.035),
+  };
+  function renderSound() {
+    const b = $('st-sound');
+    b.textContent = store.sound ? 'SND ON' : 'SND OFF';
+    b.setAttribute('aria-pressed', String(store.sound));
+  }
+  function toggleSound() {
+    store.sound = !store.sound;
+    save();
+    renderSound();
+  }
+
+  /* ---------- wake lock ---------- */
+  async function wake(on) {
+    try {
+      if (on && !lock && 'wakeLock' in navigator && document.visibilityState === 'visible') {
+        lock = await navigator.wakeLock.request('screen');
+        lock.addEventListener('release', () => { lock = null; });
+      } else if (!on && lock) {
+        const l = lock;
+        lock = null;
+        await l.release();
+      }
+    } catch { lock = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!running || !timeline) return;
+    advance(performance.now());
+    if (locate(timeline, elapsed).done) return finish();
+    if (document.visibilityState === 'visible') wake(true);
+  });
+
+  /* ---------- views and moods ---------- */
+  function show(view) {
+    root.dataset.view = view;
+    for (const p of root.querySelectorAll('[data-pane]')) p.hidden = p.dataset.pane !== view;
+    $('st-prompt').textContent = view === 'run' ? (running ? 'RUN' : 'PAUSED.') : 'READY.';
+  }
+  function tint(mood) {
+    const c = moodColor(mood || 'calm');
+    root.style.setProperty('--mood', c);
+    root.style.setProperty('--mood-ink', inkOn(mixHex(c, FIELD, KEY_MIX)));
+  }
+  function pickMood(group, mood) {
+    for (const b of root.querySelectorAll(`[data-moods="${group}"] .mood`)) {
+      b.setAttribute('aria-checked', String(b.dataset.mood === mood));
+      b.tabIndex = b.dataset.mood === mood || (!mood && b === b.parentElement.firstElementChild) ? 0 : -1;
+    }
+  }
+  function onMood(group, mood) {
+    if (group === 'before') {
+      before = before === mood ? null : mood;
+      pickMood('before', before);
+      tint(before);
+      const s = before && getSession(suggestFor(before));
+      $('st-suggest').textContent = s ? `Feeling ${before}? ${s.name} (${s.minutes} min) might fit. Any of them is fine.` : '';
+      for (const b of root.querySelectorAll('[data-session]')) b.classList.toggle('suggested', !!s && b.dataset.session === s.id);
+    } else {
+      after = mood;
+      pickMood('after', after);
+      tint(after);
+      $('st-moodline').textContent = moodLine(before, after);
+      const site = siteMoodFor(after);
+      $('st-carry-wrap').hidden = !site;
+      $('st-carry').checked = false;
+      if (site) $('st-carry-mood').textContent = site;
+      finishRecord();
+    }
+  }
+  for (const group of ['before', 'after']) {
+    const wrap = root.querySelector(`[data-moods="${group}"]`);
+    wrap.addEventListener('click', (e) => {
+      const b = e.target.closest('.mood');
+      if (b) onMood(group, b.dataset.mood);
+    });
+    // Arrow keys move between radio chips, as a radiogroup should.
+    wrap.addEventListener('keydown', (e) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const chips = [...wrap.querySelectorAll('.mood')];
+      const i = chips.indexOf(document.activeElement);
+      const n = chips[(i + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1) + chips.length) % chips.length];
+      n.focus();
+      onMood(group, n.dataset.mood);
+    });
+    pickMood(group, null);
+  }
+
+  /* ---------- the figure ---------- */
+  const INK = '#F2F0FF';
+  const PROP = '#5a4bb0';
+  const BG = '#140f33';
+  // Mood colors lifted toward white so even low and tired read on the dark field.
+  const lift = (hex, k) => {
+    const n = parseInt(hex.slice(1), 16);
+    const ch = (v) => Math.round(v + (255 - v) * k);
+    return `rgb(${ch(n >> 16)}, ${ch((n >> 8) & 255)}, ${ch(n & 255)})`;
+  };
+  function draw(pose, mix, t, mirror) {
+    const cells = rasterize(frameAt(pose, mix, mirror), pose.setting);
+    const mood = getComputedStyle(root).getPropertyValue('--mood').trim() || '#2F86D8';
+    const color = lift(/^#[0-9a-f]{6}$/i.test(mood) ? mood : '#2F86D8', 0.2);
+    g.fillStyle = BG;
+    g.fillRect(0, 0, 48, 48);
+    for (const [k, layer] of cells) {
+      const [x, y] = k.split(',').map(Number);
+      g.fillStyle = layer === 'prop' ? PROP : layer === 'head' ? INK : color;
+      g.fillRect(x, y, 1, 1);
+    }
+    if (pose.id === 'box-breath' && t != null) {
+      // A dot walks the edge of a box, one side per count of four.
+      const c = (t % 16) / 16;
+      const side = Math.floor(c * 4);
+      const k = Math.round((c * 4 - side) * 40);
+      const pts = [[4 + k, 44], [44, 44 - k], [44 - k, 4], [4, 4 + k]];
+      g.fillStyle = '#F5D142';
+      const [x, y] = pts[side];
+      g.fillRect(x - 1, y - 1, 2, 2);
+    }
+  }
+
+  /* ---------- session ---------- */
+  function buildSteps() {
+    const ol = $('st-steps');
+    ol.textContent = '';
+    for (const s of timeline.steps) {
+      const li = document.createElement('li');
+      const p = getPose(s.poseId);
+      li.innerHTML = `<b></b> <span class="mono"></span>`;
+      li.querySelector('b').textContent = p.name;
+      li.querySelector('.mono').textContent = `${s.seconds}s`;
+      ol.append(li);
+    }
+    const segs = $('st-segs');
+    segs.textContent = '';
+    for (const s of timeline.steps) {
+      const i = document.createElement('i');
+      i.style.flexGrow = String(s.seconds);
+      i.append(document.createElement('b'));
+      segs.append(i);
+    }
+  }
+
+  function start(id) {
+    gestured = true;
+    sessionId = id;
+    const s = getSession(id);
+    timeline = buildTimeline(s);
+    elapsed = 0;
+    ranSeconds = 0;
+    lastIndex = -1;
+    lastPhase = '';
+    lastSide = false;
+    $('st-session-name').textContent = `${s.name.toUpperCase()} · ${s.minutes} MIN`;
+    buildSteps();
+    show('run');
+    setRunning(true);
+    sounds.start();
+    $('st-pause').focus();
+  }
+
+  function setRunning(on) {
+    running = on;
+    lastTs = performance.now();
+    $('st-pause').textContent = on ? 'PAUSE' : 'RESUME';
+    $('st-pause').setAttribute('aria-label', on ? 'Pause (Space)' : 'Resume (Space)');
+    $('st-paused').hidden = on;
+    $('st-prompt').textContent = on ? 'RUN' : 'PAUSED.';
+    wake(on);
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(frame);
+  }
+
+  function jump(delta) {
+    if (!timeline) return;
+    const here = locate(timeline, elapsed);
+    // Back within the first two seconds of a pose goes to the previous one; later, restarts this one.
+    const target = delta < 0 && here.inStep > 2 ? here.index : here.index + delta;
+    if (target >= timeline.steps.length) return finish();
+    elapsed = startOf(timeline, target);
+    lastTs = performance.now();
+    (delta < 0 ? sounds.back : sounds.step)();
+    render(true);
+  }
+
+  function render(quiet = false) {
+    const at = locate(timeline, elapsed);
+    const pose = getPose(at.step.poseId);
+    const br = breathAt(pose.pattern, at.inStep);
+    if (at.index !== lastIndex) {
+      if (lastIndex !== -1 && running && !quiet) sounds.step();
+      lastIndex = at.index;
+      $('st-step-count').textContent = `POSE ${at.index + 1} OF ${timeline.steps.length}`;
+      $('st-pose-name').textContent = pose.name;
+      $('st-instruction').textContent = pose.instruction;
+      $('st-breath-cue').textContent = pose.breath;
+      $('st-ease').textContent = pose.easeOff;
+      $('st-optional').hidden = !pose.optional;
+      $('st-optional').textContent = pose.optional || '';
+      canvas.setAttribute('aria-label', `Pixel figure: ${pose.name}`);
+      [...$('st-steps').children].forEach((li, i) => {
+        li.classList.toggle('past', i < at.index);
+        if (i === at.index) li.setAttribute('aria-current', 'step');
+        else li.removeAttribute('aria-current');
+      });
+    }
+    if (running && br.phase !== lastPhase && (br.phase === 'in' || br.phase === 'out')) sounds[br.phase]();
+    lastPhase = br.phase;
+    const side2 = secondSide(pose, at.inStep, at.step.seconds);
+    if (side2 !== lastSide && side2 && running && !quiet) sounds.step();
+    lastSide = side2;
+    $('st-side').textContent = pose.sides ? (side2 ? 'OTHER SIDE' : 'FIRST SIDE') : '';
+    [...$('st-segs').children].forEach((seg, i) => {
+      const s = timeline.steps[i];
+      const k = Math.max(0, Math.min(1, (elapsed - s.start) / s.seconds));
+      seg.firstChild.style.width = `${k * 100}%`;
+    });
+    $('st-left').textContent = formatClock(at.left);
+    $('st-step-left').textContent = formatClock(at.stepLeft);
+    $('st-breath').textContent = br.count ? `${br.label} · ${br.count}` : br.label;
+    $('st-breath-bar').style.width = `${Math.round(br.progress * 100)}%`;
+    // Reduced motion holds one still frame per pose (and side); otherwise the figure breathes.
+    draw(pose, reduce.matches ? stillMix(pose) : br.mix, reduce.matches ? null : at.inStep, side2);
+    return at;
+  }
+
+  // rAF timestamps can trail a performance.now() taken in an input handler,
+  // so a negative step is dropped rather than running the clock backwards.
+  function advance(now) {
+    if (!running) return;
+    const dt = Math.max(0, (now - lastTs) / 1000);
+    lastTs = Math.max(lastTs, now);
+    const room = timeline ? Math.max(0, timeline.total - elapsed) : 0;
+    elapsed += dt;
+    ranSeconds += Math.min(dt, room);
+  }
+
+  function frame(now) {
+    if (root.dataset.view !== 'run') return;
+    advance(now);
+    const at = render();
+    if (at.done) return finish();
+    raf = requestAnimationFrame(frame);
+  }
+  // rAF stops in a background tab; this keeps the clock going where timers
+  // still run, and visibilitychange folds in any gap where they didn't.
+  setInterval(() => {
+    if (document.visibilityState === 'hidden' && running && timeline) {
+      advance(performance.now());
+      if (locate(timeline, elapsed).done) finish();
+    }
+  }, 1000);
+
+  let recorded = false;
+  function finish() {
+    if (root.dataset.view === 'done') return;
+    running = false;
+    cancelAnimationFrame(raf);
+    wake(false);
+    sounds.done();
+    recorded = false;
+    after = null;
+    pickMood('after', null);
+    $('st-moodline').textContent = moodLine(before, null);
+    $('st-carry-wrap').hidden = true;
+    finishRecord();
+    show('done');
+    $('st-done-title').focus();
+  }
+  function finishRecord() {
+    // One log entry per session that actually ran; picking an after-mood updates it.
+    const seconds = Math.round(ranSeconds);
+    if (!countable(seconds)) {
+      $('st-tally').textContent = `Under ${MIN_LOGGED_SECONDS} seconds of stretching, so this one is not logged. ${store.sessions} logged here so far, saved only in this browser.`;
+      return;
+    }
+    if (!recorded) {
+      store = recordSession(store, { session: sessionId, before, after, seconds, at: new Date().toISOString() });
+      recorded = true;
+    } else {
+      const last = store.log[store.log.length - 1];
+      if (last) last.after = validMood(after);
+    }
+    save();
+    const mins = Math.round(store.seconds / 60);
+    $('st-tally').textContent = `${store.sessions} ${store.sessions === 1 ? 'break' : 'breaks'} taken here · about ${mins} min · saved only in this browser`;
+  }
+
+  $('st-carry').addEventListener('change', (e) => {
+    const site = siteMoodFor(after);
+    if (!e.target.checked || !site) return;
+    try { localStorage.setItem('pc:mood', site); } catch {}
+    // Same signal MoodChip sends, so a signed-in account adopts the new mood instead of restoring the old one.
+    try { window.dispatchEvent(new CustomEvent('pc:me-state-legacy-write', { detail: { key: 'pc:mood' } })); } catch {}
+    document.documentElement.setAttribute('data-pc-mood', site);
+    try { window.dispatchEvent(new CustomEvent('pc:mood-changed', { detail: { moodId: site } })); } catch {}
+  });
+
+  /* ---------- wiring ---------- */
+  for (const b of root.querySelectorAll('[data-session]')) b.addEventListener('click', () => start(b.dataset.session));
+  $('st-pause').addEventListener('click', () => setRunning(!running));
+  $('st-next').addEventListener('click', () => jump(1));
+  $('st-prev').addEventListener('click', () => jump(-1));
+  $('st-end').addEventListener('click', finish);
+  $('st-again').addEventListener('click', () => start(sessionId));
+  $('st-home').addEventListener('click', () => {
+    show('pick');
+    tint(before);
+    root.querySelector('[data-session]').focus();
+  });
+  $('st-sound').addEventListener('click', () => { gestured = true; toggleSound(); });
+
+  // Keys belong to the room only when focus is in it, or nowhere in particular.
+  const ours = (t) => root.contains(t) || t === document.body || t === document.documentElement;
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey || e.ctrlKey || e.metaKey || !ours(e.target)) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if (e.key === 'm' || e.key === 'M') { toggleSound(); return; }
+    if (root.dataset.view !== 'run') return;
+    if (e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      setRunning(!running);
+    } else if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
+      e.preventDefault();
+      jump(1);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      jump(-1);
+    }
+  });
+  // Space on a focused button would also click it on keyup; in a session Space only pauses.
+  document.addEventListener('keyup', (e) => {
+    if (root.dataset.view === 'run' && ours(e.target) && (e.key === ' ' || e.key === 'Spacebar')) e.preventDefault();
+  });
+
+  // Arriving with a mood already set elsewhere on PointCast? Use the last
+  // stretch mood if there is one, to color the room; nothing is preselected.
+  const lastAfter = store.log.length ? store.log[store.log.length - 1].after : null;
+  if (lastAfter) {
+    tint(lastAfter);
+    $('st-suggest').textContent = `Last time here you left ${lastAfter}.`;
+  }
+  renderSound();
+</script>
+
+<style>
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 16px 16px 80px;
+  }
+  .crumb {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: var(--pc-ink-muted);
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .mono { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; }
+
+  /* ---------- the screen, in PMM colors ---------- */
+  .crt {
+    --border: #7869C4;
+    --field: #40318D;
+    --field-2: #352577;
+    --ink: #F2F0FF;
+    --ink-2: #BDB4F0;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    background: var(--field);
+    color: var(--ink);
+    border: 12px solid var(--border);
+    font: 16px/1.45 var(--mono);
+    max-width: 720px;
+    margin: 0 auto;
+    box-shadow: 0 0 0 2px #2a1f66;
+  }
+  .crt :focus-visible { outline: 3px solid #F5D142; outline-offset: 2px; }
+  .bar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--border);
+  }
+  .wordmark { display: inline-flex; align-items: center; gap: 6px; font-weight: 900; letter-spacing: 0.06em; }
+  .fuji { display: inline-grid; grid-template-rows: repeat(6, 3px); gap: 1px; width: 16px; }
+  .fuji i:nth-child(1) { background: #E8453C; } .fuji i:nth-child(2) { background: #F28C28; }
+  .fuji i:nth-child(3) { background: #F5D142; } .fuji i:nth-child(4) { background: #58B947; }
+  .fuji i:nth-child(5) { background: #2F86D8; } .fuji i:nth-child(6) { background: #7E57B5; }
+  .prompt { margin: 0; color: var(--ink-2); font-size: 13px; letter-spacing: 0.1em; }
+  .prompt::after { content: "█"; margin-left: 2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .pane { padding: 16px; display: grid; gap: 12px; }
+  .pane[hidden] { display: none; }
+  h1 { margin: 0; font-size: clamp(24px, 6vw, 34px); line-height: 1.1; letter-spacing: 0.02em; color: var(--ink); }
+  .big { margin: 0; font-size: 34px; }
+  .guide { margin: 0; color: var(--ink); }
+  .who { color: #F5D142; font-weight: 800; }
+  .label { margin: 6px 0 0; font-size: 12px; letter-spacing: 0.14em; color: var(--ink-2); font-weight: 700; text-transform: uppercase; }
+  .hint { margin: 0; min-height: 1.4em; color: var(--ink-2); font-size: 14px; }
+  .safety, .tally { margin: 0; color: var(--ink-2); font-size: 13px; }
+
+  .key {
+    min-height: 48px;
+    padding: 8px 14px;
+    border: 2px solid var(--ink);
+    background: var(--field);
+    color: var(--ink);
+    font: 700 14px/1.2 var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 3px 3px 0 var(--ink);
+    cursor: pointer;
+    transition: transform 0.06s, box-shadow 0.06s;
+  }
+  .key:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .key.small { min-height: 40px; font-size: 12px; padding: 0 10px; }
+  /* 30% keeps light or dark ink at 4.5:1 or better for every mood (tests/stretch.test.mjs). */
+  .key.primary { background: color-mix(in srgb, var(--mood) 30%, var(--field)); color: var(--mood-ink, var(--ink)); }
+  .key.ghost { border-color: var(--ink-2); color: var(--ink-2); box-shadow: 3px 3px 0 var(--ink-2); }
+
+  .moods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .mood {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border: 2px solid var(--c);
+    background: var(--field-2);
+    color: var(--ink);
+    font: 700 13px var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .mood .sw { width: 12px; height: 12px; background: var(--c); flex: none; }
+  .mood[aria-checked="true"] { background: color-mix(in srgb, var(--c) 30%, var(--field)); color: var(--on, var(--ink)); box-shadow: inset 0 0 0 2px var(--ink); }
+
+  .sessions { display: grid; gap: 12px; }
+  .session { display: grid; gap: 4px; text-align: left; text-transform: none; letter-spacing: 0.02em; font-weight: 400; padding: 12px 14px; }
+  .session__top { display: flex; justify-content: space-between; gap: 8px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .session__top span, .session__n { color: var(--ink-2); font-size: 12px; letter-spacing: 0.12em; }
+  .session__for { color: var(--ink); font-size: 14px; }
+  .session.suggested { border-color: var(--mood); box-shadow: 3px 3px 0 var(--mood); }
+  .session.suggested .session__n::after { content: " · SUGGESTED"; color: var(--ink); }
+
+  .run-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; letter-spacing: 0.12em; color: var(--ink-2); flex-wrap: wrap; }
+  #st-left { color: var(--ink); font-weight: 800; }
+  .segs { display: flex; gap: 3px; height: 8px; }
+  .segs :global(i) { display: block; background: var(--field-2); border: 1px solid var(--border); position: relative; overflow: hidden; }
+  .segs :global(i b) { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--mood); }
+
+  .stage { position: relative; display: grid; place-items: center; background: #140f33; border: 2px solid var(--border); padding: 10px; }
+  #st-canvas { width: min(64vw, 300px); height: auto; aspect-ratio: 1; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  .breath { position: absolute; left: 10px; top: 10px; display: grid; gap: 4px; font-size: 13px; letter-spacing: 0.1em; }
+  .breath b { color: var(--ink); }
+  .breath__bar { width: 110px; height: 6px; background: var(--field-2); border: 1px solid var(--border); }
+  .breath__bar i { display: block; height: 100%; width: 0; background: var(--mood); }
+  .clock { position: absolute; right: 10px; top: 10px; font-size: 22px; font-weight: 800; }
+  .side { position: absolute; right: 10px; top: 42px; font-size: 12px; letter-spacing: 0.12em; color: #F5D142; }
+  .paused { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--field); padding: 2px 8px; font-weight: 800; letter-spacing: 0.14em; }
+  .paused[hidden] { display: none; }
+
+  .cue h2 { margin: 0 0 4px; font-size: 22px; }
+  .cue p { margin: 0 0 6px; }
+  .cue__breath { color: var(--ink-2); }
+  .cue__opt { color: #F5D142; font-size: 14px; }
+  .cue__opt[hidden] { display: none; }
+  .cue__ease { font-size: 14px; color: var(--ink-2); border-left: 4px solid #F28C28; padding-left: 8px; }
+
+  .controls { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 10px; }
+  .controls.two { grid-template-columns: 1fr 1fr; }
+  .controls .key { min-height: 56px; }
+  .end { justify-self: center; }
+  .keys-hint { margin: 0; text-align: center; font-size: 12px; color: var(--ink-2); letter-spacing: 0.08em; }
+
+  .steps { margin: 0; padding-left: 26px; display: grid; gap: 4px; font-size: 14px; }
+  .steps :global(li) { color: var(--ink); }
+  .steps :global(li.past) { color: var(--ink-2); text-decoration: line-through; }
+  .steps :global(li[aria-current="step"]) { color: #F5D142; }
+  .steps :global(li[aria-current="step"]::marker) { content: "▶ "; }
+  .steps :global(.mono) { color: var(--ink-2); }
+
+  .moodline { margin: 0; min-height: 1.5em; font-size: 20px; font-weight: 800; color: var(--ink); }
+  .carry { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--ink); cursor: pointer; min-height: 44px; }
+  .carry[hidden] { display: none; }
+  .carry input { width: 24px; height: 24px; accent-color: var(--mood); flex: none; margin: 0; }
+
+  /* ---------- the readable plan, below the screen ---------- */
+  .plans { max-width: 1080px; margin: 32px auto 0; }
+  .plans h2 { margin: 0 0 4px; font-size: 22px; }
+  .plans__dek, .plans__safety, .plans__more { color: var(--pc-ink-muted); font-size: 15px; }
+  .plans__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
+  .plan { border: 2px solid #40318D; padding: 12px 14px; }
+  .plan h3 { margin: 0 0 8px; font-size: 17px; display: flex; justify-content: space-between; gap: 8px; }
+  .plan ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 14px; }
+  .plan__how, .plan__ease { display: block; }
+  .plan__ease { color: var(--pc-ink-muted); font-size: 13px; }
+  .plans__safety { font-weight: 600; color: inherit; }
+
+  @media (max-width: 860px) {
+    .plans__grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px) {
+    .page { padding: 12px 8px 80px; }
+    .crt { border-width: 8px; }
+    .pane { padding: 12px; }
+    .moods { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #st-canvas { width: min(70vw, 260px); }
+    .clock { font-size: 18px; }
+    .controls .key { font-size: 13px; padding: 8px 6px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .prompt::after { animation: none; }
+    .key { transition: none; }
+  }
+</style>
