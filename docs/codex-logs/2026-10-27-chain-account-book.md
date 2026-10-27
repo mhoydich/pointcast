@@ -31,6 +31,10 @@ corrections. No browser/mobile visual verification was available.
 
 The full-site Astro build compiled server/client bundles, then its first route
 generation attempt failed on an unrelated external fetch (`ECONNREFUSED`,
-176.9.105.239:443). A proxy-aware retry and the final combined publication build
-are coordinated with the parent release task. No deployment is performed from
-this checkout, and no `/games`, Mist or Receipt source is modified here.
+176.9.105.239:443). A `--use-env-proxy` retry passed bundling and generated the
+Account Book route. Its compiled identity pins, canonical, application module,
+Mist/wallet navigation and single h1 were checked. That partial build was stopped
+after this check to free the shared build lane for the parent's final combined
+publication build; this is not a claimed full-site build pass. No deployment is
+performed from this checkout, and no `/games`, Mist or Receipt source is modified
+here.
