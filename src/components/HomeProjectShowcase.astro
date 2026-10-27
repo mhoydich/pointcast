@@ -1,0 +1,121 @@
+---
+import { Image } from 'astro:assets';
+import catalog from '../data/home-latest-projects.json';
+import { getPublishedProjects } from '../lib/home-published-projects.mjs';
+import toy from '../../public/hoydich-play/previews/02-packaging-concept.webp';
+import band from '../../public/images/nouns-drum-club/bandmates/01-pocket-captain.webp';
+import baseball from '../../public/images/baseball/hero-thumb.webp';
+import rocks from '../../public/images/rocks/cover.png';
+import weather from '../../public/images/weather-atlas/cover.svg';
+import mobility from '../../public/images/mobility-2030/stratus-two-seat.webp';
+import books from '../../public/images/siddhartha/river-horizon.webp';
+import cat from '../../public/lucky-cat/cats/classic.png';
+
+// Presentation only. Titles and destinations come from the existing verified
+// catalog; this selection does not create a second navigation registry.
+const selection = [
+  { id: 'hoydich-play', art: toy, alt: 'Cream robot dinosaur beside its orange and blue SIGNALSAURS packaging and concept sketches', summary: 'A robot-dinosaur toy concept, from the brand book to the manufacturing questions.', tone: '#e4d5be' },
+  { id: 'drum-club', art: band, alt: 'Pocket Captain, a pixel drummer wearing green Nouns glasses on an orange Bandmates poster', summary: 'Make your keyboard an instrument, build a loop and play with a reactive band.', tone: '#ff6039', contain: true },
+  { id: 'baseball', art: baseball, alt: 'Illustrated baseball diamond and spectators in warm light as the sun sets beyond the outfield', summary: 'Read the essay, follow an illustrated half inning and keep a little memory.', tone: '#d8c79d' },
+  { id: 'pocket-rocks', art: rocks, alt: 'Five rounded digital rock specimens with woodgrain, spiral, leaflike and speckled surfaces', summary: 'Turn a digital specimen and build your own little cabinet of treasures.', tone: '#f0efe5', contain: true },
+  { id: 'weather-living-atlas', art: weather, alt: 'A cloud, sun, rain shell and ember with square glasses arranged around a 25-mile circle', summary: 'An illustrated guide to South Bay climate history and seasonal living. Not a forecast.', tone: '#e6ece4', contain: true },
+  { id: 'mobility-2030', art: mobility, alt: 'Stratus, an imagined two-seat personal transit vehicle from the Mobility 2030 design study', summary: 'Three personal-transit concepts, open engineering questions and a research roadmap.', tone: '#dce8e9' },
+  { id: 'books', art: books, alt: 'Painterly blue river flowing between distant hills beneath a pale, textured sky', summary: 'Twenty reading doors, with book companions and a map of connections.', tone: '#cbdcde' },
+  { id: 'lucky-cat-v2', art: cat, alt: 'Smiling cream lucky cat raising one paw and holding a gold coin', summary: 'Catch glowing sparks, take a focus break and meet sixty original cat companions.', tone: '#fff', contain: true },
+];
+const published = new Map(getPublishedProjects(catalog).map(project => [project.id, project]));
+const projects = selection.map(presentation => {
+  const project = published.get(presentation.id);
+  if (!project) throw new Error(`Showcase project needs verified publication evidence: ${presentation.id}`);
+  return { ...project, ...presentation };
+});
+---
+
+<section class="project-showcase" aria-labelledby="project-showcase-title" data-project-showcase>
+  <header class="project-showcase__header">
+    <div>
+      <p class="project-showcase__eyebrow"><span aria-hidden="true">✳</span> A little independent internet</p>
+      <h2 id="project-showcase-title">Find a little <em>wonder.</em></h2>
+    </div>
+    <p class="project-showcase__intro">Things to play, make, read &amp; imagine.<br /> A few doors into PointCast.</p>
+  </header>
+  <div class="project-showcase__toolbar">
+    <p id="project-showcase-help">Swipe or scroll to explore <span aria-hidden="true">↔</span></p>
+    <div class="project-showcase__controls" data-showcase-controls>
+      <span class="project-showcase__counter" data-showcase-counter aria-hidden="true">01 / {String(projects.length).padStart(2, '0')}</span>
+      <button type="button" aria-label="Previous projects" aria-controls="project-showcase-rail" aria-disabled="true" data-showcase-previous><span aria-hidden="true">←</span></button>
+      <button type="button" aria-label="Next projects" aria-controls="project-showcase-rail" aria-disabled="false" data-showcase-next><span aria-hidden="true">→</span></button>
+    </div>
+  </div>
+  <ol class="project-showcase__rail" id="project-showcase-rail" tabindex="0" aria-label="Featured PointCast projects" aria-describedby="project-showcase-help" data-showcase-rail>
+    {projects.map((project, index) => (
+      <li class="project-showcase__item" data-showcase-item>
+        <a class="project-showcase__card" href={project.href} aria-labelledby={`showcase-title-${project.id}`} aria-describedby={`showcase-summary-${project.id}`}>
+          <div class:list={['project-showcase__art', { 'project-showcase__art--contain': project.contain }]} style={`--art-paper:${project.tone}`}>
+            <Image src={project.art} alt={project.alt} width={640} widths={[320, 480, 640, 960]} sizes="(max-width: 560px) 82vw, (max-width: 900px) 52vw, 430px" format="webp" quality={78} loading={index === 0 ? 'eager' : 'lazy'} decoding="async" fetchpriority={index === 0 ? 'high' : undefined} />
+          </div>
+          <div class="project-showcase__copy">
+            <p class="project-showcase__category"><span>{project.group}</span><span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span></p>
+            <h3 id={`showcase-title-${project.id}`}>{project.title}</h3>
+            <p class="project-showcase__summary" id={`showcase-summary-${project.id}`}>{project.summary}</p>
+            <span class="project-showcase__open">Explore the project <span aria-hidden="true">↗</span></span>
+          </div>
+        </a>
+      </li>
+    ))}
+  </ol>
+  <footer class="project-showcase__footer"><p>Follow your curiosity. Stay a while.</p><a href="/apps/">All projects <span aria-hidden="true">↗</span></a></footer>
+  <p class="project-showcase__status" role="status" aria-live="polite" aria-atomic="true" data-showcase-status></p>
+</section>
+
+<script>
+  import { initializeProjectShowcase } from '../lib/home-project-showcase.mjs';
+  const mounted = new Set<ReturnType<typeof initializeProjectShowcase>>();
+  const initialize = () => document.querySelectorAll<HTMLElement>('[data-project-showcase]').forEach(root => {
+    const controller = initializeProjectShowcase(root);
+    if (controller) mounted.add(controller);
+  });
+  initialize();
+  document.addEventListener('astro:page-load', initialize);
+  document.addEventListener('astro:before-swap', () => { mounted.forEach(controller => controller?.destroy()); mounted.clear(); });
+</script>
+
+<style>
+  .project-showcase { --ink:#202d2b;--paper:#f7f3e9;--rule:#bcc1b5;min-width:0;margin:24px 0 34px;color:var(--ink); }
+  .project-showcase__header { display:flex;justify-content:space-between;align-items:end;gap:24px;padding:12px 0 25px;border-top:2px solid var(--ink); }
+  .project-showcase__eyebrow { display:flex;align-items:center;gap:10px;margin:0 0 15px;font:550 10px/1.5 var(--pc-font-mono);letter-spacing:.075em;text-transform:uppercase; }
+  .project-showcase__eyebrow>span { color:#b64b2f;font-size:23px;line-height:1; }
+  .project-showcase h2 { margin:0;font-size:clamp(36px,5.5vw,72px);line-height:1;letter-spacing:-.065em;font-weight:600; }
+  .project-showcase h2 em { font-family:Georgia,serif;font-weight:400;letter-spacing:-.07em;color:#315d49; }
+  .project-showcase__intro { margin:0 0 2px;font-size:13px;line-height:1.6; }
+  .project-showcase__toolbar { display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--rule); }
+  .project-showcase__toolbar>p { margin:0;font:500 10px/1.5 var(--pc-font-mono); }
+  .project-showcase__toolbar>p>span { margin-left:10px;font-size:16px; }
+  .project-showcase__controls { display:flex;align-items:center;gap:6px;visibility:hidden; }
+  .project-showcase[data-showcase-ready] .project-showcase__controls { visibility:visible; }
+  .project-showcase__counter { min-width:8ch;text-align:center;font:500 11px/1 var(--pc-font-mono);font-variant-numeric:tabular-nums; }
+  .project-showcase__controls button { display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--ink);border-radius:50%;background:transparent;color:inherit;font:400 23px/1 var(--pc-font-sans);cursor:pointer; }
+  .project-showcase__controls button:hover { background:var(--ink);color:var(--paper); }
+  .project-showcase__controls button[aria-disabled='true'] { color:#7b8279;border-color:var(--rule);background:transparent;cursor:default; }
+  .project-showcase__rail { display:flex;gap:16px;min-width:0;max-width:100%;overflow-x:auto;scroll-snap-type:x proximity;scroll-padding-inline:4px;scrollbar-width:thin;scrollbar-color:#647467 #e4e6db;list-style:none;margin:0;padding:4px 4px 16px; }
+  .project-showcase__item { display:flex;flex:0 0 35%;min-width:0;scroll-snap-align:start; }
+  .project-showcase__card { display:flex;flex-direction:column;width:100%;min-width:0;border:1px solid var(--ink);background:#fffdf7;text-decoration:none;color:inherit; }
+  .project-showcase__art { aspect-ratio:8/5;overflow:hidden;background:var(--art-paper); }
+  .project-showcase__art img { display:block;width:100%;height:100%;object-fit:cover; }
+  .project-showcase__art--contain img { object-fit:contain; }
+  .project-showcase__copy { display:flex;flex-direction:column;flex:1;padding:19px 20px 16px;border-top:1px solid var(--ink); }
+  .project-showcase__category { display:flex;justify-content:space-between;gap:10px;margin:0 0 12px;font:500 9px/1.5 var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;color:#536154; }
+  .project-showcase h3 { margin:0;font-size:clamp(23px,2.4vw,31px);line-height:1.07;letter-spacing:-.045em;font-weight:580;text-wrap:balance; }
+  .project-showcase__summary { margin:12px 0 22px;max-width:43ch;font-size:13px;line-height:1.55;color:#4c594e; }
+  .project-showcase__open { display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:auto;padding-top:12px;border-top:1px solid #d9ddcf;font:500 10px/1.5 var(--pc-font-mono); }
+  .project-showcase__open>span { font-size:21px;line-height:1; }
+  .project-showcase__card:hover h3 { text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px; }
+  .project-showcase :is(a,button,ol):focus-visible { outline:3px solid #185fa5;outline-offset:1px; }
+  .project-showcase__footer { display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0 0;font:500 10px/1.5 var(--pc-font-mono); }
+  .project-showcase__footer p { margin:0;color:#536154; }
+  .project-showcase__footer a { display:inline-flex;align-items:center;gap:25px;min-height:44px;text-decoration:underline;text-underline-offset:4px; }
+  .project-showcase__status { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
+  @media(max-width:900px) { .project-showcase__header { align-items:start;flex-direction:column;gap:15px; }.project-showcase__intro br { display:none; }.project-showcase__item { flex-basis:52%; } }
+  @media(max-width:560px) { .project-showcase { margin-top:16px; }.project-showcase__header { padding-bottom:20px; }.project-showcase__eyebrow { font-size:8px;letter-spacing:.045em; }.project-showcase__intro { font-size:12px; }.project-showcase__rail { gap:12px; }.project-showcase__item { flex-basis:88%; }.project-showcase__copy { padding:17px 16px 15px; }.project-showcase__counter { min-width:7ch;font-size:10px; }.project-showcase__toolbar>p { font-size:9px;max-width:15ch; }.project-showcase__toolbar>p>span { margin-left:4px; }.project-showcase__footer { font-size:9px; }.project-showcase__footer p { max-width:20ch; }.project-showcase__footer a { gap:12px; } }
+  @media(prefers-reduced-motion:reduce) { .project-showcase__rail { scroll-behavior:auto;scroll-snap-type:none; } }
+</style>
