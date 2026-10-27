@@ -1,8 +1,10 @@
 # PointCast V2 exploration: first safe visitor slice
 
 Source baseline: origin/main at `8ff76aecb0d8c69c5b091af382e8d81c93421432`.
-V2 here means an onboarding and verification exploration, not a new chain or
-protocol. It leaves existing state, contracts and keys untouched. Protocol changes
+V2 here means an onboarding and verification exploration within the existing
+Present Company / Town Network direction, not a new chain or protocol. The
+existing /chain roadmap reports batches 2–6 built and markets and trust-floor
+batches 7–13 paused as of 21 October; current backend status needs verification. It leaves existing state, contracts and keys untouched. Protocol changes
 remain a future design question after recovery and operational controls are
 verified. This branch excludes held PRs #1556 and #1558. It adds a guided first visit at
 `/chain-pilot/`: a local, explicitly simulated action, then a read-only example
