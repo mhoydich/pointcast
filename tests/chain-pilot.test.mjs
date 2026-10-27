@@ -9,7 +9,7 @@ const chainStatus = (g = genesis) => ({ chain_id: 'pointcast-devnet-2', genesis_
 const tx = { status: 'included', height: 8, receipt: { tx_hash: hash, kind: 'publish_block' } };
 const feed = { blocks: [{ height: 8, txs: [{ hash }] }] };
 function setup(get) {
-  const dom = new JSDOM(`<main data-pilot data-api="https://example.test" data-genesis="${genesis}" data-chain-id="pointcast-devnet-2"><button data-practice></button><div data-practice-result></div><button data-find></button><p data-status></p><div data-example hidden><code data-hash></code><span data-height></span></div></main>`);
+  const dom = new JSDOM(`<main data-pilot data-api="https://example.test" data-genesis="${genesis}" data-chain-id="pointcast-devnet-2"><button data-practice></button><div data-practice-result></div><button data-find></button><p data-status></p><div data-example hidden><code data-hash tabindex="0"></code><button data-copy></button><span data-height></span></div></main>`);
   const root = dom.window.document.querySelector('main'); mountPilot(root, { get });
   const click = (name) => root.querySelector(`[data-${name}]`).click();
   return { dom, root, click };
@@ -25,7 +25,16 @@ test('a real example is read only, pinned before and after, and matches its rece
   assert.deepEqual(calls, ['/status', '/feed?limit=10', '/tx/' + hash, '/status']);
   assert.equal(p.root.querySelector('[data-hash]').textContent, hash);
   assert.equal(p.root.querySelector('[data-height]').textContent, '8');
-  assert.equal(p.root.querySelector('[data-example]').hidden, false); p.dom.window.close();
+  assert.equal(p.root.querySelector('[data-example]').hidden, false);
+  p.click('copy'); await tick();
+  assert.match(p.root.querySelector('[data-status]').textContent, /Select the hash/);
+  assert.equal(p.dom.window.document.activeElement, p.root.querySelector('[data-hash]'));
+  let copied = ''; Object.defineProperty(p.dom.window.navigator, 'clipboard', { value: { writeText: async (s) => { copied = s; } }, configurable: true });
+  p.click('copy'); await tick(); assert.equal(copied, hash); assert.match(p.root.querySelector('[data-status]').textContent, /Hash copied/);
+  let rejectCopy; Object.defineProperty(p.dom.window.navigator, 'clipboard', { value: { writeText: () => new Promise((_, reject) => { rejectCopy = reject; }) }, configurable: true });
+  p.click('copy'); p.click('find'); await tick(); await tick(); rejectCopy(new Error('denied')); await tick();
+  assert.match(p.root.querySelector('[data-status]').textContent, /Example read/);
+  p.dom.window.close();
 });
 test('a reset, bad response or mismatched receipt clears the example instead of claiming inclusion', async () => {
   let mode = 'ok', checks = 0;

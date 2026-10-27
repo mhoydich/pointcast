@@ -9,6 +9,19 @@ export function mountPilot(root, net = makeNet(root.dataset.api)) {
   get('practice').addEventListener('click', () => {
     get('practice-result').textContent = 'PRACTICE ONLY · Status: simulated · Network: none · Transaction: none · Value: none. No transaction was sent. A real receipt would name a transaction and its reported block.';
   });
+  get('copy').addEventListener('click', async () => {
+    const hash = get('hash').textContent;
+    const current = generation;
+    if (!isHex64(hash)) return;
+    try {
+      await root.ownerDocument.defaultView.navigator.clipboard.writeText(hash);
+      if (current === generation) status.textContent = 'Hash copied. Paste it into Receipt Desk.';
+    } catch {
+      if (current !== generation) return;
+      status.textContent = 'Copy is unavailable. Select the hash above to copy it.';
+      get('hash').focus();
+    }
+  });
   async function check() {
     const s = await pinnedStatus(net, root.dataset.genesis);
     if (s.chainId !== root.dataset.chainId) throw new Error('network identity changed');
