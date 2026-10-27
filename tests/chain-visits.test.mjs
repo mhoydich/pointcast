@@ -1,6 +1,6 @@
 // Visits to /chain/* are counted and show on the register, and the MCP apps shelf lists the chain
 // truthfully. What this suite holds:
-//   - every Astro page under /chain mounts the pageview beacon (BlockLayout, never `isolated`);
+//   - every Astro page under /chain mounts the shared beacon, through BlockLayout or directly;
 //   - every static page under public/chain/ loads /js/pc-pageview.js, the same path-only beacon,
 //     which reports `/chain/yard` (no trailing slash) to this site's /api/analytics and nothing else;
 //   - no third-party tracker anywhere in those pages;
@@ -27,12 +27,19 @@ const BEACON = 'public/js/pc-pageview.js';
 const TAG = '<script src="/js/pc-pageview.js" defer></script>';
 const TRACKERS = /google-analytics|googletagmanager|gtag\(|plausible|segment\.(io|com)|mixpanel|hotjar|clarity\.ms|fullstory|amplitude|posthog|matomo|umami|facebook\.net|connect\.facebook|doubleclick|cloudflareinsights/i;
 
-test('every Astro page under /chain mounts the beacon: BlockLayout, never isolated', () => {
+test('every Astro page under /chain mounts exactly one shared beacon: layout or standalone', () => {
   assert.ok(ASTRO_PAGES.length >= 18, ASTRO_PAGES.length + ' pages');
   for (const f of ASTRO_PAGES) {
     const s = read(f);
-    assert.match(s, /import BlockLayout from '[./]+layouts\/BlockLayout\.astro';/, f);
-    assert.doesNotMatch(s, /<BlockLayout[^>]*\bisolated\b/, f + ' would drop the beacon');
+    const layouts = [...s.matchAll(/<BlockLayout\b[^>]*>/g)];
+    const beacons = [...s.matchAll(/<PageviewBeacon\s*\/>/g)];
+    assert.equal(layouts.length + beacons.length, 1, f + ': one shared beacon owner');
+    if (layouts.length) {
+      assert.match(s, /import BlockLayout from '[./]+layouts\/BlockLayout\.astro';/, f);
+      assert.doesNotMatch(layouts[0][0], /\bisolated\b/, f + ' would drop the beacon');
+    } else {
+      assert.match(s, /import PageviewBeacon from '[./]+components\/PageviewBeacon\.astro';/, f);
+    }
   }
   const layout = read('src/layouts/BlockLayout.astro');
   assert.match(layout, /\{!isolated && <PageviewBeacon \/>\}/);
@@ -138,6 +145,39 @@ test('apps_list reads /apps.json: the chain entry is the public devnet, and the 
 });
 
 const built = new URL('dist/register/index.html', root);
+const receiptBuilt = new URL('dist/chain/receipt/index.html', root);
+test('built Receipt Desk includes one shared beacon and reports only its path', { skip: !existsSync(receiptBuilt) && 'no dist/ build' }, async () => {
+  const doc = new JSDOM(readFileSync(receiptBuilt, 'utf8')).window.document;
+  const beacons = [...doc.querySelectorAll('script')].filter((s) => s.textContent.includes('/api/analytics'));
+  assert.equal(beacons.length, 1, 'one analytics sender in the compiled page');
+  assert.equal(doc.querySelectorAll('script[src="/js/pc-pageview.js"]').length, 0, 'no duplicate external beacon');
+  assert.ok(beacons[0].hasAttribute('data-astro-rerun'));
+  const shared = read('src/components/PageviewBeacon.astro').match(/<script is:inline data-astro-rerun>([\s\S]*?)<\/script>/)[1];
+  assert.equal(beacons[0].textContent.trim(), shared.trim(), 'uses the unchanged shared component');
+  const run = async (url, { bot = false, webdriver = false, fallback = false } = {}) => {
+    const dom = new JSDOM('<!doctype html><body></body>', { url, runScripts: 'outside-only' });
+    const sent = [];
+    const { window } = dom;
+    window.Blob = globalThis.Blob;
+    Object.defineProperty(window.navigator, 'userAgent', { value: bot ? 'Googlebot/2.1' : 'Mozilla/5.0', configurable: true });
+    Object.defineProperty(window.navigator, 'webdriver', { value: webdriver, configurable: true });
+    window.navigator.sendBeacon = fallback ? undefined : (to, body) => { sent.push({ to, body }); return true; };
+    window.fetch = async (to, options) => { sent.push({ to, body: options.body }); return {}; };
+    window.eval(beacons[0].textContent);
+    const result = await Promise.all(sent.map(async ({ to, body }) => ({ to, body: JSON.parse(typeof body === 'string' ? body : await body.text()) })));
+    dom.window.close();
+    return result;
+  };
+  const url = 'https://pointcast.xyz/chain/receipt/?hash=' + 'a'.repeat(64) + '#private-fragment';
+  const expected = [{ to: '/api/analytics', body: { event: 'pageview', meta: { path: '/chain/receipt' } } }];
+  assert.deepEqual(await run(url), expected, 'one first-party path, without query/hash or identity');
+  assert.deepEqual(await run(url, { fallback: true }), expected, 'same payload without sendBeacon');
+  assert.deepEqual(await run('http://localhost:4321/chain/receipt/?hash=private'), []);
+  assert.deepEqual(await run('https://pointcast-preview.pages.dev/chain/receipt/'), []);
+  assert.deepEqual(await run(url, { bot: true }), []);
+  assert.deepEqual(await run(url, { webdriver: true }), []);
+});
+
 test('built /register: the chain table is there, one row per chain page the main board does not have', { skip: !existsSync(built) && 'no dist/ build' }, () => {
   const doc = new JSDOM(readFileSync(built, 'utf8')).window.document;
   const sec = doc.querySelector('#chain');
