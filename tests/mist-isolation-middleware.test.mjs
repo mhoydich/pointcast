@@ -32,6 +32,13 @@ test('Pages middleware excludes the local simulations on both HTML paths and the
       assert.equal(response.headers.get('x-pointcast-tezos-session-bridge'), null, base + suffix);
       assert.equal(injections, 0, base + suffix);
     }
+    // A browser module import must go straight to the asset, not through the
+    // no-slash directory fetch (which would request model.mjs/).
+    const asset = await onRequest({ request: new Request('https://pointcast.xyz/chain/agreement/model.mjs', { headers: { accept: '*/*', 'user-agent': 'Mozilla/5.0 Chrome/140' } }), env: {}, next: async () => new Response('export const fixture = true;', { headers: { 'content-type': 'text/javascript' } }), waitUntil() { assert.fail('unexpected visit write'); } });
+    assert.equal(asset.status, 200);
+    assert.equal(await asset.text(), 'export const fixture = true;');
+    assert.equal(asset.headers.get('x-pointcast-tezos-session-bridge'), null);
+
     for (const path of ['/dao-other', '/chain/agreement-more/', '/chain/mist/']) {
       const { response, injections } = await route(path);
       assert.equal(response.headers.get('x-pointcast-tezos-session-bridge'), '1', path);
