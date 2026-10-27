@@ -1,0 +1,43 @@
+name: Check project progress board
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/project-progress-check.yml'
+      - 'src/pages/project-kanban.astro'
+      - 'src/pages/project-kanban.json.ts'
+      - 'src/data/project-progress.json'
+      - 'docs/project-progress-maintenance.md'
+      - 'tests/project-progress.test.mjs'
+      - 'src/data/home-latest-projects.json'
+      - 'src/lib/home-published-projects.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: project-progress-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check snapshot and preservation contract
+        run: node --test tests/project-progress.test.mjs
+      - name: Build the full repository
+        run: npm run build:bare
