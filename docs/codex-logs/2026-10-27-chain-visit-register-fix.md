@@ -13,8 +13,9 @@ release; that does not mean these fixes are published.
 
 Receipt Desk now mounts the existing PageviewBeacon component directly, once,
 inside its standalone document. Its layout, lookup logic and shared beacon
-implementation are unchanged. The component reports the normalized pathname,
+implementation are unchanged. The component JSON body reports the normalized pathname,
 without the transaction query or fragment, and suppresses preview/bot visits.
+That body-only check does not establish what the browser sends in Referer.
 The chain page invariant now checks exactly one shared beacon owner, either the
 normal BlockLayout or the directly mounted component. A compiled Receipt Desk
 regression exercises its emitted script with mocked transports and checks
@@ -42,3 +43,27 @@ lacked built output, so matching names alone cannot establish unrelatedness.
 Actual browser/mobile checks require a supported browser connection; none is
 exposed here. Source/DOM/compiled-output results are not real-device QA. Keep
 review holds intact and let the parent coordinate any later release.
+
+## Referrer follow-up
+
+Terra identified that the global strict-origin-when-cross-origin policy still
+allows the receipt URL query in a same-origin Referer header. The receipt
+document now sets an early no-referrer meta policy. An exact-path GET/HEAD
+response wrapper in the existing middleware sets Referrer-Policy: no-referrer
+for /chain/receipt, /chain/receipt/ and /chain/receipt/index.html, including
+rewrites and early returns. Existing request handling, visit classification and
+KV writes are unchanged. The wrapper replaces any inherited policy value.
+
+The initial receipt request necessarily sends its query to the site (including
+internal rewrites and redirects). This change protects subsequent requests; it
+does not remove hashes from initial request/access logs or browser history.
+
+No rules were added to public/_headers: it already has 108 rules against the
+Pages 100-rule limit. Adding receipt rules would displace unrelated existing
+rules. Resolving that pre-existing overflow is outside this narrow patch.
+
+The new middleware regression checks response headers for aliases, GET/HEAD,
+redirects, errors and neighboring routes. Local Pages runtime HTTP checks verify
+the served policy using the actual middleware. Neither test claims real-browser
+outgoing Referer behavior: native sendBeacon and fetch fallback request-header
+inspection remains required when supported browser tools are available.

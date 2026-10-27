@@ -146,8 +146,13 @@ test('apps_list reads /apps.json: the chain entry is the public devnet, and the 
 
 const built = new URL('dist/register/index.html', root);
 const receiptBuilt = new URL('dist/chain/receipt/index.html', root);
-test('built Receipt Desk includes one shared beacon and reports only its path', { skip: !existsSync(receiptBuilt) && 'no dist/ build' }, async () => {
+test('built Receipt Desk sets an early referrer policy and its one shared beacon sends a path-only JSON body', { skip: !existsSync(receiptBuilt) && 'no dist/ build' }, async () => {
   const doc = new JSDOM(readFileSync(receiptBuilt, 'utf8')).window.document;
+  const policy = doc.querySelectorAll('meta[name="referrer"]');
+  assert.equal(policy.length, 1);
+  assert.equal(policy[0].getAttribute('content'), 'no-referrer');
+  const firstResourceOrPolicy = doc.querySelector('meta[name="referrer"], script, link[href], img[src], iframe[src]');
+  assert.equal(firstResourceOrPolicy, policy[0], 'document policy precedes resources and scripts');
   const beacons = [...doc.querySelectorAll('script')].filter((s) => s.textContent.includes('/api/analytics'));
   assert.equal(beacons.length, 1, 'one analytics sender in the compiled page');
   assert.equal(doc.querySelectorAll('script[src="/js/pc-pageview.js"]').length, 0, 'no duplicate external beacon');
@@ -170,7 +175,7 @@ test('built Receipt Desk includes one shared beacon and reports only its path', 
   };
   const url = 'https://pointcast.xyz/chain/receipt/?hash=' + 'a'.repeat(64) + '#private-fragment';
   const expected = [{ to: '/api/analytics', body: { event: 'pageview', meta: { path: '/chain/receipt' } } }];
-  assert.deepEqual(await run(url), expected, 'one first-party path, without query/hash or identity');
+  assert.deepEqual(await run(url), expected, 'JSON body contains one first-party path, without query/hash or identity');
   assert.deepEqual(await run(url, { fallback: true }), expected, 'same payload without sendBeacon');
   assert.deepEqual(await run('http://localhost:4321/chain/receipt/?hash=private'), []);
   assert.deepEqual(await run('https://pointcast-preview.pages.dev/chain/receipt/'), []);

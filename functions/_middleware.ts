@@ -155,7 +155,7 @@ function injectUnfurlCards(response: Response, pathname: string, search = ''): R
   return new Response(transformed.body, { status: transformed.status, statusText: transformed.statusText, headers });
 }
 
-export const onRequest: PagesFunction<Env> = async (context) => {
+const handleRequest: PagesFunction<Env> = async (context) => {
   const { request, env, next, waitUntil } = context;
 
   // Only process HTML GETs — skip API calls, static assets, preflights.
@@ -555,4 +555,23 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   return browserResponse;
+};
+
+// The initial receipt GET necessarily includes its query. Prevent that URL
+// becoming the Referer of subsequent requests (including both beacon transports).
+// Keep this outside the existing handler so rewrites, redirects and HEAD replies
+// get the same policy without changing visit classification or KV writes.
+// _headers is already at its rule limit; do not displace unrelated rules there.
+export const onRequest: PagesFunction<Env> = async (context) => {
+  const response = await handleRequest(context);
+  const { pathname } = new URL(context.request.url);
+  if (!['GET', 'HEAD'].includes(context.request.method)
+    || !['/chain/receipt', '/chain/receipt/', '/chain/receipt/index.html'].includes(pathname)) return response;
+  const headers = new Headers(response.headers);
+  headers.set('Referrer-Policy', 'no-referrer');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 };
