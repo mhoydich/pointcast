@@ -7,7 +7,7 @@ export function mountPilot(root, net = makeNet(root.dataset.api)) {
   const find = get('find'), status = get('status'), example = get('example');
   let generation = 0;
   get('practice').addEventListener('click', () => {
-    get('practice-result').textContent = 'PRACTICE ONLY · No transaction was sent. A real receipt would name a transaction and its reported block.';
+    get('practice-result').textContent = 'PRACTICE ONLY · Status: simulated · Network: none · Transaction: none · Value: none. No transaction was sent. A real receipt would name a transaction and its reported block.';
   });
   async function check() {
     const s = await pinnedStatus(net, root.dataset.genesis);

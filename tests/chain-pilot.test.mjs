@@ -16,7 +16,7 @@ function setup(get) {
 }
 test('practice makes no network request or visitor data and is explicitly not a transaction', () => {
   const p = setup(() => assert.fail('practice must not access the network')); p.click('practice');
-  assert.match(p.root.querySelector('[data-practice-result]').textContent, /PRACTICE ONLY.*No transaction was sent/);
+  assert.match(p.root.querySelector('[data-practice-result]').textContent, /PRACTICE ONLY.*Status: simulated.*No transaction was sent/);
   p.dom.window.close();
 });
 test('a real example is read only, pinned before and after, and matches its receipt', async () => {

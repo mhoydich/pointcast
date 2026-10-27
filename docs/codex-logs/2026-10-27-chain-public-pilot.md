@@ -1,7 +1,10 @@
-# PointCast public pilot: first safe visitor slice
+# PointCast V2 exploration: first safe visitor slice
 
 Source baseline: origin/main at `8ff76aecb0d8c69c5b091af382e8d81c93421432`.
-This branch excludes held PRs #1556 and #1558. It adds a guided first visit at
+V2 here means an onboarding and verification exploration, not a new chain or
+protocol. It leaves existing state, contracts and keys untouched. Protocol changes
+remain a future design question after recovery and operational controls are
+verified. This branch excludes held PRs #1556 and #1558. It adds a guided first visit at
 `/chain-pilot/`: a local, explicitly simulated action, then a read-only example
 from the public devnet with manual paths to the existing Receipt Desk and block
 verifier. It creates no keys, accounts, writes, payments or persistent visitor
@@ -54,3 +57,23 @@ Current slice is draft review work only and does not authorize publication or
 production writes. Receipts use existing public hash data; shared Receipt Desk
 lookup links may include a hash in their URL, and its referrer fix is separately
 held in #1558. This page uses no query-bearing link to Receipt Desk.
+
+## Proposed V1 event envelope for a later integration
+
+The separate webhook task owns implementation. This is a proposed interface,
+not an endpoint or a claim that any event has been delivered or verified. A
+minimal envelope might contain `version: 1`, an opaque producer-scoped
+`event_id`, a constrained `event_type`, a UTC `observed_at`, and an optional
+`receipt_ref` with `network`, `genesis`, `tx_hash` and optional reported
+`block_height`. A digest should be optional and only cover explicitly public,
+canonical bytes after the canonicalization is specified; even a hash of
+low-entropy or private data can leak information. Do not include raw payloads,
+headers, URL queries, IP addresses, keys or personal data.
+
+A producer-supplied identifier and timestamp are untrusted claims. Scope and
+dedupe IDs per producer, handle retries and reordering, bound sizes/rates and
+retention, and do not treat receipt references as verified until an independent
+check succeeds. Delivery, a digest or a node's inclusion report is not proof
+of truth, independent inclusion, finality, ownership or source authenticity.
+If no real transaction exists, omit `receipt_ref`; never promote a local
+practice record into an on-chain receipt.
