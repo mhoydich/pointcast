@@ -45,7 +45,7 @@ test('Pages middleware excludes the local simulations on both HTML paths and the
 });
 
 test('session bridge performs no reconciliation or wallet writes on an isolated document', async () => {
-  const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error', server: { middlewareMode: true, hmr: false, ws: false } });
+  const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error', optimizeDeps: { noDiscovery: true, entries: [], include: [] }, server: { middlewareMode: true, hmr: false, ws: false } });
   try {
     const { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } = await server.ssrLoadModule('/src/lib/auth/session-bridge-script.ts');
     const dom = new JSDOM('<!doctype html><html data-pc-isolated="true"><body></body></html>', { url: 'https://pointcast.xyz/dao/', runScripts: 'outside-only' });
