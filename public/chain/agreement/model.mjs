@@ -59,6 +59,7 @@ export function applyEvent(room, event) {
     case 'approve':
       mustPerson();
       if (room.status !== 'working' || room.changeRequested || event.revision !== room.revision) throw Error('Approve the current revision after changes are resolved.');
+      if (room.approvals[event.actor] === room.revision) throw Error('This collaborator already approved the current revision.');
       next.approvals[event.actor] = room.revision; break;
     case 'complete':
       mustPerson();

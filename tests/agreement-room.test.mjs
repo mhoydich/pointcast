@@ -17,6 +17,7 @@ test('amendment invalidates approvals and both must approve exact revision', () 
   assert.equal(r.revision, 2); assert.deepEqual(r.approvals, {});
   assert.throws(() => act(r, 'stale', 'approve', 'Bo', { revision: 1 }));
   r = act(r, 'b2', 'approve', 'Bo', { revision: 2 });
+  assert.throws(() => act(r, 'repeat', 'approve', 'Bo', { revision: 2 }), /already approved/);
   assert.throws(() => act(r, 'one', 'complete', 'Bo', { revision: 2 }));
   r = act(r, 'a2', 'approve', 'Ari', { revision: 2 });
   assert.equal(act(r, 'done', 'complete', 'Ari', { revision: 2 }).status, 'completed');
