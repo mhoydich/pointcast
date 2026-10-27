@@ -19,3 +19,7 @@ Public JSON is an allowlisted summary of fictional terms and simulated approvals
 - The PointCast devnet is reported as resettable, single-operator and no-value. Its durability, backups and recovery need proof before stronger claims. The prototype deliberately does not connect to it.
 
 Future work should compare a real low-stakes collaboration's requirements against existing primitives before choosing any protocol work. A safe real pilot would need consent, version-bound approvals, privacy review, per-action authorization, recovery, bounded writes and abuse controls, and real-device accessibility testing. Trusted observers, reviewer mandates and dispute/appeal policy require separate design. Payments, real legal adjudication, mainnet and general-purpose execution are not part of this experiment.
+
+## A possible language: particles and threads
+
+As a product metaphor under exploration, a particle could be a small idea, contribution, permission, agreement or keepsake; a thread could connect related particles into a project, relationship or story. PointCast Mist would be the place to explore those threads. Selected, deliberate commitments might use a chain underneath. Private and temporary particles do not automatically become public or immutable records. These are ideas for language and interaction, not a new protocol, data schema, consensus system or network identity.
