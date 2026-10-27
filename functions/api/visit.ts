@@ -91,7 +91,7 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
 /** Classify a User-Agent into a type tag. */
 export function classifyUA(ua: string): string {
   if (!ua) return 'unknown';
-  if (/gptbot|chatgpt-user|openai/i.test(ua)) return 'ai:openai';
+  if (/gptbot|chatgpt-user|oai-searchbot|openai/i.test(ua)) return 'ai:openai';
   if (/claudebot|claude-web|anthropic/i.test(ua)) return 'ai:anthropic';
   if (/perplexitybot|perplexity/i.test(ua)) return 'ai:perplexity';
   if (/ccbot|common crawl/i.test(ua)) return 'ai:commoncrawl';

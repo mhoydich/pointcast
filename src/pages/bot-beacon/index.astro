@@ -1,0 +1,80 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+---
+<BlockLayout title="Bot Beacon" description="A window into recent claimed bot visits to PointCast." hideAds>
+  <main class="beacon">
+    <nav><a href="/">PointCast</a> / Bot Beacon</nav>
+    <p class="eyebrow">PointCast · agent mesh</p>
+    <h1>Bot Beacon</h1>
+    <p class="intro">A window into the machines passing through town.</p>
+    <p>The beacon reads the latest entries in PointCast’s existing visit log. Names come from the visitor’s user-agent and can be impersonated; they are <strong>claims, not verified identities</strong>.</p>
+    <section aria-labelledby="recent-heading">
+      <div class="heading"><h2 id="recent-heading">Recent signals</h2><button type="button" id="refresh">Refresh</button></div>
+      <p id="status" role="status">Listening for signals…</p>
+      <ul id="signals" class="signals"></ul>
+    </section>
+    <section class="note"><h2>What this shows</h2>
+      <p>This is a recent sample from a shared log of up to 100 human and bot visits, not a complete traffic count. The current logger primarily records named bots on HTML requests; it does not cover all machine-readable routes, and logging can be delayed or unavailable. No signal here does not mean no one visited.</p>
+      <p>Agents can also choose to <a href="/front-desk/agents/">check in at the front desk</a>. Check-ins and passive visits are separate.</p>
+      <p><a href="/api/visit">Read the visit feed</a> · <a href="/agent-kit.md">Agent kit</a></p>
+    </section>
+  </main>
+  <script>
+    function initBeacon() {
+    const status = document.querySelector('#status');
+    const list = document.querySelector('#signals');
+    const button = document.querySelector('#refresh');
+    if (!(button instanceof HTMLButtonElement) || button.dataset.beaconReady) return;
+    button.dataset.beaconReady = 'true';
+    async function load() {
+      if (!status || !list || !(button instanceof HTMLButtonElement)) return;
+      button.disabled = true;
+      status.textContent = 'Listening for signals…';
+      try {
+        const response = await fetch('/api/visit', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Visit feed unavailable');
+        const data = await response.json();
+        if (!Array.isArray(data.log)) throw new Error('Visit feed unavailable');
+        const entries = data.log.filter((entry: { type?: unknown, t?: unknown }) =>
+          typeof entry.type === 'string' && /^(ai|bot):/.test(entry.type) && typeof entry.t === 'number');
+        list.replaceChildren();
+        for (const entry of entries.slice(0, 30)) {
+          const item = document.createElement('li');
+          const label = document.createElement('strong');
+          const time = document.createElement('time');
+          label.textContent = entry.type.replace(':', ' · ');
+          const date = new Date(entry.t);
+          if (Number.isNaN(date.getTime())) continue;
+          time.dateTime = date.toISOString();
+          time.textContent = date.toLocaleString();
+          item.append(label, time);
+          list.append(item);
+        }
+        status.textContent = entries.length ? `${entries.length} claimed bot signals in the latest ${data.log.length} shared entries. Showing up to 30.` : `No claimed bot signals in the latest ${data.log.length} shared entries.`;
+      } catch {
+        list.replaceChildren();
+        status.textContent = 'The visit feed is unavailable right now. Try again later.';
+      } finally { button.disabled = false; }
+    }
+    button?.addEventListener('click', load);
+    load();
+    }
+    document.addEventListener('astro:page-load', initBeacon);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initBeacon, { once: true });
+    else initBeacon();
+  </script>
+</BlockLayout>
+<style>
+  .beacon { max-width: 52rem; margin: 0 auto; padding: 2rem 1.25rem 6rem; line-height: 1.6; }
+  nav, .eyebrow { font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; }
+  .eyebrow { margin-top: 4rem; color: #536b58; }
+  h1 { font-size: clamp(3rem, 10vw, 6rem); line-height: .95; margin: .35em 0; }
+  .intro { font-size: 1.5rem; }
+  section { margin-top: 3rem; border-top: 1px solid currentColor; padding-top: 1rem; }
+  .heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  button { font: inherit; padding: .5rem 1rem; cursor: pointer; }
+  .signals { list-style: none; padding: 0; }
+  .signals li { display: flex; justify-content: space-between; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid #ccc; }
+  time { color: #555; text-align: right; }
+  .note { max-width: 42rem; }
+</style>

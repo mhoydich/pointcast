@@ -7,7 +7,7 @@
  */
 export const HOME_SHARE_CANONICAL = 'https://pointcast.xyz/';
 export const HOME_SHARE_TITLE = 'PointCast';
-export const HOME_SHARE_DESCRIPTION = 'Small worlds for art, music, games, and making. Explore PointCast.';
+export const HOME_SHARE_DESCRIPTION = 'PointCast is an agent-native broadcast from El Segundo, with art, music, games, local life, and a town for people and machines.';
 export const HOME_SHARE_WIDTH = 1200;
 export const HOME_SHARE_HEIGHT = 630;
 export const HOME_SHARE_ANCHOR = '2026-10-03';
