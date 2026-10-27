@@ -1,9 +1,9 @@
 (() => {
   const tracks = [
-    {name:'KICK', subtitle:'THE HEARTBEAT', icon:'◕', color:'coral'},
-    {name:'SNARE', subtitle:'THE SNAP', icon:'✳', color:'blue'},
-    {name:'HI-HAT', subtitle:'THE TICK', icon:'◉', color:'yellow'},
-    {name:'PERC', subtitle:'THE WILDCARD', icon:'★', color:'green'}
+    {name:'KICK', subtitle:'NOUN 42', noun:42, color:'coral'},
+    {name:'SNARE', subtitle:'NOUN 127', noun:127, color:'blue'},
+    {name:'HI-HAT', subtitle:'NOUN 272', noun:272, color:'yellow'},
+    {name:'PERC', subtitle:'NOUN 455', noun:455, color:'green'}
   ];
   const presets = {
     groove: [[0,4,8,12],[4,12],[0,2,4,6,8,10,12,14],[3,11]],
@@ -34,7 +34,7 @@
   }
   function render() {
     numbers.innerHTML = Array.from({length:16}, (_, i) => `<span class="${i % 4 === 0 ? 'beat-number' : ''}">${String(i + 1).padStart(2,'0')}</span>`).join('');
-    grid.innerHTML = tracks.map((t, r) => `<div class="track"><div class="track-label"><button type="button" class="avatar ${t.color}" data-sound="${r}" aria-label="Play ${t.name.toLowerCase()} sound"><span class="avatar-icon">${t.icon}</span><span class="avatar-glasses">▰▰</span></button><span class="track-info"><strong>${t.name}</strong><small>${t.subtitle}</small></span></div><div class="steps">${pattern[r].map((on, i) => `<button type="button" class="step ${on ? 'active' : ''} ${i === currentStep ? 'current' : ''} ${i % 4 === 0 ? 'group-start' : ''}" data-row="${r}" data-step="${i}" aria-label="${t.name}, step ${i + 1}" aria-pressed="${on}"></button>`).join('')}</div></div>`).join('');
+    grid.innerHTML = tracks.map((t, r) => `<div class="track"><div class="track-label"><button type="button" class="avatar ${t.color}" data-sound="${r}" aria-label="Play ${t.name.toLowerCase()} sound, Noun ${t.noun}"><img src="assets/noun-${t.noun}.svg" alt="" width="52" height="52"></button><span class="track-info"><strong>${t.name}</strong><small>${t.subtitle}</small></span></div><div class="steps">${pattern[r].map((on, i) => `<button type="button" class="step ${on ? 'active' : ''} ${i === currentStep ? 'current' : ''} ${i % 4 === 0 ? 'group-start' : ''}" data-row="${r}" data-step="${i}" aria-label="${t.name}, step ${i + 1}" aria-pressed="${on}"></button>`).join('')}</div></div>`).join('');
   }
   function audio() {
     if (!context) {
