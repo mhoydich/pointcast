@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { AUDIO_MANIFEST } from '../public/open-channel/audio-manifest.mjs';
 import { SCENES } from '../public/open-channel/scenes.mjs';
 import { WORKSHOPS } from '../public/open-channel/workshops.mjs';
-import { NARRATION_LINES, getNarrationClip, getRecordingCoverage } from '../public/open-channel/narration-catalog.mjs';
+import { NARRATION_LINES, getNarrationClip, getRecordingCoverage, RECORDINGS_READY } from '../public/open-channel/narration-catalog.mjs';
 
 const example = NARRATION_LINES[0];
 const source = '/open-channel/audio/characters/last-signal/start.mp3';
@@ -66,4 +69,38 @@ test('coverage counts valid current recordings and never treats a partial catalo
   assert.deepEqual(getRecordingCoverage({ clips }), { recorded: 54, total: 54, complete: true });
   clips[example.key].text = 'An older script.';
   assert.deepEqual(getRecordingCoverage({ clips }), { recorded: 53, total: 54, complete: false });
+});
+
+
+test('included recordings have verified MP3 assets and partial catalogs cannot enable recorded narration', async () => {
+  assert.equal(AUDIO_MANIFEST.provider, 'ElevenLabs');
+  assert.equal(AUDIO_MANIFEST.model, 'eleven_v4');
+  const included = Object.keys(AUDIO_MANIFEST.clips);
+  assert.ok(included.length > 0 && included.length <= 54, 'the draft must retain its completed recordings');
+  const knownKeys = new Set(NARRATION_LINES.map(line => line.key));
+  for (const key of included) assert.ok(knownKeys.has(key), `${key}: recording has no authored source`);
+  const complete = included.length === 54;
+  assert.deepEqual(getRecordingCoverage(), { recorded: included.length, total: 54, complete });
+  assert.equal(RECORDINGS_READY, complete, 'partial coverage must keep recorded narration unavailable');
+  const paths = new Set(), hashes = new Set();
+  for (const line of NARRATION_LINES.filter(line => included.includes(line.key))) {
+    const clip = AUDIO_MANIFEST.clips[line.key];
+    const src = getNarrationClip(line.key, line.text);
+    assert.ok(src, `${line.key} must match the current script and use a local MP3 path`);
+    assert.ok(!paths.has(src), `${line.key} must not reuse another line's recording`); paths.add(src);
+    for (const field of ['voiceId', 'voiceName', 'generationId']) {
+      assert.equal(typeof clip[field], 'string', `${line.key}: ${field}`);
+      assert.ok(clip[field].trim(), `${line.key}: ${field} is required provenance`);
+    }
+    assert.match(clip.sha256, /^[a-f0-9]{64}$/, `${line.key}: expected SHA256`);
+    const bytes = await readFile(new URL(`../public${src}`, import.meta.url));
+    assert.ok(bytes.length > 1000, `${line.key}: recording is empty or truncated`);
+    const hasID3 = bytes.subarray(0, 3).toString('ascii') === 'ID3';
+    const hasMpegFrame = bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+    assert.ok(hasID3 || hasMpegFrame, `${line.key}: expected MP3 audio, not an error response`);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    assert.equal(hash, clip.sha256, `${line.key}: recording bytes no longer match the manifest`);
+    assert.ok(!hashes.has(hash), `${line.key}: duplicate recording bytes for a different line`); hashes.add(hash);
+  }
+  assert.ok(!JSON.stringify(AUDIO_MANIFEST).includes('X-Goog-'), 'signed generation URLs must not be shipped');
 });
