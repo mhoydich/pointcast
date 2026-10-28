@@ -40,13 +40,14 @@ for (const [p, n] of hand) add(p, n, 'room');
 projects.set('/', { path: '/', name: 'Front door', kind: 'journey' });
 
 // ---- the chain: the /chain hub, the apps in src/data/chain-apps.ts, and the other pages under /chain/
-// (Astro pages mount the beacon through BlockLayout; the static pages under public/chain/ load
+// (Astro pages mount the shared beacon directly or through BlockLayout; static pages under public/chain/ load
 // public/js/pc-pageview.js). Pageviews are keyed by path without a trailing slash, as these are.
 const CHAIN_PAGES = [
   ['/chain', 'PointCast Chain'], ['/chain/net', 'The Daily Net'], ['/chain/bots', 'Chain bots guide'], ['/chain/mints', 'First Mints'],
   ['/chain/first-mints', 'First Mints (passkey page)'], ['/chain/yard', 'Block Yard'], ['/chain/docs', 'Chain docs'], ['/chain/dev', 'Chain dev tools'],
   ['/chain/case-study', 'Chain case study'], ['/chain/interns', 'Chain intern assignments'], ['/chain/sanctuary', 'The Sanctuary (preview)'], ['/chain/mixtape', 'Mixtape Mint'],
   ['/chain/plan', 'The plan for PointCast Chain'],
+  ['/chain/mist', 'PointCast Mist'], ['/chain/receipt', 'Receipt Desk'],
 ];
 const chainAppsSrc = readFileSync('src/data/chain-apps.ts', 'utf8');
 const CHAIN_APP_KEYS = new Map(); // path -> app key
@@ -65,6 +66,7 @@ const chainFiles = (p) => {
   const out = [`src/pages/chain/${leaf}.astro`, `src/pages/chain/${leaf}/`, `public/chain/${leaf}/`, `src/data/chain-${leaf}.ts`, `src/data/chain-${leaf}/`];
   if (key) out.push(`public/chain/apps/${chainStem(key)}.js`, `public/chain/apps/${chainStem(key)}-view.js`, `src/data/chain-app-${chainStem(key)}.ts`);
   if (leaf === 'net') out.push('src/lib/daily-net.mjs', 'src/components/chain/DailyNetPanel.astro');
+  if (leaf === 'mist') out.push('public/chain/apps/mist-browser.js');
   return [...new Set(out)].filter(existsSync);
 };
 /** Tests that name one /chain page: chain-app-<stem>, chain-<leaf>, and the Daily Net's own suite. */
@@ -73,6 +75,8 @@ const chainTests = (p) => {
   const leaf = p.slice('/chain/'.length);
   const key = CHAIN_APP_KEYS.get(p);
   const names = [`chain-${leaf}.`, key ? `chain-app-${chainStem(key)}.` : null, leaf === 'net' ? 'chain-daily-net.' : null].filter(Boolean);
+  if (leaf === 'mist') names.push('chain-mist-browser.');
+  if (leaf === 'receipt') names.push('chain-receipt-desk.');
   return readdirSync('tests').filter((f) => names.some((n) => f.startsWith(n))).length;
 };
 
