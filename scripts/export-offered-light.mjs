@@ -23,12 +23,13 @@ for (const [name, output] of [['index.html', 'offered-light.html'], ['effects-la
     return `<style>${css}</style>`;
   });
   html = await replaceAsync(html, /<script src="([^"]+)"><\/script>/g, async match => `<script>${(await readFile(resolve(app, match[1]), 'utf8')).replaceAll('</script', '<\\/script')}</script>`);
-  html = await replaceAsync(html, /assets\/(dawn|garden|dusk)\.webp/g, async match => asset(resolve(app, match[0])));
+  html = await replaceAsync(html, /assets\/[a-z0-9-]+\.webp/g, async match => asset(resolve(app, match[0])));
   html = html.replaceAll('href="index.html"', 'href="offered-light.html"').replaceAll('href="effects-lab.html"', 'href="effects-playground.html"').replaceAll('href="../pointcast-effects/v0.1.0/README.md"', 'href="effects/README.md"');
   await writeFile(resolve(out, output), html);
   console.log(`${output}: ${Buffer.byteLength(html)} bytes`);
 }
-await copyFile(resolve(app, 'design-board.html'), resolve(out, 'design-board.html'));
+await writeFile(resolve(out, 'design-board.html'), (await readFile(resolve(app, 'design-board.html'), 'utf8')).replaceAll('href="index.html"', 'href="offered-light.html"'));
+await copyFile(resolve(app, 'artwork-provenance.json'), resolve(out, 'artwork-provenance.json'));
 await mkdir(resolve(out, 'effects'), { recursive: true });
 const library = resolve(repo, 'public/pointcast-effects/v0.1.0');
 for (const file of await readdir(library)) await copyFile(resolve(library, file), resolve(out, 'effects', file));

@@ -6,7 +6,7 @@
     if (!root || !Array.isArray(artworks) || !artworks.length) return null;
     if (root.offeredLight) root.offeredLight.destroy();
     const $ = id => document.getElementById(id);
-    const nodes = Object.fromEntries(['to-name','message','from-name','dedication','gift-message','signature','scene-art','scene-art-next','art-status','candle-toggle','candle-note','water','sound-toggle','ring-bell','sound-status','motion-toggle','preview-gift','edit-gift','editor','receiver-note','preview-heading','exact-share-text','share-text','copy-text','prepare-image','share-image','download-image','share-status','manual-copy','copy-field'].map(id => [id, $(id)]));
+    const nodes = Object.fromEntries(['to-name','message','from-name','dedication','gift-message','signature','scene-art','scene-art-next','art-status','current-art-title','candle-toggle','candle-note','water','sound-toggle','ring-bell','sound-status','motion-toggle','preview-gift','edit-gift','begin-gift','editor','receiver-note','preview-heading','compose-heading','compose-dialog','share-dialog','settings-dialog','open-share','open-settings','close-compose','close-share','close-settings','exact-share-text','share-text','copy-text','prepare-image','share-image','download-image','share-status','manual-copy','copy-field'].map(id => [id, $(id)]));
     const n = nodes;
     const removers = [], timers = new Set(), urls = new Set();
     const media = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches:false };
@@ -20,6 +20,68 @@
     const pressed = (id, value) => { if (n[id]) n[id].setAttribute('aria-pressed', String(value)); };
     const status = value => say('share-status', value);
     const reduced = () => still || media.matches;
+    const dialogs = new Map();
+    let previousOverflow = null;
+    function unlockScroll() {
+      if (previousOverflow !== null && !Array.from(dialogs.values()).some(record => record.modal)) {
+        document.body.style.overflow = previousOverflow;
+        previousOverflow = null;
+      }
+    }
+    function finishDialog(dialog, restoreFocus = true) {
+      const record = dialogs.get(dialog);
+      if (!record) return;
+      dialogs.delete(dialog);
+      if (!record.modal) { dialog.removeAttribute('open'); dialog.hidden = true; }
+      dialog.removeAttribute('data-nonmodal');
+      unlockScroll();
+      if (restoreFocus && !disposed) record.invoker?.focus({ preventScroll: true });
+    }
+    function closeDialog(dialog, restoreFocus = true) {
+      const record = dialogs.get(dialog);
+      if (!record) return;
+      record.restoreFocus = restoreFocus;
+      if (record.modal && dialog.open) dialog.close();
+      finishDialog(dialog, restoreFocus);
+    }
+    function closeDialogs(restoreFocus = false) {
+      Array.from(dialogs.keys()).forEach(dialog => closeDialog(dialog, restoreFocus));
+    }
+    function openDialog(dialog, invoker, heading) {
+      if (!dialog) return false;
+      closeDialogs();
+      const record = { invoker, modal: false };
+      const target = heading || dialog.querySelector('h2, h1');
+      const hadAutofocus = target?.getAttribute('autofocus') !== null;
+      // Give native dialog focusing steps a non-input target before showModal.
+      if (target) { target.setAttribute('tabindex', '-1'); target.setAttribute('autofocus', ''); }
+      dialog.hidden = false;
+      dialogs.set(dialog, record);
+      if (typeof dialog.showModal === 'function') {
+        try { dialog.showModal(); record.modal = true; } catch (_) { /* Use the in-flow fallback. */ }
+      }
+      if (record.modal) {
+        dialog.removeAttribute('data-nonmodal');
+        if (previousOverflow === null) previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+      } else { dialog.setAttribute('data-nonmodal', 'true'); dialog.setAttribute('open', ''); }
+      if (target) { target.focus({ preventScroll: true }); if (!hadAutofocus) target.removeAttribute('autofocus'); }
+      if (!record.modal) (target || dialog).scrollIntoView?.({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
+      return true;
+    }
+    ['compose','share','settings'].forEach(name => {
+      const dialog = n[name + '-dialog'];
+      on(n['close-' + name], 'click', () => closeDialog(dialog));
+      on(dialog, 'close', () => { if (!dialog.open) finishDialog(dialog, dialogs.get(dialog)?.restoreFocus !== false); });
+      // Native Escape performs its own close; the fallback needs an explicit one.
+      on(dialog, 'keydown', event => {
+        if (event.key === 'Escape' && dialogs.get(dialog)?.modal === false) {
+          event.preventDefault(); closeDialog(dialog);
+        }
+      });
+    });
+    on(n['open-share'], 'click', () => openDialog(n['share-dialog'], n['open-share']));
+    on(n['open-settings'], 'click', () => openDialog(n['settings-dialog'], n['open-settings']));
     const fields = () => ({
       to: (n['to-name']?.value || '').slice(0, 80).trim(),
       message: (n.message?.value || '').slice(0, 500).trim(),
@@ -63,24 +125,29 @@
         img.src = src;
       });
     }
+    const artInputs = Array.from(document.querySelectorAll('input[name="atmosphere"]'));
+    const artForInput = (input, index) => artworks.find(item => item.id === input.value)
+      || artworks.find(item => item.theme === input.value) || artworks[index];
+    function syncArtInputs() {
+      artInputs.forEach((input, index) => { input.checked = artForInput(input, index) === selected; });
+    }
     async function chooseArt(art, invalidateExport = true) {
-      selected = art;
       const serial = ++artSerial;
-      decodedArt = null;
-      if (invalidateExport) invalidate();
-      root.dataset.theme = art.theme || art.id;
+      syncArtInputs();
       root.dataset.artLoading = 'true';
       say('art-status', 'Opening ' + art.title + '…');
-      if (n['scene-art-next']) n['scene-art-next'].classList.remove('is-visible');
+      const main = n['scene-art'], next = n['scene-art-next'];
+      // Finish the last successful transition before trying another image.
+      if (decodedArt && main) { main.src = selected.src; main.alt = selected.alt || selected.title; }
+      next?.classList.remove('is-visible');
       try {
         const img = await imageReady(art.src);
         if (disposed || serial !== artSerial) return;
-        decodedArt = img;
-        const main = n['scene-art'], next = n['scene-art-next'];
         if (next && main && main.getAttribute('src') && !reduced()) {
           next.src = art.src; next.alt = art.alt || art.title;
           if (next.decode) await next.decode();
           if (disposed || serial !== artSerial) return;
+          // Commit all visible/selection/export state together after decoding.
           next.classList.add('is-visible');
           later(() => {
             if (serial !== artSerial) return;
@@ -88,17 +155,24 @@
             next.classList.remove('is-visible');
           }, 750);
         } else if (main) { main.src = art.src; main.alt = art.alt || art.title; }
+        selected = art; decodedArt = img;
+        if (invalidateExport) invalidate();
+        root.dataset.theme = art.theme || art.id;
+        syncArtInputs();
+        say('current-art-title', art.title);
         root.dataset.artLoading = 'false';
         root.dataset.artError = 'false';
         say('art-status', art.title + ' is ready.');
       } catch (_) {
         if (disposed || serial !== artSerial) return;
         root.dataset.artLoading = 'false'; root.dataset.artError = 'true';
+        next?.classList.remove('is-visible');
+        syncArtInputs();
         say('art-status', 'This artwork could not open. Choose another atmosphere or try it again. Your words are safe here.');
       }
     }
-    document.querySelectorAll('input[name="atmosphere"]').forEach((input, index) => {
-      const art = artworks.find(item => item.theme === input.value || item.id === input.value) || artworks[index];
+    artInputs.forEach((input, index) => {
+      const art = artForInput(input, index);
       input.checked = art === selected;
       on(input, 'change', () => { if (input.checked && art) chooseArt(art); });
     });
@@ -113,10 +187,19 @@
         setCandle(false);
         n['preview-heading']?.focus({ preventScroll: true });
         root.scrollIntoView?.({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
-      } else n['to-name']?.focus({ preventScroll: true });
+      } else if (!n['compose-dialog']) n['to-name']?.focus({ preventScroll: true });
     }
-    on(n['preview-gift'], 'click', () => setMode('receive'));
-    on(n['edit-gift'], 'click', () => setMode('create'));
+    on(n['preview-gift'], 'click', () => { closeDialog(n['compose-dialog'], false); setMode('receive'); });
+    function compose(invoker) {
+      // Editing a received preview keeps its context and focus-return control.
+      if (n['compose-dialog'] && mode === 'receive' && invoker === n['edit-gift']) {
+        if (n.editor) n.editor.hidden = false;
+        if (n['preview-gift']) n['preview-gift'].hidden = false;
+      } else setMode('create');
+      openDialog(n['compose-dialog'], invoker, n['compose-heading']);
+    }
+    on(n['begin-gift'], 'click', () => compose(n['begin-gift']));
+    on(n['edit-gift'], 'click', () => compose(n['edit-gift']));
     function applyMotion() {
       root.dataset.reducedMotion = String(reduced());
       pressed('motion-toggle', reduced());
@@ -160,7 +243,7 @@
       if (soundEnabled && soundEffect?.ring('gong')) say('sound-status', 'One quiet gong. You can turn sound off at any time.');
     });
     on(document, 'visibilitychange', () => { if (document.hidden) { stopAudio(); rippleEffect?.clear?.(); } });
-    on(window, 'pagehide', () => { stopAudio(); rippleEffect?.clear?.(); });
+    on(window, 'pagehide', () => { stopAudio(); rippleEffect?.clear?.(); closeDialogs(); });
     function manualCopy(value, message) {
       if (n['manual-copy']) n['manual-copy'].hidden = false;
       if (n['copy-field']) { n['copy-field'].value = value; n['copy-field'].focus(); n['copy-field'].select(); }
@@ -209,7 +292,8 @@
     }
     async function makeImage(art, data, image) {
       if (document.fonts?.ready) await document.fonts.ready;
-      const width = 1600, artHeight = 2400, inset = 140, textWidth = width - inset * 2;
+      const width = 1600, inset = 140, textWidth = width - inset * 2;
+      const artHeight = Math.max(800, Math.min(3200, Math.round(width * image.naturalHeight / image.naturalWidth)));
       const canvas = document.createElement('canvas'), context = canvas.getContext('2d');
       if (!context) throw new Error('Canvas unavailable');
       const blocks = [
@@ -283,6 +367,7 @@
       getState: () => ({ revision, art: selected.id, mode, lit, soundEnabled, reducedMotion: reduced(), preparing, prepared: Boolean(prepared) }),
       destroy: () => {
         disposed = true; artSerial++; prepareSerial++; stopAudio(true);
+        closeDialogs();
         removers.forEach(remove => remove());
         soundEffect?.dispose(); rippleEffect?.dispose();
         timers.forEach(timer => clearTimeout(timer)); timers.clear();

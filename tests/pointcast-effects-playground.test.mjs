@@ -37,10 +37,10 @@ test('playground integrates sound, candle, ripple, stillness, artwork and backgr
     el('lab-water').dispatchEvent(new w.MouseEvent('pointerdown', { bubbles: true, clientX: 40, clientY: 50, button: 0 }));
     const ripple = el('lab-water').querySelector('.pointcast-ripple'); assert.equal(ripple.style.left, '30px'); assert.equal(ripple.style.top, '30px');
     el('lab-still').click(); assert.equal(el('effects-lab').dataset.still, 'true'); assert.equal(el('lab-water').querySelector('.pointcast-ripple'), null);
-    d.querySelector('[data-lab-art="garden"]').click(); await tick(); assert.match(el('lab-art').src, /assets\/garden\.webp$/); assert.equal(el('lab-art').alt, 'A coral lily and cream candle beside blue water and a golden sun.');
+    d.querySelector('[data-lab-art="garden"]').click(); await tick(); assert.match(el('lab-art').src, /assets\/mj-garden\.webp$/); assert.equal(el('lab-art').alt, 'A delicate green plant against luminous blocks of pink, yellow, mint and lavender.');
     w.HTMLImageElement.prototype.decode = () => Promise.reject(new Error('decode failed'));
     d.querySelector('[data-lab-art="dusk"]').click(); await tick();
-    assert.match(el('lab-art').src, /assets\/garden\.webp$/);
+    assert.match(el('lab-art').src, /assets\/mj-garden\.webp$/);
     assert.equal(d.querySelector('[data-lab-art="garden"]').getAttribute('aria-pressed'), 'true');
     assert.equal(d.querySelector('[data-lab-art="dusk"]').getAttribute('aria-pressed'), 'false');
     assert.equal(JSON.parse(el('lab-recipe').textContent).artwork, 'garden');
