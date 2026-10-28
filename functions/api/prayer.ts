@@ -38,6 +38,7 @@ export const STATIONS = [
   'angelus',
   // the walk — /prayer-labyrinth
   'labyrinth',
+  'still-light', 'remembering',
 ] as const;
 type Station = (typeof STATIONS)[number];
 
@@ -107,6 +108,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   return json(
     {
       ok: true,
+      storageAvailable: Boolean(env.VISITS),
       stations: STATIONS,
       counts: state.counts,
       recent: state.recent,
