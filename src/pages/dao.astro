@@ -263,12 +263,16 @@ const jsonLd = {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); return true; } catch { return false; }
       }
 
+      function validChoice(value) {
+        return value && typeof value === 'object' && ['FOR', 'AGAINST', 'ABSTAIN'].includes(value.vote) && typeof value.ts === 'string' && Number.isFinite(Date.parse(value.ts));
+      }
+
       function renderStatus() {
         const votes = readVotes();
         document.querySelectorAll('[data-vote-status]').forEach(function (el) {
           const pid = el.getAttribute('data-vote-status');
           const v = votes[pid];
-          if (v && typeof v === 'object' && ['FOR', 'AGAINST', 'ABSTAIN'].includes(v.vote) && typeof v.ts === 'string' && Number.isFinite(Date.parse(v.ts))) {
+          if (validChoice(v)) {
             el.textContent = 'LOCAL CHOICE · ' + v.vote + ' · ' + (v.ts || '');
             el.classList.add('prop__status--voted');
           } else {
@@ -285,7 +289,7 @@ const jsonLd = {
           if (!pid || !vote) return;
 
           const current = readVotes();
-          if (current[pid] && current[pid].vote === vote) {
+          if (validChoice(current[pid]) && current[pid].vote === vote) {
             // Tapping same option again — treat as cancel.
             delete current[pid];
             if (!writeVotes(current)) { document.getElementById('dao-storage-status').textContent = 'Browser storage is unavailable; your choice was not changed.'; return; }

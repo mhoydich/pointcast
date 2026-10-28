@@ -52,3 +52,16 @@ test('malformed saved records are ignored without preventing other choices', () 
     other.window.close();
   }
 });
+
+
+test('clicking a choice with a malformed saved timestamp saves it rather than clearing it', () => {
+  const dom = page({ 'PC-0001': { vote: 'FOR', ts: 'not-a-date' } });
+  assert.equal(dom.window.document.querySelector('[data-vote-status]').textContent, 'NO LOCAL CHOICE');
+  dom.window.document.querySelector('button').click();
+  const saved = JSON.parse(dom.window.localStorage.getItem('pc:dao:votes'))['PC-0001'];
+  assert.equal(saved.vote, 'FOR');
+  assert.ok(Number.isFinite(Date.parse(saved.ts)));
+  assert.match(dom.window.document.querySelector('[data-vote-status]').textContent, /LOCAL CHOICE · FOR/);
+  assert.match(dom.window.document.getElementById('dao-storage-status').textContent, /saved/);
+  dom.window.close();
+});
