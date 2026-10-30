@@ -81,6 +81,12 @@
 - [x] (CC) Build the game on the shared cabinet (font, machines, mood), JSON twin, Block, cover art, catalog entry that lights its cabinet, discovery — `done`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-sea-glass-qa.md`, log to `docs/manus-logs/2026-10-22-sea-glass.md` — `queued`
 - [ ] (X) Review the quadrant tap mapping on small phones and the hazard pacing at pyramid 8 and beyond — `queued`
+### Low Tide — catch what the gull drops (wave two, Block 0750)
+
+`/low-tide`, `/low-tide.json`, Block 0750, branch `claude/low-tide-20261022` stacked on #1478. Kaboom! (Activision, 1981) made gentle. Rules in `src/lib/low-tide/tide.mjs`, tests in `tests/low-tide.test.mjs`, research note `docs/notes/2026-10-22-low-tide-notes.md`.
+
+- [x] (CC) Build the game: gull, shells and a three-bucket stack with paddle-style absolute control, fixed-count waves that speed up, a rising catch run, a tide wash for a miss, a bucket back every 1000 points, golden shells in RUSH, shared mood and machines, JSON twin, Block, cover art, discovery — `done`
+- [ ] (Manus) Real-device QA per `docs/briefs/2026-10-22-manus-low-tide-qa.md` after deploy — `queued`
 
 ---
 

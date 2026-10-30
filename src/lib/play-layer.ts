@@ -23,6 +23,11 @@ export const PLAY_SURFACES = [
     title: 'Sea Glass',
     route: '/sea-glass',
     summary: 'Turn every stone: a hermit crab hops a pyramid of 28 cubes from sand to sea glass, past bubbles and a gull. Tap a corner to hop.',
+    id: 'low-tide',
+    code: 'TIDE',
+    title: 'Low Tide',
+    route: '/low-tide',
+    summary: 'Catch what the gull drops: a gentle Kaboom! with a stack of buckets that follows your finger, a rising run of notes, and the tide for a miss.',
   },
   {
     id: 'breakwater',
