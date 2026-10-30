@@ -1,0 +1,390 @@
+---
+/**
+ * /hour — The Hour. One door at a time.
+ *
+ * Idea from Mike Hoydich's Sept 27 2026 note that PointCast's front feels
+ * like too many doors, and his interest in an experience that changes every
+ * hour. Built 2026-10-30 as a weekend project, beside the current front door
+ * rather than in place of it.
+ *
+ * Each hour, El Segundo time, the page picks one image, one line, one scale
+ * and one room from fixed pools (src/lib/hour/pools.mjs), seeded by the date
+ * and hour (src/lib/hour/scene.mjs), so everyone in the same hour sees the
+ * same scene. Nothing is generated at request time. Weather comes from
+ * Open-Meteo; the live drum count from /api/drum/live. Halloween night
+ * (Oct 31, 5 PM to midnight PT) swaps in its own pool, palette and voice.
+ *
+ * Preview any hour with ?h=0..23 and Halloween with ?halloween=1.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { imagePools, LINES, ROOMS } from '../lib/hour/pools.mjs';
+import { SCALES } from '../lib/hour/scene.mjs';
+
+const pools = { images: imagePools(), lines: LINES, rooms: ROOMS, scales: SCALES };
+const description = 'The Hour: one scene at a time from El Segundo. Every hour PointCast picks one image, one line, one instrument and one open room, by the clock, the weather and the moon. On Halloween night it turns.';
+const canonical = 'https://pointcast.xyz/hour';
+const firstDusk = pools.images.dusk[0];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': `${canonical}#page`,
+  name: 'The Hour',
+  description,
+  url: canonical,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz/' },
+  author: { '@type': 'Person', name: 'Michael Hoydich' },
+  contributor: { '@type': 'Organization', name: 'Claude Code' },
+  datePublished: '2026-10-30',
+};
+---
+
+<BlockLayout
+  title="The Hour"
+  description={description}
+  image={firstDusk.src}
+  imageAlt={firstDusk.alt}
+  themeColor="#1b2233"
+  immersive
+  jsonLd={jsonLd}
+>
+  <main class="hr" data-hr data-mode="dusk">
+    <script type="application/json" id="hr-pools" set:html={JSON.stringify(pools)} />
+
+    <figure class="hr-art" aria-hidden="false">
+      <img class="hr-img" data-img-a alt="" decoding="async" />
+      <img class="hr-img" data-img-b alt="" decoding="async" />
+      <div class="hr-veil" aria-hidden="true"></div>
+      <div class="hr-fog" aria-hidden="true"></div>
+    </figure>
+
+    <header class="hr-top">
+      <a class="hr-home" href="/" aria-label="PointCast home">POINTCAST</a>
+      <p class="hr-clock" aria-live="polite">
+        <span data-hour>—</span>
+        <span class="hr-dot" aria-hidden="true">·</span>
+        <span>El Segundo</span>
+        <span class="hr-dot" aria-hidden="true">·</span>
+        <span data-weather>reading the sky</span>
+        <span class="hr-dot" aria-hidden="true">·</span>
+        <span data-moon>—</span>
+      </p>
+    </header>
+
+    <section class="hr-center">
+      <p class="hr-eyebrow" data-eyebrow>The Hour</p>
+      <h1 class="hr-line" data-line>One door at a time.</h1>
+      <p class="hr-credit" data-credit></p>
+    </section>
+
+    <section class="hr-door" aria-label="This hour's open room">
+      <a class="hr-room" data-room href="/drum-room">
+        <span class="hr-room-label">Open now</span>
+        <span class="hr-room-name" data-room-name>Drum Room</span>
+        <span class="hr-room-note" data-room-note></span>
+      </a>
+      <a class="hr-live" data-live href="/drum-room" hidden>
+        <span class="hr-pulse" aria-hidden="true"></span>
+        <span data-live-text>someone is drumming</span>
+      </a>
+    </section>
+
+    <section class="hr-play" aria-label="This hour's instrument">
+      <button type="button" class="hr-listen" data-listen aria-pressed="false">Listen</button>
+      <div class="hr-keys" role="group" aria-label="Eight notes in this hour's scale. Keys A to K also play.">
+        {['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K'].map((k, i) => (
+          <button type="button" class="hr-key" data-key={i} aria-label={`Note ${i + 1} (${k})`}><span>{k}</span></button>
+        ))}
+      </div>
+      <p class="hr-scale" data-scale></p>
+    </section>
+
+    <footer class="hr-foot">
+      <span>A new scene every hour, the same for everyone in it.</span>
+      <a href="/hallway">The Hallway</a>
+      <a href="/haunted-drum">Haunted Drum Room</a>
+      <a href="/">Every door</a>
+    </footer>
+
+    <noscript><p class="hr-noscript">The Hour picks its scene with JavaScript. Every door is still on the <a href="/">front page</a>.</p></noscript>
+  </main>
+</BlockLayout>
+
+<style>
+  .hr {
+    --ink: #f6efe2;
+    --ink-dim: rgba(246, 239, 226, 0.72);
+    --glow: #ffb86b;
+    --veil-a: rgba(16, 20, 32, 0.15);
+    --veil-b: rgba(16, 20, 32, 0.78);
+    position: relative;
+    min-height: 100svh;
+    display: grid;
+    grid-template-rows: auto 1fr auto auto auto;
+    color: var(--ink);
+    background: #10141f;
+    overflow: hidden;
+    font-family: Inter, system-ui, sans-serif;
+  }
+  .hr[data-mode='dawn'] { --glow: #ffd3a8; --veil-b: rgba(40, 30, 40, 0.62); }
+  .hr[data-mode='day'] { --glow: #fff1b0; --veil-b: rgba(20, 30, 40, 0.6); }
+  .hr[data-mode='dusk'] { --glow: #ffb86b; }
+  .hr[data-mode='night'] { --glow: #a9c6ff; --veil-b: rgba(6, 8, 18, 0.84); }
+  .hr[data-mode='halloween'] { --glow: #ff7a1a; --ink: #ffeede; --veil-a: rgba(40, 6, 40, 0.35); --veil-b: rgba(10, 2, 14, 0.88); }
+
+  .hr-art { position: absolute; inset: 0; margin: 0; }
+  .hr-img {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    opacity: 0; transition: opacity 2.4s ease, filter 2.4s ease;
+    transform: scale(1.04); animation: hr-drift 90s ease-in-out infinite alternate;
+  }
+  .hr-img.is-on { opacity: 1; }
+  .hr[data-mode='halloween'] .hr-img { filter: saturate(0.7) hue-rotate(-18deg) contrast(1.12) brightness(0.72); }
+  .hr-veil { position: absolute; inset: 0; background: linear-gradient(180deg, var(--veil-a) 0%, transparent 35%, var(--veil-b) 100%); }
+  .hr-fog { position: absolute; inset: -20%; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at 30% 70%, rgba(255,255,255,0.14), transparent 55%), radial-gradient(ellipse at 75% 80%, rgba(255,140,60,0.12), transparent 50%); }
+  .hr[data-mode='halloween'] .hr-fog { opacity: 1; animation: hr-fog 24s ease-in-out infinite alternate; }
+  @keyframes hr-drift { from { transform: scale(1.04) translate3d(0, 0, 0); } to { transform: scale(1.1) translate3d(-1.5%, -1%, 0); } }
+  @keyframes hr-fog { from { transform: translate3d(-4%, 0, 0); } to { transform: translate3d(4%, -3%, 0); } }
+
+  .hr > :not(.hr-art) { position: relative; z-index: 1; }
+  .hr-top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; padding: 16px clamp(16px, 4vw, 40px); }
+  .hr-home { color: var(--ink); text-decoration: none; font: 700 12px/1 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.18em; }
+  .hr-clock { margin: 0; font: 500 13px/1.4 'JetBrains Mono', ui-monospace, monospace; color: var(--ink-dim); display: flex; flex-wrap: wrap; gap: 0 8px; }
+  .hr-clock [data-hour] { color: var(--ink); }
+  .hr-dot { opacity: 0.5; }
+
+  .hr-center { align-self: end; padding: 0 clamp(16px, 6vw, 72px); max-width: 980px; }
+  .hr-eyebrow { margin: 0 0 10px; font: 600 12px/1 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.2em; text-transform: uppercase; color: var(--glow); }
+  .hr-line { margin: 0; font: 600 clamp(30px, 6.4vw, 72px)/1.04 Georgia, 'Times New Roman', serif; letter-spacing: -0.01em; text-wrap: balance; text-shadow: 0 2px 30px rgba(0, 0, 0, 0.45); transition: opacity 1.2s ease; }
+  .hr-credit { margin: 14px 0 0; font-size: 13px; color: var(--ink-dim); }
+
+  .hr-door { display: flex; flex-wrap: wrap; gap: 12px; padding: 24px clamp(16px, 6vw, 72px) 0; }
+  .hr-room { display: grid; gap: 2px; padding: 14px 18px; border-radius: 14px; text-decoration: none; color: var(--ink); background: rgba(10, 12, 20, 0.42); border: 1px solid color-mix(in srgb, var(--glow) 55%, transparent); box-shadow: 0 0 40px color-mix(in srgb, var(--glow) 25%, transparent); backdrop-filter: blur(6px); min-width: min(320px, 100%); }
+  .hr-room:hover, .hr-room:focus-visible { background: rgba(10, 12, 20, 0.6); }
+  .hr-room-label { font: 600 11px/1 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.18em; text-transform: uppercase; color: var(--glow); }
+  .hr-room-name { font: 600 22px/1.2 Georgia, serif; }
+  .hr-room-note { font-size: 13px; color: var(--ink-dim); }
+  .hr-live { align-self: center; display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 999px; color: var(--ink); text-decoration: none; background: rgba(10, 12, 20, 0.42); font-size: 14px; }
+  .hr-pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 0 0 var(--glow); animation: hr-pulse 1.6s ease-out infinite; }
+  @keyframes hr-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--glow) 70%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+
+  .hr-play { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 24px clamp(16px, 6vw, 72px) 0; }
+  .hr-listen { font: 600 14px/1 Inter, system-ui, sans-serif; padding: 12px 18px; border-radius: 999px; border: 0; color: #120d08; background: var(--glow); cursor: pointer; }
+  .hr-listen[aria-pressed='true'] { background: var(--ink); }
+  .hr-keys { display: grid; grid-template-columns: repeat(8, minmax(34px, 1fr)); gap: 6px; flex: 1 1 320px; max-width: 520px; }
+  .hr-key { height: 54px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.08); color: var(--ink-dim); font: 600 12px/1 'JetBrains Mono', ui-monospace, monospace; cursor: pointer; touch-action: manipulation; transition: background 0.25s ease, transform 0.1s ease; }
+  .hr-key.is-hit { background: color-mix(in srgb, var(--glow) 70%, transparent); color: #120d08; transform: translateY(1px); transition: none; }
+  .hr-scale { margin: 0; font: 500 12px/1.3 'JetBrains Mono', ui-monospace, monospace; color: var(--ink-dim); }
+
+  .hr-foot { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 24px clamp(16px, 6vw, 72px) 20px; font-size: 13px; color: var(--ink-dim); }
+  .hr-foot a { color: var(--ink); }
+  .hr-noscript { position: relative; z-index: 2; padding: 16px; }
+
+  @media (max-width: 640px) {
+    .hr-key { height: 48px; }
+    .hr-room { min-width: 0; width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hr-img, .hr-fog, .hr-pulse { animation: none; }
+  }
+</style>
+
+<script>
+  import { ptParts, chooseScene, moonPhase, moonName, weatherWords, hourLabel, bandFor } from '../lib/hour/scene.mjs';
+
+  const root = document.querySelector<HTMLElement>('[data-hr]')!;
+  const pools = JSON.parse(document.getElementById('hr-pools')!.textContent || '{}');
+  const params = new URLSearchParams(location.search);
+  const forcedHour = params.has('h') ? Math.max(0, Math.min(23, Number(params.get('h')) || 0)) : null;
+  const forcedHalloween = params.get('halloween') === '1' ? true : undefined;
+
+  const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
+  const imgA = $<HTMLImageElement>('[data-img-a]');
+  const imgB = $<HTMLImageElement>('[data-img-b]');
+  let front = imgA;
+
+  function nowParts() {
+    const p = ptParts();
+    if (forcedHour !== null) p.hour = forcedHour;
+    return p;
+  }
+
+  let scene: ReturnType<typeof chooseScene> | null = null;
+  let sceneKey = '';
+
+  function render() {
+    const parts = nowParts();
+    const key = `${parts.year}-${parts.month}-${parts.day}-${parts.hour}-${forcedHalloween ? 'h' : ''}`;
+    $<HTMLElement>('[data-hour]').textContent = hourLabel(parts.hour);
+    if (key === sceneKey) return;
+    sceneKey = key;
+    scene = chooseScene(parts, pools, { halloween: forcedHalloween });
+    root.dataset.mode = scene.mode;
+
+    const next = front === imgA ? imgB : imgA;
+    next.onload = () => { next.classList.add('is-on'); front.classList.remove('is-on'); front = next; };
+    next.alt = scene.image.alt;
+    next.src = scene.image.src;
+
+    $<HTMLElement>('[data-eyebrow]').textContent = scene.mode === 'halloween' ? 'The Hour · Halloween night' : `The Hour · ${bandFor(parts.hour)}`;
+    $<HTMLElement>('[data-line]').textContent = scene.line;
+    $<HTMLElement>('[data-credit]').textContent = `${scene.image.title} · ${scene.image.series} · Michael Hoydich with Midjourney. Line by Claude Code.`;
+    const room = $<HTMLAnchorElement>('[data-room]');
+    room.href = scene.room.href;
+    $<HTMLElement>('[data-room-name]').textContent = scene.room.name;
+    $<HTMLElement>('[data-room-note]').textContent = scene.room.note;
+    $<HTMLElement>('[data-scale]').textContent = `${scene.scale.name} · keys A–K`;
+    document.title = `The Hour · ${hourLabel(parts.hour)} · PointCast`;
+    if (audio.on) audio.restartBed();
+  }
+
+  // ── sky: weather and moon ───────────────────────────────────
+  $<HTMLElement>('[data-moon]').textContent = moonName(moonPhase());
+  fetch('https://api.open-meteo.com/v1/forecast?latitude=33.9192&longitude=-118.4165&current=temperature_2m,weather_code&temperature_unit=fahrenheit')
+    .then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then((d) => {
+      const c = d.current;
+      $<HTMLElement>('[data-weather]').textContent = `${Math.round(c.temperature_2m)}° ${weatherWords(c.weather_code)}`;
+    })
+    .catch(() => { $<HTMLElement>('[data-weather]').textContent = 'sky not reported'; });
+
+  // ── live: is anyone drumming right now? ─────────────────────
+  async function checkLive() {
+    try {
+      const r = await fetch('/api/drum/live', { cache: 'no-store' });
+      if (!r.ok) return;
+      const d = await r.json();
+      const n = Number(d.count) || 0;
+      const live = $<HTMLAnchorElement>('[data-live]');
+      live.hidden = n < 1;
+      if (n > 0) $<HTMLElement>('[data-live-text]').textContent = n === 1 ? 'someone is drumming right now' : `${n} people drumming right now`;
+    } catch { /* quiet */ }
+  }
+
+  // ── sound: a bed for the hour and eight keys ────────────────
+  const audio = {
+    ctx: null as AudioContext | null,
+    master: null as GainNode | null,
+    bed: [] as { stop: () => void }[],
+    timer: 0,
+    on: false,
+    ensure() {
+      if (this.ctx) return this.ctx;
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      this.ctx = new Ctx();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.6;
+      const delay = this.ctx.createDelay(1.5);
+      delay.delayTime.value = 0.42;
+      const fb = this.ctx.createGain();
+      fb.gain.value = 0.32;
+      delay.connect(fb).connect(delay);
+      this.master.connect(this.ctx.destination);
+      this.master.connect(delay).connect(this.ctx.destination);
+      return this.ctx;
+    },
+    freq(i: number, octave = 0) {
+      const s = scene!.scale;
+      const step = s.steps[((i % s.steps.length) + s.steps.length) % s.steps.length];
+      return 440 * Math.pow(2, (s.root + step + octave * 12 - 69) / 12);
+    },
+    voice(f: number, when: number, dur: number, gain: number, type: OscillatorType) {
+      const ctx = this.ensure();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = scene?.mode === 'halloween' ? 1400 : 3200;
+      o.type = type;
+      o.frequency.setValueAtTime(f, when);
+      if (scene?.mode === 'halloween') {
+        // a theremin-ish swoop up into the note
+        o.frequency.setValueAtTime(f * 0.94, when);
+        o.frequency.exponentialRampToValueAtTime(f, when + 0.18);
+      }
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(gain, when + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      o.connect(lp).connect(g).connect(this.master!);
+      o.start(when);
+      o.stop(when + dur + 0.05);
+    },
+    pluck(i: number) {
+      const ctx = this.ensure();
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime;
+      const type: OscillatorType = scene?.mode === 'night' ? 'triangle' : scene?.mode === 'halloween' ? 'sine' : scene?.mode === 'day' ? 'square' : 'triangle';
+      this.voice(this.freq(i), t, scene?.mode === 'halloween' ? 1.6 : 1.1, type === 'square' ? 0.08 : 0.22, type);
+      if (scene?.mode === 'dawn') this.voice(this.freq(i, 1), t, 1.4, 0.06, 'sine');
+    },
+    startBed() {
+      const ctx = this.ensure();
+      if (ctx.state === 'suspended') ctx.resume();
+      this.stopBed();
+      const pad = (i: number, oct: number, g: number) => {
+        const o = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 700;
+        o.type = 'sawtooth';
+        o.frequency.value = this.freq(i, oct);
+        o.detune.value = (Math.random() - 0.5) * 12;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(g, ctx.currentTime + 4);
+        o.connect(lp).connect(gain).connect(this.master!);
+        o.start();
+        return { stop: () => { gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.8); o.stop(ctx.currentTime + 4); } };
+      };
+      this.bed = [pad(0, -1, 0.05), pad(2, -1, 0.035), pad(4, -1, 0.03)];
+      // a slow, seeded melody over the bed
+      const tempo = { dawn: 2600, day: 1500, dusk: 2200, night: 2800, halloween: 1900 }[scene!.mode] ?? 2200;
+      let n = 0;
+      const tick = () => {
+        const seq = [0, 2, 4, 3, 5, 4, 2, 1, 6, 4, 3, 2];
+        const step = seq[(n + (sceneKey.length * 7)) % seq.length];
+        this.voice(this.freq(step, 0), ctx.currentTime + 0.02, 2.4, 0.07, 'sine');
+        if (scene!.mode === 'halloween' && n % 4 === 0) this.voice(this.freq(0, -2), ctx.currentTime + 0.02, 3.2, 0.18, 'sine');
+        if (scene!.mode === 'night' && n % 2 === 0) this.voice(this.freq(0, -2), ctx.currentTime + 0.02, 0.5, 0.2, 'sine');
+        n += 1;
+      };
+      tick();
+      this.timer = window.setInterval(tick, tempo);
+    },
+    stopBed() {
+      window.clearInterval(this.timer);
+      this.bed.forEach((b) => b.stop());
+      this.bed = [];
+    },
+    restartBed() { this.startBed(); },
+  };
+
+  const listen = $<HTMLButtonElement>('[data-listen]');
+  listen.addEventListener('click', () => {
+    audio.on = !audio.on;
+    listen.setAttribute('aria-pressed', String(audio.on));
+    listen.textContent = audio.on ? 'Quiet' : 'Listen';
+    if (audio.on) audio.startBed(); else audio.stopBed();
+  });
+
+  const keys = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-key]'));
+  function hit(i: number) {
+    audio.pluck(i);
+    const k = keys[i];
+    k.classList.add('is-hit');
+    window.setTimeout(() => k.classList.remove('is-hit'), 140);
+  }
+  keys.forEach((k, i) => k.addEventListener('pointerdown', (e) => { e.preventDefault(); hit(i); }));
+  const keyMap = 'asdfghjk';
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    const target = e.target as HTMLElement;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+    const i = keyMap.indexOf(e.key.toLowerCase());
+    if (i >= 0) hit(i);
+  });
+
+  render();
+  checkLive();
+  window.setInterval(render, 20_000);
+  window.setInterval(checkLive, 60_000);
+</script>
