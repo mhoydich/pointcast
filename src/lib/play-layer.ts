@@ -28,6 +28,11 @@ export const PLAY_SURFACES = [
     title: 'Low Tide',
     route: '/low-tide',
     summary: 'Catch what the gull drops: a gentle Kaboom! with a stack of buckets that follows your finger, a rising run of notes, and the tide for a miss.',
+    id: 'sandcastle',
+    code: 'SAND',
+    title: 'Sandcastle',
+    route: '/sandcastle',
+    summary: 'Hold back the tide: six sandcastles, three bucket brigades and sand bursts against wave lines from the sea, in 8-bit blue with a mood the game and you keep together.',
   },
   {
     id: 'breakwater',
