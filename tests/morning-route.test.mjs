@@ -435,7 +435,9 @@ test('catalog and discovery: the cabinet lights and llms.txt gains no line', () 
   const catalog = JSON.parse(fs.readFileSync(path.join(root, 'src/data/game-catalog.json'), 'utf8'));
   const i = catalog.findIndex((g) => g.slug === 'morning-route');
   assert.ok(i >= 0);
-  assert.equal(catalog[i + 1].slug, 'breakwater', 'immediately before Breakwater');
+  // Wave two sits together just before Breakwater (wave one follows it), in any order.
+  const bw = catalog.findIndex((g) => g.slug === 'breakwater');
+  assert.ok(i < bw && catalog.slice(i, bw).every((g) => ['lighthouse', 'low-tide', 'morning-route', 'sea-glass', 'sandcastle'].includes(g.slug)), 'in the wave-two run before Breakwater');
   const g = catalog[i];
   assert.equal(g.family, 'Retro arcade');
   assert.equal(g.download.kind, 'local');

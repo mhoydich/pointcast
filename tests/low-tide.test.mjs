@@ -262,6 +262,8 @@ test('the page wires the shared modules and the house rules', () => {
   const catalog = JSON.parse(fs.readFileSync(path.join(root, 'src/data/game-catalog.json'), 'utf8'));
   const i = catalog.findIndex((g) => g.slug === 'low-tide');
   assert.ok(i >= 0);
-  assert.equal(catalog[i + 1].slug, 'breakwater');
+  // Wave two sits together just before Breakwater (wave one follows it), in any order.
+  const bw = catalog.findIndex((g) => g.slug === 'breakwater');
+  assert.ok(i < bw && catalog.slice(i, bw).every((g) => ['lighthouse', 'low-tide', 'morning-route', 'sea-glass', 'sandcastle'].includes(g.slug)), 'in the wave-two run before Breakwater');
   assert.equal(catalog[i].family, 'Retro arcade');
 });
