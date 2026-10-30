@@ -33,6 +33,11 @@ export const PLAY_SURFACES = [
     title: 'Sandcastle',
     route: '/sandcastle',
     summary: 'Hold back the tide: six sandcastles, three bucket brigades and sand bursts against wave lines from the sea, in 8-bit blue with a mood the game and you keep together.',
+    id: 'lighthouse',
+    code: 'LITE',
+    title: 'Lighthouse',
+    route: '/lighthouse',
+    summary: 'Simon as a lighthouse lens at night: watch four lamps play a growing sequence of light and tone, then play it back. A free-play mode turns the lens into an instrument.',
   },
   {
     id: 'breakwater',

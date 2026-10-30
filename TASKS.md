@@ -94,6 +94,13 @@
 - [x] (CC) Build the game on the shared font, palettes and mood model: vector beach, throws by tap or by brigade key, ten sand per brigade, bonus per castle and sand, a castle every 10,000, splits and RUSH rogue waves, CALM rebuilds every round and never ends; JSON twin, Block, cover art, discovery, lights its Cabinet Row cabinet — `done`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-sandcastle-qa.md`, log to `docs/manus-logs/2026-10-22-sandcastle.md` — `queued`
 - [ ] (MH/X) Review and merge after #1478; expect small conflicts in the discovery files with the other wave-two PRs — `waiting-on-mh`
+## Lighthouse — Simon as a lighthouse lens at night (2026-10-22)
+
+`/lighthouse`, `/lighthouse.json`, Block 0745 (moved from 0733 as the ids before it were taken on main and by open PRs). Wave-two game in the Breakwater family: four compass lamps in the machine palette's band colors, tones of an A major chord after Simon's, playback faster after the 5th, 9th and 13th step, CALM replays a miss, FREE play instrument. Rules in `src/lib/lighthouse/{lens,game}.mjs`, tests in `tests/lighthouse.test.mjs`, research note `docs/notes/2026-10-22-lighthouse-notes.md`. Branch `claude/lighthouse-20261022`, PR #1508 against `main`.
+
+- [x] (CC) Build the game, JSON twin, Block, cover art, catalog entry and discovery wiring; lights its cabinet on Cabinet Row — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-lighthouse-qa.md`, log to `docs/manus-logs/2026-10-22-lighthouse.md` — `queued`
+- [ ] (MH/X) Review and merge #1508 — `waiting-on-mh`
 
 ---
 
