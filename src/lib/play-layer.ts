@@ -18,6 +18,13 @@ export const PLAY_SURFACES = [
     summary: 'The lobby for the 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood.',
   },
   {
+    id: 'sea-glass',
+    code: 'SEA',
+    title: 'Sea Glass',
+    route: '/sea-glass',
+    summary: 'Turn every stone: a hermit crab hops a pyramid of 28 cubes from sand to sea glass, past bubbles and a gull. Tap a corner to hop.',
+  },
+  {
     id: 'breakwater',
     code: 'BRK',
     title: 'Breakwater',
