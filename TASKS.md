@@ -101,6 +101,13 @@
 - [x] (CC) Build the game, JSON twin, Block, cover art, catalog entry and discovery wiring; lights its cabinet on Cabinet Row — `done`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-lighthouse-qa.md`, log to `docs/manus-logs/2026-10-22-lighthouse.md` — `queued`
 - [ ] (MH/X) Review and merge #1508 — `waiting-on-mh`
+### Morning Route — deliver the Morning Edition (wave two, 2026-10-22)
+
+`/morning-route`, `/morning-route.json`, Block 0747, branch `claude/morning-route-20261022`, PR #1516 against main. After Paperboy (1985): an El Segundo street at 6:45 AM, lit porches and mailboxes, gentle obstacles, a report card per day. Rules in `src/lib/morning-route/{route,sprites}.mjs`, tests in `tests/morning-route.test.mjs`. Research note: `docs/notes/2026-10-22-morning-route-notes.md`.
+
+- [x] (CC) Build the game, JSON twin, Block, cover art and discovery; lights its Cabinet Row cabinet — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-morning-route-qa.md`, log to `docs/manus-logs/2026-10-22-morning-route.md` — `queued`
+- [ ] (MH/X) Review and merge #1516 (#1478 is on main) — `waiting-on-mh`
 
 ---
 

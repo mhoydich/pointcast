@@ -38,6 +38,11 @@ export const PLAY_SURFACES = [
     title: 'Lighthouse',
     route: '/lighthouse',
     summary: 'Simon as a lighthouse lens at night: watch four lamps play a growing sequence of light and tone, then play it back. A free-play mode turns the lens into an instrument.',
+    id: 'morning-route',
+    code: 'NEWS',
+    title: 'Morning Route',
+    route: '/morning-route',
+    summary: 'Deliver the Morning Edition at 6:45 AM: lit porches take the paper, the mailbox scores more, and the trouble is a sprinkler, a sitting dog and a car backing out.',
   },
   {
     id: 'breakwater',
