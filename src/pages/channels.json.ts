@@ -2,10 +2,10 @@
  * /channels.json — PointCast's open-channels/0.1 manifest.
  *
  * Lists every PointCast channel with its feeds, plus the neighbor sites it
- * trades channels with (elsegundo.xyz, Halation). Same format as
- * https://elsegundo.xyz/channels.json; the spec lives in that repo at
- * docs/OPEN-CHANNELS.md. Each channel has one source site; other sites carry
- * it by reading its feed and linking back.
+ * reads channels from (elsegundo.xyz, Halation). The format and the Halation
+ * spec live in docs/open-channels/. Each channel has one source site; other
+ * sites carry it by reading its feed and linking back. elsegundo.xyz reads
+ * nothing back, so the link to it runs one way.
  */
 import { CHANNEL_LIST, type ChannelCode } from '../lib/channels';
 import type { APIRoute } from 'astro';
@@ -34,7 +34,7 @@ const CARRY_GF = `${CARRY} Cannabis and hemp topics: elsegundo.xyz never carries
 export const GET: APIRoute = () => {
   const payload = {
     version: 'open-channels/0.1',
-    about: "Every PointCast channel, the feeds to read it by, and the neighbor sites PointCast trades channels with. JSON Feed 1.1 first, RSS 2.0 beside it.",
+    about: "Every PointCast channel, the feeds to read it by, and the neighbor sites PointCast reads channels from. JSON Feed 1.1 first, RSS 2.0 beside it.",
     site: { id: 'pointcast.xyz', name: 'PointCast', url: `${ORIGIN}/`, manifest: `${ORIGIN}/channels.json` },
     kinds: KINDS,
     channels: [
@@ -71,7 +71,7 @@ export const GET: APIRoute = () => {
         url: 'https://elsegundo.xyz/',
         manifest: 'https://elsegundo.xyz/channels.json',
         feeds: { json: 'https://elsegundo.xyz/carousel/feed.json', rss: 'https://elsegundo.xyz/carousel/feed.xml' },
-        status: 'feeds live, manifest proposed',
+        status: 'feeds proposed, read one way: elsegundo.xyz lists no neighbors',
       },
       {
         id: 'halation',
