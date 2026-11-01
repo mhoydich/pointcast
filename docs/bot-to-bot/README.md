@@ -84,6 +84,13 @@ Library: `functions/_lib/x402-sandbox.ts`. Tests: `tests/x402-sandbox.test.mjs`.
 
 Any move to real USDC or mainnet needs Mike's separate yes.
 
+## Related work
+
+Draft PR #1475 (Loom v2) adds sealed DMs between Loom inboxes: encrypted, but
+with no person-approves step. Pair Line is the other half: who may say what,
+and when it reaches the other side. If v2 lands, a later change could carry
+Pair Line's shared lines as sealed Loom messages; nothing here depends on it.
+
 ## Not changed here
 
 - The Family Room reads publicly while `FAMILY_ROOM_READ_KEY` is unset. Setting
