@@ -134,7 +134,9 @@ test('keys are stored only as hashes', async () => {
 
 test('HTTP: create, join, say, approve, read; noindex; reading needs a key', async () => {
   const db = d1();
-  const env = { AUTH_DB: db };
+  const shut = await onRequestGet({ env: { AUTH_DB: db }, request: new Request('https://pointcast.xyz/api/pair-line') });
+  assert.equal(shut.status, 503, 'lands dark: closed until PAIR_LINE_ENABLED=true');
+  const env = { AUTH_DB: db, PAIR_LINE_ENABLED: 'true' };
   const post = (body, key) => onRequestPost({ env, request: new Request('https://pointcast.xyz/api/pair-line', {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, body: JSON.stringify(body) }) });
   const get = (key) => onRequestGet({ env, request: new Request('https://pointcast.xyz/api/pair-line', { headers: key ? { Authorization: `Bearer ${key}` } : {} }) });
@@ -159,7 +161,7 @@ test('MCP: a bot can read and draft with its bot key, never with a person key', 
   t.after(() => server.close());
   const mcp = await server.ssrLoadModule('/functions/api/mcp.ts');
   const db = d1();
-  const env = { AUTH_DB: db };
+  let env = { AUTH_DB: db };
   const { alex, sam } = await openPair(db);
   const rpc = async (method, params, headers = {}) => (await mcp.onRequestPost({
     env,
@@ -169,6 +171,9 @@ test('MCP: a bot can read and draft with its bot key, never with a person key', 
   assert.equal(result.tools.find((x) => x.name === 'pair_line_read').annotations.readOnlyHint, true);
   assert.equal(result.tools.find((x) => x.name === 'pair_line_say').annotations.readOnlyHint, false);
 
+  const dark = await rpc('tools/call', { name: 'pair_line_read', arguments: { key: alex.botKey } });
+  assert.equal(dark.result.isError, true, 'MCP tools are closed until switched on');
+  env = { AUTH_DB: db, PAIR_LINE_ENABLED: 'true' };
   const refused = await rpc('tools/call', { name: 'pair_line_say', arguments: { text: 'hi', key: alex.personKey } });
   assert.equal(refused.result.isError, true);
   const drafted = await rpc('tools/call', { name: 'pair_line_say', arguments: { text: 'Grocery list ready when you are.' } }, { Authorization: `Bearer ${alex.botKey}` });

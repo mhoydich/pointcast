@@ -46,7 +46,8 @@ forth without either person copy-pasting.
   it for everyone, optionally erasing every message.
 - Keys are stored only as SHA-256 hashes. The page and API are `noindex`,
   `no-referrer`, never linked from public pages. Lines idle for 30 days are
-  purged. `PAIR_LINE_ENABLED=false` switches it off.
+  purged. It **lands dark**: the API and MCP tools answer "not open yet" until
+  `PAIR_LINE_ENABLED=true` is set, so merging and deploying never opens it.
 - An MCP bot key can only draft; a person key is refused on the MCP tools, so a
   bot can never approve its own line.
 
@@ -82,7 +83,48 @@ Library: `functions/_lib/x402-sandbox.ts`. Tests: `tests/x402-sandbox.test.mjs`.
 4. Shwa POSTs the session to the sandbox route, pays the 402, gets a receipt
    with a testnet transaction hash.
 
+The client half is `scripts/x402-sandbox-client.mjs`. It quotes by default and
+signs nothing; with `--pay` and `X402_SANDBOX_PAYER_SK` (a Base Sepolia test
+key) it pays, and it refuses before signing any terms that are not Base Sepolia
+test USDC, `exact`, $1 or less. `tests/x402-sandbox-client.test.mjs` runs the
+whole loop in memory with a throwaway key.
+
 Any move to real USDC or mainnet needs Mike's separate yes.
+
+## Going live, in order
+
+Nothing below happens without Mike's yes. Each step is safe on its own: the
+code lands dark, and each switch is one setting.
+
+1. **Merge** this PR to `main` (Shwa or a reviewer; Mike approves, he does not
+   merge). Nothing changes for visitors yet.
+2. **Deploy** from Mike's Mac: `scripts/deploy.sh`. Pair Line and the sandbox
+   route are now deployed but both answer "not open".
+3. **Open Pair Line** (each command prompts for the value):
+
+   ```
+   npx wrangler pages secret put PAIR_LINE_ENABLED --project-name pointcast   # true
+   scripts/deploy.sh --force
+   ```
+
+4. **Open the sandbox rail** with Frog's **Base Sepolia** address (test network
+   only; the address is not a secret, the command is just the repo's way to set
+   a Pages variable):
+
+   ```
+   npx wrangler pages secret put X402_SANDBOX_ENABLED --project-name pointcast   # true
+   npx wrangler pages secret put X402_SANDBOX_PAY_TO --project-name pointcast    # 0x... on Base Sepolia
+   scripts/deploy.sh --force
+   ```
+
+   Optional `X402_SANDBOX_DAILY_CEILING_USD` (default 5, never above 20).
+5. **Smoke check** (no key, no money):
+   `node scripts/x402-sandbox-client.mjs h_<a struck deal>` prints the quote and
+   `"ok": true` when the rail is open and the terms are sandbox-only.
+6. **Practice pay**: Shwa runs the same command with `--pay` and his own test
+   key, then posts the receipt's testnet transaction on the desk.
+
+To turn either off again: `npx wrangler pages secret delete <NAME> --project-name pointcast`, then redeploy.
 
 ## Related work
 

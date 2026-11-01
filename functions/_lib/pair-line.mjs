@@ -335,3 +335,7 @@ export async function purgeIdle(db, now = Date.now()) {
   }
   return (results ?? []).length;
 }
+
+/** Pair Line lands dark: it answers only once PAIR_LINE_ENABLED is exactly "true". */
+export const pairLineOpen = (env) => String(env?.PAIR_LINE_ENABLED ?? '').trim() === 'true';
+export const PAIR_LINE_CLOSED = 'Pair Line is not open yet.';

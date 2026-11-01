@@ -16,7 +16,7 @@
 import { bearerToken } from '../_lib/grok-inbox.mjs';
 import { rateLimit } from '../_rate-limit.ts';
 import {
-  closeLine, createLine, decide, joinLine, leaveLine, parseCreate, parseSay, purgeIdle, readLine, sayOnLine,
+  closeLine, createLine, PAIR_LINE_CLOSED, pairLineOpen, decide, joinLine, leaveLine, parseCreate, parseSay, purgeIdle, readLine, sayOnLine,
 } from '../_lib/pair-line.mjs';
 
 type Env = { AUTH_DB?: D1Database; PC_RATES_KV?: KVNamespace; PAIR_LINE_ENABLED?: string };
@@ -33,12 +33,12 @@ const HEADERS = {
 const BODY_MAX = 8 * 1024;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body, null, 2), { status, headers: HEADERS });
 const out = (r: { status: number } & Record<string, unknown>) => { const { status, ...rest } = r; return json(rest, status); };
-const closed = (env: Env) => env.PAIR_LINE_ENABLED === 'false';
+const closed = (env: Env) => !pairLineOpen(env);
 
 export const onRequestOptions: PagesFunction<Env> = () => new Response(null, { status: 204, headers: { ...HEADERS, 'Access-Control-Max-Age': '86400' } });
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  if (closed(env)) return json({ ok: false, error: 'Pair Line is switched off.' }, 503);
+  if (closed(env)) return json({ ok: false, error: PAIR_LINE_CLOSED }, 503);
   if (!env.AUTH_DB) return json({ ok: false, error: 'db-not-bound' }, 503);
   const key = bearerToken(request.headers.get('authorization'));
   if (!key) return json({ ok: false, error: 'Send your person key or bot key as Authorization: Bearer <key>.' }, 401);
@@ -47,7 +47,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (closed(env)) return json({ ok: false, error: 'Pair Line is switched off.' }, 503);
+  if (closed(env)) return json({ ok: false, error: PAIR_LINE_CLOSED }, 503);
   if (!env.AUTH_DB) return json({ ok: false, error: 'db-not-bound' }, 503);
   if (Number(request.headers.get('content-length') || 0) > BODY_MAX) return json({ ok: false, error: 'body too large' }, 413);
   let body: Record<string, unknown>;

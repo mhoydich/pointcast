@@ -1,7 +1,7 @@
 import { REAL_ESTATE_TOOLS, runRealEstateTool } from '../../src/lib/real-estate-agent.mjs';
 import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-inbox.mjs';
 import { anyMemberReady, canRead, memberForToken, parseAfter, parsePost, postToRoom, readRoom } from '../_lib/family-room.mjs';
-import { parseSay as parsePairSay, readLine as readPairLine, sayOnLine as sayOnPairLine } from '../_lib/pair-line.mjs';
+import { PAIR_LINE_CLOSED, pairLineOpen, parseSay as parsePairSay, readLine as readPairLine, sayOnLine as sayOnPairLine } from '../_lib/pair-line.mjs';
 import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
 import { rateLimit } from '../_rate-limit.ts';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
@@ -4281,8 +4281,9 @@ async function pairLineCall(
   name: string,
   args: Record<string, unknown>,
   request: Request,
-  env: Env & { AUTH_DB?: D1Database },
+  env: Env & { AUTH_DB?: D1Database; PAIR_LINE_ENABLED?: string },
 ) {
+  if (!pairLineOpen(env)) return { content: [{ type: 'text', text: PAIR_LINE_CLOSED }], isError: true };
   if (!env.AUTH_DB) return { content: [{ type: 'text', text: 'The Pair Line store is not bound right now.' }], isError: true };
   const key = bearerToken(request.headers.get('authorization')) || (typeof args.key === 'string' ? args.key : '');
   if (!key.startsWith('plb_')) return { content: [{ type: 'text', text: 'Pass your Pair Line bot key (plb_...). A person key belongs to a person, not their AI.' }], isError: true };
