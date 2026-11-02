@@ -65,6 +65,31 @@ scripts/deploy.sh --force     # redeploy the same sha
 - Don't run `wrangler pages deploy` by hand. Every manual deploy from a
   worktree is how prod went backwards in September.
 
+## 3b. The cloud path: merge and deploy without the Mac
+
+Added 2026-11-02 so publishing doesn't wait on anyone being at the iMac.
+
+- **Merge.** `.github/workflows/ship.yml` merges a PR to main when it has what
+  section "Merge to main" in AGENTS.md asks for: Codex's review and Mike's okay.
+  - Codex review: the Codex GitHub reviewer (`chatgpt-codex-connector[bot]`)
+    reviewed the exact head commit and flagged nothing at P0/P1, or commented
+    that it found no major issues after that commit. Ask for one with a
+    `@codex review` comment, or turn on automatic reviews in Codex.
+  - Mike's okay: the `ship` label. Add it only when Mike has said to publish in
+    his own words, and quote him in the PR body. `hold` (or `Publish: hold` in
+    the body) keeps a PR open.
+  - Every check on the head commit green. It merges that exact head with a
+    merge commit, and sweeps PRs labeled `ship` every 30 minutes.
+- **Deploy.** Every push to main, and every merge the ship workflow makes,
+  runs "Deploy PointCast to Cloudflare Pages". It does what `scripts/deploy.sh`
+  does: one deploy at a time, build retried once, the same dist gates, upload
+  only if the commit is still the tip of main, then the same smoke test. It
+  needs the `CLOUDFLARE_API_TOKEN` repo secret; until that exists it builds and
+  says "Not deployed".
+- `scripts/deploy.sh` still works as the manual fallback. Workers under
+  `workers/` still deploy by hand.
+- Check what merged but isn't live with `npm run audit:publishing`.
+
 ## 4. After the deploy
 
 Walk the town and file the report in your next PR (see README, "After the
