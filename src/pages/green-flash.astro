@@ -1,0 +1,90 @@
+---
+/** /green-flash — Door 7 of the Ten Doors (2026-11-02). Tap at the instant the last sliver of sun goes under. */
+import TenDoorsFrame from '../components/TenDoorsFrame.astro';
+---
+
+<TenDoorsFrame slug="green-flash">
+  <p class="td-readout" id="gf-real">Working out today's real sunset for El Segundo...</p>
+  <canvas class="td-canvas" id="gf-bay" width="720" height="420" aria-label="The sun setting into Santa Monica Bay. Tap when the last sliver disappears."></canvas>
+  <div class="td-row">
+    <button class="td-btn" id="gf-go">Start a sunset</button>
+  </div>
+  <p class="td-readout" id="gf-read" aria-live="polite">Tap Start, then tap again the instant the sun is gone.</p>
+</TenDoorsFrame>
+
+<script>
+  import { sunsetFor, townDay, pacificClock, addDays } from '../lib/ten-doors/daily.mjs';
+  import { fitCanvas, tone, load, save, audio } from '../lib/ten-doors/audio.mjs';
+
+  const W = 720, H = 420, HORIZON = 260, SUN_R = 46;
+  const canvas = document.getElementById('gf-bay');
+  const g = fitCanvas(canvas, W, H);
+  const read = document.getElementById('gf-read');
+  const real = document.getElementById('gf-real');
+  let state = 'idle', start = 0, duration = 40000, flash = null, record = load('green-flash:record', { caught: 0, best: null });
+
+  // Today's real sunset, from the sun's position.
+  const today = townDay(new Date());
+  let set = sunsetFor(today);
+  if (set.getTime() < Date.now()) set = sunsetFor(addDays(today, 1));
+  const mins = Math.round((set.getTime() - Date.now()) / 60000);
+  real.textContent = `Real sunset in El Segundo: ${pacificClock(set)} Pacific${mins < 24 * 60 ? `, in about ${mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`}` : ''}. Clear skies and a flat horizon help.`;
+
+  // The sun's center y over time; it is gone when its top edge passes the horizon.
+  const sunY = (t) => HORIZON - 120 + (t / duration) * (120 + SUN_R + 4);
+  const goneAt = () => ((HORIZON + SUN_R - (HORIZON - 120)) / (120 + SUN_R + 4)) * duration;
+
+  function begin() {
+    audio(); state = 'setting'; start = performance.now(); flash = null;
+    duration = 30000 + Math.random() * 14000;
+    read.textContent = 'Watch the last sliver. Tap when it is gone.';
+    tone(196, { type: 'sine', length: 1.5, release: 2, gain: 0.05 });
+  }
+  function tap() {
+    if (state === 'idle' || state === 'done') { begin(); return; }
+    const t = performance.now() - start;
+    const off = (t - goneAt()) / 1000;
+    state = 'done';
+    const abs = Math.abs(off);
+    const caught = abs <= 0.1;
+    flash = { strength: Math.max(0, 1 - abs / 0.5), at: performance.now() };
+    if (caught) { record.caught += 1; [79, 83, 86, 91].forEach((m, i) => tone(440 * 2 ** ((m - 69) / 12), { type: 'triangle', length: 0.05, release: 0.6, gain: 0.08, when: i * 0.08 })); }
+    else tone(150, { type: 'sine', length: 0.1, release: 0.4, gain: 0.1 });
+    if (record.best === null || abs < record.best) record.best = abs;
+    save('green-flash:record', record);
+    const when = off < 0 ? `${Math.abs(off).toFixed(2)} s early` : `${off.toFixed(2)} s late`;
+    read.textContent = `${caught ? 'Green flash!' : abs < 0.5 ? 'A faint green edge.' : 'Missed it.'} ${when}. Flashes caught here: ${record.caught}. Closest: ${record.best.toFixed(2)} s. Tap to watch another.`;
+  }
+  canvas.addEventListener('pointerdown', tap);
+  document.getElementById('gf-go').addEventListener('click', begin);
+  window.addEventListener('keydown', (e) => { if (e.key === ' ') { e.preventDefault(); tap(); } });
+
+  function draw(now) {
+    const t = state === 'setting' ? now - start : state === 'done' ? duration : 0;
+    const p = Math.min(1, t / duration);
+    const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+    sky.addColorStop(0, `hsl(${215 - p * 30}, 45%, ${45 - p * 25}%)`); sky.addColorStop(1, `hsl(${30 - p * 10}, 90%, ${68 - p * 20}%)`);
+    g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+    const y = state === 'idle' ? HORIZON - 120 : sunY(t);
+    g.save(); g.beginPath(); g.rect(0, 0, W, HORIZON); g.clip();
+    const sun = g.createRadialGradient(W / 2, y, 4, W / 2, y, SUN_R * 2.4);
+    sun.addColorStop(0, '#fff3c0'); sun.addColorStop(0.35, '#ffb347'); sun.addColorStop(1, 'rgba(255,120,60,0)');
+    g.fillStyle = sun; g.fillRect(0, 0, W, HORIZON);
+    g.fillStyle = '#ffd27a'; g.beginPath(); g.arc(W / 2, y, SUN_R, 0, Math.PI * 2); g.fill();
+    g.restore();
+    if (flash) {
+      const age = (now - flash.at) / 1000;
+      const a = flash.strength * Math.max(0, 1 - age / 1.6);
+      if (a > 0) { g.fillStyle = `rgba(80,255,140,${a})`; g.fillRect(W / 2 - 70, HORIZON - 6, 140, 6); g.fillStyle = `rgba(80,255,140,${a * 0.25})`; g.fillRect(0, HORIZON - 30, W, 30); }
+    }
+    const sea = g.createLinearGradient(0, HORIZON, 0, H);
+    sea.addColorStop(0, `hsl(210, 40%, ${36 - p * 16}%)`); sea.addColorStop(1, `hsl(225, 45%, ${18 - p * 8}%)`);
+    g.fillStyle = sea; g.fillRect(0, HORIZON, W, H - HORIZON);
+    if (y < HORIZON + SUN_R) { for (let i = 0; i < 12; i += 1) { g.fillStyle = `rgba(255,190,110,${0.35 - i * 0.025})`; g.fillRect(W / 2 - 50 + Math.sin(now / 300 + i) * 10, HORIZON + 6 + i * 12, 100 - i * 6, 3); } }
+    // the bluff and a bench
+    g.fillStyle = '#2b1830'; g.beginPath(); g.moveTo(0, H); g.lineTo(0, 330); g.quadraticCurveTo(160, 318, 260, H); g.fill();
+    g.fillRect(60, 312, 60, 5); g.fillRect(64, 317, 4, 14); g.fillRect(112, 317, 4, 14);
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+</script>

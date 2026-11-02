@@ -1,0 +1,117 @@
+---
+/** /ice-cream-route — Door 9 of the Ten Doors (2026-11-02). Reach every kid before the jingle runs out. A new seeded map every day. */
+import TenDoorsFrame from '../components/TenDoorsFrame.astro';
+---
+
+<TenDoorsFrame slug="ice-cream-route">
+  <canvas class="td-canvas" id="ic-map" width="600" height="600" aria-label="A grid of street corners with an ice cream truck and waving kids. Tap a corner next to the truck to drive one block."></canvas>
+  <div class="td-row">
+    <button class="td-btn" id="ic-retry">Retry round</button>
+  </div>
+  <p class="td-readout" id="ic-read" aria-live="polite">Round 1. Tap a corner next to the truck to drive.</p>
+</TenDoorsFrame>
+
+<script>
+  import { routeDay, townDay, coords, node, neighbors, canDrive, blockedFor, ROUTE_SIZE } from '../lib/ten-doors/daily.mjs';
+  import { tone, hz, fitCanvas, pointerXY, load, save, audio } from '../lib/ten-doors/audio.mjs';
+
+  const W = 600, H = 600, PAD = 70, GAP = (W - PAD * 2) / (ROUTE_SIZE - 1);
+  // An original eight-bar music-box tune; one note per block driven.
+  const JINGLE = [72, 76, 79, 76, 77, 74, 71, 74, 72, 79, 77, 76, 74, 76, 72, 67, 69, 71, 72, 74, 76, 74, 72, 67];
+  const canvas = document.getElementById('ic-map');
+  const g = fitCanvas(canvas, W, H);
+  const read = document.getElementById('ic-read');
+  const day = townDay(new Date());
+  const plan = routeDay(day);
+  const record = load('ice-cream-route:v1', {});
+  let roundIdx = 0, round, blocked, truck, waiting, notesLeft, driven, state;
+
+  function startRound(i) {
+    roundIdx = i; round = plan.rounds[i]; blocked = blockedFor(round);
+    truck = round.start; waiting = new Set(round.kids); notesLeft = round.jingle; driven = 0; state = 'driving';
+    read.textContent = `Round ${round.round} of ${plan.rounds.length}. ${waiting.size} kids waiting, ${notesLeft} notes of jingle.${round.oneWays.length ? ' Mind the one-way arrows.' : ''}`;
+  }
+  startRound(0);
+
+  const XY = (n) => { const c = coords(n); return { x: PAD + c.x * GAP, y: PAD + c.y * GAP }; };
+
+  function drive(to) {
+    if (state !== 'driving') return;
+    audio();
+    if (!neighbors(truck).includes(to)) { read.textContent = 'One block at a time: pick a corner right next to the truck.'; return; }
+    if (!canDrive(truck, to, blocked)) { tone(110, { type: 'square', length: 0.08, gain: 0.06 }); read.textContent = 'That is a one-way street the wrong way.'; return; }
+    truck = to; driven += 1; notesLeft -= 1;
+    tone(hz(JINGLE[(driven - 1) % JINGLE.length]), { type: 'triangle', length: 0.08, release: 0.35, gain: 0.12 });
+    tone(hz(JINGLE[(driven - 1) % JINGLE.length] + 12), { type: 'sine', length: 0.02, release: 0.3, gain: 0.04 });
+    if (waiting.delete(truck)) { [84, 88].forEach((m, k) => tone(hz(m), { type: 'sine', length: 0.03, release: 0.2, gain: 0.08, when: 0.12 + k * 0.08 })); }
+    if (waiting.size === 0) {
+      state = 'won';
+      const key = `${day}:${round.round}`;
+      record[key] = Math.max(record[key] ?? -1, notesLeft); save('ice-cream-route:v1', record);
+      const perfect = driven === round.best ? ' The shortest route there is.' : '';
+      read.textContent = `Every kid served with ${notesLeft} notes to spare.${perfect} ${roundIdx < plan.rounds.length - 1 ? 'Tap the map for the next round.' : 'That was the last round today; a new map comes at midnight Pacific.'}`;
+    } else if (notesLeft <= 0) {
+      state = 'lost';
+      read.textContent = `The jingle ran out with ${waiting.size} ${waiting.size === 1 ? 'kid' : 'kids'} still waiting. Tap Retry.`;
+    } else {
+      read.textContent = `${waiting.size} waiting, ${notesLeft} notes left.`;
+    }
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (state === 'won') { if (roundIdx < plan.rounds.length - 1) startRound(roundIdx + 1); return; }
+    if (state === 'lost') { startRound(roundIdx); return; }
+    const p = pointerXY(canvas, e, W, H);
+    let best = null, bestD = Infinity;
+    for (let n = 0; n < ROUTE_SIZE * ROUTE_SIZE; n += 1) { const q = XY(n); const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bestD) { bestD = d; best = n; } }
+    if (bestD < GAP * 0.45) drive(best);
+  });
+  window.addEventListener('keydown', (e) => {
+    const c = coords(truck);
+    const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (!map[e.key]) return;
+    e.preventDefault();
+    if (state !== 'driving') { if (state === 'won' && roundIdx < plan.rounds.length - 1) startRound(roundIdx + 1); else if (state === 'lost') startRound(roundIdx); return; }
+    const [dx, dy] = map[e.key]; const x = c.x + dx, y = c.y + dy;
+    if (x >= 0 && y >= 0 && x < ROUTE_SIZE && y < ROUTE_SIZE) drive(node(x, y));
+  });
+  document.getElementById('ic-retry').addEventListener('click', () => startRound(roundIdx));
+
+  function draw(now) {
+    g.fillStyle = '#fff3f8'; g.fillRect(0, 0, W, H);
+    // blocks of houses between the streets
+    for (let x = 0; x < ROUTE_SIZE - 1; x += 1) for (let y = 0; y < ROUTE_SIZE - 1; y += 1) {
+      const a = XY(node(x, y));
+      g.fillStyle = (x + y) % 2 ? '#d9f2dd' : '#e6f0d0'; g.fillRect(a.x + 14, a.y + 14, GAP - 28, GAP - 28);
+      g.fillStyle = '#f6c1a8'; g.fillRect(a.x + 24, a.y + 24, 18, 14); g.fillRect(a.x + GAP - 44, a.y + GAP - 40, 18, 14);
+    }
+    // streets
+    g.strokeStyle = '#c9b7c4'; g.lineWidth = 12; g.lineCap = 'round';
+    for (let n = 0; n < ROUTE_SIZE * ROUTE_SIZE; n += 1) for (const m of neighbors(n)) if (m > n) { const a = XY(n), b = XY(m); g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+    // one-way arrows
+    for (const [a, b] of round.oneWays) {
+      const p = XY(a), q = XY(b); const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2; const ang = Math.atan2(q.y - p.y, q.x - p.x);
+      g.save(); g.translate(mx, my); g.rotate(ang); g.fillStyle = '#4a1d3d'; g.beginPath(); g.moveTo(10, 0); g.lineTo(-6, -7); g.lineTo(-6, 7); g.closePath(); g.fill(); g.restore();
+    }
+    // corners the truck can reach next
+    if (state === 'driving') for (const m of neighbors(truck)) if (canDrive(truck, m, blocked)) { const q = XY(m); g.strokeStyle = 'rgba(74,29,61,0.35)'; g.lineWidth = 3; g.beginPath(); g.arc(q.x, q.y, 16, 0, Math.PI * 2); g.stroke(); }
+    // kids
+    for (const k of waiting) {
+      const q = XY(k); const wave = Math.sin(now / 160 + k) * 4;
+      g.fillStyle = '#ff7eb6'; g.beginPath(); g.arc(q.x, q.y - 10, 7, 0, Math.PI * 2); g.fill(); g.fillRect(q.x - 5, q.y - 3, 10, 12);
+      g.strokeStyle = '#ff7eb6'; g.lineWidth = 3; g.beginPath(); g.moveTo(q.x + 5, q.y - 2); g.lineTo(q.x + 12, q.y - 14 + wave); g.stroke();
+    }
+    // truck
+    const t = XY(truck);
+    g.fillStyle = '#ffffff'; g.strokeStyle = '#4a1d3d'; g.lineWidth = 3; g.fillRect(t.x - 18, t.y - 12, 36, 22); g.strokeRect(t.x - 18, t.y - 12, 36, 22);
+    g.fillStyle = '#7fd1ff'; g.fillRect(t.x + 6, t.y - 8, 9, 8);
+    g.fillStyle = '#ff7eb6'; g.beginPath(); g.moveTo(t.x - 8, t.y - 14); g.lineTo(t.x - 2, t.y - 28); g.lineTo(t.x + 4, t.y - 14); g.fill();
+    g.fillStyle = '#4a1d3d'; g.beginPath(); g.arc(t.x - 10, t.y + 12, 4, 0, Math.PI * 2); g.arc(t.x + 10, t.y + 12, 4, 0, Math.PI * 2); g.fill();
+    // jingle meter
+    g.fillStyle = '#4a1d3d'; g.font = '600 14px ui-monospace, monospace'; g.textAlign = 'left';
+    g.fillText(`Round ${round.round} · ${day}`, 16, 28);
+    for (let i = 0; i < round.jingle; i += 1) { g.fillStyle = i < notesLeft ? '#ff7eb6' : '#ead7e2'; g.beginPath(); g.arc(W - 20 - i * 16, 22, 6, 0, Math.PI * 2); g.fill(); }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+</script>

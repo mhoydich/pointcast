@@ -1,0 +1,103 @@
+---
+/** /chalk-score — Door 8 of the Ten Doors (2026-11-02). Sidewalk chalk read as a graphic score. */
+import TenDoorsFrame from '../components/TenDoorsFrame.astro';
+---
+
+<TenDoorsFrame slug="chalk-score">
+  <canvas class="td-canvas" id="cs-slab" width="720" height="440" aria-label="A concrete slab. Draw on it; a playhead sweeps left to right and plays your lines."></canvas>
+  <div class="td-row" role="group" aria-label="Chalk color">
+    <button class="td-btn is-on" data-chalk="0" aria-pressed="true">White bell</button>
+    <button class="td-btn" data-chalk="1" aria-pressed="false">Yellow reed</button>
+    <button class="td-btn" data-chalk="2" aria-pressed="false">Blue hum</button>
+    <button class="td-btn" data-chalk="3" aria-pressed="false">Pink pluck</button>
+  </div>
+  <div class="td-row">
+    <button class="td-btn" id="cs-hose">Hose it down</button>
+    <button class="td-btn" id="cs-demo">Draw me something</button>
+  </div>
+  <p class="td-readout" id="cs-read" aria-live="polite">Draw anywhere. High lines sing high.</p>
+</TenDoorsFrame>
+
+<script>
+  import { tone, hz, pentatonic, fitCanvas, pointerXY, load, save, audio } from '../lib/ten-doors/audio.mjs';
+
+  const W = 720, H = 440, ROWS = 15, LOOP_MS = 6000;
+  const LADDER = pentatonic(55, ROWS).reverse(); // top row is highest
+  const CHALK = [
+    { name: 'white bell', color: '#f7f3e8', play: (f, w) => tone(f, { type: 'sine', length: 0.02, release: 0.9, gain: 0.12, when: w }) },
+    { name: 'yellow reed', color: '#ffe066', play: (f, w) => tone(f, { type: 'square', length: 0.1, release: 0.15, gain: 0.05, filter: 1800, when: w }) },
+    { name: 'blue hum', color: '#7fc8ff', play: (f, w) => tone(f / 2, { type: 'triangle', length: 0.15, release: 0.3, gain: 0.14, when: w }) },
+    { name: 'pink pluck', color: '#ff9ccf', play: (f, w) => tone(f * 2, { type: 'sawtooth', length: 0.005, release: 0.25, gain: 0.05, filter: 2600, when: w }) },
+  ];
+  const canvas = document.getElementById('cs-slab');
+  const g = fitCanvas(canvas, W, H);
+  const read = document.getElementById('cs-read');
+  let strokes = load('chalk-score:v1', []);
+  if (!Array.isArray(strokes)) strokes = [];
+  const lastNote = new WeakMap();
+  let chalk = 0, drawing = null, started = false, t0 = performance.now(), lastX = 0;
+  const persist = () => save('chalk-score:v1', strokes.slice(-120));
+
+  canvas.addEventListener('pointerdown', (e) => {
+    audio(); started = true;
+    const p = pointerXY(canvas, e, W, H);
+    drawing = { c: chalk, pts: [[Math.round(p.x), Math.round(p.y)]] };
+    strokes.push(drawing); canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drawing) return;
+    const p = pointerXY(canvas, e, W, H);
+    const last = drawing.pts[drawing.pts.length - 1];
+    if (Math.hypot(p.x - last[0], p.y - last[1]) > 4) drawing.pts.push([Math.round(p.x), Math.round(p.y)]);
+  });
+  const end = () => { if (drawing) { persist(); read.textContent = `${strokes.length} chalk ${strokes.length === 1 ? 'line' : 'lines'} on the slab.`; } drawing = null; };
+  canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+  document.querySelectorAll('[data-chalk]').forEach((b) => b.addEventListener('click', () => {
+    chalk = Number(b.dataset.chalk); audio(); started = true;
+    document.querySelectorAll('[data-chalk]').forEach((o) => { o.classList.toggle('is-on', o === b); o.setAttribute('aria-pressed', String(o === b)); });
+  }));
+  document.getElementById('cs-hose').addEventListener('click', () => { strokes = []; persist(); read.textContent = 'Clean slab. Wet concrete smell.'; });
+  document.getElementById('cs-demo').addEventListener('click', () => {
+    audio(); started = true;
+    const c = Math.floor(Math.random() * 4);
+    const pts = []; const base = 120 + Math.random() * 200; const amp = 40 + Math.random() * 80; const freq = 1 + Math.random() * 3;
+    for (let x = 20; x < W - 20; x += 12) pts.push([x, Math.round(base + Math.sin((x / W) * Math.PI * 2 * freq) * amp)]);
+    strokes.push({ c, pts }); persist(); read.textContent = `A ${CHALK[c].name} wave, drawn for you.`;
+  });
+
+  const rowOf = (y) => Math.max(0, Math.min(ROWS - 1, Math.floor((y / H) * ROWS)));
+
+  function frame(now) {
+    const x = (((now - t0) % LOOP_MS) / LOOP_MS) * W;
+    if (started) {
+      const wrapped = x < lastX;
+      const swept = (px) => (wrapped ? px > lastX || px <= x : px > lastX && px <= x);
+      for (const s of strokes) {
+        const hit = s.pts.find(([px]) => swept(px));
+        if (!hit) continue;
+        const row = rowOf(hit[1]);
+        const last = lastNote.get(s);
+        // One note per stroke per beat-ish, and a fresh note whenever the line changes pitch.
+        if (last && now - last.at < 260 && last.row === row) continue;
+        if (last && now - last.at < 110) continue;
+        lastNote.set(s, { at: now, row });
+        CHALK[s.c].play(hz(LADDER[row]), 0);
+      }
+    }
+    lastX = x;
+    // the slab
+    g.fillStyle = '#5b5d5f'; g.fillRect(0, 0, W, H);
+    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 2;
+    for (let i = 1; i < 4; i += 1) { g.beginPath(); g.moveTo((W / 4) * i, 0); g.lineTo((W / 4) * i, H); g.stroke(); }
+    g.fillStyle = 'rgba(255,255,255,0.04)'; for (let r = 0; r < ROWS; r += 2) g.fillRect(0, (H / ROWS) * r, W, H / ROWS);
+    for (const s of strokes) {
+      g.strokeStyle = CHALK[s.c].color; g.lineWidth = 7; g.lineCap = 'round'; g.lineJoin = 'round'; g.globalAlpha = 0.9;
+      g.beginPath(); s.pts.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py)));
+      if (s.pts.length === 1) g.lineTo(s.pts[0][0] + 0.1, s.pts[0][1]);
+      g.stroke(); g.globalAlpha = 1;
+    }
+    g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(x - 1, 0, 2, H);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>

@@ -1,0 +1,112 @@
+---
+/** /refinery-lights — Door 2 of the Ten Doors (2026-11-02). The night skyline as an 8 by 8 step sequencer. */
+import TenDoorsFrame from '../components/TenDoorsFrame.astro';
+---
+
+<TenDoorsFrame slug="refinery-lights">
+  <canvas class="td-canvas" id="rl-sky" width="720" height="460" aria-label="Eight refinery towers, each with eight windows. Tap a window to light it; the sweep plays lit windows as drums and tones."></canvas>
+  <div class="td-row">
+    <button class="td-btn is-on" id="rl-play" aria-pressed="true">Running</button>
+    <button class="td-btn" id="rl-shift">Shift change</button>
+    <button class="td-btn" id="rl-clear">Clear</button>
+    <label class="td-readout" style="margin:0">Tempo <input id="rl-bpm" type="range" min="70" max="150" value="104" aria-label="Tempo in beats per minute" /></label>
+  </div>
+  <p class="td-readout" id="rl-read" aria-live="polite">Tap a window. Bottom row is the kick, top row the highest lamp.</p>
+</TenDoorsFrame>
+
+<script>
+  import { tone, hz, kick, noise, fitCanvas, pointerXY, load, save, audio } from '../lib/ten-doors/audio.mjs';
+
+  const W = 720, H = 460, STEPS = 8, VOICES = 8;
+  const VOICE_NAMES = ['kick', 'clap', 'hat', 'tank hum', 'lamp 1', 'lamp 2', 'lamp 3', 'lamp 4'];
+  const LAMP = [57, 60, 64, 67];
+  const START = '10001000|00100010|10101010|00000001|01000000|00010000|00000100|00000000';
+  const canvas = document.getElementById('rl-sky');
+  const g = fitCanvas(canvas, W, H);
+  const read = document.getElementById('rl-read');
+  const fromString = (s) => s.split('|').map((row) => row.split('').map((c) => c === '1'));
+  let grid = load('refinery-lights:v1', null);
+  if (!Array.isArray(grid) || grid.length !== VOICES) grid = fromString(START);
+  let running = true, started = false, step = 0, nextAt = 0, bpm = 104;
+  const tower = (s) => ({ x: 40 + s * ((W - 80) / STEPS), w: (W - 80) / STEPS - 14 });
+  const win = (s, v) => { const t = tower(s); return { x: t.x + 8, y: H - 70 - (v + 1) * 38, w: t.w - 16, h: 26 }; };
+
+  function play(v, when) {
+    if (v === 0) kick(when, 0.55);
+    else if (v === 1) noise({ length: 0.12, gain: 0.35, freq: 1400, q: 0.8, when });
+    else if (v === 2) noise({ length: 0.04, gain: 0.18, freq: 8000, type: 'highpass', when });
+    else if (v === 3) tone(hz(38), { type: 'sawtooth', length: 0.18, gain: 0.12, filter: 400, when });
+    else tone(hz(LAMP[v - 4]), { type: 'triangle', length: 0.08, release: 0.3, gain: 0.14, when });
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    audio();
+    const { x, y } = pointerXY(canvas, e, W, H);
+    for (let s = 0; s < STEPS; s += 1) for (let v = 0; v < VOICES; v += 1) {
+      const r = win(s, v);
+      if (x >= r.x - 4 && x <= r.x + r.w + 4 && y >= r.y - 6 && y <= r.y + r.h + 6) {
+        grid[v][s] = !grid[v][s];
+        save('refinery-lights:v1', grid);
+        read.textContent = `${VOICE_NAMES[v]} ${grid[v][s] ? 'on' : 'off'} at tower ${s + 1}.`;
+        if (grid[v][s]) play(v, 0);
+        return;
+      }
+    }
+  });
+  document.getElementById('rl-play').addEventListener('click', (e) => {
+    audio(); running = !running;
+    e.currentTarget.textContent = running ? 'Running' : 'Paused';
+    e.currentTarget.classList.toggle('is-on', running);
+    e.currentTarget.setAttribute('aria-pressed', String(running));
+  });
+  document.getElementById('rl-shift').addEventListener('click', () => {
+    audio();
+    grid = grid.map((row, v) => row.map((_, s) => Math.random() < [0.3, 0.2, 0.45, 0.12, 0.14, 0.12, 0.1, 0.08][v] || (v === 0 && s % 4 === 0)));
+    save('refinery-lights:v1', grid);
+    read.textContent = 'Shift change. A new crew, a new pattern.';
+  });
+  document.getElementById('rl-clear').addEventListener('click', () => {
+    grid = grid.map((row) => row.map(() => false)); save('refinery-lights:v1', grid);
+    read.textContent = 'Every light off. The night is yours.';
+  });
+  document.getElementById('rl-bpm').addEventListener('input', (e) => { bpm = Number(e.currentTarget.value); });
+
+  function frame(ts) {
+    g.fillStyle = '#120c1c'; g.fillRect(0, 0, W, H);
+    const glow = g.createRadialGradient(W / 2, H, 10, W / 2, H, H);
+    glow.addColorStop(0, 'rgba(255,120,40,0.35)'); glow.addColorStop(1, 'rgba(18,12,28,0)');
+    g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    for (let s = 0; s < STEPS; s += 1) {
+      const t = tower(s);
+      g.fillStyle = s === step && running ? '#3a2a40' : '#251a2e';
+      g.fillRect(t.x, H - 60 - VOICES * 38 - 20, t.w, VOICES * 38 + 20);
+      g.fillStyle = '#251a2e'; g.fillRect(t.x + t.w / 2 - 4, H - 60 - VOICES * 38 - 60, 8, 40);
+      if (s % 3 === 0) { g.fillStyle = Math.floor(ts / 500 + s) % 2 ? '#ff3b3b' : '#5a1b1b'; g.fillRect(t.x + t.w / 2 - 3, H - 60 - VOICES * 38 - 66, 6, 6); }
+      for (let v = 0; v < VOICES; v += 1) {
+        const r = win(s, v);
+        const lit = grid[v][s];
+        const hot = lit && s === step && running;
+        g.fillStyle = hot ? '#fff3c4' : lit ? (v < 4 ? '#ff9d3b' : '#ffd36b') : '#3b2c44';
+        g.fillRect(r.x, r.y, r.w, r.h);
+      }
+    }
+    g.fillStyle = '#0c0814'; g.fillRect(0, H - 60, W, 60);
+    g.fillStyle = '#ff9d3b'; g.font = '600 12px ui-monospace, monospace'; g.textAlign = 'left';
+    g.fillText(`${bpm} BPM · tower ${step + 1}`, 20, H - 26);
+    requestAnimationFrame(frame);
+  }
+
+  // Scheduler: a look-ahead clock on the audio context once sound has started.
+  setInterval(() => {
+    if (!running) return;
+    const now = performance.now();
+    if (now < nextAt) return;
+    nextAt = now + (60000 / bpm) / 2; // eighth notes
+    step = (step + 1) % STEPS;
+    if (started) for (let v = 0; v < VOICES; v += 1) if (grid[v][step]) play(v, 0.02);
+  }, 10);
+  // Sound starts with the first gesture; until then the sweep runs silently.
+  canvas.addEventListener('pointerdown', () => { started = true; }, { once: true });
+  ['rl-play', 'rl-shift'].forEach((id) => document.getElementById(id).addEventListener('click', () => { started = true; }));
+  requestAnimationFrame(frame);
+</script>
