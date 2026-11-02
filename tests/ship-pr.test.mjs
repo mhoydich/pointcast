@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CODEX_LOGIN, eligible, codexVerdict, checksVerdict, decide } from '../scripts/ship-pr.mjs';
+import { CODEX_LOGIN, eligible, codexVerdict, checksVerdict, labelVerdict, touchesWorkflows, decide } from '../scripts/ship-pr.mjs';
 
 const head = 'a'.repeat(40);
 const older = 'b'.repeat(40);
@@ -30,11 +30,12 @@ test('a P0 or P1 finding blocks; P2 does not', () => {
   assert.equal(codexVerdict({ headSha: head, reviews, comments: p2 }), 'clean');
 });
 
-test('a "no major issues" comment counts only after the head commit', () => {
-  const said = at => [{ user: CODEX_LOGIN, body: "Codex Review: Didn't find any major issues. Keep them coming!", created_at: at }];
-  assert.equal(codexVerdict({ headSha: head, headDate: '2026-11-02T12:00:00Z', issueComments: said('2026-11-02T12:05:00Z') }), 'clean');
-  assert.equal(codexVerdict({ headSha: head, headDate: '2026-11-02T12:00:00Z', issueComments: said('2026-11-02T11:55:00Z') }), 'missing');
-  assert.equal(codexVerdict({ headSha: head, headDate: '2026-11-02T12:00:00Z', issueComments: [{ user: 'mhoydich', body: "Didn't find any major issues", created_at: '2026-11-02T12:05:00Z' }] }), 'missing', 'a person typing it is not Codex');
+test('a "no major issues" comment counts only when it names the head commit', () => {
+  const said = body => [{ user: CODEX_LOGIN, body, created_at: '2026-11-02T12:05:00Z' }];
+  assert.equal(codexVerdict({ headSha: head, issueComments: said(`Codex Review: Didn't find any major issues.\nReviewed commit: \`${head.slice(0, 10)}\``) }), 'clean');
+  assert.equal(codexVerdict({ headSha: head, issueComments: said(`Codex Review: Didn't find any major issues.\nReviewed commit: \`${older.slice(0, 10)}\``) }), 'missing', 'a clean review of an older commit does not carry over');
+  assert.equal(codexVerdict({ headSha: head, issueComments: said("Codex Review: Didn't find any major issues.") }), 'missing', 'no commit named, no proof');
+  assert.equal(codexVerdict({ headSha: head, issueComments: [{ user: 'mhoydich', body: `Didn't find any major issues ${head}`, created_at: '2026-11-02T12:05:00Z' }] }), 'missing', 'a person typing it is not Codex');
 });
 
 test('checks: running or red blocks, skipped and neutral pass, own job ignored', () => {
@@ -43,6 +44,8 @@ test('checks: running or red blocks, skipped and neutral pass, own job ignored',
   assert.equal(checksVerdict({ checkRuns: [{ name: 'build', status: 'in_progress', conclusion: null }] }), 'pending');
   assert.equal(checksVerdict({ checkRuns: [{ name: 'build', status: 'completed', conclusion: 'failure' }] }), 'failure');
   assert.equal(checksVerdict({ checkRuns: [{ name: 'ship', status: 'in_progress', conclusion: null }], ignore: ['ship'] }), 'success');
+  assert.equal(checksVerdict({ checkRuns: [], required: ['pr-check'] }), 'pending', 'no build yet is not a pass');
+  assert.equal(checksVerdict({ checkRuns: [{ name: 'pr-check', status: 'completed', conclusion: 'success' }], required: ['pr-check'] }), 'success');
   assert.equal(checksVerdict({ statuses: [{ context: 'ci', state: 'pending' }] }), 'pending');
   assert.equal(checksVerdict({ statuses: [{ context: 'ci', state: 'error' }] }), 'failure');
 });
@@ -59,9 +62,18 @@ test('merge only when every condition holds', () => {
   assert.equal(decide({ ...ok, mergeable: null }), 'waiting-on-mergeable');
 });
 
-test('a Codex thumbs-up on the PR after the head commit counts', () => {
-  const headDate = '2026-11-02T12:00:00Z';
-  assert.equal(codexVerdict({ headSha: head, headDate, reactions: [{ user: CODEX_LOGIN, content: '+1', created_at: '2026-11-02T12:03:00Z' }] }), 'clean');
-  assert.equal(codexVerdict({ headSha: head, headDate, reactions: [{ user: CODEX_LOGIN, content: '+1', created_at: '2026-11-02T11:03:00Z' }] }), 'missing');
-  assert.equal(codexVerdict({ headSha: head, headDate, reactions: [{ user: CODEX_LOGIN, content: 'eyes', created_at: '2026-11-02T12:03:00Z' }] }), 'missing', 'eyes means still reviewing');
+test('the ship label must come from Mike, and the newest labeling counts', () => {
+  const ev = login => ({ event: 'labeled', label: { name: 'ship' }, actor: { login } });
+  assert.equal(labelVerdict({ events: [ev('mhoydich')] }), 'ok');
+  assert.equal(labelVerdict({ events: [ev('claude[bot]')] }), 'not-mike');
+  assert.equal(labelVerdict({ events: [ev('mhoydich'), { event: 'unlabeled', label: { name: 'ship' }, actor: { login: 'mhoydich' } }, ev('github-actions[bot]')] }), 'not-mike');
+  assert.equal(labelVerdict({ events: [] }), 'missing');
+});
+
+test('PRs that change workflow files are left for a person', () => {
+  assert.equal(touchesWorkflows(['src/pages/a.astro', '.github/workflows/x.yml']), true);
+  assert.equal(touchesWorkflows(['src/pages/a.astro']), false);
+  const ok = { eligibility: 'ok', label: 'ok', codex: 'clean', checks: 'success', mergeable: true };
+  assert.equal(decide({ ...ok, workflows: true }), 'needs-manual-merge-workflow-files');
+  assert.equal(decide({ ...ok, label: 'not-mike' }), 'ship-label-not-from-mike');
 });

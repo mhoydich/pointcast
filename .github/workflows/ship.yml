@@ -8,24 +8,27 @@ name: Ship reviewed PRs
 #     in his own words (quote him in the PR body);
 #   - every check on the head commit green.
 # Then it starts "Deploy PointCast to Cloudflare Pages" on main.
-# A `hold` label or "Publish: hold" in the body keeps a PR open.
+# A `hold` label or "Publish: hold" in the body keeps a PR open. A PR that
+# changes .github/workflows is left for a person to merge.
+#
+# Every trigger runs from the default branch's copy of this file and script
+# (pull_request_target, workflow_run, issue_comment, schedule, dispatch), so a
+# PR can't loosen its own gate. No PR code is checked out or run here. Each run
+# sweeps every open PR labeled `ship`.
 # Logic and tests: scripts/ship-pr.mjs, tests/ship-pr.test.mjs.
 
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled, synchronize, ready_for_review, reopened]
     branches: [main]
-  pull_request_review:
-    types: [submitted]
+  workflow_run:
+    workflows: [pr-check]
+    types: [completed]
   issue_comment:
     types: [created]
   schedule:
-    - cron: '7,37 * * * *'
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
-    inputs:
-      pr:
-        description: 'PR number (blank sweeps every open PR labeled ship)'
-        required: false
 
 permissions:
   contents: write
@@ -33,6 +36,7 @@ permissions:
   actions: write
   checks: read
   statuses: read
+  issues: read
 
 concurrency:
   group: ship-pointcast
@@ -41,11 +45,7 @@ concurrency:
 jobs:
   ship:
     if: >-
-      github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request_review' ||
-      (github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request)
+      github.event_name != 'issue_comment' || github.event.issue.pull_request
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -63,10 +63,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHIP_JOB_NAME: ship
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
-        run: |
-          if [ -n "$PR_NUMBER" ]; then
-            node scripts/ship-pr.mjs --pr "$PR_NUMBER"
-          else
-            node scripts/ship-pr.mjs
-          fi
+          SHIP_APPROVERS: mhoydich
+        run: node scripts/ship-pr.mjs

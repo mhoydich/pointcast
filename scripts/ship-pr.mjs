@@ -2,13 +2,17 @@
 // everything AGENTS.md asks for before main: Codex's review and Mike's okay.
 //
 //   Codex review (X):  the Codex GitHub reviewer (chatgpt-codex-connector[bot])
-//                      reviewed the exact head commit and flagged nothing at P0
-//                      or P1, or said it found no major issues (or gave the PR a
-//                      thumbs-up) after that commit.
-//   Mike's okay (MH):  the label `ship`. Add it only when Mike has said to
-//                      publish in his own words, and quote him in the PR body.
-//   Checks:            every check run and status on the head commit is green
-//                      (skipped and neutral count as green), none still running.
+//                      reviewed the exact head commit (its review's commit_id, or
+//                      a "no major issues" comment naming the head SHA) and
+//                      flagged nothing at P0 or P1. Nothing dated counts: only
+//                      evidence tied to the head SHA.
+//   Mike's okay (MH):  the label `ship`, added by Mike's own GitHub account
+//                      (SHIP_APPROVERS, default mhoydich). Add it only when Mike
+//                      has said to publish in his own words; quote him in the PR.
+//   Checks:            the `pr-check` build ran on the head commit and passed,
+//                      and every other check and status there is green.
+//   No workflow files: a PR that changes .github/workflows is left for a person
+//                      to merge (the workflow token can't merge those).
 //
 // A `hold` label or the line "Publish: hold" in the body keeps a PR open.
 // After merging it starts the Cloudflare deploy, because a merge made with the
@@ -36,24 +40,24 @@ export function eligible({ state = 'open', draft = false, labels = [], body = ''
 // reviews: [{ id, user, commit_id, body, submitted_at }]
 // comments: inline review comments [{ pull_request_review_id, user, body }]
 // issueComments: [{ user, body, created_at }]
-// reactions: on the PR itself [{ user, content, created_at }] (Codex may only thumbs-up a clean PR)
-// headDate: ISO time of the head commit
-export function codexVerdict({ headSha, headDate, reviews = [], comments = [], issueComments = [], reactions = [] }) {
-  const since = Date.parse(headDate || 0) || 0;
+export function codexVerdict({ headSha, reviews = [], comments = [], issueComments = [] }) {
   const mine = reviews.filter(r => r.user === CODEX_LOGIN && r.commit_id === headSha);
   for (const review of mine) {
     const inline = comments.filter(c => c.pull_request_review_id === review.id && c.user === CODEX_LOGIN);
     if (inline.some(c => BLOCKING_BADGE.test(c.body || '')) || BLOCKING_BADGE.test(review.body || '')) return 'blocking';
   }
   if (mine.length) return 'clean';
-  const said = issueComments.some(c => c.user === CODEX_LOGIN && NO_ISSUES.test(c.body || '') && Date.parse(c.created_at) >= since);
-  const thumbs = reactions.some(r => r.user === CODEX_LOGIN && r.content === '+1' && Date.parse(r.created_at) >= since);
-  return said || thumbs ? 'clean' : 'missing';
+  // A "no major issues" comment counts only when it names this head commit.
+  const short = headSha.slice(0, 7);
+  const said = issueComments.some(c => c.user === CODEX_LOGIN && NO_ISSUES.test(c.body || '') && (c.body || '').includes(short));
+  return said ? 'clean' : 'missing';
 }
 
 // checkRuns: [{ name, status, conclusion }], statuses: [{ context, state }] (latest per context)
-export function checksVerdict({ checkRuns = [], statuses = [], ignore = [] }) {
+export function checksVerdict({ checkRuns = [], statuses = [], ignore = [], required = [] }) {
   const runs = checkRuns.filter(run => !ignore.includes(run.name));
+  // A required check that hasn't shown up yet is not a pass.
+  if (required.some(name => !runs.some(run => run.name === name))) return 'pending';
   if (runs.some(run => run.status !== 'completed')) return 'pending';
   if (runs.some(run => !GREEN.has(run.conclusion))) return 'failure';
   if (statuses.some(s => s.state === 'pending')) return 'pending';
@@ -61,8 +65,22 @@ export function checksVerdict({ checkRuns = [], statuses = [], ignore = [] }) {
   return 'success';
 }
 
-export function decide({ eligibility, codex, checks, mergeable }) {
+// events: the PR's issue events; the newest `labeled: ship` must be by an approver.
+export function labelVerdict({ events = [], approvers = ['mhoydich'] }) {
+  const labeled = events.filter(e => e.event === 'labeled' && e.label && e.label.name === 'ship');
+  if (!labeled.length) return 'missing';
+  const last = labeled[labeled.length - 1];
+  return approvers.includes((last.actor && last.actor.login) || '') ? 'ok' : 'not-mike';
+}
+
+export function touchesWorkflows(files = []) {
+  return files.some(f => f.startsWith('.github/workflows/'));
+}
+
+export function decide({ eligibility, label = 'ok', workflows = false, codex, checks, mergeable }) {
   if (eligibility !== 'ok') return eligibility;
+  if (label !== 'ok') return label === 'not-mike' ? 'ship-label-not-from-mike' : 'no-ship-label';
+  if (workflows) return 'needs-manual-merge-workflow-files';
   if (codex === 'blocking') return 'codex-flagged';
   if (codex !== 'clean') return 'waiting-on-codex';
   if (checks === 'failure') return 'checks-failed';
@@ -73,7 +91,8 @@ export function decide({ eligibility, codex, checks, mergeable }) {
 }
 
 function api(path, args = []) {
-  return JSON.parse(execFileSync('gh', ['api', path, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
+  const out = execFileSync('gh', ['api', path, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return out.trim() ? JSON.parse(out) : null;
 }
 
 function apiAll(path) {
@@ -94,7 +113,7 @@ function latestStatuses(list) {
   return [...seen.values()];
 }
 
-async function considerPr(repo, number, { dryRun, selfJob }) {
+async function considerPr(repo, number, { dryRun, selfJob, approvers }) {
   let pr = api(`repos/${repo}/pulls/${number}`);
   for (let i = 0; i < 5 && pr.mergeable === null; i++) {
     await new Promise(resolve => setTimeout(resolve, 3000));
@@ -110,22 +129,22 @@ async function considerPr(repo, number, { dryRun, selfJob }) {
     sameRepo: pr.head.repo && pr.head.repo.full_name === repo,
   });
   if (eligibility !== 'ok') return { number, decision: eligibility };
-  const head = api(`repos/${repo}/commits/${sha}`);
   const user = x => (x.user && x.user.login) || '';
+  const label = labelVerdict({ events: apiAll(`repos/${repo}/issues/${number}/events`), approvers });
+  const workflows = touchesWorkflows(apiAll(`repos/${repo}/pulls/${number}/files`).map(f => f.filename));
   const codex = codexVerdict({
     headSha: sha,
-    headDate: head.commit.committer.date,
     reviews: apiAll(`repos/${repo}/pulls/${number}/reviews`).map(r => ({ ...r, user: user(r) })),
     comments: apiAll(`repos/${repo}/pulls/${number}/comments`).map(c => ({ ...c, user: user(c) })),
     issueComments: apiAll(`repos/${repo}/issues/${number}/comments`).map(c => ({ ...c, user: user(c) })),
-    reactions: apiAll(`repos/${repo}/issues/${number}/reactions`).map(r => ({ ...r, user: user(r) })),
   });
   const checks = checksVerdict({
     checkRuns: apiAll(`repos/${repo}/commits/${sha}/check-runs`),
     statuses: latestStatuses(api(`repos/${repo}/commits/${sha}/status`).statuses || []),
     ignore: [selfJob],
+    required: ['pr-check'],
   });
-  const decision = decide({ eligibility, codex, checks, mergeable: pr.mergeable });
+  const decision = decide({ eligibility, label, workflows, codex, checks, mergeable: pr.mergeable });
   if (decision !== 'merge' || dryRun) return { number, sha, decision, codex, checks };
   // Merge exactly the head that was checked; GitHub refuses if it moved.
   api(`repos/${repo}/pulls/${number}/merge`, ['-X', 'PUT', '-f', `sha=${sha}`, '-f', 'merge_method=merge']);
@@ -139,13 +158,14 @@ async function main() {
   const dryRun = argv.includes('--dry-run');
   const prArg = argv.indexOf('--pr');
   const selfJob = process.env.SHIP_JOB_NAME || 'ship';
+  const approvers = (process.env.SHIP_APPROVERS || 'mhoydich').split(',').map(x => x.trim()).filter(Boolean);
   const numbers = prArg !== -1 && argv[prArg + 1]
     ? [Number(argv[prArg + 1])]
     : apiAll(`repos/${repo}/issues?state=open&labels=ship`).filter(i => i.pull_request).map(i => i.number);
   let merged = 0;
   for (const number of numbers) {
     try {
-      const result = await considerPr(repo, number, { dryRun, selfJob });
+      const result = await considerPr(repo, number, { dryRun, selfJob, approvers });
       console.log(`ship: #${number} ${result.decision}${result.sha ? ` at ${result.sha.slice(0, 8)}` : ''}${result.codex ? ` (codex ${result.codex}, checks ${result.checks})` : ''}`);
       if (result.decision === 'merged') merged++;
     } catch (error) {
