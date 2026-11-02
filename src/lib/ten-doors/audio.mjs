@@ -14,11 +14,36 @@ export function audio() {
     if (!AC) return null;
     ctx = new AC();
     master = ctx.createGain();
-    master.gain.value = 0.7;
+    master.gain.value = muted ? 0 : 0.7;
     master.connect(ctx.destination);
   }
   if (ctx.state === 'suspended') ctx.resume();
   return ctx;
+}
+
+/** True when a key event is aimed at a text box (the site footer has one), so a door leaves it alone. */
+export function typing(e) {
+  const t = e && e.target;
+  return Boolean(t && t.closest && t.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]'));
+}
+
+/** True when a key event is aimed at something Space or Enter already activates. */
+export function onControl(e) {
+  const t = e && e.target;
+  return Boolean(t && t.closest && t.closest('button, a, summary, [role="button"]'));
+}
+
+if (typeof document !== 'undefined') {
+  // A hidden tab stops drawing frames, so held notes would drone on. Pause the sound until it is back.
+  document.addEventListener('visibilitychange', () => {
+    if (!ctx) return;
+    if (document.hidden) ctx.suspend();
+    else ctx.resume();
+  });
+  // iOS unlocks Web Audio on touchend or click, not pointerdown, so resume there too.
+  const unlock = () => { if (ctx && ctx.state === 'suspended' && !document.hidden) ctx.resume(); };
+  document.addEventListener('touchend', unlock, { passive: true });
+  document.addEventListener('click', unlock);
 }
 
 export function out() {

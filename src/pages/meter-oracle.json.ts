@@ -14,7 +14,7 @@ export const GET: APIRoute = () => {
     doorManifest('meter-oracle', {
       oracle: {
         windowMinutes: 15,
-        rule: 'window = floor(unix milliseconds / 900000). fortune = FORTUNES[floor(mulberry32(fnv1a("meter:" + window))() * FORTUNES.length)], moved one place on if it matches the window before. Source: src/lib/ten-doors/daily.mjs.',
+        rule: 'window = floor(unix milliseconds / 900000). half = FORTUNES.length / 2. fortune = FORTUNES[(window mod 2) * half + floor(mulberry32(fnv1a("meter:" + window))() * half)]. Even windows draw from the first half of the deck and odd windows from the second, so neighbors never repeat. Source: src/lib/ten-doors/daily.mjs.',
         builtAt: new Date(now).toISOString(),
         windows,
         note: 'Windows run 24 hours from the last build. The page itself always computes the live window in the browser.',

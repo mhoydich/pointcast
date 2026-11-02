@@ -109,12 +109,14 @@ export function meterWindow(date = new Date()) {
   return { index, start: new Date(index * METER_WINDOW_MS), end: new Date((index + 1) * METER_WINDOW_MS) };
 }
 
-/** The fortune for the 15-minute window containing `date`; neighbors never repeat. */
+/**
+ * The fortune for the 15-minute window containing `date`. Even windows draw from the
+ * first half of the deck and odd windows from the second, so neighbors never repeat.
+ */
 export function meterFortune(date = new Date()) {
   const { index, start, end } = meterWindow(date);
-  const pick = (i) => Math.floor(rng(`meter:${i}`)() * FORTUNES.length);
-  let n = pick(index);
-  if (n === pick(index - 1)) n = (n + 1) % FORTUNES.length;
+  const half = Math.floor(FORTUNES.length / 2);
+  const n = (Math.abs(index) % 2) * half + Math.floor(rng(`meter:${index}`)() * half);
   return { window: index, start: start.toISOString(), end: end.toISOString(), fortune: FORTUNES[n], number: n + 1 };
 }
 
@@ -266,6 +268,9 @@ export const SPECIES = [
   { id: 'anemone', name: 'anemones', min: 2, max: 6 },
 ];
 
+/** Smallest distance between two creatures, in pool widths. */
+export const POOL_SPACING = 0.07;
+
 /** A day's pool: creatures with positions in a unit square and whether each hides until the water is touched. */
 export function tidePool(day) {
   const r = rng(`pool:${day}`);
@@ -275,13 +280,14 @@ export function tidePool(day) {
     const n = sp.min + Math.floor(r() * (sp.max - sp.min + 1));
     counts[sp.id] = n;
     for (let i = 0; i < n; i += 1) {
-      creatures.push({
-        species: sp.id,
-        x: Number((0.08 + r() * 0.84).toFixed(3)),
-        y: Number((0.1 + r() * 0.8).toFixed(3)),
-        hidden: r() < 0.28,
-        turn: Number((r() * 360).toFixed(0)),
-      });
+      // Keep creatures apart so two never sit on top of each other and every one can be counted.
+      let x, y, tries = 0;
+      do {
+        x = Number((0.08 + r() * 0.84).toFixed(3));
+        y = Number((0.1 + r() * 0.8).toFixed(3));
+        tries += 1;
+      } while (tries < 60 && creatures.some((c) => Math.hypot(c.x - x, c.y - y) < POOL_SPACING));
+      creatures.push({ species: sp.id, x, y, hidden: r() < 0.28, turn: Number((r() * 360).toFixed(0)) });
     }
   }
   const rocks = Array.from({ length: 5 + Math.floor(r() * 4) }, () => ({

@@ -4,7 +4,7 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
 ---
 
 <TenDoorsFrame slug="drum-round">
-  <canvas class="td-canvas" id="dr-ring" width="640" height="640" aria-label="A ring of sixteen steps around a table of six seats. On your turn, tap a step to add a hit."></canvas>
+  <canvas class="td-canvas" id="dr-ring" width="640" height="640" tabindex="0" aria-label="A ring of sixteen steps around a table of six seats. On your turn, tap a step to add a hit. With a keyboard: left and right arrows move around the ring, 1 to 5 pick a drum, Enter or Space adds the hit."></canvas>
   <div class="td-row" role="group" aria-label="Your drum">
     <button class="td-btn is-on" data-voice="0" aria-pressed="true">Kick</button>
     <button class="td-btn" data-voice="1" aria-pressed="false">Clap</button>
@@ -25,7 +25,7 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
 </style>
 
 <script>
-  import { tone, hz, kick, noise, fitCanvas, pointerXY, load, save, audio } from '../lib/ten-doors/audio.mjs';
+  import { tone, hz, kick, noise, fitCanvas, pointerXY, load, save, audio, typing } from '../lib/ten-doors/audio.mjs';
 
   const W = 640, H = 640, CX = W / 2, CY = H / 2, R = 220, STEPS = 16, LAPS = 6;
   const VOICES = ['kick', 'clap', 'hat', 'tom', 'rim'];
@@ -42,9 +42,9 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   const g = fitCanvas(canvas, W, H);
   const read = document.getElementById('dr-read');
   const keptEl = document.getElementById('dr-kept');
-  let bar, lap, seat, voice = 0, playing = false, step = 0, nextAt = 0, started = false;
+  let bar, lap, seat, voice = 0, playing = false, step = 0, nextAt = 0, started = false, round = 0, cursor = 0, focused = false;
   const fresh = () => VOICES.map(() => new Array(STEPS).fill(false));
-  function reset() { bar = fresh(); lap = 1; seat = 0; document.getElementById('dr-keep').hidden = true; read.textContent = 'Your seat first. Pick a drum, tap a step on the ring.'; }
+  function reset() { round += 1; bar = fresh(); lap = 1; seat = 0; document.getElementById('dr-keep').hidden = true; read.textContent = 'Your seat first. Pick a drum, tap a step on the ring.'; }
   reset();
 
   const hits = () => bar.reduce((n, row) => n + row.filter(Boolean).length, 0);
@@ -67,12 +67,16 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   }
 
   function passAround() {
+    // Each pass belongs to one round, so Start over stops a pass already going around the table.
+    const mine = round;
     let delay = 0;
     for (let i = 1; i < SEATS.length; i += 1) {
       delay += 700;
       setTimeout(() => {
+        if (mine !== round) return;
         seat = i; read.textContent = agentMove(i);
         if (i === SEATS.length - 1) setTimeout(() => {
+          if (mine !== round) return;
           seat = 0;
           if (lap >= LAPS) { read.textContent = `Six laps. The bar is finished with ${hits()} hits. Keep it or start over.`; document.getElementById('dr-keep').hidden = false; seat = -1; }
           else { lap += 1; read.textContent = `Lap ${lap} of ${LAPS}. Your seat again.`; }
@@ -90,19 +94,35 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   }
 
   const stepXY = (s, r = R) => { const a = (s / STEPS) * Math.PI * 2 - Math.PI / 2; return { x: CX + Math.cos(a) * r, y: CY + Math.sin(a) * r }; };
+  function place(s) {
+    audio(); started = true; playing = true;
+    if (seat !== 0) return;
+    bar[voice][s] = true; play(voice, 0); read.textContent = `You put a ${VOICES[voice]} on step ${s + 1}. Passing the bar.`; seat = 1; passAround();
+  }
   canvas.addEventListener('pointerdown', (e) => {
     audio(); started = true; playing = true;
     if (seat !== 0) return;
     const { x, y } = pointerXY(canvas, e, W, H);
     for (let s = 0; s < STEPS; s += 1) {
       const p = stepXY(s);
-      if (Math.hypot(x - p.x, y - p.y) < 34) { bar[voice][s] = true; play(voice, 0); read.textContent = `You put a ${VOICES[voice]} on step ${s + 1}. Passing the bar.`; seat = 1; passAround(); return; }
+      if (Math.hypot(x - p.x, y - p.y) < 34) { cursor = s; place(s); return; }
     }
   });
-  document.querySelectorAll('[data-voice]').forEach((b) => b.addEventListener('click', () => {
-    voice = Number(b.dataset.voice); audio(); started = true; playing = true; play(voice, 0);
-    document.querySelectorAll('[data-voice]').forEach((o) => { o.classList.toggle('is-on', o === b); o.setAttribute('aria-pressed', String(o === b)); });
-  }));
+  const voiceButtons = [...document.querySelectorAll('[data-voice]')];
+  function pickVoice(v) {
+    voice = v; audio(); started = true; playing = true; play(voice, 0);
+    voiceButtons.forEach((o) => { const on = Number(o.dataset.voice) === v; o.classList.toggle('is-on', on); o.setAttribute('aria-pressed', String(on)); });
+  }
+  voiceButtons.forEach((b) => b.addEventListener('click', () => pickVoice(Number(b.dataset.voice))));
+  canvas.addEventListener('focus', () => { focused = true; });
+  canvas.addEventListener('blur', () => { focused = false; });
+  canvas.addEventListener('keydown', (e) => {
+    if (typing(e)) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); cursor = (cursor + 1) % STEPS; read.textContent = `Step ${cursor + 1}.`; }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); cursor = (cursor + STEPS - 1) % STEPS; read.textContent = `Step ${cursor + 1}.`; }
+    else if (/^[1-5]$/.test(e.key)) { e.preventDefault(); pickVoice(Number(e.key) - 1); read.textContent = `${VOICES[voice]} picked.`; }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (seat === 0) place(cursor); }
+  });
   document.getElementById('dr-reset').addEventListener('click', reset);
   const kept = load('drum-round:kept', []);
   const renderKept = () => { keptEl.innerHTML = ''; kept.slice(-5).forEach((k) => { const li = document.createElement('li'); li.textContent = `${k.name}: ${k.code}`; keptEl.append(li); }); };
@@ -129,6 +149,7 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
       const p = stepXY(s);
       g.fillStyle = s === step && playing ? '#4d3a2a' : '#2a1d15'; g.beginPath(); g.arc(p.x, p.y, 26, 0, Math.PI * 2); g.fill();
       g.strokeStyle = s % 4 === 0 ? '#f2c14e' : '#6b5040'; g.lineWidth = s % 4 === 0 ? 2 : 1; g.stroke();
+      if (focused && s === cursor) { g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.beginPath(); g.arc(p.x, p.y, 31, 0, Math.PI * 2); g.stroke(); }
       bar.forEach((row, v) => { if (!row[s]) return; const q = stepXY(s, R - 18 + v * 9); g.fillStyle = COLORS[v]; g.beginPath(); g.arc(q.x, q.y, s === step ? 7 : 5, 0, Math.PI * 2); g.fill(); });
     }
     SEATS.forEach((st, i) => {

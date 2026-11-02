@@ -88,7 +88,7 @@ export const DOORS = [
       'The needle swings and the meter prints a fortune good for the next fifteen minutes.',
       'Everyone who asks in the same fifteen minutes gets the same fortune, people and bots alike.',
     ],
-    agents: 'GET /meter-oracle.json returns the fortune for the current fifteen-minute window and the next one, with the window\'s start and end.',
+    agents: 'GET /meter-oracle.json returns 24 hours of fifteen-minute windows starting from the last site build, plus the rule, so an agent can compute the fortune for any window itself.',
     place: 'Main Street in El Segundo is a short walk of shops and diners lined with meters.',
   },
   {
@@ -102,7 +102,7 @@ export const DOORS = [
     color: '#1d1410',
     ink: '#f2c14e',
     how: [
-      'The bar loops, sixteen steps long. On your turn, tap a step on the ring to add one hit.',
+      'The bar loops, sixteen steps long. On your turn, tap a step on the ring to add one hit. With a keyboard, the arrows move around the ring, 1 to 5 pick a drum and Enter adds the hit.',
       'Then the bar passes around the table. Each house agent adds one hit in its own taste: Sky likes the off-beats, Tides the downbeats, Swell rolls, Sun claps, Air leaves space and sometimes takes a hit away.',
       'Six laps and the bar is finished. Name it and keep it; START OVER clears the table.',
     ],
@@ -142,7 +142,7 @@ export const DOORS = [
       'Inside a tenth of a second is a green flash. The closer you are, the brighter the flash.',
       'The page also shows today\'s real sunset time for El Segundo, worked out from the sun\'s position, so you know when to go outside and try it for real.',
     ],
-    agents: 'GET /green-flash.json returns today\'s computed sunset for El Segundo in Pacific time and UTC, with the method and its error margin.',
+    agents: 'GET /green-flash.json returns 60 days of computed El Segundo sunsets from the last site build, in Pacific time and UTC, with the method and its error margin.',
     place: 'From the El Segundo bluffs the sun sets straight into Santa Monica Bay for most of the year.',
   },
   {
@@ -178,7 +178,7 @@ export const DOORS = [
       'The jingle is the clock. Visit every kid before the last note. Fewer blocks driven means more song left over, which is your score.',
       'Three rounds a day; one-way streets join in rounds two and three. The street map is new every day, the same for everyone.',
     ],
-    agents: 'GET /ice-cream-route.json returns today\'s seeded street map, the kids\' corners and the one-way streets, so an agent can try to solve the day\'s route.',
+    agents: 'GET /ice-cream-route.json returns 14 days of seeded street maps from the last site build, with the kids\' corners and the one-way streets, so an agent can try to solve a day\'s route.',
     place: 'Summer afternoons on the residential grid west of Sepulveda.',
   },
   {
@@ -196,7 +196,7 @@ export const DOORS = [
       'Enter your counts and tap FILE THE CENSUS to see how you did against the true count.',
       'The pool changes at midnight Pacific. Your record of days stays in this browser.',
     ],
-    agents: 'GET /tide-pool-census.json returns today\'s pool: every creature, its position and whether it is hidden. Bots always count right; people get the fun.',
+    agents: 'GET /tide-pool-census.json returns 14 days of pools from the last site build: every creature, its position and whether it is hidden. Bots always count right; people get the fun.',
     place: 'The rocky stretches at Palos Verdes, at the south end of the bay, are the nearest real tide pools.',
   },
 ];

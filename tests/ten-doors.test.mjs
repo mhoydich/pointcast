@@ -6,7 +6,7 @@ import { DOORS, DOOR_SLUGS, doorJsonLd, doorManifest } from '../src/lib/ten-door
 import { DETAILS } from '../src/lib/ten-doors/details.mjs';
 import {
   FORTUNES, meterFortune, meterWindow, sunsetFor, townDay, addDays,
-  routeDay, shortestTour, blockedFor, tidePool, SPECIES, ROUTE_SIZE,
+  routeDay, shortestTour, blockedFor, tidePool, SPECIES, ROUTE_SIZE, POOL_SPACING,
 } from '../src/lib/ten-doors/daily.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -55,9 +55,12 @@ test('meter oracle: one fortune per 15-minute window, same input same answer, no
   assert.deepEqual(a, meterFortune(new Date('2026-11-02T18:14:59Z')));
   assert.equal(meterWindow(at).start.toISOString(), '2026-11-02T18:00:00.000Z');
   assert.ok(FORTUNES.includes(a.fortune));
-  for (let i = 0; i < 500; i += 1) {
-    const t = new Date(Date.UTC(2026, 10, 2) + i * 900000);
-    assert.notEqual(meterFortune(t).fortune, meterFortune(new Date(t.getTime() + 900000)).fortune);
+  // A full year of windows, one after another.
+  let prev = meterFortune(new Date(Date.UTC(2026, 10, 2)));
+  for (let i = 1; i < 96 * 366; i += 1) {
+    const next = meterFortune(new Date(Date.UTC(2026, 10, 2) + i * 900000));
+    assert.notEqual(next.fortune, prev.fortune, `repeat at window ${next.window}`);
+    prev = next;
   }
 });
 
@@ -89,7 +92,7 @@ test('ice cream route: every round of 30 days is solvable inside the jingle, wit
 });
 
 test('tide pool census: counts match the creatures and stay in range', () => {
-  for (let i = 0; i < 30; i += 1) {
+  for (let i = 0; i < 366; i += 1) {
     const pool = tidePool(addDays('2026-11-02', i));
     for (const sp of SPECIES) {
       const n = pool.creatures.filter((c) => c.species === sp.id).length;
@@ -97,6 +100,9 @@ test('tide pool census: counts match the creatures and stay in range', () => {
       assert.ok(n >= sp.min && n <= sp.max);
     }
     assert.ok(pool.creatures.every((c) => c.x > 0 && c.x < 1 && c.y > 0 && c.y < 1));
+    pool.creatures.forEach((a, j) => pool.creatures.slice(j + 1).forEach((b) => {
+      assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= POOL_SPACING, `${pool.day}: two creatures overlap`);
+    }));
   }
 });
 

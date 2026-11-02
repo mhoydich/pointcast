@@ -33,7 +33,10 @@ import { SPECIES } from '../lib/ten-doors/daily.mjs';
   const pool = tidePool(day);
   const history = load('tide-pool-census:v1', {});
   let stir = null, filed = history[day] || null;
-  if (filed) read.textContent = `You filed today's census already: ${filed.right} of ${SPECIES.length} counts right. A new pool comes at midnight Pacific.`;
+  const form = document.getElementById('tp-form');
+  // One census per pool: once the true counts are shown, the form closes until tomorrow's pool.
+  const closeForm = () => form.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
+  if (filed) { read.textContent = `You filed today's census already: ${filed.right} of ${SPECIES.length} counts right. A new pool comes at midnight Pacific.`; closeForm(); }
 
   canvas.addEventListener('pointerdown', (e) => {
     audio();
@@ -42,8 +45,9 @@ import { SPECIES } from '../lib/ten-doors/daily.mjs';
     noise({ length: 0.4, gain: 0.07, freq: 700, q: 0.6 });
   });
 
-  document.getElementById('tp-form').addEventListener('submit', (e) => {
+  form.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (filed) return;
     audio();
     const data = new FormData(e.currentTarget);
     const lines = []; let right = 0;
@@ -57,6 +61,7 @@ import { SPECIES } from '../lib/ten-doors/daily.mjs';
     history[day] = filed; save('tide-pool-census:v1', history);
     const days = Object.keys(history).length;
     read.textContent = `${right} of ${SPECIES.length} right. ${lines.join(', ')}. Days counted in this browser: ${days}.`;
+    closeForm();
     (right === SPECIES.length ? [72, 76, 79, 84] : [72, 74]).forEach((m, i) => tone(440 * 2 ** ((m - 69) / 12), { type: 'sine', length: 0.04, release: 0.5, gain: 0.08, when: i * 0.1 }));
   });
 
