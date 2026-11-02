@@ -41,7 +41,16 @@ test('observatory remains local, isolated, truthful and CSP-compatible', () => {
   assert(html.includes('noindex,nofollow'));
   assert(html.includes('GEOMETRIC FORM STUDY · FICTIONAL'));
   assert(html.includes('No live visitors or scores'));
-  assert(!/(?:https?:\/\/|fetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|localStorage|sessionStorage|<audio|<iframe)/.test(html + css + source));
+  // Canonical/share data may name URLs but never fetches or executes them.
+  const runtimeHtml = html.replace(/<!-- atlas-release-metadata:start -->[\s\S]*?<!-- atlas-release-metadata:end -->/, '');
+  assert(!/(?:https?:\/\/|fetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|localStorage|sessionStorage|<audio|<iframe)/.test(runtimeHtml + css + source));
+  const doc = new JSDOM(html).window.document;
+  for (const element of doc.querySelectorAll('[src],[href]')) {
+    if (element.matches('link[rel="canonical"]')) continue;
+    assert(!/^https?:/.test(element.getAttribute('src') ?? element.getAttribute('href')));
+  }
+  assert.equal(doc.querySelectorAll('script:not([src]):not([type="application/ld+json"])').length, 0);
+  assert.equal(JSON.parse(doc.querySelector('script[type="application/ld+json"]').textContent)['@type'], 'WebPage');
   assert(!/style=|innerHTML/.test(html + source));
   assert(css.includes('min-height:44px'));
   assert(css.includes('touch-action:pan-y'));

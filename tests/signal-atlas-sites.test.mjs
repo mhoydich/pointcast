@@ -132,6 +132,8 @@ test('five exports preserve art, links and parents, disable other-site evidence 
         const document = new JSDOM(await readFile(pagePath, 'utf8')).window.document;
         if (page === 'index.html') assert.equal(document.querySelector('.wordmark').getAttribute('href'), './#main');
         assert.equal(document.querySelector('meta[name="robots"]').content, 'noindex,nofollow');
+        assert.equal(document.querySelector('link[rel="canonical"]'), null, 'local review must not claim a published canonical URL');
+        assert.equal(document.querySelector('script[type="application/ld+json"]'), null);
         for (const element of document.querySelectorAll('[href],[src]')) {
           const value = element.getAttribute('href') ?? element.getAttribute('src');
           if (!value || /^(#|\/|https?:)/.test(value)) continue;
@@ -197,4 +199,19 @@ test('browser preferences are isolated by edition, including both university nam
   assert.equal(new Set(scopes).size, 5);
   assert.equal(SITE_VARIANTS.pointcast.storageScope, 'pointcast:signal-atlas');
   for (const scope of scopes) assert.match(scope, /^[a-z-]+:signal-atlas$/);
+});
+
+
+test('public PointCast pages carry truthful share metadata without executable inline scripts', async () => {
+  for (const [path, url] of [['index.html', 'https://pointcast.xyz/signal-atlas/'], ['observatory/index.html', 'https://pointcast.xyz/signal-atlas/observatory/']]) {
+    const document = new JSDOM(await readFile(join(repo, 'public/signal-atlas', path), 'utf8')).window.document;
+    assert.equal(document.querySelector('link[rel="canonical"]').href, url);
+    assert.equal(document.querySelector('meta[property="og:url"]').content, url);
+    assert.equal(document.querySelector('meta[property="og:image"]').content, 'https://pointcast.xyz/signal-atlas/art/collectible-world.webp');
+    assert.equal(document.querySelector('meta[name="robots"]').content, 'noindex,nofollow');
+    const data = JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent);
+    assert.equal(data['@type'], 'WebPage');
+    assert.equal(data.url, url);
+    assert.equal(document.querySelectorAll('script:not([src]):not([type="application/ld+json"])').length, 0);
+  }
 });

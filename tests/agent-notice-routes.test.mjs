@@ -18,7 +18,12 @@ test('actual Pages event catch-all and feed routes allow anonymous reads and den
 // No stand-in performs I/O; fetch records its use and returns an in-memory response.
 const state={};
 const middlewareSource=readFileSync(new URL('../functions/_middleware.ts',import.meta.url),'utf8');
-const stripped=stripTypeScriptTypes(middlewareSource).replace(/^import .*;\n/gm,'');
+const stripped=stripTypeScriptTypes(middlewareSource).replace(/^import .*;\n/gm,line=>{
+ // Retain the real pure Atlas boundary; imported services below remain stand-ins.
+ return line.includes("'../src/lib/signal-atlas-boundary.mjs'")
+  ? line.replace("'../src/lib/signal-atlas-boundary.mjs'",JSON.stringify(new URL('../src/lib/signal-atlas-boundary.mjs',import.meta.url).href))
+  : '';
+});
 const standins=`
 const state=globalThis[Symbol.for('pointcast.noticeboard.middleware-test')];
 const classifyUA=ua=>{state.classify++;return ua.includes('GPTBot')?'ai:openai':'human'};

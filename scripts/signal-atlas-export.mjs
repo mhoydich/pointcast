@@ -25,6 +25,10 @@ function replaceOne(text, pattern, replacement, label) {
   if ((text.match(new RegExp(pattern.source, 'g')) ?? []).length !== 1) throw new Error('Expected exactly one ' + label + '; review source changes');
   return text.replace(pattern, replacement);
 }
+function reviewHtml(source) {
+  // Local, unconnected exports have no published canonical URL.
+  return replaceOne(source, /<!-- atlas-release-metadata:start -->[\s\S]*?<!-- atlas-release-metadata:end -->/, '', 'release metadata block');
+}
 function editionHtml(source, config) {
   let text = replaceOne(source, /<title>[^<]*<\/title>/, '<title>Signal Atlas — ' + escapeHtml(editionLabel(config)) + ' preview</title>', 'title');
   text = replaceOne(text, /<a class="wordmark" href="\/">POINTCAST/, '<a class="wordmark" href="./#main" aria-label="' + escapeHtml(editionLabel(config)) + ' Signal Atlas, top">' + escapeHtml(config.brand.toUpperCase()), 'wordmark');
@@ -85,7 +89,8 @@ export async function exportAtlasEditions(destination) {
     const files = new Map([...sources].map(([path, bytes]) => [prefix + path, bytes]));
     files.set(prefix + 'review.css', Buffer.from(reviewStyles));
     files.set(prefix + 'review-nav.mjs', Buffer.from(reviewNavigationSource));
-    files.set(prefix + 'index.html', Buffer.from(editionHtml(sources.get('index.html').toString('utf8'), config)));
+    files.set(prefix + 'index.html', Buffer.from(editionHtml(reviewHtml(sources.get('index.html').toString('utf8')), config)));
+    files.set(prefix + 'observatory/index.html', Buffer.from(reviewHtml(sources.get('observatory/index.html').toString('utf8'))));
     files.set(prefix + 'site-config.mjs', Buffer.from(replaceOne(sources.get('site-config.mjs').toString('utf8'), /export const SITE_CONFIG = getSiteConfig\('pointcast'\);/, "export const SITE_CONFIG = getSiteConfig('" + config.variantId + "');", 'edition selection')));
     const manifest = JSON.parse(sources.get('manifest.json'));
     Object.assign(manifest, { status: 'local-review-package', editionId: config.variantId, intendedOrigin: config.origin, canonicalUrl: null,
