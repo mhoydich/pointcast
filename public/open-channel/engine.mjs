@@ -26,7 +26,7 @@ export function exportSession(scene, session) {
   const node = scene.nodes[session.nodeId];
   return [
     'OPEN CHANNEL / POINTCAST', `${scene.title} — ${scene.character}`, 'https://pointcast.xyz/open-channel/',
-    'Scripted story demo. Optional browser voices. Dessa is not connected.', '',
+    'Scripted story demo. Optional narration. Dessa is not connected.', '',
     ...session.turns.map(turn => `${turn.speaker}: ${turn.text}\n`),
     node?.ending ? `ENDING: ${node.ending}\n` : 'Scene in progress.\n',
     session.note ? `MY NOTE\n${session.note}\n` : '',

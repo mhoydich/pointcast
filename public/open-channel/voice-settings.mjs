@@ -1,25 +1,40 @@
 /** Shared narration preferences. Selection never starts playback. */
 export function setupVoiceSettings(narrator, { recordingsReady, onChange = () => {} }) {
   const $ = id => document.getElementById(id);
-  const key = 'pointcast-open-channel-voice-v1';
-  const settings = { mode: recordingsReady ? 'recording' : 'browser', voiceURI: '' };
-  try {
-    const prior = JSON.parse(sessionStorage.getItem(key) || 'null');
-    if (prior?.mode === 'browser' || (prior?.mode === 'recording' && recordingsReady)) settings.mode = prior.mode;
-    if (typeof prior?.voiceURI === 'string') settings.voiceURI = prior.voiceURI.slice(0, 500);
-  } catch {}
+  const key = 'pointcast-open-channel-voice-v2';
+  function readPreference(storageKey) {
+    try { return JSON.parse(sessionStorage.getItem(storageKey) || 'null'); } catch { return null; }
+  }
+  const prior = readPreference(key);
+  const legacy = readPreference('pointcast-open-channel-voice-v1');
+  // The old release offered only device voices. Its automatic browser choice
+  // must not hide the first complete recording release from returning visitors.
+  const hasSeenRecordings = prior?.hasSeenRecordings === true || recordingsReady;
+  let preferredMode = prior?.hasSeenRecordings === true && ['browser', 'recording'].includes(prior.mode)
+    ? prior.mode : recordingsReady ? 'recording' : 'browser';
+  const priorVoice = typeof prior?.voiceURI === 'string' ? prior.voiceURI : legacy?.voiceURI;
+  const settings = {
+    mode: preferredMode === 'recording' && !recordingsReady ? 'browser' : preferredMode,
+    voiceURI: typeof priorVoice === 'string' ? priorVoice.slice(0, 500) : '',
+  };
   const recordingOption = $('voice-mode').querySelector('[value="recording"]');
-  if (!recordingsReady) {
-    recordingOption.remove();
-    $('voice-mode').hidden = true;
-    document.querySelector('label[for="voice-mode"]').hidden = true;
+  $('voice-mode').hidden = !recordingsReady;
+  document.querySelector('label[for="voice-mode"]').hidden = !recordingsReady;
+  if (!recordingsReady) recordingOption?.remove();
+  else if (!recordingOption) {
+    const option = document.createElement('option'); option.value = 'recording'; option.textContent = 'Recorded voices · ElevenLabs';
+    $('voice-mode').prepend(option);
   }
   $('voice-mode').value = settings.mode;
-  function save() { try { sessionStorage.setItem(key, JSON.stringify(settings)); } catch {} }
+  function save() {
+    // Keep the preferred source when recordings are temporarily unavailable.
+    // Choosing another device voice in that state changes only its voice URI.
+    try { sessionStorage.setItem(key, JSON.stringify({ mode: preferredMode, voiceURI: settings.voiceURI, hasSeenRecordings })); } catch {}
+  }
   function paint() {
     $('browser-voice-row').hidden = settings.mode !== 'browser';
     $('voice-description').textContent = settings.mode === 'recording'
-      ? 'Pre-recorded AI narration by ElevenLabs. Your answers are not sent to a voice generator.'
+      ? 'AI narration recorded with ElevenLabs. Your answers are not sent to ElevenLabs.'
       : 'Choose an English voice available on this device. Voice quality varies by browser. Playback uses the voice’s natural pitch and pace.';
   }
   function populateVoices() {
@@ -32,13 +47,14 @@ export function setupVoiceSettings(narrator, { recordingsReady, onChange = () =>
     else $('browser-voice').value = '';
   }
   $('voice-mode').addEventListener('change', () => {
-    narrator.stop(); settings.mode = $('voice-mode').value === 'recording' && recordingsReady ? 'recording' : 'browser';
-    paint(); save(); onChange();
+    if (!recordingsReady) return;
+    narrator.stop(); settings.mode = $('voice-mode').value === 'recording' ? 'recording' : 'browser';
+    preferredMode = settings.mode; paint(); save(); onChange();
   });
   $('browser-voice').addEventListener('change', () => {
     narrator.stop(); settings.voiceURI = $('browser-voice').value; save(); onChange();
   });
-  populateVoices(); paint();
+  populateVoices(); paint(); save();
   const unsubscribe = narrator.onVoicesChanged(populateVoices);
   return { getOptions: () => ({ mode: settings.mode, voiceURI: settings.voiceURI, rate: 1 }), destroy: unsubscribe };
 }
