@@ -106,6 +106,8 @@ export function start(root) {
   const chainStatus = q(root, '[data-chain-status]');
   const editions = q(root, '[data-editions]');
   const sendBtn = q(root, '[data-send]');
+  const artifactActions = root.querySelectorAll('[data-png], [data-svg], [data-copy-svg], [data-copy-png], [data-copy-html], [data-copy-inline], [data-hash], [data-sign], [data-prepare]');
+  let renderVersion = 0;
   const where = resolveApi(window.location.search, { api: root.dataset.api, genesis: root.dataset.genesis });
 
   const S = {
@@ -137,12 +139,21 @@ export function start(root) {
   }
 
   function invalidate() {
+    renderVersion += 1;
+    S.svg = '';
+    S.width = 0;
+    S.height = 0;
     S.png = null;
     S.hash = '';
     S.plan = null;
     text(hashOut, '');
+    text(signedOut, '');
     text(bodyOut, '');
+    text(recordOut, '');
+    stage.replaceChildren();
+    for (const button of artifactActions) button.disabled = true;
     if (sendBtn) sendBtn.disabled = true;
+    return renderVersion;
   }
 
   async function loadFont(id) {
@@ -155,32 +166,43 @@ export function start(root) {
   }
 
   async function render() {
-    invalidate();
+    const version = invalidate();
+    const mode = S.mode;
+    const fontId = fontSel.value;
+    const typedText = name.value || 'PointCast';
+    const settings = controls();
     try {
       let laid;
-      if (S.mode === 'type') {
-        S.font = await loadFont(fontSel.value);
-        laid = layoutTyped({ font: S.font, text: name.value || 'PointCast', ...controls() });
-        text(missing, laid.missing.length ? 'This face has no glyph for: ' + laid.missing.join(' ') : '');
-        S.kind = 'typed';
-      } else if (S.mode === 'draw') {
-        laid = layoutDrawn(S.points, { minWidth: 1.2, maxWidth: Number(pen.value), color: color.value, flourish: flourish.checked });
-        text(missing, '');
-        S.kind = 'drawn';
+      let kind;
+      let message = '';
+      if (mode === 'type') {
+        const font = await loadFont(fontId);
+        if (version !== renderVersion) return;
+        laid = layoutTyped({ font, text: typedText, ...settings });
+        S.font = font;
+        message = laid.missing.length ? 'This face has no glyph for: ' + laid.missing.join(' ') : '';
+        kind = 'typed';
+      } else if (mode === 'draw') {
+        laid = layoutDrawn(S.points, { minWidth: 1.2, maxWidth: Number(pen.value), color: settings.color, flourish: settings.flourish });
+        kind = 'drawn';
       } else {
         if (!S.upload) { text(missing, 'Choose an image.'); return; }
         laid = S.upload;
-        text(missing, 'An upload stays a picture. The SVG wraps it. It is not a traced vector.');
-        S.kind = 'upload';
+        message = 'An upload stays a picture. The SVG wraps it. It is not a traced vector.';
+        kind = 'upload';
       }
+      if (version !== renderVersion) return;
+      showSvg(stage, laid.svg);
       S.svg = laid.svg;
       S.width = laid.width;
       S.height = laid.height;
-      showSvg(stage, laid.svg);
-      text(note, S.kind === 'upload' ? 'PNG export re-encodes the picture on a transparent canvas.' : 'PNG is a transparent raster of this SVG.');
+      S.kind = kind;
+      text(missing, message);
+      text(note, kind === 'upload' ? 'PNG export re-encodes the picture on a transparent canvas.' : 'PNG is a transparent raster of this SVG.');
+      for (const button of artifactActions) button.disabled = false;
     } catch (e) {
-      if (e && e.code === 'empty' && S.mode === 'draw') {
-        stage.replaceChildren();
+      if (version !== renderVersion) return;
+      if (e && e.code === 'empty' && mode === 'draw') {
         text(missing, 'Draw on the pad. Lift your pointer and the stroke becomes the signature.');
         return;
       }
@@ -227,6 +249,7 @@ export function start(root) {
     pad.addEventListener('pointerdown', (ev) => {
       try { pad.setPointerCapture(ev.pointerId); } catch { /* some browsers refuse capture on this event */ }
       S.drawing = true;
+      invalidate();
       S.points = [pointFrom(ev)];
       paintPad();
     });
@@ -244,13 +267,23 @@ export function start(root) {
   q(root, '[data-clear]')?.addEventListener('click', () => { S.points = []; paintPad(); render(); });
 
   file?.addEventListener('change', () => {
+    const version = invalidate();
+    S.upload = null;
     const f = file.files && file.files[0];
-    if (!f) return;
+    if (!f) { text(missing, 'Choose an image.'); return; }
     if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type)) { text(missing, 'Upload a PNG, JPEG, GIF or WebP.'); return; }
+    text(missing, 'Reading the image…');
+    const failed = () => {
+      if (version === renderVersion) text(missing, 'The image could not be read. Choose a PNG, JPEG, GIF or WebP.');
+    };
     const reader = new FileReader();
+    reader.onerror = failed;
     reader.onload = () => {
+      if (version !== renderVersion) return;
       const img = new Image();
+      img.onerror = failed;
       img.onload = () => {
+        if (version !== renderVersion) return;
         const max = 1400;
         const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
         try {
@@ -260,16 +293,19 @@ export function start(root) {
       };
       img.src = String(reader.result);
     };
-    reader.readAsDataURL(f);
+    try { reader.readAsDataURL(f); } catch { failed(); }
   });
 
   for (const btn of root.querySelectorAll('[data-mode-set]')) btn.addEventListener('click', () => setMode(btn.dataset.modeSet));
   for (const el of [name, fontSel, size, slant, weight, color, flourish, pen]) el?.addEventListener('input', () => { if (S.mode === 'draw' && el === color) paintPad(); render(); });
 
   async function png() {
-    if (!S.svg) await render();
-    if (!S.png) S.png = await rasterize(S.svg, S.width, S.height);
-    return S.png;
+    if (!S.svg) throw new Error('Make a mark before exporting or hashing it.');
+    const version = renderVersion;
+    const result = S.png || await rasterize(S.svg, S.width, S.height);
+    if (version !== renderVersion) throw new Error('The mark changed. Try again with the current preview.');
+    S.png = result;
+    return result;
   }
 
   q(root, '[data-png]')?.addEventListener('click', async () => {
@@ -305,9 +341,12 @@ export function start(root) {
   });
 
   q(root, '[data-hash]')?.addEventListener('click', async () => {
+    const version = renderVersion;
     try {
       const { bytes } = await png();
-      S.hash = await hashBytes(bytes);
+      const hash = await hashBytes(bytes);
+      if (version !== renderVersion) return;
+      S.hash = hash;
       text(hashOut, 'sha256 ' + S.hash + '\n' + bytes.length + ' bytes of PNG. Change the mark and this hash is no longer the one you sign or record.');
       hashOut.dataset.state = 'ok';
     } catch (e) {
@@ -317,14 +356,18 @@ export function start(root) {
   });
 
   q(root, '[data-sign]')?.addEventListener('click', async () => {
+    const version = renderVersion;
     try {
       if (!S.hash) {
         const { bytes } = await png();
-        S.hash = await hashBytes(bytes);
+        const hash = await hashBytes(bytes);
+        if (version !== renderVersion) return;
+        S.hash = hash;
         text(hashOut, 'sha256 ' + S.hash);
       }
       if (!S.key) throw new Error('Make a key first. It stays in this browser.');
       const signed = await signStatement({ key: S.key, statement: q(root, '[data-statement]').value, pngSha256: S.hash });
+      if (version !== renderVersion) return;
       text(signedOut, [
         signed.canonical,
         '',
@@ -399,9 +442,12 @@ export function start(root) {
   });
 
   q(root, '[data-prepare]')?.addEventListener('click', async () => {
+    const version = renderVersion;
     try {
       const { bytes } = await png();
-      S.hash = await hashBytes(bytes);
+      const hash = await hashBytes(bytes);
+      if (version !== renderVersion) return;
+      S.hash = hash;
       text(hashOut, 'sha256 ' + S.hash);
       S.plan = planRecord({
         sha256: S.hash,
@@ -429,6 +475,9 @@ export function start(root) {
   q(root, '[data-send]')?.addEventListener('click', async () => {
     if (!S.plan) { text(recordOut, 'Prepare the post first.'); return; }
     if (!S.key) { text(recordOut, 'Make a key first.'); return; }
+    const version = renderVersion;
+    const plan = S.plan;
+    const key = S.key;
     sendBtn.disabled = true;
     try {
       if (!S.chain) {
@@ -438,10 +487,14 @@ export function start(root) {
         text(chainStatus, 'Public devnet ' + st.chainId + ', height ' + st.height + '. It may reset.');
         S.chain = await connectPinned(where.api, { pinned: where.genesis });
       }
+      if (version !== renderVersion || S.plan !== plan || S.key !== key) {
+        sendBtn.disabled = !S.plan || !S.svg;
+        return;
+      }
       const done = await recordSignature({
         chain: S.chain,
-        key: S.key,
-        plan: S.plan,
+        key,
+        plan,
         onStage: (s) => text(recordOut, s === 'signed' ? 'Signed in the browser. Sending…' : s === 'sent' ? 'The devnet accepted it. Waiting for a block…' : 'Waiting…'),
       });
       const links = txLinks(where.api, done.txHash);
@@ -459,11 +512,11 @@ export function start(root) {
           box.append(a, ' ');
         }
       }
-      S.plan = null;
+      if (S.plan === plan) S.plan = null;
     } catch (e) {
       recordOut.dataset.state = 'bad';
       text(recordOut, e && e.sendState ? sendFailureText(e) : describeError(e));
-      sendBtn.disabled = false;
+      sendBtn.disabled = !S.plan || !S.svg;
     }
   });
 
