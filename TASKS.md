@@ -4,6 +4,15 @@
 
 ---
 
+## Private UES course profile foundation (2026-11-03)
+
+- [x] (X) Build a held, disabled-by-default first slice: deliberate per-course checklist save/restore/remove through the existing PointCast session, private `/me` shelf, self-attestation wording, bounded atomic D1 storage and tests — `done` — `docs/setup/ues-course-profile.md`
+- [ ] (MH/X) Review draft; land and verify #1590 before activation, reconcile Me with #1287 if needed — `queued`
+- [ ] (MH) Separately approved migration/flag activation and real provider/two-device release checks — `waiting-on-mh` — publication requested; held pending prerequisite and independent review
+- [ ] (MH/X) Scope El Segundo federation, interactions and voting authorization independently; no account linking, voting right or chain credential is inferred from a course checklist — `queued`
+
+---
+
 ## Gridtown — a browser-first city builder (2026-10-22)
 
 `/gridtown`, `/gridtown.json`, Block 0742 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
