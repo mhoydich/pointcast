@@ -1,0 +1,170 @@
+---
+/** /tide-pool-census — Door 10 of the Ten Doors (2026-11-02). Count a seeded daily tide pool; bots read the same pool as JSON. */
+import TenDoorsFrame from '../components/TenDoorsFrame.astro';
+import { SPECIES } from '../lib/ten-doors/daily.mjs';
+---
+
+<TenDoorsFrame slug="tide-pool-census">
+  <canvas class="td-canvas" id="tp-pool" width="640" height="460" role="img" aria-label="Today's tide pool, seen from above. Tap the water to stir it and reveal hidden creatures, or use the Stir whole pool button and text view below."></canvas>
+  <div class="td-row"><button class="td-btn" id="tp-stir" type="button">Stir whole pool</button></div>
+  <details class="tp-observations">
+    <summary>Text view of the pool</summary>
+    <p>Each item is one creature, including those under weed or rock. Count the observations by species, then file the same census below.</p>
+    <ul id="tp-observations" aria-label="Today's pool observations"></ul>
+  </details>
+  <form class="tp-form" id="tp-form">
+    {SPECIES.map((sp) => (
+      <label><span>{sp.name}</span><input type="number" min="0" max="30" inputmode="numeric" name={sp.id} value="0" /></label>
+    ))}
+    <button class="td-btn" type="submit">File the census</button>
+  </form>
+  <p class="td-readout" id="tp-read" aria-live="polite">Count what you see. Tap the water to stir it; some creatures hide.</p>
+</TenDoorsFrame>
+
+<style>
+  .tp-form { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; align-items: end; margin-top: 0.8rem; }
+  .tp-form label { display: flex; flex-direction: column; gap: 0.2rem; font: 600 0.75rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; color: var(--td-ink); }
+  .tp-form input { width: 4.5rem; font: 1.1rem ui-monospace, monospace; padding: 0.4rem; border-radius: 8px; border: 2px solid var(--td-ink); background: rgb(255 255 255 / 0.1); color: var(--td-ink); }
+  #tp-pool { touch-action: pan-y; }
+  .tp-observations { max-width: 34rem; margin: 0.8rem auto; font-size: 0.9rem; line-height: 1.5; }
+  .tp-observations summary { cursor: pointer; min-height: 44px; display: list-item; align-content: center; }
+  .tp-observations summary:focus-visible { outline: 3px solid var(--td-ink); outline-offset: 3px; }
+  .tp-observations ul { columns: 2; padding-inline-start: 1.2rem; }
+  @media (max-width: 480px) { .tp-observations ul { columns: 1; } }
+</style>
+
+<script>
+  import { tidePool, townDay, SPECIES } from '../lib/ten-doors/daily.mjs';
+  import { tone, noise, fitCanvas, pointerXY, load, save, audio, reducedMotion } from '../lib/ten-doors/audio.mjs';
+
+  const W = 640, H = 460;
+  const canvas = document.getElementById('tp-pool');
+  const g = fitCanvas(canvas, W, H);
+  const read = document.getElementById('tp-read');
+  let day = townDay(new Date());
+  let pool = tidePool(day);
+  const saved = load('tide-pool-census:v1', {});
+  const history = Object.create(null);
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+    for (const [date, entry] of Object.entries(saved)) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date) && entry && Number.isInteger(entry.right) && entry.right >= 0 && entry.right <= SPECIES.length) history[date] = { right: entry.right };
+    }
+  }
+  let stir = null, filed = history[day] || null;
+  const form = document.getElementById('tp-form');
+  // One census per pool: once the true counts are shown, the form closes until tomorrow's pool.
+  const closeForm = () => form.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
+  function showPool() {
+    const observations = document.getElementById('tp-observations');
+    observations.replaceChildren();
+    const names = { crab: 'A shore crab', star: 'A sea star', snail: 'A turban snail', anemone: 'An anemone' };
+    [...pool.creatures].sort((a, b) => a.y - b.y || a.x - b.x).forEach((c) => {
+      const item = document.createElement('li');
+      item.textContent = `${names[c.species]}${c.hidden ? ', sheltered under weed or rock' : ', in open water'}.`;
+      observations.append(item);
+    });
+    form.querySelectorAll('input, button').forEach((el) => { el.disabled = false; });
+    form.querySelectorAll('input').forEach((el) => { el.value = '0'; });
+    if (filed) { read.textContent = `You filed today's census already: ${filed.right} of ${SPECIES.length} counts right. A new pool comes at midnight Pacific.`; closeForm(); }
+    else read.textContent = `Pool for ${day}. Count what you see, stir the water, or use the text observations.`;
+  }
+  function refreshDay() {
+    const today = townDay(new Date());
+    if (today === day) return false;
+    day = today; pool = tidePool(day); filed = history[day] || null; stir = null;
+    showPool();
+    return true;
+  }
+  showPool();
+
+  canvas.addEventListener('click', (e) => {
+    refreshDay();
+    audio();
+    const p = pointerXY(canvas, e, W, H);
+    stir = { x: p.x / W, y: p.y / H, at: performance.now() };
+    noise({ length: 0.4, gain: 0.07, freq: 700, q: 0.6 });
+    redraw();
+  });
+  document.getElementById('tp-stir').addEventListener('click', () => {
+    refreshDay(); audio();
+    stir = { x: 0.5, y: 0.5, at: performance.now(), whole: true };
+    noise({ length: 0.4, gain: 0.07, freq: 700, q: 0.6 });
+    read.textContent = 'The whole pool is stirred. Hidden creatures are visible; the text view lists them too.';
+    redraw();
+  });
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (refreshDay()) { redraw(); return; }
+    if (filed) return;
+    audio();
+    const data = new FormData(e.currentTarget);
+    const lines = []; let right = 0;
+    for (const sp of SPECIES) {
+      const guess = Number(data.get(sp.id)) || 0;
+      const truth = pool.counts[sp.id];
+      if (guess === truth) right += 1;
+      lines.push(`${sp.name}: ${truth}${guess === truth ? ' (right)' : ` (you said ${guess})`}`);
+    }
+    filed = { right };
+    history[day] = filed; save('tide-pool-census:v1', history);
+    const days = Object.keys(history).length;
+    read.textContent = `${right} of ${SPECIES.length} right. ${lines.join(', ')}. Days counted in this browser: ${days}.`;
+    closeForm();
+    redraw();
+    (right === SPECIES.length ? [72, 76, 79, 84] : [72, 74]).forEach((m, i) => tone(440 * 2 ** ((m - 69) / 12), { type: 'sine', length: 0.04, release: 0.5, gain: 0.08, when: i * 0.1 }));
+  });
+
+  function creature(c, alpha, now) {
+    const x = c.x * W, y = c.y * H;
+    g.save(); g.translate(x, y); g.rotate((c.turn * Math.PI) / 180); g.globalAlpha = alpha;
+    if (c.species === 'crab') {
+      g.fillStyle = '#ff7a59'; g.beginPath(); g.ellipse(0, 0, 11, 8, 0, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#ff7a59'; g.lineWidth = 2; for (const s of [-1, 1]) for (let i = 0; i < 3; i += 1) { g.beginPath(); g.moveTo(s * 8, -4 + i * 4); g.lineTo(s * 16, -6 + i * 5); g.stroke(); }
+      g.beginPath(); g.arc(-7, -10, 4, 0, Math.PI * 2); g.arc(7, -10, 4, 0, Math.PI * 2); g.fill();
+    } else if (c.species === 'star') {
+      g.fillStyle = '#c86bfa'; g.beginPath();
+      for (let i = 0; i < 10; i += 1) { const r = i % 2 ? 6 : 17; const a = (i / 10) * Math.PI * 2; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+      g.closePath(); g.fill();
+    } else if (c.species === 'snail') {
+      g.fillStyle = '#6b4f3a'; g.beginPath(); g.arc(0, 0, 7, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#e8d2b0'; g.lineWidth = 1.5; g.beginPath(); g.arc(0, 0, 4, 0, Math.PI * 1.6); g.stroke();
+    } else {
+      const sway = Math.sin(now / 500 + c.x * 10) * 0.2;
+      g.fillStyle = '#4fd1a5'; for (let i = 0; i < 10; i += 1) { const a = (i / 10) * Math.PI * 2 + sway; g.beginPath(); g.ellipse(Math.cos(a) * 9, Math.sin(a) * 9, 6, 2.5, a, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = '#2a9d7c'; g.beginPath(); g.arc(0, 0, 6, 0, Math.PI * 2); g.fill();
+    }
+    g.restore(); g.globalAlpha = 1;
+  }
+
+  function draw(now) {
+    const still = reducedMotion();
+    const visualNow = still ? 0 : now;
+    g.fillStyle = '#7a6a58'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#0d4f57'; g.beginPath(); g.ellipse(W / 2, H / 2, W / 2 - 14, H / 2 - 14, 0, 0, Math.PI * 2); g.fill();
+    for (const r of pool.rocks) { g.fillStyle = '#56616a'; g.beginPath(); g.ellipse(r.x * W, r.y * H, r.r * W, r.r * H * 0.8, 0, 0, Math.PI * 2); g.fill(); }
+    const stirAge = stir ? (now - stir.at) / 1000 : 99;
+    for (const c of pool.creatures) {
+      let alpha = 1;
+      if (c.hidden) {
+        const near = stir ? stir.whole || Math.hypot(c.x - stir.x, c.y - stir.y) < 0.28 : false;
+        alpha = near ? still ? 1 : Math.max(0, 1 - stirAge / 4) : 0;
+        if (filed) alpha = Math.max(alpha, 0.55);
+      }
+      if (alpha > 0) creature(c, alpha, visualNow);
+    }
+    // weed and light ripples over everything
+    g.strokeStyle = 'rgba(80,140,60,0.55)'; g.lineWidth = 3;
+    for (let i = 0; i < 9; i += 1) { const bx = ((i * 97) % (W - 120)) + 60, by = ((i * 61) % (H - 120)) + 60; g.beginPath(); g.moveTo(bx, by); g.quadraticCurveTo(bx + 20 + Math.sin(visualNow / 700 + i) * 10, by - 25, bx + 6, by - 50); g.stroke(); }
+    if (!still && stir && stirAge < 2) { g.strokeStyle = `rgba(255,255,255,${0.5 - stirAge / 4})`; g.lineWidth = 2; g.beginPath(); g.arc(stir.x * W, stir.y * H, 20 + stirAge * 80, 0, Math.PI * 2); g.stroke(); }
+    g.fillStyle = 'rgba(255,255,255,0.05)'; for (let i = 0; i < 6; i += 1) { g.beginPath(); g.ellipse(((visualNow / 30 + i * 120) % (W + 100)) - 50, 80 + i * 60, 60, 8, 0.2, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#e9fbf7'; g.font = '600 13px ui-monospace, monospace'; g.textAlign = 'left'; g.fillText(`Pool for ${day}`, 18, 24);
+    frame = still ? 0 : requestAnimationFrame(draw);
+  }
+  let frame = 0;
+  function redraw() { cancelAnimationFrame(frame); frame = requestAnimationFrame(draw); }
+  window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', redraw);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && refreshDay()) redraw(); });
+  setInterval(() => { if (!document.hidden && refreshDay()) redraw(); }, 30000);
+  redraw();
+</script>

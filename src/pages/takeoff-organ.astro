@@ -1,0 +1,151 @@
+---
+/** /takeoff-organ — Door 1 of the Ten Doors (2026-11-02). Planes off the LAX north runway hold organ notes. */
+import TenDoorsFrame from '../components/TenDoorsFrame.astro';
+---
+
+<TenDoorsFrame slug="takeoff-organ">
+  <canvas class="td-canvas" id="to-sky" width="720" height="440" aria-label="Night sky over El Segundo. Tap the runway lanes at the bottom to launch planes that each hold a note."></canvas>
+  <div class="td-row" role="group" aria-label="Launch a departure">
+    <button class="td-btn" data-lane="0">Lane 1</button><button class="td-btn" data-lane="1">Lane 2</button>
+    <button class="td-btn" data-lane="2">Lane 3</button><button class="td-btn" data-lane="3">Lane 4</button>
+    <button class="td-btn" data-lane="4">Lane 5</button><button class="td-btn" data-lane="5">Lane 6</button>
+    <button class="td-btn" data-lane="6">Lane 7</button><button class="td-btn" data-lane="7">Lane 8</button>
+  </div>
+  <div class="td-row">
+    <button class="td-btn" id="to-auto" aria-pressed="false">Auto schedule</button>
+    <button class="td-btn" id="to-mute" aria-pressed="false">Sound on</button>
+  </div>
+  <p class="td-readout" id="to-read" aria-live="polite">Tap a runway lane to launch the first departure.</p>
+</TenDoorsFrame>
+
+<style>
+  #to-sky { touch-action: pan-y; }
+</style>
+
+<script>
+  import { tone, hz, setMuted, isMuted, fitCanvas, pointerXY, reducedMotion, audio, out, typing } from '../lib/ten-doors/audio.mjs';
+
+  const W = 720, H = 440, LANES = 8;
+  const SCALE = [50, 53, 55, 57, 60, 62, 65, 67]; // D minor-ish organ ladder, MIDI
+  const canvas = document.getElementById('to-sky');
+  const g = fitCanvas(canvas, W, H);
+  const read = document.getElementById('to-read');
+  const planes = [];
+  const activeOscillators = new Set();
+  const stars = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: Math.random() * H * 0.7, s: Math.random() * 1.6 + 0.3 }));
+  let auto = false, nextAuto = 0, launched = 0;
+
+  function organ(midi) {
+    const c = audio();
+    if (!c) return null;
+    const t = c.currentTime;
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.09, t + 1.2);
+    const oscs = [1, 2, 3].map((m, i) => {
+      const o = c.createOscillator();
+      o.type = i === 0 ? 'sine' : 'triangle';
+      o.frequency.value = hz(midi) * m;
+      const og = c.createGain();
+      og.gain.value = [1, 0.35, 0.15][i];
+      o.connect(og); og.connect(gain); o.start(t);
+      activeOscillators.add(o); o.addEventListener('ended', () => activeOscillators.delete(o), { once: true });
+      return o;
+    });
+    gain.connect(out());
+    return { gain, oscs, context: c };
+  }
+
+  function launch(lane) {
+    const holding = planes.filter((p) => p.voice);
+    if (holding.length >= 10) release(holding[0]);
+    const voice = organ(SCALE[lane]);
+    planes.push({ lane, x: W - 40 - lane * 6, y: H - 46, vx: -(1.6 + Math.random() * 0.6), vy: -(0.55 + lane * 0.05), t: 0, voice });
+    launched += 1;
+    read.textContent = `Departure ${launched} off lane ${lane + 1}. ${planes.length} in the air.`;
+  }
+
+  function release(p) {
+    if (!p.voice) return;
+    const c = p.voice.context;
+    const t = c.currentTime;
+    p.voice.gain.gain.cancelScheduledValues(t);
+    p.voice.gain.gain.setValueAtTime(p.voice.gain.gain.value, t);
+    p.voice.gain.gain.exponentialRampToValueAtTime(0.0001, t + 2.5);
+    p.voice.oscs.forEach((o) => o.stop(t + 2.6));
+    p.voice = null;
+  }
+
+  canvas.addEventListener('click', (e) => {
+    const { x, y } = pointerXY(canvas, e, W, H);
+    if (y < H - 90) { launch(Math.floor(Math.random() * LANES)); return; }
+    launch(Math.min(LANES - 1, Math.floor((x / W) * LANES)));
+  });
+  window.addEventListener('keydown', (e) => {
+    if (typing(e) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    const n = Number(e.key);
+    if (n >= 1 && n <= 8) launch(n - 1);
+  });
+  document.querySelectorAll('[data-lane]').forEach((button) => button.addEventListener('click', () => launch(Number(button.dataset.lane))));
+  function toggleAuto() {
+    auto = !auto;
+    document.getElementById('to-auto').setAttribute('aria-pressed', String(auto));
+    read.textContent = auto ? 'The airport is running its own schedule.' : 'Back to you on the tower.';
+  }
+  document.getElementById('to-auto').addEventListener('click', () => { audio(); toggleAuto(); });
+  document.getElementById('to-mute').addEventListener('click', (e) => {
+    setMuted(!isMuted());
+    e.currentTarget.textContent = isMuted() ? 'Sound off' : 'Sound on';
+    e.currentTarget.setAttribute('aria-pressed', String(isMuted()));
+  });
+
+  let animationFrame = 0, lastDraw = performance.now();
+  function draw(ts) {
+    const delta = Math.min(3, Math.max(0, (ts - lastDraw) / (1000 / 60)));
+    lastDraw = ts;
+    const still = reducedMotion();
+    const sky = g.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#081028'); sky.addColorStop(0.7, '#1b2a55'); sky.addColorStop(1, '#3a2b4a');
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    for (const s of stars) { g.fillStyle = `rgba(255,255,240,${still ? 0.6 : 0.4 + 0.3 * Math.sin(ts / 900 + s.x)})`; g.fillRect(s.x, s.y, s.s, s.s); }
+    // the sea at left, dunes, town lights
+    g.fillStyle = '#0b1733'; g.fillRect(0, H - 120, 150, 120);
+    g.fillStyle = '#2a2236';
+    g.beginPath(); g.moveTo(150, H - 70); for (let x = 150; x <= W; x += 20) g.lineTo(x, H - 78 - 10 * Math.sin(x / 50)); g.lineTo(W, H); g.lineTo(150, H); g.fill();
+    for (let i = 0; i < 40; i += 1) { g.fillStyle = i % 3 ? '#ffd27a' : '#ff9d6b'; g.fillRect(170 + ((i * 37) % (W - 180)), H - 70 + ((i * 13) % 14), 2, 2); }
+    // runway lanes
+    for (let l = 0; l < LANES; l += 1) {
+      const x0 = (l / LANES) * W;
+      g.fillStyle = l % 2 ? 'rgba(255,210,122,0.08)' : 'rgba(255,210,122,0.14)';
+      g.fillRect(x0, H - 40, W / LANES, 40);
+      g.fillStyle = '#ffd27a';
+      g.font = '600 12px ui-monospace, monospace'; g.textAlign = 'center';
+      g.fillText(String(l + 1), x0 + W / LANES / 2, H - 16);
+      if (!still && Math.floor(ts / 400) % LANES === l) { g.fillStyle = '#ffffff'; g.fillRect(x0 + 6, H - 40, W / LANES - 12, 2); }
+    }
+    // planes
+    for (const p of planes) {
+      p.t += delta;
+      if (!still) { p.x += p.vx * delta; p.y += p.vy * delta; p.vy *= 0.997 ** delta; }
+      if (p.voice && (p.x < 150 || (still && p.t > 220))) release(p);
+      g.save(); g.translate(p.x, p.y); g.rotate(Math.atan2(p.vy, p.vx) + Math.PI);
+      g.fillStyle = '#e8ecf5'; g.fillRect(-10, -2, 20, 4); g.fillRect(-3, -9, 5, 18); g.fillRect(7, -5, 3, 10);
+      g.restore();
+      const blink = still ? 0 : Math.floor(p.t / 20) % 2;
+      g.fillStyle = blink ? '#ff4d4d' : '#7dff9a'; g.fillRect(p.x - 1, p.y - 1, 3, 3);
+      if (!reducedMotion()) { g.strokeStyle = 'rgba(255,210,122,0.18)'; g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x - p.vx * 30, p.y - p.vy * 30); g.stroke(); }
+    }
+    for (let i = planes.length - 1; i >= 0; i -= 1) if (planes[i].x < -30 || planes[i].y < -30 || (still && planes[i].t > 380)) { release(planes[i]); planes.splice(i, 1); }
+    if (auto && ts > nextAuto) { launch(Math.floor(Math.random() * LANES)); nextAuto = ts + 1800 + Math.random() * 2600; }
+    animationFrame = requestAnimationFrame(draw);
+  }
+  animationFrame = requestAnimationFrame(draw);
+  window.addEventListener('pagehide', () => {
+    cancelAnimationFrame(animationFrame); auto = false;
+    document.getElementById('to-auto').setAttribute('aria-pressed', 'false');
+    for (const oscillator of activeOscillators) { try { oscillator.stop(); } catch { /* Already stopped. */ } }
+    activeOscillators.clear();
+    planes.length = 0;
+  });
+  window.addEventListener('pageshow', (event) => { if (event.persisted) { lastDraw = performance.now(); animationFrame = requestAnimationFrame(draw); } });
+</script>

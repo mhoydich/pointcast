@@ -1,0 +1,175 @@
+---
+/** /kite-line — Door 3 of the Ten Doors (2026-11-02). Fly a kite in a seeded, gusting sea breeze. */
+import TenDoorsFrame from '../components/TenDoorsFrame.astro';
+---
+
+<TenDoorsFrame slug="kite-line">
+  <canvas class="td-canvas" id="kl-beach" width="720" height="480" tabindex="0" aria-label="Kite flight controls" aria-describedby="kl-help kl-flight"></canvas>
+  <div class="td-row">
+    <button class="td-btn" id="kl-go">Launch the kite</button>
+    <button class="td-btn" id="kl-pause" disabled>Pause flight</button>
+  </div>
+  <p id="kl-help">Drag the beach to reel in or give line. With the beach focused, hold Up to reel in, Down to give line, and Space to pause. Launch moves focus to the beach.</p>
+  <p class="td-readout" id="kl-flight" aria-live="off"></p>
+  <p class="td-readout" id="kl-read" aria-live="polite">Best flight: none yet.</p>
+</TenDoorsFrame>
+
+<script>
+  import { fitCanvas, pointerXY, load, save, audio, out, noise, reducedMotion } from '../lib/ten-doors/audio.mjs';
+
+  const W = 720, H = 480, HAND = { x: 120, y: H - 90 };
+  const canvas = document.getElementById('kl-beach');
+  const g = fitCanvas(canvas, W, H);
+  const read = document.getElementById('kl-read');
+  const savedBest = load('kite-line:best', 0);
+  let best = Number.isFinite(savedBest) && savedBest >= 0 ? savedBest : 0;
+  const pauseButton = document.getElementById('kl-pause');
+  const flightRead = document.getElementById('kl-flight');
+  let state = 'ready', kite, pull = 0, t0 = 0, last = 0, flight = 0, seed = Math.random() * 1000;
+  let hum = null;
+
+  const showBest = () => { read.textContent = best ? `Best flight: ${best.toFixed(1)} seconds aloft.` : 'Best flight: none yet.'; };
+  showBest();
+
+  // Wind: a slow sea breeze that builds, plus overlapping gusts and lulls.
+  function wind(t) {
+    const breeze = 1.2 + Math.min(1.4, t / 40);
+    const gust = Math.sin(t * 0.7 + seed) * 0.8 + Math.sin(t * 1.9 + seed * 2) * 0.45 + Math.sin(t * 0.23 + seed * 3) * 0.9;
+    return Math.max(0.15, breeze + gust);
+  }
+
+  function startHum() {
+    const c = audio();
+    if (!c || hum) return;
+    const o = c.createOscillator(); const gn = c.createGain(); const f = c.createBiquadFilter();
+    o.type = 'sawtooth'; f.type = 'bandpass'; f.Q.value = 6; gn.gain.value = 0;
+    o.connect(f); f.connect(gn); gn.connect(out()); o.start();
+    hum = { o, gn, f, c };
+  }
+
+  function launch() {
+    startHum();
+    kite = { x: HAND.x + 80, y: HAND.y - 60, vx: 0, vy: 0, len: 160, angle: -0.3 };
+    state = 'flying'; t0 = performance.now(); last = t0; pull = 0; flight = 0;
+    pauseButton.disabled = false; pauseButton.textContent = 'Pause flight';
+    read.textContent = 'Up it goes. Reel in through the lulls, give line when a big gust hits.';
+    canvas.focus({ preventScroll: true });
+  }
+
+  document.getElementById('kl-go').addEventListener('click', launch);
+  let dragY = null;
+  const keys = new Set();
+  function pause() {
+    if (state !== 'flying') return;
+    state = 'paused'; keys.clear(); dragY = null; pull = 0;
+    if (hum && hum.c.state !== 'closed') hum.gn.gain.setTargetAtTime(0, hum.c.currentTime, 0.05);
+    pauseButton.textContent = 'Resume flight';
+    read.textContent = `Paused at ${flight.toFixed(1)} seconds. Resume when you are ready.`;
+  }
+  function resume() {
+    if (state !== 'paused') return;
+    startHum();
+    state = 'flying'; last = performance.now();
+    pauseButton.textContent = 'Pause flight';
+    read.textContent = 'Flying again. Reel in through lulls; give line in strong gusts.';
+  }
+  pauseButton.addEventListener('click', () => { if (state === 'paused') resume(); else pause(); });
+  canvas.addEventListener('pointerdown', (e) => { if (state === 'paused') resume(); else if (state !== 'flying') launch(); dragY = pointerXY(canvas, e, W, H).y; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', (e) => { if (dragY === null) return; const y = pointerXY(canvas, e, W, H).y; pull = Math.max(-1, Math.min(1, (dragY - y) / 90)); });
+  const endDrag = () => { dragY = null; pull = 0; };
+  canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || !['ArrowUp', 'ArrowDown', ' '].includes(e.key)) return;
+    e.preventDefault();
+    if (e.key === ' ') { if (!e.repeat) { if (state === 'flying') pause(); else if (state === 'paused') resume(); else launch(); } return; }
+    if (state === 'paused') return;
+    if (state !== 'flying') launch();
+    keys.add(e.key);
+  });
+  window.addEventListener('keyup', (e) => keys.delete(e.key));
+  canvas.addEventListener('blur', () => { keys.clear(); endDrag(); });
+  canvas.addEventListener('lostpointercapture', endDrag);
+  window.addEventListener('blur', pause);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+  window.addEventListener('pagehide', () => { pause(); hum = null; });
+
+  function step(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    // Flight time only runs while frames are drawn, so a hidden tab doesn't count toward the score.
+    if (state === 'flying') flight += dt;
+    const t = flight;
+    if (keys.has('ArrowUp')) pull = 1; else if (keys.has('ArrowDown')) pull = -1; else if (dragY === null) pull = 0;
+    if (state === 'flying') {
+      const w = wind(t);
+      // Lift comes from wind. Reeling in makes your own wind in a lull, until the line runs short.
+      // Giving line slackens it and stores line for later. A big gust overpowers a held kite.
+      const reeling = pull > 0 && kite.len > 60;
+      kite.len = Math.max(60, Math.min(420, kite.len + (pull < 0 ? 70 : -30 * pull) * dt));
+      const tension = pull < 0 ? w * 0.45 : w * 0.5 + (reeling ? pull * 0.9 : 0);
+      const stall = pull > 0.4 && w < 0.35;
+      const over = pull >= 0 && w > 2.9;
+      kite.vy += ((stall ? 2.6 : 0.9) + (over ? 2.5 : 0) - tension * 1.25) * 60 * dt;
+      kite.vx += (w * 0.9 - 0.4) * 30 * dt;
+      kite.vx *= 0.94 ** (dt * 60); kite.vy *= 0.92 ** (dt * 60);
+      kite.x += kite.vx * dt * 3; kite.y += kite.vy * dt * 3;
+      // the line holds it to its length
+      const dx = kite.x - HAND.x, dy = kite.y - HAND.y, d = Math.hypot(dx, dy);
+      if (d > kite.len) { kite.x = HAND.x + (dx / d) * kite.len; kite.y = HAND.y + (dy / d) * kite.len; }
+      kite.y = Math.max(20, kite.y);
+      kite.angle = Math.atan2(dy, dx) + Math.PI / 2 + (reducedMotion() ? 0 : Math.sin(t * 6) * 0.08 * w);
+      if (hum && hum.c.state !== 'closed') {
+        hum.o.frequency.setTargetAtTime(90 + tension * 140, hum.c.currentTime, 0.05);
+        hum.f.frequency.setTargetAtTime(300 + tension * 500, hum.c.currentTime, 0.05);
+        hum.gn.gain.setTargetAtTime(Math.min(0.08, 0.015 + tension * 0.025), hum.c.currentTime, 0.1);
+      }
+      if (kite.y > H - 70) {
+        state = 'down'; pauseButton.disabled = true;
+        noise({ length: 0.3, gain: 0.3, freq: 600 });
+        if (hum && hum.c.state !== 'closed') hum.gn.gain.setTargetAtTime(0, hum.c.currentTime, 0.1);
+        const flew = flight;
+        if (flew > best) { best = flew; save('kite-line:best', best); read.textContent = `${flew.toFixed(1)} seconds. A new best. Tap to fly again.`; }
+        else read.textContent = `${flew.toFixed(1)} seconds aloft. Best is ${best.toFixed(1)}. Tap to fly again.`;
+      }
+    }
+    flightRead.textContent = kite ? `${flight.toFixed(1)} seconds aloft · ${Math.max(0, H - 70 - kite.y).toFixed(0)} above the sand · wind ${wind(t).toFixed(1)}.` : 'The kite is ready on the sand.';
+    draw(t);
+    requestAnimationFrame(step);
+  }
+
+  function draw(t) {
+    const sky = g.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#8fd0ec'); sky.addColorStop(1, '#e6f5fb');
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    const sceneryTime = reducedMotion() ? 0 : t;
+    // Decorative drift rests for reduced motion; kite movement is the game.
+    g.fillStyle = 'rgba(255,255,255,0.8)';
+    for (let i = 0; i < 4; i += 1) { const x = ((i * 230 + sceneryTime * 18 * (state === 'flying' ? wind(t) : 1)) % (W + 200)) - 100; g.beginPath(); g.ellipse(x, 60 + i * 34, 60, 16, 0, 0, Math.PI * 2); g.fill(); }
+    // sea and sand
+    g.fillStyle = '#3f8fb0'; g.fillRect(0, H - 120, W, 40);
+    g.fillStyle = '#ffffff'; for (let x = 0; x < W; x += 40) g.fillRect((x + sceneryTime * 20) % W, H - 82, 18, 2);
+    g.fillStyle = '#ecd9a8'; g.fillRect(0, H - 80, W, 80);
+    // a departure overhead
+    const px = W - ((sceneryTime * 60) % (W + 200));
+    g.fillStyle = '#5a6b7a'; g.fillRect(px, 40, 24, 4); g.fillRect(px + 9, 34, 5, 16);
+    // flyer
+    g.fillStyle = '#0d3b52'; g.fillRect(HAND.x - 6, HAND.y, 12, 30); g.beginPath(); g.arc(HAND.x, HAND.y - 8, 8, 0, Math.PI * 2); g.fill();
+    if (kite) {
+      g.strokeStyle = '#334'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(HAND.x, HAND.y); g.quadraticCurveTo((HAND.x + kite.x) / 2, (HAND.y + kite.y) / 2 + 30, kite.x, kite.y); g.stroke();
+      g.save(); g.translate(kite.x, kite.y); g.rotate(kite.angle);
+      g.fillStyle = '#ff5b5b'; g.beginPath(); g.moveTo(0, -26); g.lineTo(18, 0); g.lineTo(0, 30); g.lineTo(-18, 0); g.closePath(); g.fill();
+      g.fillStyle = '#ffd36b'; g.beginPath(); g.moveTo(0, -26); g.lineTo(18, 0); g.lineTo(0, 0); g.closePath(); g.fill();
+      g.strokeStyle = '#0d3b52'; g.beginPath(); g.moveTo(0, 30);
+      for (let i = 1; i < 6; i += 1) g.lineTo(Math.sin(sceneryTime * 8 + i) * 8, 30 + i * 12); g.stroke();
+      g.restore();
+    }
+    if (state === 'flying') {
+      g.fillStyle = '#0d3b52'; g.font = '600 14px ui-monospace, monospace'; g.textAlign = 'right';
+      g.fillText(`${flight.toFixed(1)} s · wind ${wind(t).toFixed(1)}`, W - 16, 24);
+    } else {
+      g.fillStyle = 'rgba(13,59,82,0.85)'; g.font = '600 18px ui-monospace, monospace'; g.textAlign = 'center';
+      g.fillText(state === 'ready' ? 'Tap or press Up to launch' : state === 'paused' ? 'Paused. Resume when you are ready.' : 'Down in the sand. Tap to fly again.', W / 2, H / 2);
+    }
+  }
+  requestAnimationFrame((now) => { last = now; step(now); });
+</script>
