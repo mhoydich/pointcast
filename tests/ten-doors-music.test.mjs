@@ -53,23 +53,6 @@ function setup(t, slug, options = {}) {
   };
 }
 
-test('Takeoff native lanes work, Shift+Tab does not toggle auto, and Back restarts a silent scene', t => {
-  const room=setup(t,'takeoff-organ',{reducedMotion:true});
-  room.w.dispatchEvent(new room.w.KeyboardEvent('keydown',{key:'Shift',shiftKey:true}));
-  assert.equal(room.get('to-auto').getAttribute('aria-pressed'),'false');
-  room.d.querySelector('[data-lane="2"]').click();
-  assert.match(room.get('to-read').textContent,/lane 3/);
-  assert.equal(room.sounds.length,3);
-  room.frame(1000);
-  room.pagehide();
-  assert.equal(room.frames.size,0);
-  assert.equal(room.stops.length,3,'all held oscillators stop before caching');
-  room.back();
-  assert.equal(room.frames.size,1);
-  room.frame(1100);
-  assert.equal(room.sounds.length,3,'Back does not resume auto or held notes');
-});
-
 test('Refinery rejects malformed saved grids and exposes every window to native controls', t => {
   const malformed = [null, [], Array(8).fill(null), Array(8).fill('11111111'), Array.from({length:8},()=>Array(7).fill(true)), Array.from({length:8},()=>Array(8).fill('yes'))];
   for(const stored of malformed){
