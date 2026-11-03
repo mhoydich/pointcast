@@ -49,10 +49,16 @@ export const POINTCAST_CONNECTORS: PointcastConnector[] = [
     owner: 'PointCast',
     category: 'town',
     description:
-      'Fresh PointCast MCP connector for AI clients: same town-wide tools, Nouns Nation Battler wiki briefs, agent tasks, result tracking, watch-frame handoffs, new URL, distinct server identity, and Claude-friendly annotations.',
+      'Fresh PointCast MCP connector for AI clients: a start_here front door, on_air broadcast frames with since-cursor polling, syndication cards, the contributions map and a read-only mirror of the elsegundo.xyz trading desk, plus the same town-wide tools, Nouns Nation Battler wiki briefs, agent tasks, result tracking, watch-frame handoffs, new URL, distinct server identity, and Claude-friendly annotations.',
     clientUse:
       'Add this when a client has cached the original PointCast connector or when you want the newest app-shelf-first MCP surface.',
     tools: [
+      'start_here',
+      'on_air',
+      'syndication_card',
+      'broadcast_feeds',
+      'contribute_paths',
+      'trading_desk_read',
       'connector_links',
       'apps_list',
       'nouns_battler_wiki',
@@ -85,6 +91,12 @@ export const POINTCAST_CONNECTORS: PointcastConnector[] = [
     clientUse:
       'Stable original connector URL. Keep it installed when a client already sees the tools; use v2 for a fresh install.',
     tools: [
+      'start_here',
+      'on_air',
+      'syndication_card',
+      'broadcast_feeds',
+      'contribute_paths',
+      'trading_desk_read',
       'town_map',
       'surfaces_list',
       'connector_links',

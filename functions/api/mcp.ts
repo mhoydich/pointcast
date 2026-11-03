@@ -53,6 +53,14 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *           and matching receipt ids). Read-only, and still the same
  *           fictional demo household.
  *
+ * v0.15.0 / v2 2.10.0 — Front door and broadcast (per Mike: "id like it to
+ *           broadcast more"). Adds start_here, on_air (since-cursor polling),
+ *           broadcast_feeds and syndication_card from src/lib/broadcast-mcp,
+ *           and contribute_paths plus trading_desk_read (a read-only mirror
+ *           of the elsegundo.xyz moneyless trading desk) from
+ *           src/lib/contributions-mcp. Explicit tool annotations now survive
+ *           the catalogue pass, and read tools say they are idempotent.
+ *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
  * 2.0 / HTTP and operate the entire PointCast surface — connector links,
@@ -227,6 +235,8 @@ import {
   dispatchCivilServiceTool,
 } from '../../src/lib/civil-service-mcp';
 import { RADIO_TOOL_DEFINITIONS, dispatchRadioTool } from '../../src/lib/radio-mcp';
+import { BROADCAST_TOOL_DEFINITIONS, BROADCAST_TOOL_NAMES, dispatchBroadcastTool } from '../../src/lib/broadcast-mcp';
+import { CONTRIBUTIONS_TOOL_DEFINITIONS, CONTRIBUTIONS_TOOL_NAMES, dispatchContributionsTool } from '../../src/lib/contributions-mcp';
 import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
@@ -239,9 +249,9 @@ import { FIRST_EDITION, editionDate, parseEditionParam } from '../_lib/morning.m
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.14.0';
+const SERVER_VERSION = '0.15.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.9.0';
+const V2_SERVER_VERSION = '2.10.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -291,14 +301,19 @@ function toolTitle(name: string): string {
     .join(' ');
 }
 
-function toolAnnotations(name: string) {
+function toolAnnotations(name: string, explicit?: Record<string, unknown>) {
   const isWrite = WRITE_TOOL_NAMES.has(name);
   return {
     title: toolTitle(name),
     readOnlyHint: !isWrite,
     destructiveHint: false,
-    idempotentHint: false,
+    // A read returns the same thing for the same input until the site changes.
+    idempotentHint: !isWrite,
     openWorldHint: true,
+    // A tool that states its own annotations keeps them (nouns_battler_play
+    // is closed-world, for example); the write list still wins on readOnly.
+    ...(explicit || {}),
+    ...(isWrite ? { readOnlyHint: false, idempotentHint: false } : {}),
   };
 }
 
@@ -1552,6 +1567,7 @@ const TOOL_DEFINITIONS = [
 ] as const;
 
 const TOOLS = [
+  ...BROADCAST_TOOL_DEFINITIONS,
   ...TOOL_DEFINITIONS,
   TUG_PULL_TOOL,
   ...BENCH_TOOL_DEFINITIONS,
@@ -1559,9 +1575,10 @@ const TOOLS = [
   ...WILD_TOOL_DEFINITIONS,
   ...CIVIL_SERVICE_TOOL_DEFINITIONS,
   ...RADIO_TOOL_DEFINITIONS,
+  ...CONTRIBUTIONS_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
-  annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
+  annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name, (tool as { annotations?: Record<string, unknown> }).annotations),
 }));
 
 // ── Resources ────────────────────────────────────────────────────────
@@ -4017,6 +4034,16 @@ function discoveryHtml(request: Request) {
 
 <p>Full setup: <a href="/connectors">/connectors</a>. Machine guide: <a href="/agent-kit.md">/agent-kit.md</a>. App shelf: <a href="/apps">/apps</a>.</p>
 
+<h2>Start here — front door and broadcast</h2>
+<ul>
+  <li><code>start_here</code> — every tool grouped by what you want to do, plus the rules for write tools</li>
+  <li><code>on_air</code> — what PointCast is publishing now; poll with <code>since</code> for only what is new</li>
+  <li><code>broadcast_feeds</code> — every RSS and JSON feed to subscribe to (<a href="/broadcast.json">/broadcast.json</a> is the frame)</li>
+  <li><code>syndication_card</code> — a quotable card for one block: citation, short and long post, cross-post ideas</li>
+  <li><code>contribute_paths</code> — every way to contribute, in one vocabulary</li>
+  <li><code>trading_desk_read</code> — read-only mirror of the elsegundo.xyz moneyless trading desk</li>
+</ul>
+
 <h2>Tools — client links + apps</h2>
 <ul>
   <li><code>connector_links</code> — addable MCP URLs for AI clients</li>
@@ -4279,7 +4306,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card; for a one-minute pause, small_shrine. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the PointCast Radio Network plan (Radio El Segundo and six South Bay sister stations), call radio_network, then radio_station for one station; it is a plan, nothing is on air. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, the Radio Network plan, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. New here or unsure which tool fits: call start_here first; it groups every tool by what you want to do. To see what PointCast is publishing right now, call on_air and keep its cursor; call it again later with since=<cursor> to get only what is new, and use syndication_card to quote a block with its citation (drafts only; your person posts). broadcast_feeds lists every RSS and JSON feed to subscribe to. For every way to contribute, call contribute_paths; for the moneyless elsegundo.xyz trading desk (signals, pledges, confidence, reputation), call trading_desk_read. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card; for a one-minute pause, small_shrine. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the PointCast Radio Network plan (Radio El Segundo and six South Bay sister stations), call radio_network, then radio_station for one station; it is a plan, nothing is on air. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, the Radio Network plan, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {
@@ -4296,6 +4323,13 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
       const name = String(params.name || '');
       const args = (params.arguments || {}) as Record<string, unknown>;
       if (name === 'pointcast_pair') return rpcResult(id, await confirmAiVisit(env, args));
+      if (BROADCAST_TOOL_NAMES.includes(name)) {
+        return rpcResult(id, await dispatchBroadcastTool(name, args, { base, toolCount: TOOLS.length }));
+      }
+      if (CONTRIBUTIONS_TOOL_NAMES.includes(name)) {
+        const deskBase = (env as { DESK_MIRROR_URL?: string }).DESK_MIRROR_URL;
+        return rpcResult(id, await dispatchContributionsTool(name, args, { deskBase }));
+      }
       if (name === 'station_request') { // in-process, so the caller's own address is rate-limited, not a shared one
         const filed = await fileAgentRequest(request, env as never, args);
         return rpcResult(id, filed.body?.ok && filed.body.request
