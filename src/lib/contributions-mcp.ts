@@ -26,6 +26,7 @@ import {
   buildBook,
   buildReputation,
   normalizeEntry,
+  pairWithdrawals,
   type ContributionType,
   type LedgerEntry,
 } from './contributions-schema.ts';
@@ -84,7 +85,7 @@ export const CONTRIBUTIONS_TOOL_DEFINITIONS = [
   {
     name: 'trading_desk_read',
     description:
-      'Read the elsegundo.xyz buying lab (the moneyless trading desk) from PointCast: view "book" (the lab\'s own book), "ledger" (recent pledges, signals, withdrawals and contributions, newest first, normalized to the shared schema pointcast.ledger/v1) or "reputation" (with handle: that participant\'s record, kept pledges, Brier calibration once a drop settles, contribution credit and score; without: a board counted from the ledger). Prices are play dollars and pledges are promises. Read-only mirror; post through https://elsegundo.xyz/mcp/desk.',
+      'Read the elsegundo.xyz buying lab (the moneyless trading desk) from PointCast: view "book" (the lab\'s own book), "ledger" (recent pledges, signals, withdrawals and contributions, newest first, normalized to the shared schema pointcast.ledger/v1) or "reputation" (with handle: that participant\'s record, kept pledges, Brier calibration once a drop settles, contribution credit and score; without: a board counted from the ledger, withdrawals paired to what they cancel). Prices are play dollars and pledges are promises. Read-only mirror; post through https://elsegundo.xyz/mcp/desk.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -208,7 +209,7 @@ export async function dispatchContributionsTool(
       const lines = [`Buying-lab ledger · ${rows.length} of ${entries.length} events read${read.total != null ? ` (${read.total} in all)` : ''} · ${read.source}`, MONEYLESS, ...rows.map((e) => `· ${e.createdAt.slice(0, 16)}Z ${e.handle} ${e.status === 'withdrawn' ? `withdrew a ${e.kind}` : e.kind}${e.contributionType ? ` (${e.contributionType})` : ''}${e.price != null ? ` $${e.price}` : ''}${e.confidence != null ? ` @${e.confidence}` : ''} on ${e.target.id || e.target.type} [${e.status}]`)];
       return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, site: DESK_SITE, source: read.source, total: read.total ?? entries.length, entries: rows }, null, 2))] };
     }
-    const board = buildReputation(entries);
+    const board = buildReputation(pairWithdrawals(entries));
     const lines = [`Buying-lab board from the last ${entries.length} ledger events · ${read.source}`, MONEYLESS, 'Pass handle for a participant\'s full record, scored by the lab itself.', ...board.slice(0, limit).map((r) => `· ${r.handle} (${r.actor}): ${r.entries} events, open ${r.open}, withdrawn ${r.withdrawn}, accepted ${r.accepted}${r.keptRate != null ? `, kept rate ${r.keptRate}` : ''}${r.brier != null ? `, Brier ${r.brier}` : ''}`)];
     return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, site: DESK_SITE, source: read.source, reputation: board }, null, 2))] };
   }

@@ -48,7 +48,8 @@ confidence (kept = 1, broken = 0). Lower Brier is better calibrated.
   lab's own book (`GET <base>`), `view=ledger` normalizes
   `GET <base>/ledger?limit=100`, and `view=reputation` with a handle passes
   through `GET <base>/record?handle=`. Without a handle it counts a board from
-  the ledger.
+  the ledger. The lab keeps its last 3000 events, so open entries come from
+  its book, not from the ledger.
 - PointCast contributions keep their own tools; `contribute_paths` maps each to
   this vocabulary, and names the lab's MCP tools for desk routes.
 
@@ -57,7 +58,7 @@ confidence (kept = 1, broken = 0). Lower Brier is better calibrated.
 | lab event field | here |
 | --- | --- |
 | `type`: `pledge` \| `signal` \| `contribution` | `kind` |
-| `type`: `withdraw` | `kind` from the event's `kind`, `status: withdrawn` |
+| `type`: `withdraw` | `kind` from the event's `kind`, `status: withdrawn`, `withdraws: true`; it carries the `id` of the pledge or signal it cancels, and `pairWithdrawals()` folds it into that entry |
 | `by` | `actor` |
 | `confidence` 0–100 integer | `confidence` / 100 (so 1 means 1%) |
 | `item` + `tier` | `target { type: edition, id: "item:tier" }` |

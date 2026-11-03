@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { buildBook, buildReputation, normalizeConfidence, normalizeEntry } from '../src/lib/contributions-schema.ts';
+import { buildBook, buildReputation, normalizeConfidence, normalizeEntry, pairWithdrawals } from '../src/lib/contributions-schema.ts';
 import { CONTRIBUTION_PATHS, CONTRIBUTIONS_TOOL_NAMES, dispatchContributionsTool, extractRows } from '../src/lib/contributions-mcp.ts';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -104,6 +104,13 @@ test('buying-lab events normalize: type, by, confidence 0-100, item+tier, place,
   assert.equal(withdraw.kind, 'pledge');
   assert.equal(withdraw.status, 'withdrawn');
   assert.equal(withdraw.side, null);
+  assert.equal(withdraw.withdraws, true);
+  assert.equal(pledge.withdraws, undefined);
+  const paired = pairWithdrawals([withdraw, signal, pledge]);
+  assert.equal(paired.length, 2);
+  assert.equal(paired.find((e) => e.id === 'p_00000000000000a1').status, 'withdrawn');
+  assert.equal(paired.find((e) => e.id === 's_00000000000000a4').status, 'open');
+  assert.equal(pairWithdrawals([withdraw]).length, 1, 'an orphan withdraw (original aged off the ledger) stays');
   assert.equal(contrib.kind, 'contribution');
   assert.equal(contrib.contributionType, 'data', 'place-data maps to data');
   assert.equal(contrib.status, 'open', 'pending maps to open');
@@ -141,7 +148,10 @@ test('trading_desk_read reads the buying lab: own book, ledger events, a partici
   assert.match(record.content[0].text, /Brier not yet/);
 
   const board = JSON.parse((await dispatchContributionsTool('trading_desk_read', { view: 'reputation' }, opts)).content[1].text);
-  assert.ok(board.reputation.find((r) => r.handle === 'shwa').withdrawn === 1);
+  const shwa = board.reputation.find((r) => r.handle === 'shwa');
+  assert.equal(shwa.entries, 1, 'the withdraw folds into the pledge it cancels');
+  assert.equal(shwa.withdrawn, 1);
+  assert.equal(shwa.open, 0);
 
   const missing = await dispatchContributionsTool('trading_desk_read', { view: 'reputation', handle: 'nobody' }, { fetcher: async () => new Response(JSON.stringify({ ok: true, record: { handle: 'nobody', found: false } })) });
   assert.match(missing.content[0].text, /No buying-lab record for nobody/);

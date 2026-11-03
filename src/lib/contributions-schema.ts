@@ -77,6 +77,8 @@ export interface LedgerEntry {
   status: Status;
   createdAt: string;
   resolvedAt: string | null;
+  /** True on a buying-lab withdraw event; its id is the id of the entry it cancels. */
+  withdraws?: true;
 }
 
 export interface Reputation {
@@ -146,7 +148,8 @@ export function normalizeEntry(raw: unknown, site: string): LedgerEntry | null {
   if (deskType && r.status === 'hidden') return null;
   let kind: EntryKind | null;
   let status: Status | null = null;
-  if (deskType === 'withdraw') {
+  const isWithdraw = deskType === 'withdraw';
+  if (isWithdraw) {
     kind = pick(ENTRY_KINDS, r.kind) ?? 'pledge';
     status = 'withdrawn';
   } else if (deskType) {
@@ -190,7 +193,22 @@ export function normalizeEntry(raw: unknown, site: string): LedgerEntry | null {
     status: status ?? pick(STATUSES, rawStatus) ?? 'open',
     createdAt,
     resolvedAt: isoOrNull(r.resolvedAt),
+    ...(isWithdraw ? { withdraws: true as const } : {}),
   };
+}
+
+/**
+ * Fold buying-lab withdraw events into the entries they cancel (same id):
+ * the original becomes status "withdrawn" and the withdraw event is dropped.
+ * A withdraw whose original fell off the lab's 3000-event ledger is kept as a
+ * withdrawn row so the count stays honest.
+ */
+export function pairWithdrawals(entries: LedgerEntry[]): LedgerEntry[] {
+  const cancelled = new Set(entries.filter((e) => e.withdraws).map((e) => `${e.site}:${e.id}`));
+  const originals = new Set(entries.filter((e) => !e.withdraws).map((e) => `${e.site}:${e.id}`));
+  return entries
+    .filter((e) => !(e.withdraws && originals.has(`${e.site}:${e.id}`)))
+    .map((e) => (!e.withdraws && cancelled.has(`${e.site}:${e.id}`) && e.status === 'open' ? { ...e, status: 'withdrawn' as const } : e));
 }
 
 /**
