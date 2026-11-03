@@ -1,0 +1,1 @@
+Nouns 0–9: original NounsDAO artwork released under CC0 (https://nouns.wtf/brand). Exact SVGs copied from PointCast Noggle Reserve, verified against NounsDAO seed and asset data: https://pointcast.xyz/images/noggle-reserve/provenance.json; originals https://noun.pics/0.svg through /9.svg.
