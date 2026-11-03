@@ -4,16 +4,31 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
 ---
 
 <TenDoorsFrame slug="ice-cream-route">
-  <canvas class="td-canvas" id="ic-map" width="600" height="600" aria-label="A grid of street corners with an ice cream truck and waving kids. Tap a corner next to the truck to drive one block."></canvas>
+  <canvas class="td-canvas" id="ic-map" width="600" height="600" tabindex="0" aria-label="Ice cream street map" aria-describedby="ic-help ic-position"></canvas>
   <div class="td-row">
+    <button class="td-btn" id="ic-up">Drive up</button>
+    <button class="td-btn" id="ic-left">Drive left</button>
+    <button class="td-btn" id="ic-down">Drive down</button>
+    <button class="td-btn" id="ic-right">Drive right</button>
     <button class="td-btn" id="ic-retry">Retry round</button>
+    <button class="td-btn" id="ic-next" hidden>Next round</button>
   </div>
+  <p id="ic-help">Tap a neighboring corner, use the drive buttons, or focus the map and use arrow keys. Rows run top to bottom; columns run left to right, from 1 to 5.</p>
+  <p id="ic-position"></p>
+  <p id="ic-daynotice" role="status" hidden></p>
+  <details><summary>Read the street map</summary><p id="ic-waiting"></p><p id="ic-oneways"></p></details>
   <p class="td-readout" id="ic-read" aria-live="polite">Round 1. Tap a corner next to the truck to drive.</p>
 </TenDoorsFrame>
 
+<style>
+  #ic-map { touch-action: pan-y; }
+  #ic-help, #ic-position, details { line-height: 1.5; max-width: 42rem; margin: 0.75rem auto; }
+  summary { cursor: pointer; padding-block: 0.5rem; }
+</style>
+
 <script>
   import { routeDay, townDay, coords, node, neighbors, canDrive, blockedFor, ROUTE_SIZE } from '../lib/ten-doors/daily.mjs';
-  import { tone, hz, fitCanvas, pointerXY, load, save, audio, typing } from '../lib/ten-doors/audio.mjs';
+  import { tone, hz, fitCanvas, pointerXY, load, save, audio, reducedMotion } from '../lib/ten-doors/audio.mjs';
 
   const W = 600, H = 600, PAD = 70, GAP = (W - PAD * 2) / (ROUTE_SIZE - 1);
   // An original eight-bar music-box tune; one note per block driven.
@@ -21,15 +36,53 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   const canvas = document.getElementById('ic-map');
   const g = fitCanvas(canvas, W, H);
   const read = document.getElementById('ic-read');
-  const day = townDay(new Date());
-  const plan = routeDay(day);
-  const record = load('ice-cream-route:v1', {});
+  let day = townDay(new Date());
+  let plan = routeDay(day);
+  const storedRecord = load('ice-cream-route:v1', {});
+  const record = {};
+  if (storedRecord && typeof storedRecord === 'object' && !Array.isArray(storedRecord)) {
+    for (const [key, value] of Object.entries(storedRecord)) {
+      if (/^\d{4}-\d{2}-\d{2}:[1-3]$/.test(key) && Number.isSafeInteger(value) && value >= 0) record[key] = value;
+    }
+  }
+  const directions = { up: [0, -1], left: [-1, 0], down: [0, 1], right: [1, 0] };
+  const nextButton = document.getElementById('ic-next');
+  const retryButton = document.getElementById('ic-retry');
+  const dayNotice = document.getElementById('ic-daynotice');
+  function noteNewDay() {
+    if (townDay(new Date()) === day) return;
+    dayNotice.hidden = false;
+    dayNotice.textContent = `You are playing the ${day} map. A new Pacific day has begun. Finish this route, or choose Play today's map for a fresh round 1.`;
+    retryButton.textContent = "Play today's map";
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) noteNewDay(); });
+  const place = (n) => { const { x, y } = coords(n); return `row ${y + 1}, column ${x + 1}`; };
+  function target(dx, dy) {
+    const c = coords(truck), x = c.x + dx, y = c.y + dy;
+    return x >= 0 && y >= 0 && x < ROUTE_SIZE && y < ROUTE_SIZE ? node(x, y) : null;
+  }
+  function describeMap() {
+    document.getElementById('ic-position').textContent = `Map: ${day}. Truck: ${place(truck)}. ${waiting.size} kids waiting. ${notesLeft} notes left.`;
+    document.getElementById('ic-waiting').textContent = waiting.size ? `Waiting kids: ${[...waiting].map(place).join('; ')}.` : 'All kids on this map have been served.';
+    document.getElementById('ic-oneways').textContent = round.oneWays.length
+      ? `All streets run both ways except these one-way blocks: ${round.oneWays.map(([a, b]) => `${place(a)} to ${place(b)}`).join('; ')}.`
+      : 'All streets run both ways in this round.';
+    for (const [name, [dx, dy]] of Object.entries(directions)) {
+      const to = target(dx, dy);
+      document.getElementById(`ic-${name}`).disabled = state !== 'driving' || to === null || !canDrive(truck, to, blocked);
+    }
+    nextButton.hidden = state !== 'won' || roundIdx >= plan.rounds.length - 1;
+  }
   let roundIdx = 0, round, blocked, truck, waiting, notesLeft, driven, state;
 
   function startRound(i) {
+    const today = townDay(new Date());
+    if (today !== day) { day = today; plan = routeDay(day); i = 0; }
+    dayNotice.hidden = true; retryButton.textContent = 'Retry round';
     roundIdx = i; round = plan.rounds[i]; blocked = blockedFor(round);
     truck = round.start; waiting = new Set(round.kids); notesLeft = round.jingle; driven = 0; state = 'driving';
     read.textContent = `Round ${round.round} of ${plan.rounds.length}. ${waiting.size} kids waiting, ${notesLeft} notes of jingle.${round.oneWays.length ? ' Mind the one-way arrows.' : ''}`;
+    describeMap();
   }
   startRound(0);
 
@@ -37,6 +90,7 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
 
   function drive(to) {
     if (state !== 'driving') return;
+    noteNewDay();
     audio();
     if (!neighbors(truck).includes(to)) { read.textContent = 'One block at a time: pick a corner right next to the truck.'; return; }
     if (!canDrive(truck, to, blocked)) { tone(110, { type: 'square', length: 0.08, gain: 0.06 }); read.textContent = 'That is a one-way street the wrong way.'; return; }
@@ -49,16 +103,17 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
       const key = `${day}:${round.round}`;
       record[key] = Math.max(record[key] ?? -1, notesLeft); save('ice-cream-route:v1', record);
       const perfect = driven === round.best ? ' The shortest route there is.' : '';
-      read.textContent = `Every kid served with ${notesLeft} notes to spare.${perfect} ${roundIdx < plan.rounds.length - 1 ? 'Tap the map for the next round.' : 'That was the last round today; a new map comes at midnight Pacific.'}`;
+      read.textContent = `Every kid served with ${notesLeft} notes to spare.${perfect} ${roundIdx < plan.rounds.length - 1 ? 'Choose Next round or tap the map to continue.' : 'That was the last round today; a new map comes at midnight Pacific.'}`;
     } else if (notesLeft <= 0) {
       state = 'lost';
       read.textContent = `The jingle ran out with ${waiting.size} ${waiting.size === 1 ? 'kid' : 'kids'} still waiting. Tap Retry.`;
     } else {
       read.textContent = `${waiting.size} waiting, ${notesLeft} notes left.`;
     }
+    describeMap();
   }
 
-  canvas.addEventListener('pointerdown', (e) => {
+  canvas.addEventListener('click', (e) => {
     if (state === 'won') { if (roundIdx < plan.rounds.length - 1) startRound(roundIdx + 1); return; }
     if (state === 'lost') { startRound(roundIdx); return; }
     const p = pointerXY(canvas, e, W, H);
@@ -66,8 +121,8 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
     for (let n = 0; n < ROUTE_SIZE * ROUTE_SIZE; n += 1) { const q = XY(n); const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bestD) { bestD = d; best = n; } }
     if (bestD < GAP * 0.45) drive(best);
   });
-  window.addEventListener('keydown', (e) => {
-    if (typing(e)) return;
+  canvas.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     const c = coords(truck);
     const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     if (!map[e.key]) return;
@@ -76,7 +131,11 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
     const [dx, dy] = map[e.key]; const x = c.x + dx, y = c.y + dy;
     if (x >= 0 && y >= 0 && x < ROUTE_SIZE && y < ROUTE_SIZE) drive(node(x, y));
   });
-  document.getElementById('ic-retry').addEventListener('click', () => startRound(roundIdx));
+  for (const [name, [dx, dy]] of Object.entries(directions)) {
+    document.getElementById(`ic-${name}`).addEventListener('click', () => { const to = target(dx, dy); if (to !== null) drive(to); });
+  }
+  nextButton.addEventListener('click', () => { if (state === 'won' && roundIdx < plan.rounds.length - 1) { startRound(roundIdx + 1); canvas.focus({ preventScroll: true }); } });
+  retryButton.addEventListener('click', () => { startRound(roundIdx); canvas.focus({ preventScroll: true }); });
 
   function draw(now) {
     g.fillStyle = '#fff3f8'; g.fillRect(0, 0, W, H);
@@ -98,7 +157,7 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
     if (state === 'driving') for (const m of neighbors(truck)) if (canDrive(truck, m, blocked)) { const q = XY(m); g.strokeStyle = 'rgba(74,29,61,0.35)'; g.lineWidth = 3; g.beginPath(); g.arc(q.x, q.y, 16, 0, Math.PI * 2); g.stroke(); }
     // kids
     for (const k of waiting) {
-      const q = XY(k); const wave = Math.sin(now / 160 + k) * 4;
+      const q = XY(k); const wave = reducedMotion() ? 0 : Math.sin(now / 160 + k) * 4;
       g.fillStyle = '#ff7eb6'; g.beginPath(); g.arc(q.x, q.y - 10, 7, 0, Math.PI * 2); g.fill(); g.fillRect(q.x - 5, q.y - 3, 10, 12);
       g.strokeStyle = '#ff7eb6'; g.lineWidth = 3; g.beginPath(); g.moveTo(q.x + 5, q.y - 2); g.lineTo(q.x + 12, q.y - 14 + wave); g.stroke();
     }

@@ -7,17 +7,30 @@ let ctx = null;
 let master = null;
 let muted = false;
 
+// Audio is optional. Browser policy, private mode, and device loss must not
+// abort the button press that also starts a game or changes its state.
+function settle(operation) {
+  try { operation()?.catch?.(() => {}); } catch { /* Continue without sound. */ }
+}
+
 export function audio() {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || typeof document === 'undefined' || document.hidden) return null;
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
-    ctx = new AC();
-    master = ctx.createGain();
-    master.gain.value = muted ? 0 : 0.7;
-    master.connect(ctx.destination);
+    try {
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : 0.7;
+      master.connect(ctx.destination);
+    } catch {
+      if (ctx) settle(() => ctx.close());
+      ctx = null; master = null;
+      return null;
+    }
   }
-  if (ctx.state === 'suspended') ctx.resume();
+  if (ctx.state === 'closed') { ctx = null; master = null; return audio(); }
+  if (ctx.state === 'suspended') settle(() => ctx.resume());
   return ctx;
 }
 
@@ -37,18 +50,22 @@ if (typeof document !== 'undefined') {
   // A hidden tab stops drawing frames, so held notes would drone on. Pause the sound until it is back.
   document.addEventListener('visibilitychange', () => {
     if (!ctx) return;
-    if (document.hidden) ctx.suspend();
-    else ctx.resume();
+    if (document.hidden) settle(() => ctx.suspend());
+    else settle(() => ctx.resume());
   });
   // iOS unlocks Web Audio on touchend or click, not pointerdown, so resume there too.
-  const unlock = () => { if (ctx && ctx.state === 'suspended' && !document.hidden) ctx.resume(); };
+  const unlock = () => { if (ctx && ctx.state === 'suspended' && !document.hidden) settle(() => ctx.resume()); };
   document.addEventListener('touchend', unlock, { passive: true });
   document.addEventListener('click', unlock);
+  window.addEventListener('pagehide', () => {
+    const previous = ctx;
+    ctx = null; master = null;
+    if (previous) settle(() => previous.close());
+  });
 }
 
 export function out() {
-  audio();
-  return master;
+  return audio() ? master : null;
 }
 
 export function setMuted(value) {
@@ -167,9 +184,24 @@ export function fitCanvas(canvas, width, height) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(width * dpr);
   canvas.height = Math.round(height * dpr);
-  const g = canvas.getContext('2d');
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return g;
+  try {
+    const g = canvas.getContext('2d');
+    if (g) { g.setTransform(dpr, 0, 0, dpr, 0, 0); return g; }
+  } catch { /* Keep native controls and the explanation available. */ }
+  canvas.hidden = true;
+  const notice = canvas.ownerDocument.createElement('p');
+  notice.textContent = 'The visual scene is unavailable in this browser. Controls and instructions remain available; try another browser for the full picture.';
+  notice.className = 'td-canvas-notice';
+  canvas.after(notice);
+  // Drawing is separate from native controls. Avoid a cascade of frame
+  // errors when a browser disables Canvas 2D, while clearly reporting it above.
+  return new Proxy({}, {
+    get(target, name) {
+      if (name in target) return target[name];
+      if (name === 'createLinearGradient' || name === 'createRadialGradient') return () => ({ addColorStop() {} });
+      return () => {};
+    },
+  });
 }
 
 /** Pointer position in canvas CSS coordinates (canvas drawn at logical width w). */

@@ -11,7 +11,7 @@ export const DETAILS = {
       voice: 'three stacked partials (sine fundamental, triangle 2nd and 3rd) per plane',
       envelope: 'swells in over 1.2 s while the plane climbs, releases over 2.5 s once it crosses the shoreline',
       polyphony: 'up to 10 held notes; the oldest lets go first',
-      controls: { tap: 'a lane at the bottom launches on that note; anywhere in the sky launches a random lane', keys: '1 to 8 launch lanes, Shift toggles the auto schedule' },
+      controls: { tap: 'a lane at the bottom launches on that note; anywhere in the sky launches a random lane', keys: '1 to 8 launch lanes; native Lane buttons also launch notes', auto: 'Auto schedule button toggles automatic departures' },
     },
   },
   'refinery-lights': {
@@ -23,6 +23,7 @@ export const DETAILS = {
       starterPattern: '10001000|00100010|10101010|00000001|01000000|00010000|00000100|00000000',
       patternFormat: 'eight rows separated by |, bottom voice (kick) first, one character per tower, 1 = lit',
       storage: 'localStorage key refinery-lights:v1',
+      controls: 'tap a window or choose Tower and Voice, then Light/Darken window; Play/Pause controls playback',
     },
   },
   'kite-line': {
@@ -31,7 +32,7 @@ export const DETAILS = {
       gusts: 'three overlapping sine waves at different speeds with a random phase per session; never below 0.15',
     },
     flight: {
-      controls: { drag: 'up reels line in, down gives line out', keys: 'Up reels in, Down gives' },
+      controls: { drag: 'up reels line in, down gives line out', keys: 'with beach focused, Up reels in, Down gives, Space pauses/resumes', pause: 'Pause flight button; background tabs pause the flight' },
       lift: 'wind alone keeps the kite up only above about 1.45; reeling in adds lift until the line is down to 60',
       stall: 'reeling hard while the wind is under 0.35 stalls the kite and it drops',
       overpower: 'a gust over 2.9 knocks a held kite down unless you are giving line',
@@ -57,6 +58,7 @@ export const DETAILS = {
       ],
       barFormat: 'five rows (kick, clap, hat, tom, rim) of 16 characters separated by |, 1 = hit',
       storage: 'kept bars in localStorage key drum-round:kept',
+      controls: 'tap the ring or choose Your step and Add hit; native drum buttons and Playback pause/resume; Keep this bar saves a named finished round',
     },
     related: ['https://pointcast.xyz/drum', 'https://pointcast.xyz/drum-relay', 'https://pointcast.xyz/drum-table'],
   },
@@ -65,6 +67,8 @@ export const DETAILS = {
       maxLength: 140,
       stored: 'nothing but a count of cards let go, in localStorage key pelican-post:count',
       sent: 'nothing; the page makes no request with the words',
+      cleared: 'immediately on letting go, or when leaving the page with an unfinished draft',
+      accessibility: 'silent by default; optional sound, skip flight, immediate release for reduced motion, keyboard-accessible repeat flow',
       forAgents: 'There is no inbox, archive or API for the cards. If a person asks you to read what they sent, the honest answer is that it is gone.',
     },
   },
@@ -76,6 +80,7 @@ export const DETAILS = {
       voices: { white: 'sine bell', yellow: 'filtered square reed', blue: 'triangle hum an octave down', pink: 'short filtered sawtooth pluck an octave up' },
       strokeFormat: '{ c: 0..3, pts: [[x, y], ...] } on a 720 by 440 slab',
       storage: 'up to 120 strokes in localStorage key chalk-score:v1',
+      controls: 'draw or choose Beat/Pitch and Add note; Play/Pause score; reduced motion preserves music without the moving playhead',
     },
   },
 };

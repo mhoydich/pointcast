@@ -12,7 +12,15 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
     <button class="td-btn" data-voice="3" aria-pressed="false">Tom</button>
     <button class="td-btn" data-voice="4" aria-pressed="false">Rim</button>
   </div>
+  <div class="td-row dr-step-controls">
+    <label for="dr-step">Your step</label>
+    <select id="dr-step" aria-describedby="dr-read">
+      {Array.from({ length: 16 }, (_, i) => <option value={i}>Step {i + 1}</option>)}
+    </select>
+    <button class="td-btn" id="dr-place">Add hit</button>
+  </div>
   <div class="td-row">
+    <button class="td-btn" id="dr-playback">Start playback</button>
     <button class="td-btn" id="dr-reset">Start over</button>
     <button class="td-btn" id="dr-keep" hidden>Keep this bar</button>
   </div>
@@ -21,11 +29,15 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
 </TenDoorsFrame>
 
 <style>
+  #dr-ring { touch-action: pan-y; }
   .dr-kept { font: 0.85rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0.8rem auto 0; max-width: 32rem; }
+  .dr-step-controls label { font: 600 0.8rem/1.4 ui-monospace, monospace; }
+  .dr-step-controls select { min-height: 44px; padding: 0.4rem; border: 2px solid var(--td-ink); border-radius: 8px; background: var(--td-bg); color: var(--td-ink); font: 0.9rem ui-monospace, monospace; }
+  .dr-step-controls select:focus-visible { outline: 3px solid var(--td-ink); outline-offset: 3px; }
 </style>
 
 <script>
-  import { tone, hz, kick, noise, fitCanvas, pointerXY, load, save, audio, typing } from '../lib/ten-doors/audio.mjs';
+  import { tone, hz, kick, noise, fitCanvas, pointerXY, load, save, audio, typing, reducedMotion } from '../lib/ten-doors/audio.mjs';
 
   const W = 640, H = 640, CX = W / 2, CY = H / 2, R = 220, STEPS = 16, LAPS = 6;
   const VOICES = ['kick', 'clap', 'hat', 'tom', 'rim'];
@@ -42,9 +54,18 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   const g = fitCanvas(canvas, W, H);
   const read = document.getElementById('dr-read');
   const keptEl = document.getElementById('dr-kept');
-  let bar, lap, seat, voice = 0, playing = false, step = 0, nextAt = 0, started = false, round = 0, cursor = 0, focused = false;
+  const stepSelect = document.getElementById('dr-step');
+  const placeButton = document.getElementById('dr-place');
+  const playbackButton = document.getElementById('dr-playback');
+  let bar, lap, seat, voice = 0, playing = false, step = 0, nextAt = 0, started = false, round = 0, cursor = 0, focused = false, keptThisRound = false;
   const fresh = () => VOICES.map(() => new Array(STEPS).fill(false));
-  function reset() { round += 1; bar = fresh(); lap = 1; seat = 0; document.getElementById('dr-keep').hidden = true; read.textContent = 'Your seat first. Pick a drum, tap a step on the ring.'; }
+  function updateControls() {
+    placeButton.disabled = seat !== 0;
+    stepSelect.disabled = seat !== 0;
+    stepSelect.value = String(cursor);
+    playbackButton.textContent = playing ? 'Pause playback' : started ? 'Resume playback' : 'Start playback';
+  }
+  function reset() { round += 1; bar = fresh(); lap = 1; seat = 0; playing = false; started = false; step = 0; nextAt = 0; keptThisRound = false; document.getElementById('dr-keep').hidden = true; read.textContent = 'Your seat first. Pick a drum, tap a step on the ring or choose a step and Add hit.'; updateControls(); }
   reset();
 
   const hits = () => bar.reduce((n, row) => n + row.filter(Boolean).length, 0);
@@ -80,6 +101,7 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
           seat = 0;
           if (lap >= LAPS) { read.textContent = `Six laps. The bar is finished with ${hits()} hits. Keep it or start over.`; document.getElementById('dr-keep').hidden = false; seat = -1; }
           else { lap += 1; read.textContent = `Lap ${lap} of ${LAPS}. Your seat again.`; }
+          updateControls();
         }, 600);
       }, delay);
     }
@@ -95,12 +117,11 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
 
   const stepXY = (s, r = R) => { const a = (s / STEPS) * Math.PI * 2 - Math.PI / 2; return { x: CX + Math.cos(a) * r, y: CY + Math.sin(a) * r }; };
   function place(s) {
-    audio(); started = true; playing = true;
     if (seat !== 0) return;
-    bar[voice][s] = true; play(voice, 0); read.textContent = `You put a ${VOICES[voice]} on step ${s + 1}. Passing the bar.`; seat = 1; passAround();
-  }
-  canvas.addEventListener('pointerdown', (e) => {
     audio(); started = true; playing = true;
+    bar[voice][s] = true; play(voice, 0); read.textContent = `You put a ${VOICES[voice]} on step ${s + 1}. Passing the bar.`; seat = 1; updateControls(); passAround();
+  }
+  canvas.addEventListener('click', (e) => {
     if (seat !== 0) return;
     const { x, y } = pointerXY(canvas, e, W, H);
     for (let s = 0; s < STEPS; s += 1) {
@@ -110,7 +131,7 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   });
   const voiceButtons = [...document.querySelectorAll('[data-voice]')];
   function pickVoice(v) {
-    voice = v; audio(); started = true; playing = true; play(voice, 0);
+    voice = v; audio(); play(voice, 0);
     voiceButtons.forEach((o) => { const on = Number(o.dataset.voice) === v; o.classList.toggle('is-on', on); o.setAttribute('aria-pressed', String(on)); });
   }
   voiceButtons.forEach((b) => b.addEventListener('click', () => pickVoice(Number(b.dataset.voice))));
@@ -118,24 +139,38 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   canvas.addEventListener('blur', () => { focused = false; });
   canvas.addEventListener('keydown', (e) => {
     if (typing(e)) return;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); cursor = (cursor + 1) % STEPS; read.textContent = `Step ${cursor + 1}.`; }
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); cursor = (cursor + STEPS - 1) % STEPS; read.textContent = `Step ${cursor + 1}.`; }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); cursor = (cursor + 1) % STEPS; stepSelect.value = String(cursor); read.textContent = `Step ${cursor + 1}.`; }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); cursor = (cursor + STEPS - 1) % STEPS; stepSelect.value = String(cursor); read.textContent = `Step ${cursor + 1}.`; }
     else if (/^[1-5]$/.test(e.key)) { e.preventDefault(); pickVoice(Number(e.key) - 1); read.textContent = `${VOICES[voice]} picked.`; }
     else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (seat === 0) place(cursor); }
   });
+  stepSelect.addEventListener('change', () => { cursor = Number(stepSelect.value); });
+  placeButton.addEventListener('click', () => place(Number(stepSelect.value)));
+  playbackButton.addEventListener('click', () => {
+    if (!playing) { audio(); started = true; nextAt = 0; }
+    playing = !playing; updateControls();
+  });
+  const pausePlayback = () => { playing = false; updateControls(); };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pausePlayback(); });
+  window.addEventListener('pagehide', pausePlayback);
   document.getElementById('dr-reset').addEventListener('click', reset);
-  const kept = load('drum-round:kept', []);
+  const saved = load('drum-round:kept', []);
+  const kept = Array.isArray(saved) ? saved.filter((k) => k && typeof k.name === 'string' && k.name.length <= 40 && typeof k.code === 'string' && /^[01]{16}(\|[01]{16}){4}$/.test(k.code)).slice(-20) : [];
   const renderKept = () => { keptEl.innerHTML = ''; kept.slice(-5).forEach((k) => { const li = document.createElement('li'); li.textContent = `${k.name}: ${k.code}`; keptEl.append(li); }); };
   renderKept();
   document.getElementById('dr-keep').addEventListener('click', () => {
-    const name = (window.prompt('Name this bar', `Round ${kept.length + 1}`) || `Round ${kept.length + 1}`).slice(0, 40);
+    if (seat !== -1 || keptThisRound) return;
+    const answer = window.prompt('Name this bar', `Round ${kept.length + 1}`);
+    if (answer === null) return;
+    const name = (answer.trim() || `Round ${kept.length + 1}`).slice(0, 40);
     const code = bar.map((row) => row.map((on) => (on ? '1' : '0')).join('')).join('|');
     kept.push({ name, code }); save('drum-round:kept', kept.slice(-20)); renderKept();
+    keptThisRound = true; document.getElementById('dr-keep').hidden = true;
     read.textContent = `Kept "${name}". Start over for a new round.`;
   });
 
   setInterval(() => {
-    if (!playing || !started) return;
+    if (!playing || !started || document.hidden) return;
     const now = performance.now(); if (now < nextAt) return;
     nextAt = now + 60000 / 104 / 4; step = (step + 1) % STEPS;
     bar.forEach((row, v) => row[step] && play(v, 0.01));
@@ -147,10 +182,10 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
     g.strokeStyle = '#5b4330'; g.lineWidth = 2; g.beginPath(); g.arc(CX, CY, R, 0, Math.PI * 2); g.stroke();
     for (let s = 0; s < STEPS; s += 1) {
       const p = stepXY(s);
-      g.fillStyle = s === step && playing ? '#4d3a2a' : '#2a1d15'; g.beginPath(); g.arc(p.x, p.y, 26, 0, Math.PI * 2); g.fill();
+      g.fillStyle = s === step && playing && !reducedMotion() ? '#4d3a2a' : '#2a1d15'; g.beginPath(); g.arc(p.x, p.y, 26, 0, Math.PI * 2); g.fill();
       g.strokeStyle = s % 4 === 0 ? '#f2c14e' : '#6b5040'; g.lineWidth = s % 4 === 0 ? 2 : 1; g.stroke();
       if (focused && s === cursor) { g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.beginPath(); g.arc(p.x, p.y, 31, 0, Math.PI * 2); g.stroke(); }
-      bar.forEach((row, v) => { if (!row[s]) return; const q = stepXY(s, R - 18 + v * 9); g.fillStyle = COLORS[v]; g.beginPath(); g.arc(q.x, q.y, s === step ? 7 : 5, 0, Math.PI * 2); g.fill(); });
+      bar.forEach((row, v) => { if (!row[s]) return; const q = stepXY(s, R - 18 + v * 9); g.fillStyle = COLORS[v]; g.beginPath(); g.arc(q.x, q.y, s === step && !reducedMotion() ? 7 : 5, 0, Math.PI * 2); g.fill(); });
     }
     SEATS.forEach((st, i) => {
       const a = (i / SEATS.length) * Math.PI * 2 - Math.PI / 2;

@@ -12,14 +12,26 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
     <button class="td-btn" data-chalk="3" aria-pressed="false">Pink pluck</button>
   </div>
   <div class="td-row">
+    <button class="td-btn" id="cs-play" aria-pressed="false">Play score</button>
     <button class="td-btn" id="cs-hose">Hose it down</button>
     <button class="td-btn" id="cs-demo">Draw me something</button>
   </div>
+  <fieldset class="td-row cs-editor" style="border:0;padding:0">
+    <legend>Compose without drawing</legend>
+    <label>Beat <select id="cs-beat"><option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">4</option><option value="4">5</option><option value="5">6</option><option value="6">7</option><option value="7">8</option></select></label>
+    <label>Pitch <select id="cs-pitch"><option value="0">15 · highest</option><option value="1">14</option><option value="2">13</option><option value="3">12</option><option value="4">11</option><option value="5">10</option><option value="6">9</option><option value="7" selected>8 · middle</option><option value="8">7</option><option value="9">6</option><option value="10">5</option><option value="11">4</option><option value="12">3</option><option value="13">2</option><option value="14">1 · lowest</option></select></label>
+    <button class="td-btn" id="cs-note">Add note</button>
+  </fieldset>
   <p class="td-readout" id="cs-read" aria-live="polite">Draw anywhere. High lines sing high.</p>
 </TenDoorsFrame>
 
+<style>
+  .cs-editor label { display: flex; align-items: center; gap: 0.4rem; }
+  .cs-editor select { min-height: 44px; font: inherit; padding: 0.4rem; color: #1b1b1b; background: #fff; border-radius: 4px; }
+</style>
+
 <script>
-  import { tone, hz, pentatonic, fitCanvas, pointerXY, load, save, audio } from '../lib/ten-doors/audio.mjs';
+  import { tone, hz, pentatonic, fitCanvas, pointerXY, load, save, audio, reducedMotion } from '../lib/ten-doors/audio.mjs';
 
   const W = 720, H = 440, ROWS = 15, LOOP_MS = 6000;
   const LADDER = pentatonic(55, ROWS).reverse(); // top row is highest
@@ -32,44 +44,68 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   const canvas = document.getElementById('cs-slab');
   const g = fitCanvas(canvas, W, H);
   const read = document.getElementById('cs-read');
-  let strokes = load('chalk-score:v1', []);
-  if (!Array.isArray(strokes)) strokes = [];
-  const lastNote = new WeakMap();
-  let chalk = 0, drawing = null, started = false, t0 = performance.now(), lastX = 0;
-  const persist = () => save('chalk-score:v1', strokes.slice(-120));
+  const saved = load('chalk-score:v1', []);
+  let strokes = (Array.isArray(saved) ? saved : []).filter((stroke) => stroke && Number.isInteger(stroke.c) && stroke.c >= 0 && stroke.c < CHALK.length && Array.isArray(stroke.pts))
+    .slice(-120).map((stroke) => ({ c: stroke.c, pts: stroke.pts.filter((point) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite) && point[0] >= 0 && point[0] <= W && point[1] >= 0 && point[1] <= H).slice(0, 320) })).filter((stroke) => stroke.pts.length);
+  let lastNote = new WeakMap();
+  let chalk = 0, drawing = null, playing = false, t0 = performance.now(), lastX = 0, animationFrame = 0;
+  const voices = new Set();
+  const persist = () => save('chalk-score:v1', strokes);
+  const redraw = () => { if (!animationFrame) animationFrame = requestAnimationFrame(frame); };
+  function setPlaying(value) {
+    playing = value;
+    const button = document.getElementById('cs-play');
+    button.textContent = playing ? 'Pause score' : 'Play score';
+    button.classList.toggle('is-on', playing); button.setAttribute('aria-pressed', String(playing));
+    if (playing) { audio(); t0 = performance.now(); lastX = 0; lastNote = new WeakMap(); }
+    else for (const voice of voices) { try { voice.osc.stop(); } catch { /* Already ended. */ } }
+    if (!playing) voices.clear();
+    redraw();
+  }
+  function addStroke(stroke) { strokes.push(stroke); if (strokes.length > 120) strokes.shift(); }
 
   canvas.addEventListener('pointerdown', (e) => {
-    audio(); started = true;
+    if (!playing) setPlaying(true);
     const p = pointerXY(canvas, e, W, H);
-    drawing = { c: chalk, pts: [[Math.round(p.x), Math.round(p.y)]] };
-    strokes.push(drawing); canvas.setPointerCapture(e.pointerId);
+    drawing = { c: chalk, pts: [[Math.round(Math.max(0, Math.min(W, p.x))), Math.round(Math.max(0, Math.min(H, p.y)))]] };
+    addStroke(drawing); canvas.setPointerCapture(e.pointerId); redraw();
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (!drawing) return;
+    if (!drawing || drawing.pts.length >= 320) return;
     const p = pointerXY(canvas, e, W, H);
+    p.x = Math.max(0, Math.min(W, p.x)); p.y = Math.max(0, Math.min(H, p.y));
     const last = drawing.pts[drawing.pts.length - 1];
     if (Math.hypot(p.x - last[0], p.y - last[1]) > 4) drawing.pts.push([Math.round(p.x), Math.round(p.y)]);
+    redraw();
   });
   const end = () => { if (drawing) { persist(); read.textContent = `${strokes.length} chalk ${strokes.length === 1 ? 'line' : 'lines'} on the slab.`; } drawing = null; };
   canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
   document.querySelectorAll('[data-chalk]').forEach((b) => b.addEventListener('click', () => {
-    chalk = Number(b.dataset.chalk); audio(); started = true;
+    chalk = Number(b.dataset.chalk);
     document.querySelectorAll('[data-chalk]').forEach((o) => { o.classList.toggle('is-on', o === b); o.setAttribute('aria-pressed', String(o === b)); });
   }));
-  document.getElementById('cs-hose').addEventListener('click', () => { strokes = []; persist(); read.textContent = 'Clean slab. Wet concrete smell.'; });
+  document.getElementById('cs-play').addEventListener('click', () => setPlaying(!playing));
+  document.getElementById('cs-hose').addEventListener('click', () => { drawing = null; strokes = []; persist(); setPlaying(false); read.textContent = 'Clean slab. Wet concrete smell.'; });
   document.getElementById('cs-demo').addEventListener('click', () => {
-    audio(); started = true;
+    if (!playing) setPlaying(true);
     const c = Math.floor(Math.random() * 4);
     const pts = []; const base = 120 + Math.random() * 200; const amp = 40 + Math.random() * 80; const freq = 1 + Math.random() * 3;
     for (let x = 20; x < W - 20; x += 12) pts.push([x, Math.round(base + Math.sin((x / W) * Math.PI * 2 * freq) * amp)]);
-    strokes.push({ c, pts }); persist(); read.textContent = `A ${CHALK[c].name} wave, drawn for you.`;
+    addStroke({ c, pts }); persist(); read.textContent = `A ${CHALK[c].name} wave, drawn for you.`; redraw();
+  });
+  document.getElementById('cs-note').addEventListener('click', () => {
+    const beat = Number(document.getElementById('cs-beat').value), row = Number(document.getElementById('cs-pitch').value);
+    addStroke({ c: chalk, pts: [[Math.round((beat + 0.5) * W / 8), Math.round((row + 0.5) * H / ROWS)]] });
+    persist(); if (!playing) setPlaying(true);
+    read.textContent = `A ${CHALK[chalk].name} note at beat ${beat + 1}, pitch ${ROWS - row}.`; redraw();
   });
 
   const rowOf = (y) => Math.max(0, Math.min(ROWS - 1, Math.floor((y / H) * ROWS)));
 
   function frame(now) {
+    animationFrame = 0;
     const x = (((now - t0) % LOOP_MS) / LOOP_MS) * W;
-    if (started) {
+    if (playing && !document.hidden) {
       const wrapped = x < lastX;
       const swept = (px) => (wrapped ? px > lastX || px <= x : px > lastX && px <= x);
       for (const s of strokes) {
@@ -81,7 +117,8 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
         if (last && now - last.at < 260 && last.row === row) continue;
         if (last && now - last.at < 110) continue;
         lastNote.set(s, { at: now, row });
-        CHALK[s.c].play(hz(LADDER[row]), 0);
+        const voice = CHALK[s.c].play(hz(LADDER[row]), 0);
+        if (voice) { voices.add(voice); voice.osc.addEventListener('ended', () => voices.delete(voice), { once: true }); }
       }
     }
     lastX = x;
@@ -96,8 +133,11 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
       if (s.pts.length === 1) g.lineTo(s.pts[0][0] + 0.1, s.pts[0][1]);
       g.stroke(); g.globalAlpha = 1;
     }
-    g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(x - 1, 0, 2, H);
-    requestAnimationFrame(frame);
+    if (playing && !reducedMotion()) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(x - 1, 0, 2, H); }
+    if (playing && !document.hidden) redraw();
   }
-  requestAnimationFrame(frame);
+  redraw();
+  document.addEventListener('visibilitychange', () => { if (document.hidden) setPlaying(false); });
+  window.addEventListener('pagehide', () => { end(); setPlaying(false); cancelAnimationFrame(animationFrame); animationFrame = 0; });
+  window.addEventListener('pageshow', (event) => { if (event.persisted) redraw(); });
 </script>

@@ -107,7 +107,7 @@ test('tide pool census: counts match the creatures and stay in range', () => {
 });
 
 test('pelican post never sends or stores the words', async () => {
-  const page = await read('src/pages/pelican-post.astro');
+  const page = await read('src/pages/pelican-post.astro') + await read('src/lib/ten-doors/pelican-post.mjs');
   assert.doesNotMatch(page, /fetch\(|sendBeacon|XMLHttpRequest|WebSocket/);
   assert.doesNotMatch(page, /save\([^)]*text\.value/);
 });

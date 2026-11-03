@@ -9,58 +9,95 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
   <div class="td-row">
     <button class="td-btn" id="gf-go">Start a sunset</button>
   </div>
-  <p class="td-readout" id="gf-read" aria-live="polite">Tap Start, then tap again the instant the sun is gone.</p>
+  <p class="td-readout" id="gf-read" aria-live="polite">Start a sunset, then use Catch the flash or tap the bay the instant the sun is gone.</p>
 </TenDoorsFrame>
+
+<style>
+  #gf-bay { touch-action: pan-y; }
+</style>
 
 <script>
   import { sunsetFor, townDay, pacificClock, addDays } from '../lib/ten-doors/daily.mjs';
-  import { fitCanvas, tone, load, save, audio, typing, onControl } from '../lib/ten-doors/audio.mjs';
+  import { fitCanvas, tone, load, save, audio, typing, onControl, reducedMotion } from '../lib/ten-doors/audio.mjs';
 
   const W = 720, H = 420, HORIZON = 260, SUN_R = 46;
   const canvas = document.getElementById('gf-bay');
   const g = fitCanvas(canvas, W, H);
   const read = document.getElementById('gf-read');
   const real = document.getElementById('gf-real');
-  let state = 'idle', start = 0, duration = 40000, flash = null, record = load('green-flash:record', { caught: 0, best: null });
+  const go = document.getElementById('gf-go');
+  const saved = load('green-flash:record', null);
+  const record = {
+    caught: Number.isSafeInteger(saved?.caught) && saved.caught >= 0 ? saved.caught : 0,
+    best: typeof saved?.best === 'number' && Number.isFinite(saved.best) && saved.best >= 0 ? saved.best : null,
+  };
+  let state = 'idle', start = 0, duration = 40000, flash = null, stoppedAt = 0, hiddenAt = null, frame = 0, refreshTimer = 0;
 
-  // Today's real sunset, from the sun's position.
-  const today = townDay(new Date());
-  let set = sunsetFor(today);
-  if (set.getTime() < Date.now()) set = sunsetFor(addDays(today, 1));
-  const mins = Math.round((set.getTime() - Date.now()) / 60000);
-  real.textContent = `Real sunset in El Segundo: ${pacificClock(set)} Pacific${mins < 24 * 60 ? `, in about ${mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`}` : ''}. Clear skies and a flat horizon help.`;
+  // Refresh the next real sunset after long visits and Pacific-midnight changes.
+  function refreshRealSunset() {
+    const today = townDay(new Date());
+    let set = sunsetFor(today);
+    if (set.getTime() < Date.now()) set = sunsetFor(addDays(today, 1));
+    const mins = Math.round((set.getTime() - Date.now()) / 60000);
+    real.textContent = `Real sunset in El Segundo: ${pacificClock(set)} Pacific${mins < 24 * 60 ? `, in about ${mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`}` : ''}. Clear skies and a flat horizon help.`;
+  }
+  function startRefresh() {
+    refreshRealSunset();
+    if (!document.hidden && !refreshTimer) refreshTimer = setInterval(refreshRealSunset, 60000);
+  }
+  startRefresh();
 
   // The sun's center y over time; it is gone when its top edge passes the horizon.
   const sunY = (t) => HORIZON - 120 + (t / duration) * (120 + SUN_R + 4);
   const goneAt = () => ((HORIZON + SUN_R - (HORIZON - 120)) / (120 + SUN_R + 4)) * duration;
 
   function begin() {
+    refreshRealSunset();
     audio(); state = 'setting'; start = performance.now(); flash = null;
     duration = 30000 + Math.random() * 14000;
-    read.textContent = 'Watch the last sliver. Tap when it is gone.';
+    go.textContent = 'Catch the flash';
+    read.textContent = 'Watch the last sliver. Use Catch the flash or tap the bay when it is gone.';
     tone(196, { type: 'sine', length: 1.5, release: 2, gain: 0.05 });
+    cancelAnimationFrame(frame); frame = requestAnimationFrame(draw);
   }
   function tap() {
     if (state === 'idle' || state === 'done') { begin(); return; }
     const t = performance.now() - start;
     const off = (t - goneAt()) / 1000;
-    state = 'done';
+    state = 'done'; stoppedAt = t; go.textContent = 'Watch another sunset';
     const abs = Math.abs(off);
     const caught = abs <= 0.1;
     flash = { strength: Math.max(0, 1 - abs / 0.5), at: performance.now() };
-    if (caught) { record.caught += 1; [79, 83, 86, 91].forEach((m, i) => tone(440 * 2 ** ((m - 69) / 12), { type: 'triangle', length: 0.05, release: 0.6, gain: 0.08, when: i * 0.08 })); }
+    if (caught) { record.caught = Math.min(Number.MAX_SAFE_INTEGER, record.caught + 1); [79, 83, 86, 91].forEach((m, i) => tone(440 * 2 ** ((m - 69) / 12), { type: 'triangle', length: 0.05, release: 0.6, gain: 0.08, when: i * 0.08 })); }
     else tone(150, { type: 'sine', length: 0.1, release: 0.4, gain: 0.1 });
     if (record.best === null || abs < record.best) record.best = abs;
     save('green-flash:record', record);
     const when = off < 0 ? `${Math.abs(off).toFixed(2)} s early` : `${off.toFixed(2)} s late`;
     read.textContent = `${caught ? 'Green flash!' : abs < 0.5 ? 'A faint green edge.' : 'Missed it.'} ${when}. Flashes caught here: ${record.caught}. Closest: ${record.best.toFixed(2)} s. Tap to watch another.`;
+    cancelAnimationFrame(frame); draw(performance.now());
   }
-  canvas.addEventListener('pointerdown', tap);
-  document.getElementById('gf-go').addEventListener('click', begin);
-  window.addEventListener('keydown', (e) => { if (e.key !== ' ' || typing(e) || onControl(e)) return; e.preventDefault(); tap(); });
+  canvas.addEventListener('click', tap);
+  go.addEventListener('click', tap);
+  go.addEventListener('keydown', (event) => { if (event.repeat && (event.key === ' ' || event.key === 'Enter')) event.preventDefault(); });
+  window.addEventListener('keydown', (e) => { if (e.key !== ' ' || e.repeat || e.ctrlKey || e.metaKey || e.altKey || typing(e) || onControl(e)) return; e.preventDefault(); tap(); });
+  function pause() {
+    if (state === 'setting' && hiddenAt === null) hiddenAt = performance.now();
+    cancelAnimationFrame(frame); frame = 0;
+    clearInterval(refreshTimer); refreshTimer = 0;
+  }
+  function resume() {
+    if (document.hidden) return;
+    startRefresh();
+    if (hiddenAt !== null) start += performance.now() - hiddenAt;
+    hiddenAt = null;
+    cancelAnimationFrame(frame); draw(performance.now());
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); else resume(); });
+  window.addEventListener('pagehide', pause);
+  window.addEventListener('pageshow', (event) => { if (event.persisted) resume(); });
 
   function draw(now) {
-    const t = state === 'setting' ? now - start : state === 'done' ? duration : 0;
+    const t = state === 'setting' ? now - start : state === 'done' ? stoppedAt : 0;
     const p = Math.min(1, t / duration);
     const sky = g.createLinearGradient(0, 0, 0, HORIZON);
     sky.addColorStop(0, `hsl(${215 - p * 30}, 45%, ${45 - p * 25}%)`); sky.addColorStop(1, `hsl(${30 - p * 10}, 90%, ${68 - p * 20}%)`);
@@ -74,17 +111,17 @@ import TenDoorsFrame from '../components/TenDoorsFrame.astro';
     g.restore();
     if (flash) {
       const age = (now - flash.at) / 1000;
-      const a = flash.strength * Math.max(0, 1 - age / 1.6);
+      const a = flash.strength * (reducedMotion() ? 1 : Math.max(0, 1 - age / 1.6));
       if (a > 0) { g.fillStyle = `rgba(80,255,140,${a})`; g.fillRect(W / 2 - 70, HORIZON - 6, 140, 6); g.fillStyle = `rgba(80,255,140,${a * 0.25})`; g.fillRect(0, HORIZON - 30, W, 30); }
     }
     const sea = g.createLinearGradient(0, HORIZON, 0, H);
     sea.addColorStop(0, `hsl(210, 40%, ${36 - p * 16}%)`); sea.addColorStop(1, `hsl(225, 45%, ${18 - p * 8}%)`);
     g.fillStyle = sea; g.fillRect(0, HORIZON, W, H - HORIZON);
-    if (y < HORIZON + SUN_R) { for (let i = 0; i < 12; i += 1) { g.fillStyle = `rgba(255,190,110,${0.35 - i * 0.025})`; g.fillRect(W / 2 - 50 + Math.sin(now / 300 + i) * 10, HORIZON + 6 + i * 12, 100 - i * 6, 3); } }
+    if (y < HORIZON + SUN_R) { for (let i = 0; i < 12; i += 1) { g.fillStyle = `rgba(255,190,110,${0.35 - i * 0.025})`; g.fillRect(W / 2 - 50 + Math.sin((reducedMotion() ? 0 : now / 300) + i) * 10, HORIZON + 6 + i * 12, 100 - i * 6, 3); } }
     // the bluff and a bench
     g.fillStyle = '#2b1830'; g.beginPath(); g.moveTo(0, H); g.lineTo(0, 330); g.quadraticCurveTo(160, 318, 260, H); g.fill();
     g.fillRect(60, 312, 60, 5); g.fillRect(64, 317, 4, 14); g.fillRect(112, 317, 4, 14);
-    requestAnimationFrame(draw);
+    if (!document.hidden && ((state === 'setting' && t < duration) || (flash && !reducedMotion() && now - flash.at < 1600))) frame = requestAnimationFrame(draw);
   }
-  requestAnimationFrame(draw);
+  frame = requestAnimationFrame(draw);
 </script>
