@@ -1,0 +1,210 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import config from '../data/the-desk.json';
+
+const description = 'The Desk: Mike’s AI agents trade Mike’s own capped bankroll, live on PointCast. Positions, P&L by agent and venue, every order sealed before it runs and revealed after it settles. Not investment advice.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'The Desk',
+  description,
+  url: 'https://pointcast.xyz/the-desk',
+  isAccessibleForFree: true,
+};
+---
+
+<BlockLayout title="The Desk" description={description} jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/api/the-desk', title: 'The Desk (JSON)' }]}>
+  <main class="td" data-desk>
+    <p class="td__banner" role="note"><strong>Not investment advice.</strong> {config.banner.replace(/^Not investment advice\.\s*/, '')}</p>
+
+    <header class="td__head">
+      <div>
+        <p class="td__kicker">THE DESK · <span data-mode>{config.mode.toUpperCase()} MODE</span></p>
+        <h1>Agents at the desk.</h1>
+        <p class="td__dek">
+          Three house strategies and one guest seat trade a capped bankroll across Kalshi and Alpaca. Every order clears a Risk Gate
+          (2% per position, a daily loss limit, Mike’s approval above ${config.limits.approvalAboveUsd}), is sealed before it runs, and is
+          revealed after it settles. A drum sounds on every fill; a bell when the day’s loss limit trips.
+        </p>
+      </div>
+      <div class="td__status">
+        <span data-state>connecting…</span>
+        <button type="button" data-sound aria-pressed="false">Sound off</button>
+      </div>
+    </header>
+
+    <section class="td__totals" aria-label="Totals">
+      <div><span>Equity</span><strong data-total="equity">—</strong></div>
+      <div><span>Since start</span><strong data-total="pnl">—</strong></div>
+      <div><span>Today</span><strong data-total="dayPnl">—</strong></div>
+      <div><span>Daily loss limit</span><strong>−${config.limits.dailyLossLimitUsd}</strong></div>
+    </section>
+
+    <section aria-labelledby="td-venues"><h2 id="td-venues">By venue</h2><div class="td__table" data-venues></div></section>
+    <section aria-labelledby="td-agents"><h2 id="td-agents">By agent</h2><div class="td__table" data-agents></div></section>
+    <section aria-labelledby="td-pos"><h2 id="td-pos">Open positions</h2><div class="td__table" data-positions></div></section>
+    <section aria-labelledby="td-log">
+      <h2 id="td-log">Trade log</h2>
+      <p class="td__note">Sealed orders show their commitment hash now and their reasoning after settlement. Anyone can recompute the hash: see <a href="/api/the-desk">the JSON</a>, field <code>verify</code>.</p>
+      <div class="td__log" data-trades></div>
+    </section>
+    <section aria-labelledby="td-events"><h2 id="td-events">Desk wire</h2><ol class="td__events" data-events></ol></section>
+  </main>
+</BlockLayout>
+
+<style is:global>
+  .td { --ink: #16181d; --mute: #5b6170; --line: #d9dde5; --paper: #fbfaf7; --up: #0f7b4a; --down: #b4232c; --warn: #fff4d6;
+    max-width: 1040px; margin: 0 auto; padding: 1.5rem 16px 5rem; color: var(--ink); background: var(--paper); font: 15px/1.5 Inter, system-ui, sans-serif; }
+  @media (prefers-color-scheme: dark) {
+    .td { --ink: #eceef2; --mute: #a3a9b6; --line: #343944; --paper: #12141a; --up: #4fd18f; --down: #ff7a80; --warn: #3a3218; }
+  }
+  .td__banner { background: var(--warn); border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; margin: 0 0 1.5rem; }
+  .td__head { display: flex; gap: 1.5rem; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+  .td__kicker { font: 600 12px/1 'JetBrains Mono', ui-monospace, monospace; letter-spacing: .08em; color: var(--mute); margin: 0 0 .5rem; }
+  .td h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.05; margin: 0 0 .75rem; }
+  .td h2 { font-size: 18px; margin: 2rem 0 .75rem; }
+  .td__dek { max-width: 62ch; color: var(--mute); margin: 0; }
+  .td__status { display: flex; gap: .5rem; align-items: center; font: 13px 'JetBrains Mono', ui-monospace, monospace; }
+  .td__status button { font: inherit; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 6px; padding: .35rem .6rem; cursor: pointer; }
+  .td__status [data-state].is-killed, .td__status [data-state].is-halted { color: var(--down); font-weight: 700; }
+  .td__totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin: 1.5rem 0 0; }
+  .td__totals div { border: 1px solid var(--line); border-radius: 8px; padding: .75rem; }
+  .td__totals span { display: block; color: var(--mute); font-size: 12px; }
+  .td__totals strong { font: 600 22px 'JetBrains Mono', ui-monospace, monospace; }
+  .td__table { overflow-x: auto; }
+  .td table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .td th, .td td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .td th { color: var(--mute); font-weight: 500; font-size: 12px; }
+  .td td.num { font-family: 'JetBrains Mono', ui-monospace, monospace; text-align: right; }
+  .td .up { color: var(--up); } .td .down { color: var(--down); }
+  .td__note { color: var(--mute); font-size: 13px; margin: -.25rem 0 .75rem; }
+  .td__log { display: grid; gap: .5rem; }
+  .td__trade { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; }
+  .td__trade header { display: flex; flex-wrap: wrap; gap: .25rem .75rem; font-size: 14px; }
+  .td__trade .hash { font: 11px 'JetBrains Mono', ui-monospace, monospace; color: var(--mute); overflow-wrap: anywhere; }
+  .td__trade p { margin: .35rem 0 0; }
+  .td__events { list-style: none; padding: 0; margin: 0; font: 13px/1.6 'JetBrains Mono', ui-monospace, monospace; }
+  .td__events li { border-bottom: 1px dashed var(--line); padding: .2rem 0; overflow-wrap: anywhere; }
+  .td__empty { color: var(--mute); }
+</style>
+
+<script>
+  const root = document.querySelector('[data-desk]') as HTMLElement;
+  const $ = (sel: string) => root.querySelector(sel) as HTMLElement;
+  const usd = (n: number) => `${n < 0 ? '−' : ''}$${Math.abs(n ?? 0).toFixed(2)}`;
+  const signed = (n: number) => `${n > 0 ? '+' : ''}${usd(n)}`;
+  const cls = (n: number) => (n > 0 ? 'up' : n < 0 ? 'down' : '');
+
+  function el(tag: string, props: Record<string, string> = {}, ...kids: (Node | string | null | undefined)[]) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) if (v) node.setAttribute(k, v);
+    for (const kid of kids) if (kid != null) node.append(kid);
+    return node;
+  }
+
+  function table(cols: [string, string?][], rows: (string | number | { v: string; c?: string })[][]) {
+    if (!rows.length) return el('p', { class: 'td__empty' }, 'Nothing yet.');
+    return el('table', {},
+      el('thead', {}, el('tr', {}, ...cols.map(([h]) => el('th', {}, h)))),
+      el('tbody', {}, ...rows.map((r) => el('tr', {}, ...r.map((cell, i) => {
+        const o = typeof cell === 'object' ? cell : { v: String(cell) };
+        return el('td', { class: [cols[i][1] || '', o.c || ''].join(' ').trim() }, o.v);
+      })))));
+  }
+
+  // ─── sound: a drum on every fill, a bell on halt or kill ───
+  let audio: AudioContext | null = null;
+  const soundBtn = $('[data-sound]');
+  soundBtn.addEventListener('click', () => {
+    audio = audio ? (audio.close(), null) : new AudioContext();
+    soundBtn.textContent = audio ? 'Sound on' : 'Sound off';
+    soundBtn.setAttribute('aria-pressed', String(Boolean(audio)));
+    if (audio) drum();
+  });
+  function drum() {
+    if (!audio) return;
+    const t = audio.currentTime;
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+    g.gain.setValueAtTime(0.9, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    o.connect(g).connect(audio.destination);
+    o.start(t);
+    o.stop(t + 0.4);
+  }
+  function bell() {
+    if (!audio) return;
+    const t = audio.currentTime;
+    for (const [f, a] of [[660, 0.4], [1320, 0.2], [1980, 0.1]]) {
+      const o = audio.createOscillator();
+      const g = audio.createGain();
+      o.frequency.value = f;
+      g.gain.setValueAtTime(a, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 3);
+      o.connect(g).connect(audio.destination);
+      o.start(t);
+      o.stop(t + 3.1);
+    }
+  }
+
+  let lastEvent: number | null = null;
+
+  function render(d: any) {
+    const st = $('[data-state]');
+    st.className = d.state.killed ? 'is-killed' : d.state.haltedToday ? 'is-halted' : '';
+    st.textContent = d.state.killed ? 'KILLED · flat' : d.state.haltedToday ? `HALTED · ${d.state.day}` : `live · ${new Date(d.generatedAt).toLocaleTimeString()}`;
+    for (const k of ['equity', 'pnl', 'dayPnl']) {
+      const n = d.totals[k];
+      const s = root.querySelector(`[data-total="${k}"]`) as HTMLElement;
+      s.textContent = k === 'equity' ? usd(n) : signed(n);
+      s.className = k === 'equity' ? '' : cls(n);
+    }
+    $('[data-venues]').replaceChildren(table(
+      [['Venue'], ['Mode'], ['Bankroll', 'num'], ['Cash', 'num'], ['Positions', 'num'], ['Equity', 'num'], ['P&L', 'num']],
+      d.venues.filter((v: any) => v.enabled).map((v: any) => [v.label, v.mode, usd(v.bankroll), usd(v.cash), usd(v.value), usd(v.equity), { v: signed(v.pnl), c: cls(v.pnl) }]),
+    ));
+    $('[data-agents]').replaceChildren(table(
+      [['Agent'], ['Thesis'], ['Realized', 'num'], ['Fees', 'num'], ['Open', 'num'], ['P&L', 'num']],
+      d.agents.map((a: any) => [a.name, a.thesis, signed(a.realized), usd(a.fees), signed(a.unrealized), { v: signed(a.pnl), c: cls(a.pnl) }]),
+    ));
+    $('[data-positions]').replaceChildren(table(
+      [['Agent'], ['Venue'], ['Instrument'], ['Market'], ['Qty', 'num'], ['Cost', 'num'], ['Mark', 'num'], ['Open P&L', 'num']],
+      d.positions.map((p: any) => [p.agent, p.venue, p.instrument, p.title || '', String(p.qty), usd(p.cost), String(p.mark), { v: signed(p.unrealized), c: cls(p.unrealized) }]),
+    ));
+    $('[data-trades]').replaceChildren(...(d.trades.length ? d.trades.slice(0, 40).map((t: any) => el('article', { class: 'td__trade' },
+      el('header', {},
+        el('strong', {}, `${t.agent} · ${t.action} ${t.qty} ${t.instrument}`),
+        el('span', {}, `@ ≤ ${t.limitPrice}`),
+        el('span', { class: t.status === 'refused' ? 'down' : '' }, t.status + (t.refusal ? ` (${t.refusal})` : '')),
+        t.filledQty ? el('span', {}, `filled ${t.filledQty} @ ${Number(t.avgPrice).toFixed(4)}`) : null,
+        el('time', { datetime: t.at }, new Date(t.at).toLocaleString())),
+      t.title ? el('p', {}, t.title) : null,
+      t.reasoning != null ? el('p', {}, t.revealedAt ? 'Revealed: ' : 'Reasoning: ', t.reasoning) : el('p', { class: 'td__empty' }, 'Reasoning sealed until settlement.'),
+      t.commitment ? el('p', { class: 'hash' }, `commitment ${t.commitment}`, el('br'), `chain ${t.chain}`, t.salt ? el('br') : null, t.salt ? `salt ${t.salt}` : null) : null,
+    )) : [el('p', { class: 'td__empty' }, 'No orders yet.')]));
+    $('[data-events]').replaceChildren(...d.events.slice(0, 40).map((e: any) => el('li', {}, `${new Date(e.at).toLocaleTimeString()} · ${e.kind}${e.agent ? ` · ${e.agent}` : ''}${e.detail ? ` · ${e.detail}` : ''}`)));
+
+    const newest = d.events[0]?.id ?? 0;
+    if (lastEvent != null) {
+      const fresh = d.events.filter((e: any) => e.id > (lastEvent as number));
+      if (fresh.some((e: any) => e.kind === 'halt' || e.kind === 'kill')) bell();
+      fresh.filter((e: any) => e.kind === 'fill').forEach((_: unknown, i: number) => setTimeout(drum, i * 220));
+    }
+    lastEvent = newest;
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch('/api/the-desk', { cache: 'no-store' });
+      const d = await res.json();
+      if (res.ok) render(d);
+      else $('[data-state]').textContent = d.reason === 'not-started' ? 'not started yet' : 'offline';
+    } catch {
+      $('[data-state]').textContent = 'offline';
+    }
+  }
+  poll();
+  setInterval(poll, 15_000);
+</script>
