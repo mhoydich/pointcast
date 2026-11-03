@@ -1,0 +1,417 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { BLOCK_ID, PAGE_PATH, slides } from '../../data/publish-audit-2026-10-19.mjs';
+
+const title = 'Oct 19: every merge is live';
+const description = 'A slide audit of October 19, 2026. Every pull request that merged is live on pointcast.xyz. The deploy for main 7efd2faa succeeded at 4:15 PM PT.';
+const pageUrl = `https://pointcast.xyz${PAGE_PATH}`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: title,
+  description,
+  datePublished: '2026-10-20T03:20:00Z',
+  dateModified: '2026-10-20T03:20:00Z',
+  inLanguage: 'en-US',
+  url: pageUrl,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  mainEntityOfPage: pageUrl,
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  author="PointCast"
+  themeColor="#ffffff"
+  immersive
+  isolated
+  showNetworkStrip={false}
+  hideAds
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/publishing/2026-10-19.json', title: 'Oct 19 publish audit (JSON)' },
+    { type: 'application/json', href: `/b/${BLOCK_ID}.json`, title: `Block ${BLOCK_ID}` },
+  ]}
+>
+  <div class="audit" data-audit-deck>
+    <header class="bar">
+      <a class="brand" href="/">PointCast</a>
+      <a class="brand" href={`/b/${BLOCK_ID}`}>№ {BLOCK_ID}</a>
+      <p class="count" data-count aria-live="polite">1 / {slides.length}</p>
+      <span class="progress" data-progress aria-hidden="true"></span>
+    </header>
+
+    <div
+      class="deck"
+      id="deck"
+      data-deck
+      tabindex="0"
+      aria-label="October 19 publish audit, one idea per slide"
+    >
+      {slides.map((slide, index) => (
+        <section
+          class="slide"
+          id={slide.id}
+          data-kind={slide.kind}
+          data-slide
+          aria-roledescription="slide"
+          aria-label={`${index + 1} of ${slides.length}. ${slide.title}`}
+        >
+          <div class="slide-inner">
+            <p class="kicker">{slide.kicker}</p>
+            {index === 0 ? <h1>{slide.title}</h1> : <h2>{slide.title}</h2>}
+            {slide.lede && <p class="lede">{slide.lede}</p>}
+            {slide.lines && (
+              <ol class="lines">
+                {slide.lines.map((line) => <li>{line}</li>)}
+              </ol>
+            )}
+            {slide.chips && (
+              <ul class="chips">
+                {slide.chips.map((chip) => (
+                  <li><a href={chip.href}>{chip.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    <nav class="controls" aria-label="Slide navigation">
+      <button type="button" data-dir="-1" aria-label="Previous slide">
+        <span aria-hidden="true">←</span> Prev
+      </button>
+      <button type="button" data-dir="1" aria-label="Next slide">
+        Next <span aria-hidden="true">→</span>
+      </button>
+    </nav>
+  </div>
+</BlockLayout>
+
+<script>
+  import { clampIndex, indexAfterKey, keyToDelta } from '../../scripts/publish-audit-deck.mjs';
+
+  const root = document.querySelector('[data-audit-deck]');
+  const deck = root?.querySelector('[data-deck]');
+  const slides = deck ? [...deck.querySelectorAll('[data-slide]')] : [];
+  const countEl = root?.querySelector('[data-count]');
+  const progress = root?.querySelector('[data-progress]');
+  const prev = root?.querySelector('[data-dir="-1"]');
+  const next = root?.querySelector('[data-dir="1"]');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let current = 0;
+  let lock = false;
+
+  function paint(index) {
+    current = clampIndex(index, slides.length);
+    const slide = slides[current];
+    if (countEl) countEl.textContent = `${current + 1} / ${slides.length}`;
+    if (progress instanceof HTMLElement) {
+      progress.style.transform = `scaleX(${(current + 1) / slides.length})`;
+    }
+    slides.forEach((item, i) => {
+      item.toggleAttribute('data-current', i === current);
+    });
+    if (prev instanceof HTMLButtonElement) prev.disabled = current === 0;
+    if (next instanceof HTMLButtonElement) next.disabled = current === slides.length - 1;
+    if (slide?.id) {
+      const url = new URL(window.location.href);
+      url.hash = slide.id;
+      history.replaceState(null, '', url);
+    }
+  }
+
+  function slideTop(index) {
+    const slide = slides[index];
+    return deck.scrollTop + slide.getBoundingClientRect().top - deck.getBoundingClientRect().top;
+  }
+
+  function go(index, instant) {
+    const nextIndex = clampIndex(index, slides.length);
+    if (!slides[nextIndex]) return;
+    const jump = Math.abs(nextIndex - current) > 1;
+    const behavior = instant || jump || reduced ? 'auto' : 'smooth';
+    let tries = 0;
+    const apply = () => {
+      const top = slideTop(nextIndex);
+      if (nextIndex > 0 && top < 8 && tries < 12) {
+        tries += 1;
+        requestAnimationFrame(apply);
+        return;
+      }
+      lock = true;
+      deck.scrollTo({ top, behavior });
+      paint(nextIndex);
+      window.setTimeout(() => { lock = false; }, behavior === 'auto' ? 120 : 700);
+    };
+    apply();
+  }
+
+  if (deck && slides.length) {
+    const observer = new IntersectionObserver((entries) => {
+      if (lock) return;
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      const index = slides.indexOf(visible.target);
+      if (index >= 0) paint(index);
+    }, { root: deck, threshold: [0.6] });
+    slides.forEach((slide) => observer.observe(slide));
+
+    root.querySelectorAll('[data-dir]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const dir = Number(button.getAttribute('data-dir'));
+        go(current + dir);
+      });
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (keyToDelta(event.key) === 0) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (event.key === ' ' && target instanceof Element && target.closest('button, a')) return;
+      event.preventDefault();
+      go(indexAfterKey(current, slides.length, event.key));
+    });
+
+    const startId = window.location.hash.replace('#', '');
+    const start = slides.findIndex((slide) => slide.id === startId);
+    requestAnimationFrame(() => go(start >= 0 ? start : 0, true));
+  }
+</script>
+
+<style>
+  :global(html:has([data-audit-deck])),
+  :global(body.pc-block-shell:has([data-audit-deck])) {
+    height: 100%;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
+  .audit {
+    --audit-bar: 52px;
+    --audit-controls: 76px;
+    color: var(--pc-ink);
+    background: #fff;
+    font-family: var(--pc-font-sans);
+  }
+
+  .audit a:focus-visible,
+  .audit button:focus-visible {
+    outline: 2px solid var(--pc-accent);
+    outline-offset: 3px;
+  }
+
+  .bar {
+    position: fixed;
+    z-index: 3;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: var(--audit-bar);
+    padding: 0 clamp(16px, 4vw, 40px);
+    background: rgba(255, 255, 255, 0.92);
+    border-bottom: 1px solid var(--pc-rule-soft);
+    backdrop-filter: blur(8px);
+  }
+
+  .brand {
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+    text-decoration: none;
+  }
+
+  .brand:hover { text-decoration: underline; }
+
+  .count {
+    margin: 0 0 0 auto;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--pc-ink-muted);
+  }
+
+  .progress {
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    height: 3px;
+    width: 100%;
+    background: var(--pc-accent);
+    transform: scaleX(0);
+    transform-origin: left center;
+  }
+
+  .deck {
+    height: 100dvh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    overscroll-behavior-y: contain;
+  }
+
+  .slide {
+    height: 100dvh;
+    min-height: 100dvh;
+    scroll-snap-align: start;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    overflow-y: auto;
+    padding: calc(var(--audit-bar) + 28px) clamp(20px, 6vw, 88px) calc(var(--audit-controls) + 28px);
+    background: #fff;
+  }
+
+  .slide[data-kind="live"] { background: #eef4fa; }
+  .slide[data-kind="miss"] { background: #fbefea; }
+  .slide[data-kind="rule"] { background: #12110e; color: #fff; }
+
+  .slide-inner {
+    width: min(920px, 100%);
+    margin: 0 auto;
+  }
+
+  .kicker {
+    margin: 0 0 18px;
+    font-family: var(--pc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pc-accent);
+  }
+
+  .slide[data-kind="miss"] .kicker { color: #993c1d; }
+  .slide[data-kind="rule"] .kicker { color: #9ec8ef; }
+
+  h1, h2 {
+    margin: 0;
+    max-width: 16ch;
+    font-size: clamp(2.6rem, 7.4vw, 6.2rem);
+    font-weight: 500;
+    letter-spacing: -0.045em;
+    line-height: 0.96;
+    text-wrap: balance;
+  }
+
+  .slide[data-kind="cause"] h2,
+  .slide[data-kind="receipt"] h2 {
+    max-width: 14ch;
+  }
+
+  h1 { font-size: clamp(2.8rem, 8vw, 6.6rem); }
+
+  .lede {
+    margin: 22px 0 0;
+    max-width: 38rem;
+    font-size: clamp(1.15rem, 2.1vw, 1.55rem);
+    line-height: 1.4;
+    color: var(--pc-ink-soft);
+    text-wrap: pretty;
+  }
+
+  .slide[data-kind="rule"] .lede { color: #d9d6cf; }
+
+  .lines {
+    margin: 26px 0 0;
+    padding: 0;
+    list-style: none;
+    max-width: 42rem;
+  }
+
+  .lines li {
+    margin: 0;
+    padding: 10px 0;
+    border-top: 1px solid var(--pc-rule-soft);
+    font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+    line-height: 1.35;
+  }
+
+  .lines li:last-child { border-bottom: 1px solid var(--pc-rule-soft); }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 26px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .chips a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 13px;
+    text-decoration: none;
+  }
+
+  .chips a:hover { border-color: var(--pc-accent); color: var(--pc-accent); }
+
+  .controls {
+    position: fixed;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px clamp(16px, 4vw, 40px) calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0));
+    pointer-events: none;
+  }
+
+  .controls button {
+    pointer-events: auto;
+    min-height: 48px;
+    min-width: 108px;
+    padding: 0 18px;
+    border: 1px solid var(--pc-rule);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--pc-ink);
+    font: 500 16px/1 var(--pc-font-sans);
+    cursor: pointer;
+    box-shadow: 0 1px 0 rgba(18, 17, 14, 0.04);
+  }
+
+  .controls button:hover { border-color: var(--pc-ink); }
+  .controls button:disabled { opacity: 0.35; cursor: default; }
+
+  @media (max-width: 640px) {
+    h1, h2 { max-width: 12ch; }
+    .lede { font-size: 1.08rem; }
+    .lines li { font-size: 1rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .deck { scroll-behavior: auto; }
+  }
+
+  @media print {
+    :global(html:has([data-audit-deck])),
+    :global(body.pc-block-shell:has([data-audit-deck])) {
+      height: auto;
+      overflow: visible;
+    }
+    .bar, .controls { position: static; }
+    .deck { height: auto; overflow: visible; }
+    .slide { min-height: auto; page-break-after: always; }
+  }
+</style>
