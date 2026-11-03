@@ -3,15 +3,23 @@
  * Merged into each door's JSON manifest by doorManifest(slug, DETAILS[slug]).
  * Keep these in step with the page scripts in src/pages/<slug>.astro.
  */
+import { SCALE, NOTES, PLANS, FLIGHT_MS, MAX_PLANES } from './takeoff.mjs';
+
 export const DETAILS = {
   'takeoff-organ': {
     instrument: {
+      version: 2,
       lanes: 8,
-      scaleMidi: [50, 53, 55, 57, 60, 62, 65, 67],
-      voice: 'three stacked partials (sine fundamental, triangle 2nd and 3rd) per plane',
-      envelope: 'swells in over 1.2 s while the plane climbs, releases over 2.5 s once it crosses the shoreline',
-      polyphony: 'up to 10 held notes; the oldest lets go first',
-      controls: { tap: 'a lane at the bottom launches on that note; anywhere in the sky launches a random lane', keys: '1 to 8 launch lanes; native Lane buttons also launch notes', auto: 'Auto schedule button toggles automatic departures' },
+      scaleMidi: SCALE,
+      notes: NOTES,
+      voice: 'sine fundamental, softer triangle second partial and sine third partial per departure',
+      envelope: '35 ms onset, held while the plane climbs, soft release after clearing the coast; reduced motion keeps the same notes with a shorter hold',
+      polyphony: `up to ${MAX_PLANES} note voices plus one brief three-note completion chime`,
+      flightMs: FLIGHT_MS,
+      controls: { tap: 'eight native note pads', keys: '1 to 8 while instrument focused; Space pauses outside buttons; Escape pauses/resumes', auto: 'Auto fly is optional in Free play and stops on pause, background or leaving', sound: 'off by default, optional', reducedMotion: 'static scene and immediate goal clearance, with the same optional music' },
+      skyChords: PLANS.map(plan=>({id:plan.id,name:plan.title,lanes:plan.lanes.map(lane=>lane+1),notes:plan.lanes.map(lane=>NOTES[lane])})),
+      goal: 'three different marked departures clear the coast; duplicate and other notes remain playable without awarding progress',
+      storage: 'takeoff-organ:v2 contains only version, selected chord index and unique explored chord IDs; no active aircraft or audio is restored',
     },
   },
   'refinery-lights': {
