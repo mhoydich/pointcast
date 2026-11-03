@@ -41,7 +41,7 @@ test('The Local Transmission defines ten active, independently completable six-m
   assert.match(source, /Complete any four of the six module receipts and the final course outcome or a private equivalent/);
   assert.match(source, /Start any class immediately, without an application or account/);
   assert.match(source, /No live attendance, camera, account, wallet, or public posting is required/);
-  assert.match(source, /Progress stays in this browser unless the learner chooses to download a private completion receipt/);
+  assert.match(source, /Progress stays in this browser by default/);
   assert.match(source, /Every required prompt, scenario, rubric, and checklist is written on this course page/);
   assert.match(source, /No AI system is required/);
   assert.doesNotMatch(source, /\b(?:supplied|class-provided|instructor-provided)\b/i);
@@ -100,7 +100,7 @@ test('UES publishes one shared catalog, ten JSON routes, and privacy-safe self-p
   assert.match(roomJson, /status: 'active'/);
   assert.match(roomJson, /deliveryMode: 'self-paced'/);
   assert.match(roomJson, /start: 'anytime'/);
-  assert.match(roomJson, /storage: 'local-browser-only'/);
+  assert.match(roomJson, /storage: 'local-browser-by-default'/);
   assert.match(roomJson, /walletRequired: false/);
   assert.match(roomJson, /transactionPolicy/);
   assert.match(catalogJson, /current:/);
@@ -108,7 +108,7 @@ test('UES publishes one shared catalog, ten JSON routes, and privacy-safe self-p
   assert.match(catalogJson, /learnerPriceUsd: 0/);
   assert.match(catalogJson, /account: false/);
   assert.match(catalogJson, /wallet: false/);
-  assert.match(catalogJson, /syncsToServer: false/);
+  assert.match(catalogJson, /syncsToServer: 'explicit-snapshot-only-when-enabled'/);
   assert.match(program, /nextOnlineTerm: ONLINE_SEASON_ONE/);
   assert.match(program, /nextCourses: UES_SEASON_ONE_COURSES/);
 });

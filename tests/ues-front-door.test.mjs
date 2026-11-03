@@ -32,5 +32,5 @@ test('PointCast edit preserves the current ten-course catalog and progress imple
  assert.ok(page.includes('id="current-term"'));assert.ok(page.includes('UES_SEASON_ONE_COURSES.map'));
  assert.ok(page.includes('/ues/track-05'));assert.ok(page.includes('/ues/classes.json'));
  assert.ok(page.includes('<UesFrontDoor />'));assert.equal((page.match(/<h1[ >]/g)||[]).length,0);
- assert.equal(data.classes.length,10); assert.equal(data.participation.progress.storage,'local-browser-only');
+ assert.equal(data.classes.length,10); assert.equal(data.participation.progress.storage,'local-browser-by-default');
 });

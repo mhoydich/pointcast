@@ -17,11 +17,14 @@ export const GET: APIRoute = () => {
       wallet: false,
     },
     progress: {
-      storage: 'local-browser-only',
-      syncsToServer: false,
-      identityStored: false,
+      storage: 'local-browser-by-default',
+      syncsToServer: 'explicit-snapshot-only-when-enabled',
+      identityStored: 'only-for-optional-account-copy',
+      optionalAccountEndpoint: '/api/me/courses',
+      attestation: 'self-attested',
+      publicProfile: false,
       learnerArtifactsStored: false,
-      note: 'Only completion choices and timestamps are saved in this browser. The learner may reset them or download a private receipt.',
+      note: 'No automatic upload. A signed-in learner may explicitly save or remove a private checklist copy when enabled. An account copy links the public course code, choices and timestamps to that account; it is not a verified qualification or voting right.',
     },
     optionalSupportedCohorts: {
       availableWhenFunded: true,

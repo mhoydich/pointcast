@@ -1,3 +1,5 @@
+import { UES_COMPLETION_RECEIPT_V2_URL, UES_COMPLETION_ATTESTATION_V2 } from './ues-completion-receipt-v2.mjs';
+
 export const UES_PROGRESS_VERSION = 1;
 export const UES_MODULE_COUNT = 6;
 export const UES_COMPLETION_MODULES = 4;
@@ -175,7 +177,7 @@ export const createCompletionReceipt = (progress, at = new Date()) => {
   if (!completionReached(normalized)) return null;
 
   return {
-    schema: 'https://pointcast.xyz/ues/completion-receipt/v1.json',
+    schema: UES_COMPLETION_RECEIPT_V2_URL,
     kind: 'self-attested-course-completion',
     program: 'University of El Segundo',
     courseCode: normalized.courseCode,
@@ -184,7 +186,7 @@ export const createCompletionReceipt = (progress, at = new Date()) => {
     finalOutcome: true,
     startedAt: normalized.startedAt,
     completedAt: normalized.completedAt ?? nowIso(at),
-    attestation: 'Self-attested by the learner; no identity was collected or verified.',
+    attestation: UES_COMPLETION_ATTESTATION_V2,
     disclaimer: 'Not academic credit, accreditation, verified identity, an on-chain record, or a financial credential.',
   };
 };

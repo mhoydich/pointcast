@@ -93,7 +93,7 @@ const SHARED_ACCESS = [
   'Every required prompt, scenario, rubric, and checklist is written on this course page; named sources are optional references, not missing course materials.',
   'Low-bandwidth, print-friendly syllabus with no paid platform or subscription required.',
   'No live attendance, camera, account, wallet, or public posting is required.',
-  'Progress stays in this browser unless the learner chooses to download a private completion receipt.',
+  'Progress stays in this browser by default. Learners may download a private completion receipt or deliberately save a checklist copy to their private PointCast account when available.',
 ] as const;
 
 export const ONLINE_SEASON_ONE = {

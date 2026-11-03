@@ -1,5 +1,6 @@
 ---
 import BlockLayout from '../../layouts/BlockLayout.astro';
+import UesCourseProfile from '../../components/UesCourseProfile.astro';
 import gallery from '../../data/el-segundo-school-gallery.json';
 import { UES_SEASON_ONE_COURSES, type UesSeasonOneCourse } from '../../lib/ues-classes';
 import { UES_PROGRAM } from '../../lib/ues-program';
@@ -127,7 +128,7 @@ const jsonLd = {
       <div class="course-desk__intro">
         <p class="eyebrow">YOUR PRIVATE COURSE DESK</p>
         <h2 id="course-desk-title">Start here. No account required.</h2>
-        <p>Check off modules as you work. Progress stays in this browser; the university never receives your name, work, location, email, or wallet.</p>
+        <p>Check off modules as you work. Progress stays in this browser by default. You can optionally save a checklist copy to your signed-in PointCast account below. Your coursework is never uploaded by this checklist.</p>
       </div>
       <div class="course-desk__controls">
         <div class="progress-wrap">
@@ -143,6 +144,7 @@ const jsonLd = {
         <p class="storage-note" data-course-storage aria-live="polite">Local progress is ready. You can also use the class without saving anything.</p>
         <noscript><p class="storage-note">JavaScript is off. The complete class remains available below; print this page or keep your own checklist.</p></noscript>
       </div>
+      <div class="course-account"><UesCourseProfile courseCode={course.code} coursePath={course.path} /></div>
     </section>
 
     <section class="weeks" id="weeks" aria-labelledby="weeks-title">
@@ -228,6 +230,7 @@ const jsonLd = {
 </BlockLayout>
 
 <script>
+  import { mountCourseProfile } from '../../scripts/ues-course-profile.mjs';
   import {
     createCompletionReceipt,
     createProgress,
@@ -257,6 +260,7 @@ const jsonLd = {
     const resetButton = desk.querySelector<HTMLButtonElement>('[data-course-reset]');
     const printButton = desk.querySelector<HTMLButtonElement>('[data-course-print]');
     let progress = createProgress(courseCode);
+    let progressRevision = 0;
     let storageAvailable = true;
 
     try {
@@ -266,6 +270,7 @@ const jsonLd = {
     }
 
     const save = () => {
+      progressRevision += 1;
       if (!storageAvailable) return;
       try {
         window.localStorage.setItem(storageKey, serializeProgress(progress));
@@ -338,7 +343,7 @@ const jsonLd = {
       }
       if (storageText) {
         storageText.textContent = storageAvailable
-          ? 'Progress is saved only in this browser. Reset it here or download a private receipt when complete.'
+          ? 'Edits are saved in this browser. Account copies update only when you choose Save below. Reset local progress or download a private receipt when complete.'
           : 'Private saving is unavailable in this browser. The checklist still works until this page closes; print the syllabus to keep a separate record.';
       }
     };
@@ -374,6 +379,7 @@ const jsonLd = {
 
     resetButton?.addEventListener('click', () => {
       if (!window.confirm(`Reset private progress for ${courseCode}?`)) return;
+      progressRevision += 1;
       progress = createProgress(courseCode);
       if (storageAvailable) {
         try {
@@ -390,6 +396,11 @@ const jsonLd = {
       if (receiptLink.getAttribute('aria-disabled') === 'true') event.preventDefault();
     });
 
+    mountCourseProfile(desk.querySelector('[data-ues-profile]'), {
+      getProgress: () => progress,
+      getProgressRevision: () => progressRevision,
+      replaceProgress: (saved) => { progress = saved; save(); render(); },
+    });
     render();
   }
 </script>
@@ -447,6 +458,7 @@ const jsonLd = {
   .solo-path b { font:700 11px var(--pc-font-mono); text-transform:uppercase; }
   .solo-path p { margin:10px 0 0; font:18px/1.5 Georgia,serif; }
   .course-desk { scroll-margin-top:58px; display:grid; grid-template-columns:minmax(280px,.8fr) minmax(0,1.2fr); gap:clamp(38px,8vw,140px); padding:clamp(70px,9vw,130px) clamp(18px,5vw,76px); border-bottom:1px solid var(--ink); background:var(--blue); color:#fff; }
+  .course-account { grid-column: 1 / -1; min-width: 0; }
   .course-desk .eyebrow { color:var(--acid); }
   .course-desk h2 { max-width:11ch; margin:14px 0 28px; font-size:clamp(48px,7vw,96px); line-height:.84; letter-spacing:-.065em; }
   .course-desk__intro>p:last-child { max-width:650px; margin:0; font:20px/1.5 Georgia,serif; }

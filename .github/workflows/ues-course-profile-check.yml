@@ -1,0 +1,38 @@
+name: UES private course profile checks
+on:
+  pull_request:
+    paths:
+      - 'functions/api/me/courses.ts'
+      - 'functions/api/auth/session.ts'
+      - 'migrations/auth/*ues_course_progress*'
+      - 'src/components/UesCourseProfile.astro'
+      - 'src/scripts/ues-course-profile.mjs'
+      - 'src/lib/ues-*.mjs'
+      - 'src/lib/ues-classes.ts'
+      - 'src/pages/me.astro'
+      - 'src/pages/ues/**'
+      - 'tests/ues-course-profile-*.test.mjs'
+      - '.github/workflows/ues-course-profile-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ues-course-profile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Private-course API, browser logic, receipts and profile compatibility
+        run: node --test tests/ues-course-profile-*.test.mjs tests/ues-progress.test.mjs tests/ues-receipt-schema.test.mjs tests/ues-front-door.test.mjs tests/profile-me.test.mjs
+      - name: Pages Function type check
+        run: npx --no-install tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler --allowJs --allowImportingTsExtensions --types @cloudflare/workers-types functions/api/me/courses.ts
+      - name: Pages Function bundle
+        run: npx --no-install esbuild functions/api/me/courses.ts --bundle --format=esm --platform=browser --outfile=/tmp/ues-courses-function.mjs
