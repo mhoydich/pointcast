@@ -16,13 +16,26 @@ class SQLiteD1 {
       this.sqlite.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(`fixture-${id}`, id, Date.now() + 600_000);
     }
   }
+  async batch(statements) {
+    this.sqlite.exec('BEGIN');
+    try {
+      const result = statements.map(statement => statement.execute());
+      this.sqlite.exec('COMMIT'); return result;
+    } catch (error) { this.sqlite.exec('ROLLBACK'); throw error; }
+  }
   prepare(sql) {
     const db = this.sqlite;
     return {
       args: [], bind(...args) { this.args = args; return this; },
       async first() { return db.prepare(sql).get(...this.args) ?? null; },
       async all() { return { success: true, results: db.prepare(sql).all(...this.args) }; },
-      async run() { return { success: true, meta: { changes: Number(db.prepare(sql).run(...this.args).changes) } }; },
+      execute() {
+        const statement = db.prepare(sql);
+        return statement.columns().length
+          ? { success: true, results: statement.all(...this.args), meta: { changes: 0 } }
+          : { success: true, results: [], meta: { changes: Number(statement.run(...this.args).changes) } };
+      },
+      async run() { return this.execute(); },
     };
   }
 }
@@ -39,7 +52,12 @@ function req(method = 'GET', body, user = 'alpha', headers = {}, search = '') {
   }, ...(body === undefined ? {} : { body: typeof body === 'string' ? body : JSON.stringify(body) }) });
 }
 const call = (handler, env, request) => handler({ request, env });
-const save = async (env, body = input(), user = 'alpha') => call(onRequestPut, env, req('PUT', body, user));
+const save = async (env, body = input(), user = 'alpha') => {
+  if (body && typeof body === 'object' && !Object.hasOwn(body, 'expectedGeneration')) {
+    body = { ...body, expectedGeneration: (await read(env, user)).generation };
+  }
+  return call(onRequestPut, env, req('PUT', body, user));
+};
 const read = async (env, user = 'alpha', search = '') => (await call(onRequestGet, env, req('GET', undefined, user, {}, search))).json();
 
 test('course feature fails closed when disabled, KV-only, or migration missing', async t => {
@@ -101,13 +119,14 @@ test('course updates preserve other courses, reject stale writes, and permit und
 test('concurrent snapshots cannot silently clobber the same revision', async t => {
   const env = fixture(t);
   const first = (await (await save(env)).json()).course;
-  const writes = await Promise.all([save(env, input({ expectedRevision: first.revision })), save(env, input({ expectedRevision: first.revision }))]);
+  const generation = (await read(env)).generation;
+  const writes = await Promise.all([save(env, input({ expectedRevision: first.revision, expectedGeneration: generation })), save(env, input({ expectedRevision: first.revision, expectedGeneration: generation }))]);
   assert.deepEqual(writes.map(r => r.status).sort(), [200, 409]);
 });
 test('remove is account/revision scoped; stale writes cannot revive a removed or recreated copy', async t => {
   const env = fixture(t);
   const first = (await (await save(env)).json()).course;
-  const remove = { courseCode: 'UES-201', expectedRevision: first.revision };
+  const remove = { courseCode: 'UES-201', expectedRevision: first.revision, expectedGeneration: (await read(env)).generation };
   assert.equal((await call(onRequestDelete, env, req('DELETE', remove, 'beta'))).status, 409);
   assert.equal((await call(onRequestDelete, env, req('DELETE', remove))).status, 200);
   assert.deepEqual((await read(env)).courses, []);
@@ -124,9 +143,10 @@ test('invalid, forged credential, private-note and cross-course payloads never p
     input({ progress: { ...initial(), completedWeeks: [7] } }), input({ progress: { ...initial(), finalOutcome: 'yes' } }),
     input({ progress: { ...initial(), startedAt: null } }), input({ progress: { ...initial(), completedAt: '2026-01-01T01:00:00.000Z' } }),
     input({ progress: { ...initial(), startedAt: '2999-01-01T00:00:00.000Z' } }), input({ progress: { ...initial(), startedAt: '2026-02-30T00:00:00.000Z' } }),
-    input({ expectedRevision: 'not-a-revision' }), input({ progress: null }), '{bad', '[]',
+    input({ expectedRevision: 'not-a-revision' }), input({ expectedGeneration: null }), input({ expectedGeneration: 'invalid' }), input({ progress: null }), '{bad', '[]',
   ];
   for (const value of malformed) assert.equal((await save(env, value)).status, 400);
+  assert.equal((await call(onRequestPut, env, req('PUT', input()))).status, 400, 'a save without a reviewed generation is rejected');
   assert.equal((await save(env, ' '.repeat(2049))).status, 413);
   assert.equal((await read(env)).courses.length, 0);
 });
@@ -140,4 +160,35 @@ test('deleting a user cascades private progress', async t => {
   const env = fixture(t); await save(env);
   env.AUTH_DB.sqlite.prepare('DELETE FROM users WHERE id = ?').run('alpha');
   assert.equal(env.AUTH_DB.sqlite.prepare('SELECT COUNT(*) AS n FROM ues_course_progress').get().n, 0);
+  assert.equal(env.AUTH_DB.sqlite.prepare('SELECT COUNT(*) AS n FROM ues_course_profile_revisions').get().n, 0);
+});
+
+test('an old empty-profile read cannot resurrect a course after another client saves then removes it', async t => {
+  const env = fixture(t);
+  const absent = await read(env);
+  assert.deepEqual(absent.courses, []);
+  const created = await (await save(env)).json();
+  const removed = await call(onRequestDelete, env, req('DELETE', {
+    courseCode: 'UES-201', expectedRevision: created.course.revision, expectedGeneration: created.generation,
+  }));
+  assert.equal(removed.status, 200);
+  const delayedFirstSave = await save(env, input({ expectedGeneration: absent.generation }));
+  assert.equal(delayedFirstSave.status, 409, 'a first save based on the pre-delete empty view must not recreate the removed course');
+  assert.deepEqual((await read(env)).courses, []);
+  const metadata = env.AUTH_DB.sqlite.prepare('SELECT * FROM ues_course_profile_revisions WHERE user_id = ?').get('alpha');
+  assert.deepEqual(Object.keys(metadata).sort(), ['generation', 'user_id']);
+  assert.equal(env.AUTH_DB.sqlite.prepare('SELECT COUNT(*) AS n FROM ues_course_progress').get().n, 0);
+  assert.equal((await save(env)).status, 200, 'a new explicit save after rereading the empty profile remains allowed');
+});
+
+
+test('a failed course mutation rolls back generation advancement and remains safely retryable', async t => {
+  const env = fixture(t);
+  const before = await read(env);
+  env.AUTH_DB.sqlite.exec("CREATE TRIGGER fixture_fail_insert BEFORE INSERT ON ues_course_progress BEGIN SELECT RAISE(ABORT, 'fixture failure'); END");
+  assert.equal((await save(env, input({ expectedGeneration: before.generation }))).status, 503);
+  const after = await read(env);
+  assert.equal(after.generation, before.generation); assert.deepEqual(after.courses, []);
+  env.AUTH_DB.sqlite.exec('DROP TRIGGER fixture_fail_insert');
+  assert.equal((await save(env, input({ expectedGeneration: before.generation }))).status, 200);
 });

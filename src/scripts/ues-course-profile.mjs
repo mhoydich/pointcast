@@ -2,6 +2,7 @@ import { normalizeProgress, progressSummary, serializeProgress } from '../lib/ue
 
 const ENDPOINT = '/api/me/courses';
 const REQUEST_FAILED = 'The profile request failed. Your local work is still here.';
+const validGeneration = value => typeof value === 'string' && /^[0-9a-f-]{36}$/.test(value);
 const messages = {
   unauthorized: 'Sign in to PointCast, then check your private profile again. Your local work is still here.',
   'account-changed': 'The signed-in account changed. Check your private profile again before saving.',
@@ -22,14 +23,21 @@ export function createCourseProfileClient(fetcher = globalThis.fetch) {
     let result;
     try { result = await response.json(); } catch { throw new Error(REQUEST_FAILED); }
     if (!response.ok || !result?.ok) throw new Error(messages[result?.reason] ?? REQUEST_FAILED);
+    if (!validGeneration(result.generation)) throw new Error(REQUEST_FAILED);
     return result;
   };
   return {
     load: code => request('GET', null, null, code),
-    save: (account, code, progress, expectedRevision) => request('PUT', {
-      courseCode: code, progress: JSON.parse(serializeProgress(normalizeProgress(progress, code))), expectedRevision, consent: true,
-    }, account.userId),
-    remove: (account, code, expectedRevision) => request('DELETE', { courseCode: code, expectedRevision }, account.userId),
+    save: async (account, code, progress, expectedRevision) => {
+      if (!validGeneration(account?.generation)) throw new Error(REQUEST_FAILED);
+      return request('PUT', {
+        courseCode: code, progress: JSON.parse(serializeProgress(normalizeProgress(progress, code))), expectedRevision, expectedGeneration: account.generation, consent: true,
+      }, account.userId);
+    },
+    remove: async (account, code, expectedRevision) => {
+      if (!validGeneration(account?.generation)) throw new Error(REQUEST_FAILED);
+      return request('DELETE', { courseCode: code, expectedRevision, expectedGeneration: account.generation }, account.userId);
+    },
   };
 }
 
@@ -76,7 +84,7 @@ function setup(root, client) {
   return { client, status, load, run, on, clear, focusLoad };
 }
 
-export function mountCourseProfile(root, { getProgress, replaceProgress, client = createCourseProfileClient() }) {
+export function mountCourseProfile(root, { getProgress, getProgressRevision, replaceProgress, client = createCourseProfileClient() }) {
   if (!root) return;
   const { status, load, run, on, focusLoad } = setup(root, client);
   const code = root.dataset.course;
@@ -101,10 +109,14 @@ export function mountCourseProfile(root, { getProgress, replaceProgress, client 
   }));
   on(restore, 'click', () => run(async valid => {
     const previous = snapshot;
+    const localRevision = getProgressRevision();
     const result = await client.load(code);
     if (!valid()) return;
     if (result.userId !== previous.userId || result.courses[0]?.revision !== previous.courses[0]?.revision) {
       show(result); status.textContent += ' The account or saved copy changed. Review it and choose again.'; return;
+    }
+    if (getProgressRevision() !== localRevision) {
+      show(result); status.textContent += ' The local checklist changed while the account copy was loading. Your edits were kept. Review the copy and choose again to replace them.'; return;
     }
     replaceProgress(normalizeProgress(result.courses[0].progress, code));
     show(result); status.textContent += ' Saved checklist copied here. This does not enable automatic syncing.';
@@ -120,6 +132,7 @@ export function mountProfileShelf(root, client = createCourseProfileClient()) {
   const { status, load, run, on, focusLoad } = setup(root, client);
   const list = root.querySelector('[data-ues-profile-list]');
   const show = result => {
+    let account = result;
     list.replaceChildren();
     status.textContent = `${result.displayName}: ${result.courses.length} saved course checklist${result.courses.length === 1 ? '' : 's'}. Private and self-attested.`;
     result.courses.forEach(course => {
@@ -133,8 +146,9 @@ export function mountProfileShelf(root, client = createCourseProfileClient()) {
       button.type = 'button'; button.textContent = 'Remove account copy';
       button.setAttribute('aria-label', `Remove ${course.courseCode} account copy`);
       on(button, 'click', () => run(async valid => {
-        await client.remove(result, course.courseCode, course.revision);
+        const removed = await client.remove(account, course.courseCode, course.revision);
         if (!valid()) return;
+        account = { ...account, generation: removed.generation };
         li.remove(); status.textContent = `${course.courseCode} account copy removed. Local checklists are unchanged.`; focusLoad();
       }));
       li.append(link, text, button); list.append(li);

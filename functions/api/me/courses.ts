@@ -3,6 +3,7 @@ import { UES_SEASON_ONE_COURSES } from '../../../src/lib/ues-classes.ts';
 import { normalizeProgress } from '../../../src/lib/ues-progress.mjs';
 
 export interface CourseProfileEnv extends AuthEnv { UES_COURSE_PROFILE_ENABLED?: string; }
+interface GenerationRow { generation: string; }
 interface CourseRow { course_code: string; progress: string; revision: string; saved_at: string; }
 const catalog = new Map(UES_SEASON_ONE_COURSES.map(course => [course.code as string, course]));
 const MAX_BODY_BYTES = 2048;
@@ -76,38 +77,62 @@ async function handle(request: Request, env: CourseProfileEnv): Promise<Response
     const code = url.searchParams.get('courseCode');
     if (code !== null && !catalog.has(code)) return fail('unknown-course', 400);
     if (!mutating) {
-      const rows = code === null
-        ? await env.AUTH_DB.prepare('SELECT course_code, progress, revision, saved_at FROM ues_course_progress WHERE user_id = ? ORDER BY course_code').bind(userId).all<CourseRow>()
-        : await env.AUTH_DB.prepare('SELECT course_code, progress, revision, saved_at FROM ues_course_progress WHERE user_id = ? AND course_code = ?').bind(userId, code).all<CourseRow>();
-      return authJson({ ok: true, ...account, courses: rows.results.map(project) });
+      const courses = code === null
+        ? env.AUTH_DB.prepare('SELECT course_code, progress, revision, saved_at FROM ues_course_progress WHERE user_id = ? ORDER BY course_code').bind(userId)
+        : env.AUTH_DB.prepare('SELECT course_code, progress, revision, saved_at FROM ues_course_progress WHERE user_id = ? AND course_code = ?').bind(userId, code);
+      // One transaction binds the displayed courses (including an empty view)
+      // to a durable account generation. A read never resets that generation.
+      const result = await env.AUTH_DB.batch([
+        env.AUTH_DB.prepare('INSERT INTO ues_course_profile_revisions (user_id, generation) VALUES (?, ?) ON CONFLICT(user_id) DO NOTHING').bind(userId, crypto.randomUUID()),
+        env.AUTH_DB.prepare('SELECT generation FROM ues_course_profile_revisions WHERE user_id = ?').bind(userId),
+        courses,
+      ]);
+      const generation = (result[1].results[0] as GenerationRow | undefined)?.generation;
+      if (generation === null || !revision(generation)) throw new Error('invalid-profile-generation');
+      return authJson({ ok: true, ...account, generation, courses: (result[2].results as CourseRow[]).map(project) });
     }
     if (request.headers.get('X-PointCast-User') !== userId) return fail('account-changed', 409);
     const input = await body(request);
     if (input instanceof Response) return input;
     const remove = request.method === 'DELETE';
-    if (!exact(input, remove ? ['courseCode', 'expectedRevision'] : ['courseCode', 'expectedRevision', 'consent', 'progress'])
+    if (!exact(input, remove ? ['courseCode', 'expectedRevision', 'expectedGeneration'] : ['courseCode', 'expectedRevision', 'expectedGeneration', 'consent', 'progress'])
       || typeof input.courseCode !== 'string' || !catalog.has(input.courseCode)
-      || !revision(input.expectedRevision) || (remove && input.expectedRevision === null)) return fail('invalid-payload', 400);
+      || !revision(input.expectedRevision) || (remove && input.expectedRevision === null)
+      || input.expectedGeneration === null || !revision(input.expectedGeneration)) return fail('invalid-payload', 400);
     const courseCode = input.courseCode;
     if (!remove && (input.consent !== true || !validProgress(input.progress, courseCode))) return fail('invalid-payload', 400);
-    // Opaque revisions prevent stale updates/deletes, including delete/re-create.
-    // One statement changes one course; generic /me/state never touches this table.
-    if (remove) {
-      const result = await env.AUTH_DB.prepare('DELETE FROM ues_course_progress WHERE user_id = ? AND course_code = ? AND revision = ?')
-        .bind(userId, courseCode, input.expectedRevision).run();
-      return result.meta.changes ? authJson({ ok: true, ...account, removed: courseCode }) : fail('revision-conflict', 409);
-    }
-    const payload = JSON.stringify(normalizeProgress(input.progress, courseCode));
+    const nextGeneration = crypto.randomUUID();
     const nextRevision = crypto.randomUUID();
     const savedAt = new Date().toISOString();
-    const row = input.expectedRevision === null
-      ? await env.AUTH_DB.prepare(`INSERT INTO ues_course_progress (user_id, course_code, progress, revision, saved_at)
-          VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, course_code) DO NOTHING RETURNING course_code, progress, revision, saved_at`)
-        .bind(userId, courseCode, payload, nextRevision, savedAt).first<CourseRow>()
-      : await env.AUTH_DB.prepare(`UPDATE ues_course_progress SET progress = ?, revision = ?, saved_at = ?
-          WHERE user_id = ? AND course_code = ? AND revision = ? RETURNING course_code, progress, revision, saved_at`)
-        .bind(payload, nextRevision, savedAt, userId, courseCode, input.expectedRevision).first<CourseRow>();
-    return row ? authJson({ ok: true, ...account, course: project(row) }) : fail('revision-conflict', 409);
+    const payload = remove ? null : JSON.stringify(normalizeProgress(input.progress, courseCode));
+    const matchingCourse = input.expectedRevision === null
+      ? 'NOT EXISTS (SELECT 1 FROM ues_course_progress WHERE user_id = ? AND course_code = ?)'
+      : 'EXISTS (SELECT 1 FROM ues_course_progress WHERE user_id = ? AND course_code = ? AND revision = ?)';
+    const guard = env.AUTH_DB.prepare(`UPDATE ues_course_profile_revisions SET generation = ?
+      WHERE user_id = ? AND generation = ? AND ${matchingCourse}`)
+      .bind(nextGeneration, userId, input.expectedGeneration, userId, courseCode,
+        ...(input.expectedRevision === null ? [] : [input.expectedRevision]));
+    const generationMatches = 'EXISTS (SELECT 1 FROM ues_course_profile_revisions WHERE user_id = ? AND generation = ?)';
+    const change = remove
+      ? env.AUTH_DB.prepare(`DELETE FROM ues_course_progress WHERE user_id = ? AND course_code = ? AND revision = ? AND ${generationMatches}`)
+        .bind(userId, courseCode, input.expectedRevision, userId, nextGeneration)
+      : input.expectedRevision === null
+        ? env.AUTH_DB.prepare(`INSERT INTO ues_course_progress (user_id, course_code, progress, revision, saved_at)
+            SELECT ?, ?, ?, ?, ? WHERE ${generationMatches} ON CONFLICT(user_id, course_code) DO NOTHING`)
+          .bind(userId, courseCode, payload, nextRevision, savedAt, userId, nextGeneration)
+        : env.AUTH_DB.prepare(`UPDATE ues_course_progress SET progress = ?, revision = ?, saved_at = ?
+            WHERE user_id = ? AND course_code = ? AND revision = ? AND ${generationMatches}`)
+          .bind(payload, nextRevision, savedAt, userId, courseCode, input.expectedRevision, userId, nextGeneration);
+    // D1.batch is one transaction: generation advancement and the course change
+    // succeed together. A stale empty-view save cannot survive save -> delete,
+    // since deletion preserves the new account generation without course data.
+    const result = await env.AUTH_DB.batch([guard, change]);
+    if (result[0].meta.changes !== 1 || result[1].meta.changes !== 1) return fail('revision-conflict', 409);
+    return remove
+      ? authJson({ ok: true, ...account, generation: nextGeneration, removed: courseCode })
+      : authJson({ ok: true, ...account, generation: nextGeneration, course: project({
+        course_code: courseCode, progress: payload!, revision: nextRevision, saved_at: savedAt,
+      }) });
   } catch { return unavailable(); }
 }
 
