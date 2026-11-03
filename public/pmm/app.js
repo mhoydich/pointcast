@@ -81,8 +81,9 @@
   async function fingerprint(pub) { const d = await crypto.subtle.digest('SHA-256', enc.encode(`${pub.x}.${pub.y}`)); return hex(d); }
   const sigilOf = (fp) => { const b = unhex(fp.slice(0, 8)); return GLYPHS[b[0] & 15] + GLYPHS[b[1] & 15] + GLYPHS[b[2] & 15] + GLYPHS[b[3] & 15]; };
   const unhex = (h) => { const b = new Uint8Array(h.length / 2); for (let i = 0; i < b.length; i++) b[i] = parseInt(h.substr(i * 2, 2), 16); return b; };
-  async function ensureIdentity() {
+  async function ensureIdentity({ create = false } = {}) {
     if (!state.me.pub || !state.me.priv) {
+      if (!create) throw new Error('Choose a handle and continue to create this device identity');
       const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
       state.me.pub = await crypto.subtle.exportKey('jwk', kp.publicKey);
       state.me.priv = await crypto.subtle.exportKey('jwk', kp.privateKey);
@@ -101,9 +102,10 @@
 
   /* ---------- state ---------- */
   let state = load();
+  let identityReady = false, quickstartBusy = false, sessionStarted = false;
   function load() {
     try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.me && Array.isArray(s.friends)) return s; } catch (_) {}
-    return { me: { name: '', place: '', tz: '', mood: 'calm', live: true, sound: true }, friends: [], si: [] };
+    return { me: { name: '', place: '', tz: '', mood: 'calm', live: true, sound: false, soundChoice: false }, friends: [], si: [] };
   }
   let storageWarned = false;
   function save() { if (state.si && state.si.length > 200) state.si = state.si.slice(-200); try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) { if (!storageWarned) { storageWarned = true; setTimeout(() => toast('STORAGE OFF: NOTHING WILL BE KEPT'), 300); } } }
@@ -120,7 +122,7 @@
   /* ---------- sound: square waves, two notes ---------- */
   let ac = null;
   function blip(up) {
-    if (!state.me.sound || !gestured) return;
+    if (state.me.sound !== true || state.me.soundChoice !== true || !gestured) return;
     try {
       ac = ac || new (window.AudioContext || window.webkitAudioContext)();
       const t = ac.currentTime; const notes = up ? [440, 660] : [660, 440];
@@ -133,31 +135,116 @@
   function toast(text) { toastEl.textContent = text; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toastEl.hidden = true), 2400); }
   function show(view) {
     app.dataset.view = view;
+    $('chat-welcome').hidden = view !== 'lobby' || !wide.matches;
+    const target = !profileReady() ? 'quickstart-name' : view === 'chat' ? 'composer-input' : view === 'si' ? 'si-input' : view === 'load' ? 'load-screen' : 'btn-host';
+    const skip = document.querySelector('.skip'); skip.href = '#' + target; skip.textContent = !profileReady() ? 'Skip to handle setup' : view === 'chat' || view === 'si' ? 'Skip to composer' : 'Skip to connection controls';
     for (const p of ['lobby', 'load', 'chat', 'si']) $('pane-' + p).hidden = wide.matches ? false : p !== view;
   }
-  function openSheet(id) { $('sheet-wrap').hidden = false; for (const s of document.querySelectorAll('.sheet')) s.hidden = s.id !== id; }
-  function closeSheets() { $('sheet-wrap').hidden = true; }
+  let activeSheet = null, sheetOpener = null;
+  function visibleFocusTarget(el) {
+    if (!el || !el.isConnected || el.matches(':disabled') || el.closest('[hidden], [inert]')) return false;
+    for (let node = el; node && node !== document.body; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    }
+    return true;
+  }
+  function sheetControls() {
+    return [...activeSheet.querySelectorAll('button, input, select, textarea, a[href], [tabindex]')].filter((el) => el.tabIndex >= 0 && visibleFocusTarget(el));
+  }
+  function focusSheet() { (sheetControls()[0] || activeSheet).focus(); }
+  function focusFlow() {
+    const target = $(document.querySelector('.skip').hash.slice(1));
+    if (visibleFocusTarget(target)) target.focus({ preventScroll: true });
+  }
+  function openSheet(id, opener = document.activeElement) {
+    if (!activeSheet) sheetOpener = opener;
+    activeSheet = $(id); activeSheet.tabIndex = -1;
+    $('sheet-wrap').hidden = false;
+    for (const s of document.querySelectorAll('.sheet')) s.hidden = s !== activeSheet;
+    app.setAttribute('inert', ''); document.querySelector('.skip').setAttribute('inert', '');
+    focusSheet();
+  }
+  function closeSheets() {
+    if (!activeSheet) return;
+    $('sheet-wrap').hidden = true; activeSheet = null;
+    app.removeAttribute('inert'); document.querySelector('.skip').removeAttribute('inert');
+    if (visibleFocusTarget(sheetOpener) && sheetOpener.tabIndex >= 0) sheetOpener.focus({ preventScroll: true });
+    else focusFlow();
+    sheetOpener = null;
+  }
+  document.querySelector('.skip').addEventListener('click', (e) => { e.preventDefault(); focusFlow(); });
   $('scrim').addEventListener('click', closeSheets);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSheets(); if (scanStream) stopScan(); } });
+  document.addEventListener('focusin', (e) => { if (activeSheet && !activeSheet.contains(e.target)) focusSheet(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (activeSheet) { e.preventDefault(); closeSheets(); } if (scanStream) stopScan(); return; }
+    if (e.key !== 'Tab' || !activeSheet) return;
+    const controls = sheetControls(), first = controls[0], last = controls[controls.length - 1];
+    const focused = document.activeElement, outside = !activeSheet.contains(focused) || focused === activeSheet;
+    if (!first) { e.preventDefault(); activeSheet.focus(); }
+    else if (e.shiftKey && (focused === first || outside)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (focused === last || outside)) { e.preventDefault(); first.focus(); }
+  });
+
+  /* ---------- quickstart: a display name, never a username registry ---------- */
+  function handleValue(value) {
+    const name = value.trim().replace(/\s+/g, ' ').replace(/^@/, '');
+    if (!name) return { error: 'Choose a handle so friends know what to call you.' };
+    if (name.length > 24 || !/^[\p{L}\p{N}][\p{L}\p{N}\p{M} ._'’-]*$/u.test(name)) return { error: 'Use 1–24 characters: letters, numbers, spaces, dots, dashes or underscores.' };
+    return { name };
+  }
+  function profileReady() { return identityReady && Boolean(state.me.name?.trim()); }
+  function renderQuickstart() {
+    const ready = profileReady();
+    if (!ready) show('lobby');
+    $('quickstart-invite').hidden = !/(?:^|&)(?:join|offer|answer)=/.test(location.hash.slice(1));
+    $('quickstart').hidden = ready;
+    if (ready && app.dataset.view === 'lobby') show('lobby');
+    $('me-card').hidden = !state.me.id;
+    $('first-use-next').hidden = !ready;
+    $('friend-actions').hidden = !ready;
+    $('friend-directory').hidden = !ready;
+    $('btn-export').disabled = !identityReady;
+    $('lobby-prompt').textContent = ready ? 'READY.' : 'SET YOUR HANDLE';
+    $('welcome-next').textContent = ready ? 'Invite someone or choose a conversation on the left.' : 'Set a handle on the left, then invite a friend or use their code or link.';
+    $('quickstart-identity').textContent = state.me.pub && state.me.priv ? 'Continue keeps your existing device identity.' : 'Continue creates a signing key on this device.';
+    if (!ready && !$('quickstart-name').value) $('quickstart-name').value = state.me.name || '';
+  }
+  $('quickstart-name').addEventListener('input', () => { $('quickstart-name').removeAttribute('aria-invalid'); $('quickstart-error').hidden = true; });
+  $('quickstart-form').addEventListener('submit', async (e) => {
+    e.preventDefault(); if (quickstartBusy) return;
+    const result = handleValue($('quickstart-name').value);
+    if (result.error) { $('quickstart-error').textContent = result.error; $('quickstart-error').hidden = false; $('quickstart-name').setAttribute('aria-invalid', 'true'); $('quickstart-name').focus(); return; }
+    quickstartBusy = true; $('quickstart-submit').disabled = true; $('quickstart-submit').textContent = 'SETTING UP…'; $('quickstart-error').hidden = true;
+    try {
+      await ensureIdentity({ create: true }); identityReady = true;
+      state.me.name = result.name; save(); renderMe(); renderQuickstart(); renderFriends();
+      startSession();
+      focusFlow();
+    } catch (_) {
+      $('quickstart-error').textContent = 'Could not set up this device. Try again, or restore a key in Settings. Your invite link has not changed.';
+      $('quickstart-error').hidden = false;
+    } finally { quickstartBusy = false; $('quickstart-submit').disabled = false; $('quickstart-submit').textContent = 'CONTINUE'; }
+  });
 
   /* ---------- lobby ---------- */
   function renderMe() {
     $('me-name').textContent = myName().toUpperCase();
-    $('me-id').textContent = state.me.id ? `SIGIL ${state.me.id.slice(0, 8).toUpperCase()} · ${(state.me.place || tzName()).toUpperCase()}` : 'minting your key…';
+    $('me-id').textContent = state.me.id ? `SIGIL ${state.me.id.slice(0, 8).toUpperCase()} · ${(state.me.place || tzName()).toUpperCase()}` : 'Set a handle to begin';
     $('me-sigil').textContent = state.me.id ? sigilOf(state.me.id) : '····';
     $('btn-mood').textContent = state.me.mood.toUpperCase();
     document.documentElement.style.setProperty('--mood-me', moodColor(state.me.mood));
   }
   function renderFriends() {
     const ul = $('friends'); ul.replaceChildren();
-    if (!state.friends.length) { const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'NO FRIENDS LOADED. TAP LOAD "FRIEND" AND SEND THEM THE LINK.'; ul.append(li); return; }
+    if (!state.friends.length) { const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Your conversations will appear here after you connect with a friend.'; ul.append(li); return; }
     const sorted = [...state.friends].sort((a, b) => (lastMsg(b)?.ts || b.created) - (lastMsg(a)?.ts || a.created));
     for (const f of sorted) {
       const li = document.createElement('li'); const b = document.createElement('button'); b.className = 'friend'; b.type = 'button';
       b.setAttribute('aria-current', current && current.id === f.id ? 'true' : 'false');
       const online = peer && peer.friend === f && peer.dc && peer.dc.readyState === 'open';
       const l = lastMsg(f);
-      b.innerHTML = `<span class="sigil" aria-hidden="true">${sigilOf(f.id)}</span><span class="friend-main"><strong></strong><span></span></span><span class="friend-meta"><span class="dot ${online ? '' : 'off'}" title="${online ? 'online' : 'offline'}"></span>${f.unread ? `<span class="badge">${f.unread}</span>` : ''}</span>`;
+      b.innerHTML = `<span class="sigil" aria-hidden="true">${sigilOf(f.id)}</span><span class="friend-main"><strong></strong><span></span></span><span class="friend-meta"><span class="dot ${online ? '' : 'off'}" role="img" aria-label="${online ? 'Connected' : 'Not connected'}"></span>${f.unread ? `<span class="badge">${f.unread}</span>` : ''}</span>`;
       b.querySelector('strong').textContent = f.name.toUpperCase() + (f.trusted ? ' ✓' : '');
       b.querySelector('.friend-main span').textContent = l ? (l.from === 'me' ? 'YOU: ' : '') + (l.text || l.label || '').replace(/\s+/g, ' ') : `${(f.mood || 'calm').toUpperCase()} · ${f.tz || ''}`;
       b.addEventListener('click', () => openChat(f.id));
@@ -185,16 +272,22 @@
   });
 
   /* ---------- settings ---------- */
-  $('btn-settings').addEventListener('click', () => {
+  let soundChoiceChanged = false;
+  $('set-sound').addEventListener('change', () => { soundChoiceChanged = true; });
+  $('btn-settings').addEventListener('click', (e) => {
+    soundChoiceChanged = false; $('set-name-error').hidden = true; $('set-name').removeAttribute('aria-invalid');
     $('set-name').value = state.me.name; $('set-place').value = state.me.place || ''; $('set-tz').value = state.me.tzAddr || '';
-    $('set-live').checked = state.me.live !== false; $('set-sound').checked = state.me.sound !== false;
-    $('set-key').textContent = state.me.id ? `${sigilOf(state.me.id)}  ${state.me.id.slice(0, 16).toUpperCase()} · minted on this phone. Export it to keep your sigil if you clear the browser.` : 'minting…';
-    openSheet('sheet-settings');
+    $('set-live').checked = state.me.live !== false; $('set-sound').checked = state.me.sound === true && state.me.soundChoice === true;
+    $('set-key').textContent = state.me.id ? `${sigilOf(state.me.id)}  ${state.me.id.slice(0, 16).toUpperCase()} · minted on this phone. Export it to keep your sigil if you clear the browser.` : 'Created when you continue through quickstart.';
+    openSheet('sheet-settings', e.currentTarget);
   });
   $('btn-settings-done').addEventListener('click', () => {
-    state.me.name = $('set-name').value.replace(/[✓✔☑✅]/g, '').trim().slice(0, 24); state.me.place = $('set-place').value.trim().slice(0, 32);
+    const handle = $('set-name').value === state.me.name ? { name: state.me.name } : handleValue($('set-name').value);
+    if (handle.error) { $('set-name-error').textContent = handle.error; $('set-name-error').hidden = false; $('set-name').setAttribute('aria-invalid', 'true'); $('set-name').focus(); return; }
+    state.me.name = handle.name; state.me.place = $('set-place').value.trim().slice(0, 32);
     state.me.tzAddr = $('set-tz').value.trim().slice(0, 40); state.me.live = $('set-live').checked; state.me.sound = $('set-sound').checked;
-    save(); renderMe(); closeSheets(); sendHello();
+    if (soundChoiceChanged) state.me.soundChoice = true;
+    save(); renderMe(); renderQuickstart(); if (profileReady() && !sessionStarted) startSession(); closeSheets(); sendHello();
   });
   $('btn-export').addEventListener('click', () => {
     const friends = state.friends.map((f) => ({ id: f.id, name: f.name, pub: f.pub, trusted: Boolean(f.trusted), mood: f.mood, tz: f.tz, place: f.place, created: f.created }));
@@ -230,7 +323,8 @@
         fr.name = str(f.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.trusted = fr.trusted || f.trusted === true;
         if (!fr.mood) fr.mood = validMood(f.mood); if (!fr.tz) fr.tz = str(f.tz, 64); if (!fr.place) fr.place = str(f.place, 32);
       }
-      save(); renderMe(); renderFriends(); toast(restored ? `KEY LOADED · ${restored} FRIEND${restored === 1 ? '' : 'S'} RESTORED` : 'KEY LOADED'); closeSheets();
+      identityReady = true; renderQuickstart();
+      save(); renderMe(); renderFriends(); toast(restored ? `KEY LOADED · ${restored} FRIEND${restored === 1 ? '' : 'S'} RESTORED` : 'KEY LOADED'); if (profileReady()) startSession(); closeSheets();
     } catch (_) { toast('NOT A PMM KEY FILE'); }
     e.target.value = '';
   });
@@ -339,10 +433,11 @@
 
   // HOST: make an offer. Code flow when the signal store is bound, paste mode otherwise.
   async function host() {
+    if (!profileReady()) { show('lobby'); renderQuickstart(); return; }
     cancelPending(); hangup(); const mine = ++attempt;
     show('load'); $('load-prompt').textContent = 'SEARCHING FOR FRIEND'; $('load-code').hidden = true; $('form-join').hidden = true; $('form-answer').hidden = true;
     $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true; $('load-hint').textContent = ''; hideQr(); scanKey('');
-    screen('LOAD "FRIEND",8,1', 'PRESS PLAY ON TAPE', '');
+    screen('LOAD "FRIEND",8,1', 'CREATING YOUR INVITE', 'Keep this screen open while PMM prepares a link.');
     await iceWithTimeout(1500); if (mine !== attempt) return;
     const pc = freshPc(); const dc = pc.createDataChannel('pmm', { ordered: true });
     const p = { pc, dc, role: 'host', startedAt: now() }; pending = p;
@@ -390,11 +485,13 @@
 
   // GUEST: answer an offer from a code (store) or an offer link (paste mode).
   function joinView() {
+    if (!profileReady()) { show('lobby'); renderQuickstart(); return; }
     cancelPending(); show('load'); $('load-prompt').textContent = 'JOIN'; $('load-code').hidden = true; $('form-answer').hidden = true; $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true;
-    screen('LOAD "FRIEND",8,1', 'TYPE THE CODE YOUR FRIEND READ OUT', canScan ? 'or paste the link they sent, or scan their code' : 'or paste the link they sent, or point your camera at their code'); $('form-join').hidden = false; $('load-hint').textContent = ''; hideQr(); scanKey('SCAN THEIR CODE'); setTimeout(() => $('join-input').focus(), 50);
+    screen('LOAD "FRIEND",8,1', 'ENTER THEIR CODE OR LINK', canScan ? 'or paste the link they sent, or scan their code' : 'or paste the link they sent, or point your camera at their code'); $('form-join').hidden = false; $('load-hint').textContent = ''; hideQr(); scanKey('SCAN THEIR CODE'); setTimeout(() => $('join-input').focus(), 50);
   }
   $('form-join').addEventListener('submit', (e) => { e.preventDefault(); const v = $('join-input').value.trim(); const o = /offer=([A-Za-z0-9_-]+)/.exec(v); const j = /join=([A-Z2-9]{6})/i.exec(v); if (o) joinOffer(o[1]); else joinCode((j ? j[1] : v).toUpperCase()); });
   async function joinCode(code) {
+    if (!profileReady()) return;
     if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code)) return toast('?SYNTAX ERROR: SIX LETTERS');
     cancelPending(); show('load'); $('form-join').hidden = true; $('load-code').textContent = code; $('load-code').hidden = false; hideQr(); scanKey('');
     screen('LOAD "FRIEND",8,1', 'SEARCHING FOR FRIEND', 'asking the desk for the handshake…');
@@ -413,6 +510,7 @@
     if (pending?.pc === pc) screen(null, '?FILE NOT FOUND ERROR', 'no handshake under that code. ask them to LOAD again.');
   }
   async function joinOffer(packed) {
+    if (!profileReady()) return;
     cancelPending(); show('load'); $('form-join').hidden = true; $('load-code').hidden = true; $('load-prompt').textContent = 'JOIN'; hideQr(); scanKey('');
     screen('LOAD "FRIEND",8,1', 'PASTE MODE', 'reading their handshake…');
     const mine = ++attempt; await iceWithTimeout(1500); if (mine !== attempt) return;
@@ -625,7 +723,15 @@
     const online = peer && peer.friend === current && peer.dc.readyState === 'open';
     $('peer-name').textContent = current.name.toUpperCase() + (current.trusted ? ' ✓' : '');
     $('peer-sigil').textContent = sigilOf(current.id);
-    $('peer-status').textContent = online ? `RUN · ${peer.rtt == null ? '…' : peer.rtt + ' MS'} · ${peer.path}` : 'OFFLINE · NOTES WAIT HERE';
+    $('peer-status').textContent = online ? 'CONNECTED' : 'NOT CONNECTED';
+    const waiting = current.messages.filter((m) => m.from === 'me' && m.status === 'queued').length;
+    const note = online
+      ? 'Connected to ' + current.name + '. Keep PMM open on both devices.'
+      : (waiting ? `${waiting} ${waiting === 1 ? 'message is' : 'messages are'} waiting on this device. ` : 'Messages stay on this device for now. ') + 'Connect with ' + current.name + ' to send.';
+    if ($('connection-note').textContent !== note) $('connection-note').textContent = note;
+    $('btn-send').textContent = online ? 'SEND' : 'KEEP HERE';
+    $('btn-send').setAttribute('aria-label', online ? 'Send message' : 'Keep message on this device until connected');
+    $('composer-input').placeholder = online ? 'Write a message…' : 'Write now, send when connected…';
     $('btn-connect').hidden = online; $('btn-file').disabled = !online; $('btn-voice').disabled = !online;
   }
   function renderAtmo() {
@@ -637,6 +743,7 @@
   const fmtDay = (ts) => { const d = new Date(ts), t = new Date(); if (d.toDateString() === t.toDateString()) return 'TODAY'; return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase(); };
   function renderChat() {
     const f = current; if (!f) return; const ol = $('messages'); ol.replaceChildren(); let day = '';
+    if (!f.messages.some((m) => m.kind !== 'sys')) { const li = document.createElement('li'); li.className = 'conversation-empty'; li.innerHTML = '<strong>Say your first hello.</strong><p>Write a message below. The connection note shows when it can leave this device.</p>'; ol.append(li); }
     for (const m of f.messages) {
       const d = fmtDay(m.ts); if (d !== day) { day = d; const li = document.createElement('li'); li.className = 'day'; li.textContent = d; ol.append(li); }
       const li = document.createElement('li'); li.dataset.id = m.id;
@@ -654,9 +761,10 @@
       li.append(bubble);
       if (m.reaction) { const r = document.createElement('span'); r.className = 'react'; r.textContent = m.reaction; li.append(r); }
       const meta = document.createElement('div'); meta.className = 'meta';
-      meta.innerHTML = `<span>${fmtTime(m.ts)}</span>${m.mood ? `<span class="mood" style="--m:${moodColor(m.mood)}">${esc(m.mood)}</span>` : ''}${m.from === 'me' ? `<span class="${m.status === 'read' ? 'read' : ''}">${m.status === 'read' ? '✓✓' : m.status === 'queued' ? 'WAITING' : '✓'}</span>` : m.verified === false ? '<span class="bad">UNVERIFIED</span>' : m.kind !== 'file' ? '<span class="ok">SIGNED</span>' : ''}`;
+      meta.innerHTML = `<span>${fmtTime(m.ts)}</span>${m.mood ? `<span class="mood" style="--m:${moodColor(m.mood)}">${esc(m.mood)}</span>` : ''}${m.from === 'me' ? `<span class="delivery ${m.status === 'read' ? 'read' : ''}">${m.status === 'read' ? 'RECEIVED' : m.status === 'queued' ? 'WAITING' : m.status === 'sent' ? 'SENT' : 'NOT CONFIRMED'}</span>` : m.verified === false ? '<span class="bad">UNVERIFIED</span>' : m.kind !== 'file' ? '<span class="ok">SIGNED</span>' : ''}`;
       li.append(meta); attachPress(li, m); ol.append(li);
     }
+    renderChatHead();
     scrollBottom(true);
   }
   const scrollEl = $('scroll');
@@ -763,14 +871,24 @@
   /* ---------- boot ---------- */
   async function boot() {
     if (!state.me.tz) state.me.tz = tzName();
-    renderMe(); renderFriends(); ticker(); refreshIce(true);
-    await ensureIdentity(); renderMe();
-    setInterval(() => { if (ice.relay) refreshIce(false); }, 240000);
-    if (wide.matches) show('lobby');
+    renderMe(); renderFriends(); show('lobby'); renderQuickstart();
+    // Returning profiles import their existing key. Fresh visits never mint one.
+    if (state.me.pub && state.me.priv) {
+      try { await ensureIdentity(); identityReady = true; renderMe(); renderQuickstart(); }
+      catch (_) { $('quickstart-error').textContent = 'Could not load your existing identity. Try Continue again or restore a key in Settings.'; $('quickstart-error').hidden = false; }
+    }
+    if (profileReady()) startSession();
+  }
+  function startSession() {
+    if (!sessionStarted) {
+      sessionStarted = true; ticker(); refreshIce(true);
+      setInterval(() => { if (ice.relay) refreshIce(false); }, 240000);
+      setInterval(() => { if (current) renderAtmo(); if (app.dataset.view === 'si') renderSi(); }, 30000);
+    }
     route();
-    setInterval(() => { if (current) renderAtmo(); if (app.dataset.view === 'si') renderSi(); }, 30000);
   }
   function route() {
+    if (!profileReady()) { renderQuickstart(); return; }
     const h = location.hash.slice(1);
     const o = /offer=([A-Za-z0-9_-]+)/.exec(h), a = /answer=([A-Za-z0-9_-]+)/.exec(h), j = /join=([A-Z2-9]{6})/i.exec(h), f = /f=([0-9a-f]{16})/.exec(h);
     if (o) { history.replaceState(null, '', location.pathname); joinOffer(o[1]); }
