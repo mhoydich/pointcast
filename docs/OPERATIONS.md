@@ -65,6 +65,40 @@ scripts/deploy.sh --force     # redeploy the same sha
 - Don't run `wrangler pages deploy` by hand. Every manual deploy from a
   worktree is how prod went backwards in September.
 
+## 3b. The cloud path: merge and deploy without the Mac
+
+Added 2026-11-02 so publishing doesn't wait on anyone being at the iMac.
+
+- **Merge.** `.github/workflows/ship.yml` merges a PR to main when it has what
+  section "Merge to main" in AGENTS.md asks for: Codex's review and Mike's okay.
+  - Codex review: the Codex GitHub reviewer (`chatgpt-codex-connector[bot]`)
+    reviewed the exact head commit (its review is on that commit, or its
+    "no major issues" comment names that commit) and flagged nothing at P0/P1.
+    Ask for one with a `@codex review` comment, or turn on automatic reviews
+    in Codex. A review of an older commit never carries over.
+  - Mike's okay: the `ship` label, added from Mike's own GitHub account. Add it
+    only when Mike has said to publish in his own words, and quote him in the
+    PR body. `hold` (or `Publish: hold` in the body) keeps a PR open.
+  - Checks: `pr-check` (a plain build of every PR, no path filter) passed on
+    the head commit, and every other check there is green.
+  - It merges that exact head with a merge commit. Each run sweeps every open
+    PR labeled `ship`, every 15 minutes and whenever a PR is labeled, pushed,
+    commented on, or finishes `pr-check`. Every trigger runs main's copy of the
+    workflow and script, so a PR can't loosen its own gate.
+  - A PR that changes `.github/workflows/` is left for a person to merge: the
+    workflow token can't merge workflow files.
+- **Deploy.** Every push to main, and every merge the ship workflow makes,
+  runs "Deploy PointCast to Cloudflare Pages". It does what `scripts/deploy.sh`
+  does: one deploy at a time, build retried once, the same dist gates, upload
+  only if the commit is still the tip of main, then the same smoke test. It
+  needs the `CLOUDFLARE_API_TOKEN` repo secret; until that exists it builds and
+  says "Not deployed".
+- A failed smoke test turns the run red but doesn't roll back; roll back in
+  the Cloudflare dashboard or with `scripts/deploy.sh --release-sha=...`.
+- `scripts/deploy.sh` still works as the manual fallback. Workers under
+  `workers/` still deploy by hand.
+- Check what merged but isn't live with `npm run audit:publishing`.
+
 ## 4. After the deploy
 
 Walk the town and file the report in your next PR (see README, "After the

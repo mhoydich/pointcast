@@ -2,8 +2,13 @@ name: Deploy PointCast to Cloudflare Pages
 
 # The Cloudflare Pages project "pointcast" is a Direct Upload project (it has no
 # Git connection, and Cloudflare can't add one to an existing Direct Upload
-# project). This workflow is the auto-deploy: every push to main builds the site
-# and uploads it with wrangler, so what's on main is what's live.
+# project). This workflow is the cloud deploy: every push to main, and every
+# merge the ship workflow makes, builds the site and uploads it with wrangler,
+# so what's on main is what's live. No Mac needed.
+#
+# It mirrors scripts/deploy.sh: one deploy at a time, a build that retries once
+# (api.tzkt.io fetches are flaky), the same dist gates, and the same smoke test.
+# scripts/deploy.sh still works as the manual fallback.
 #
 # One-time setup (repo owner): add a repository secret CLOUDFLARE_API_TOKEN with
 # the "Cloudflare Pages: Edit" permission on the account. Until that secret
@@ -17,17 +22,20 @@ on:
 permissions:
   contents: read
 
+# One deploy at a time, in order. A running deploy finishes; GitHub keeps only
+# the newest waiting run, so a burst of merges ends with the newest main live.
 concurrency:
   group: cloudflare-pages-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
       CLOUDFLARE_ACCOUNT_ID: 699061394cac705067bad6a7a4bd2db5
       NODE_OPTIONS: --max-old-space-size=6144
+      SITE: https://pointcast.xyz
     steps:
       - name: Check out PointCast
         uses: actions/checkout@v5
@@ -39,10 +47,23 @@ jobs:
           cache: npm
 
       - name: Install
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
-      - name: Build
-        run: npm run build
+      - name: Build (retries once)
+        run: |
+          if ! npm run build; then
+            echo "::warning::Build failed once (often a transient api.tzkt.io fetch); retrying"
+            npm run build
+          fi
+
+      - name: Gate the build like scripts/deploy.sh
+        run: |
+          for page in index.html court/index.html blocks.json; do
+            [ -f "dist/$page" ] || { echo "::error::dist/$page missing, not deploying"; exit 1; }
+          done
+          files=$(find dist -type f | wc -l | tr -d ' ')
+          [ "$files" -ge 3000 ] || { echo "::error::only $files files in dist, not deploying"; exit 1; }
+          echo "build ok: $files files"
 
       - name: Check for the Cloudflare token
         id: token
@@ -66,8 +87,23 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Deploy to Cloudflare Pages
+      # Main may have moved while we built. A newer push (or the ship workflow's
+      # dispatch) has already queued a run for it, so let that one ship and never
+      # let an older build land after a newer one.
+      - name: Still the tip of main?
+        id: tip
         if: steps.token.outputs.present == 'true'
+        run: |
+          tip="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "$tip" = "$GITHUB_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Skipped::main moved to ${tip::8} while ${GITHUB_SHA::8} built; the run for the newer commit deploys it."
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.token.outputs.present == 'true' && steps.tip.outputs.current == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -77,3 +113,24 @@ jobs:
             --project-name=pointcast
             --branch=main
             --commit-hash=${{ github.sha }}
+
+      - name: Smoke test the pages an outage hits first
+        if: steps.token.outputs.present == 'true' && steps.tip.outputs.current == 'true'
+        run: |
+          bad=0
+          for path in / /court/ /blocks.json; do
+            code=000
+            for attempt in 1 2 3 4 5 6; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' "$SITE$path?deploy=${GITHUB_SHA::8}")
+              [ "$code" = 200 ] && break
+              sleep 10
+            done
+            echo "$path -> $code"
+            [ "$code" = 200 ] || bad=1
+          done
+          if [ "$bad" = 1 ]; then
+            echo "::error::Deployed ${GITHUB_SHA::8} but the smoke test failed. Check https://pointcast.xyz now."
+            exit 1
+          fi
+          echo "## Live" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`${GITHUB_SHA}\` is live on $SITE." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,46 @@
+name: pr-check
+
+# Builds every pull request to main, with no path filter, so the ship workflow
+# has a real "it builds" signal on the exact head commit before it merges.
+# build:bare is a plain astro build (docs/OPERATIONS.md, section 2); the deploy
+# runs the full build.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Ship gate tests
+        run: node --test tests/ship-pr.test.mjs
+      - name: Build (retries once)
+        run: |
+          if ! npm run build:bare; then
+            echo "::warning::Build failed once (often a transient api.tzkt.io fetch); retrying"
+            npm run build:bare
+          fi
+      - name: Gate the build like scripts/deploy.sh
+        run: |
+          for page in index.html court/index.html blocks.json; do
+            [ -f "dist/$page" ] || { echo "::error::dist/$page missing"; exit 1; }
+          done
+          echo "build ok: $(find dist -type f | wc -l | tr -d ' ') files"
