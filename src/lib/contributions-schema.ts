@@ -32,7 +32,26 @@ export const CONTRIBUTION_TYPES = [
   'group_buy',
   'report',
   'broadcast',
+  'moderation',
 ] as const;
+
+/**
+ * The elsegundo.xyz buying lab names its contribution kinds its own way; each
+ * maps onto the shared vocabulary here. Kinds already shared (correction,
+ * review, art, code) pass straight through.
+ */
+export const DESK_KIND_ALIASES: Record<string, string> = {
+  'place-data': 'data',
+  'group-buy-host': 'group_buy',
+  'bonfire-host': 'host',
+  'skill-night-teach': 'teach',
+};
+
+/** Buying-lab contribution statuses mapped onto ours. "hidden" rows are never mirrored. */
+const DESK_STATUS_ALIASES: Record<string, string> = { pending: 'open', 'not-yet': 'declined' };
+
+/** Buying-lab ledger event types (append-only; withdraw is its own event). */
+const DESK_EVENT_TYPES = ['pledge', 'signal', 'withdraw', 'contribution'];
 
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 export type Actor = (typeof ACTORS)[number];
@@ -97,10 +116,14 @@ function httpsOrNull(value: unknown): string | null {
   }
 }
 
-/** Accept 0..1 or 0..100; anything else is null. */
-export function normalizeConfidence(value: unknown): number | null {
+/**
+ * Accept 0..1 or 0..100; anything else is null. With percent=true the value is
+ * always read as 0..100 (the buying lab's integer scale), so 1 means 1%.
+ */
+export function normalizeConfidence(value: unknown, percent = false): number | null {
   const n = typeof value === 'string' ? Number(value) : value;
   if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return null;
+  if (percent) return n <= 100 ? Math.round(n) / 100 : null;
   if (n <= 1) return Math.round(n * 100) / 100;
   if (n <= 100) return Math.round(n) / 100;
   return null;
@@ -116,32 +139,55 @@ export function normalizeEntry(raw: unknown, site: string): LedgerEntry | null {
   const r = raw as Record<string, any>;
   const id = typeof r.id === 'string' || typeof r.id === 'number' ? String(r.id) : '';
   const handle = String(r.handle ?? r.who ?? r.name ?? '').trim();
-  const kind = pick(ENTRY_KINDS, r.kind) ?? (r.contributionType ? 'contribution' : r.side ? 'signal' : null);
+
+  // Buying-lab events carry `type` (pledge|signal|withdraw|contribution) and
+  // use `kind` for the contribution kind, or the withdrawn kind on a withdraw.
+  const deskType = typeof r.type === 'string' && DESK_EVENT_TYPES.includes(r.type) ? r.type : null;
+  if (deskType && r.status === 'hidden') return null;
+  let kind: EntryKind | null;
+  let status: Status | null = null;
+  if (deskType === 'withdraw') {
+    kind = pick(ENTRY_KINDS, r.kind) ?? 'pledge';
+    status = 'withdrawn';
+  } else if (deskType) {
+    kind = deskType as EntryKind;
+  } else {
+    kind = pick(ENTRY_KINDS, r.kind) ?? (r.contributionType ? 'contribution' : r.side ? 'signal' : null);
+  }
   if (!id || !kind || !HANDLE_RE.test(handle)) return null;
 
-  const targetRaw = (r.target && typeof r.target === 'object') ? r.target : { type: r.targetType, id: r.targetId ?? r.item ?? r.itemId, url: r.targetUrl };
+  let targetRaw: any;
+  if (r.target && typeof r.target === 'object') targetRaw = r.target;
+  else if (deskType && r.place) targetRaw = { type: 'place', id: r.place, url: r.url };
+  else if (deskType && r.item) targetRaw = { type: 'edition', id: r.tier ? `${r.item}:${r.tier}` : r.item, url: r.url };
+  else targetRaw = { type: r.targetType, id: r.targetId ?? r.item ?? r.itemId, url: r.targetUrl };
+
   const priceNum = Number(r.price);
+  const price = Number.isFinite(priceNum) && priceNum >= 0 && r.price !== null && r.price !== '' && r.price !== undefined ? Math.round(priceNum) : null;
   const createdAt = isoOrNull(r.createdAt ?? r.at ?? r.ts) ?? new Date(0).toISOString();
+  const rawContribution = String(r.contributionType ?? (deskType ? (kind === 'contribution' ? r.kind : '') : r.type) ?? '');
+  const rawStatus = typeof r.status === 'string' ? DESK_STATUS_ALIASES[r.status] ?? r.status : r.status;
 
   return {
     id,
     kind,
     site: String(r.site || site),
     handle,
-    actor: pick(ACTORS, r.actor ?? r.via) ?? 'person',
+    actor: pick(ACTORS, r.actor ?? r.by ?? r.via) ?? 'person',
     operator: typeof r.operator === 'string' && HANDLE_RE.test(r.operator) ? r.operator : null,
     target: {
       type: pick(TARGET_TYPES, targetRaw?.type) ?? 'item',
       id: String(targetRaw?.id ?? ''),
       url: httpsOrNull(targetRaw?.url),
     },
-    side: pick(SIDES, r.side),
-    price: Number.isFinite(priceNum) && priceNum >= 0 && r.price !== null && r.price !== '' ? Math.round(priceNum) : null,
-    confidence: normalizeConfidence(r.confidence),
-    contributionType: pick(CONTRIBUTION_TYPES, r.contributionType ?? r.type),
-    body: String(r.body ?? r.note ?? '').slice(0, BODY_MAX),
+    // The buying lab has no asks yet: a priced pledge or signal there is a bid.
+    side: pick(SIDES, r.side) ?? (deskType && deskType !== 'contribution' && price != null ? 'bid' : null),
+    price,
+    confidence: normalizeConfidence(r.confidence, Boolean(deskType)),
+    contributionType: pick(CONTRIBUTION_TYPES, DESK_KIND_ALIASES[rawContribution] ?? rawContribution),
+    body: String(r.body ?? r.note ?? r.title ?? '').slice(0, BODY_MAX),
     proofUrl: httpsOrNull(r.proofUrl),
-    status: pick(STATUSES, r.status) ?? 'open',
+    status: status ?? pick(STATUSES, rawStatus) ?? 'open',
     createdAt,
     resolvedAt: isoOrNull(r.resolvedAt),
   };

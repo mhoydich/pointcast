@@ -3,13 +3,18 @@
  * read-only mirror of the elsegundo.xyz trading desk (2026-11-03).
  *
  *   contribute_paths    read   every contribution route on both sites, in the shared vocabulary
- *   trading_desk_read   read   the elsegundo.xyz desk: book, ledger or reputation, normalized
+ *   trading_desk_read   read   the elsegundo.xyz buying lab: book, ledger or a participant's record
  *
  * Kept out of mcp.ts like radio-mcp: spread CONTRIBUTIONS_TOOL_DEFINITIONS into
  * TOOLS and route both names to dispatchContributionsTool.
  *
- * Nothing here writes. Posting a signal or pledge happens on elsegundo.xyz's
- * own desk; PointCast contributions keep their existing tools (guides intake,
+ * The desk is the elsegundo.xyz buying lab (hello-token-reserve PR 193):
+ * public read-only JSON at /api/v1/buying-lab (book), /ledger (append-only
+ * events, newest first) and /record?handle= (one participant's record), with
+ * writes on its own MCP at https://elsegundo.xyz/mcp/desk.
+ *
+ * Nothing here writes. Posting a signal, pledge or contribution happens on the
+ * buying lab's own MCP or page; PointCast contributions keep their existing tools (guides intake,
  * civil service, night shift, the Loom, want ads, price wire, sky calls).
  * No money moves anywhere: prices are intent, pledges are promises and
  * confidence is self-reported.
@@ -26,7 +31,8 @@ import {
 } from './contributions-schema.ts';
 
 export const DESK_SITE = 'elsegundo.xyz';
-export const DEFAULT_DESK_BASE = 'https://elsegundo.xyz/api/v1/desk';
+export const DEFAULT_DESK_BASE = 'https://elsegundo.xyz/api/v1/buying-lab';
+export const DESK_MCP_URL = 'https://elsegundo.xyz/mcp/desk';
 export const DESK_VIEWS = ['book', 'ledger', 'reputation'] as const;
 
 export interface ContributionPath {
@@ -35,6 +41,8 @@ export interface ContributionPath {
   contributionType: ContributionType | 'signal' | 'pledge';
   what: string;
   tool: string | null;
+  /** A tool on another site's MCP server, as "<server url> · <tool>". */
+  remoteTool?: string;
   url: string;
   review: 'human' | 'resident' | 'automatic' | 'public';
   credit: string;
@@ -51,8 +59,9 @@ export const CONTRIBUTION_PATHS: ContributionPath[] = [
   { id: 'want-offer', site: 'pointcast.xyz', contributionType: 'group_buy', what: 'Answer a want with an offer; the Clerk scores it in public.', tool: 'wants_offer', url: 'https://pointcast.xyz/shop/wants', review: 'automatic', credit: 'Public score on the want.' },
   { id: 'loom', site: 'pointcast.xyz', contributionType: 'broadcast', what: 'A public message to any Loom address; mentions and topics echo it outward.', tool: 'loom_append', url: 'https://pointcast.xyz/loom', review: 'public', credit: 'Your address in the thread. Public the moment you post, so ask your person first.' },
   { id: 'station-request', site: 'pointcast.xyz', contributionType: 'review', what: 'A song request for the one-listener station, with why.', tool: 'station_request', url: 'https://pointcast.xyz/station', review: 'public', credit: 'The request line says so if it plays.' },
-  { id: 'desk-signal', site: 'elsegundo.xyz', contributionType: 'signal', what: 'A bid or ask with a whole-dollar price and a confidence on the elsegundo.xyz trading desk. Moneyless.', tool: null, url: 'https://elsegundo.xyz/value/market/', review: 'automatic', credit: 'Shows on the desk ledger and in your reputation (trading_desk_read).' },
-  { id: 'desk-pledge', site: 'elsegundo.xyz', contributionType: 'pledge', what: 'A promise to buy, give or show up, with a confidence. Kept and broken pledges build your record.', tool: null, url: 'https://elsegundo.xyz/value/market/', review: 'automatic', credit: 'Kept rate and calibration on the desk reputation board.' },
+  { id: 'desk-signal', site: 'elsegundo.xyz', contributionType: 'signal', what: 'Signal interest in an edition or place on the elsegundo.xyz buying lab, with a whole-dollar play price and a confidence from 0 to 100. Moneyless.', tool: null, remoteTool: `${DESK_MCP_URL} · post_signal`, url: 'https://elsegundo.xyz/value/market/', review: 'automatic', credit: 'Shows on the buying-lab ledger and in your record (trading_desk_read).' },
+  { id: 'desk-pledge', site: 'elsegundo.xyz', contributionType: 'pledge', what: 'A pledge (a bid; the lab has no asks yet) to buy at a play price, with a confidence. Kept pledges add 3 to your score; withdraw with withdraw.', tool: null, remoteTool: `${DESK_MCP_URL} · post_pledge`, url: 'https://elsegundo.xyz/value/market/', review: 'automatic', credit: 'Kept pledges and Brier calibration on your buying-lab record.' },
+  { id: 'desk-contribution', site: 'elsegundo.xyz', contributionType: 'data', what: 'A buying-lab contribution: place-data, correction, review, art, group-buy-host, bonfire-host, skill-night-teach, code or moderation (contribution_kinds lists them).', tool: null, remoteTool: `${DESK_MCP_URL} · contribute`, url: 'https://elsegundo.xyz/value/market/', review: 'human', credit: 'Stewards accept by PR; only accepted ids earn credit (contribution_status).' },
 ];
 
 const ROUTE_NOTE =
@@ -75,12 +84,12 @@ export const CONTRIBUTIONS_TOOL_DEFINITIONS = [
   {
     name: 'trading_desk_read',
     description:
-      'Read the elsegundo.xyz trading desk from PointCast: view "book" (best open bid and ask per item, spread, mean confidence), "ledger" (recent signals, pledges and contributions, newest first) or "reputation" (per handle: kept, broken, kept rate and Brier calibration, lower is better). Rows are normalized to the shared ledger schema pointcast.ledger/v1. Moneyless: prices are intent and pledges are promises. Read-only mirror; post on the desk itself.',
+      'Read the elsegundo.xyz buying lab (the moneyless trading desk) from PointCast: view "book" (the lab\'s own book), "ledger" (recent pledges, signals, withdrawals and contributions, newest first, normalized to the shared schema pointcast.ledger/v1) or "reputation" (with handle: that participant\'s record, kept pledges, Brier calibration once a drop settles, contribution credit and score; without: a board counted from the ledger). Prices are play dollars and pledges are promises. Read-only mirror; post through https://elsegundo.xyz/mcp/desk.',
     inputSchema: {
       type: 'object',
       properties: {
         view: { type: 'string', enum: [...DESK_VIEWS], description: 'book, ledger or reputation. Default book.' },
-        handle: { type: 'string', description: 'Only this handle\'s rows (ledger) or record (reputation).' },
+        handle: { type: 'string', description: 'A nickname: only its rows (ledger) or its record (reputation).' },
         limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Ledger rows to return. Default 25.' },
       },
       additionalProperties: false,
@@ -98,28 +107,50 @@ export function filterPaths(args: { type?: unknown; site?: unknown }) {
   return CONTRIBUTION_PATHS.filter((p) => (!args.type || p.contributionType === args.type) && (!args.site || p.site === args.site));
 }
 
-/** Pull rows out of whatever envelope the desk serves: {entries}, {ledger}, {items}, {rows} or a bare array. */
+/** Pull rows out of whatever envelope the desk serves: {events}, {entries}, {ledger}, {items}, {rows} or a bare array. */
 export function extractRows(payload: unknown): unknown[] {
   if (Array.isArray(payload)) return payload;
   if (payload && typeof payload === 'object') {
     const p = payload as Record<string, unknown>;
-    for (const key of ['entries', 'ledger', 'items', 'rows', 'signals']) if (Array.isArray(p[key])) return p[key] as unknown[];
+    for (const key of ['events', 'entries', 'ledger', 'items', 'rows', 'signals']) if (Array.isArray(p[key])) return p[key] as unknown[];
   }
   return [];
 }
 
-export async function readDeskLedger(fetcher: Fetcher, deskBase: string): Promise<{ ok: true; entries: LedgerEntry[]; source: string } | { ok: false; source: string; reason: string }> {
-  const source = `${deskBase.replace(/\/$/, '')}/ledger`;
+type DeskRead<T> = { ok: true; source: string; data: T } | { ok: false; source: string; reason: string };
+
+async function readDeskJson(fetcher: Fetcher, source: string): Promise<DeskRead<any>> {
   try {
     const res = await fetcher(source, { headers: { accept: 'application/json' } });
     if (!res.ok) return { ok: false, source, reason: `desk answered ${res.status}` };
-    const rows = extractRows(await res.json());
-    const entries = rows.map((r) => normalizeEntry(r, DESK_SITE)).filter((e): e is LedgerEntry => e !== null);
-    entries.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    return { ok: true, entries, source };
+    const data = await res.json();
+    if (data && typeof data === 'object' && (data as any).ok === false) return { ok: false, source, reason: String((data as any).note || (data as any).error || 'desk said not ok') };
+    return { ok: true, source, data };
   } catch (err: any) {
     return { ok: false, source, reason: err?.message || 'unreachable' };
   }
+}
+
+const deskRoot = (deskBase: string) => deskBase.replace(/\/$/, '');
+
+export async function readDeskLedger(fetcher: Fetcher, deskBase: string, opts: { limit?: number; handle?: string } = {}): Promise<{ ok: true; entries: LedgerEntry[]; source: string; total: number | null } | { ok: false; source: string; reason: string }> {
+  const limit = Math.max(1, Math.min(100, opts.limit ?? 100));
+  const read = await readDeskJson(fetcher, `${deskRoot(deskBase)}/ledger?limit=${limit}`);
+  if (!read.ok) return read;
+  let entries = extractRows(read.data).map((r) => normalizeEntry(r, DESK_SITE)).filter((e): e is LedgerEntry => e !== null);
+  if (opts.handle) entries = entries.filter((e) => e.handle.toLowerCase() === opts.handle);
+  entries.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const total = typeof read.data?.total === 'number' ? read.data.total : null;
+  return { ok: true, entries, source: read.source, total };
+}
+
+const MONEYLESS = 'Moneyless: prices are play dollars, pledges are promises, confidence is self-reported.';
+
+function downResult(source: string, reason: string): ToolResult {
+  return {
+    content: [text(`The elsegundo.xyz buying lab could not be read (${reason}) from ${source}. Nothing is mirrored right now; try the desk page at https://elsegundo.xyz/value/market/.`)],
+    isError: true,
+  };
 }
 
 export async function dispatchContributionsTool(
@@ -131,7 +162,7 @@ export async function dispatchContributionsTool(
     const paths = filterPaths(args ?? {});
     const lines = [
       `${paths.length} contribution route${paths.length === 1 ? '' : 's'}. ${ROUTE_NOTE}`,
-      ...paths.map((p) => `· [${p.contributionType}] ${p.what} → ${p.tool ?? p.url} (${p.site}, ${p.review} review)`),
+      ...paths.map((p) => `· [${p.contributionType}] ${p.what} → ${p.tool ?? p.remoteTool ?? p.url} (${p.site}, ${p.review} review)`),
     ];
     return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, vocabulary: [...CONTRIBUTION_TYPES, 'signal', 'pledge'], note: ROUTE_NOTE, paths }, null, 2))] };
   }
@@ -140,28 +171,46 @@ export async function dispatchContributionsTool(
     const handle = typeof args?.handle === 'string' ? args.handle.trim().toLowerCase() : '';
     const limit = Math.max(1, Math.min(100, Number(args?.limit) || 25));
     const deskBase = opts.deskBase || DEFAULT_DESK_BASE;
-    const read = await readDeskLedger(opts.fetcher ?? fetch, deskBase);
-    if (!read.ok) {
-      return {
-        content: [text(`The elsegundo.xyz trading desk could not be read (${read.reason}) from ${read.source}. Nothing is mirrored right now; try the desk page at https://elsegundo.xyz/value/market/.`)],
-        isError: true,
-      };
+    const fetcher = opts.fetcher ?? fetch;
+
+    if (view === 'book') {
+      // The lab serves its own book; withdrawals are separate ledger events,
+      // so its book is the honest view of what is still open.
+      const read = await readDeskJson(fetcher, deskRoot(deskBase));
+      if (!read.ok) return downResult(read.source, read.reason);
+      const rows = extractRows(read.data);
+      const editions = Array.isArray(read.data?.editions) ? read.data.editions : rows;
+      const lines = [`Buying-lab book · ${read.source}`, MONEYLESS];
+      if (typeof read.data?.note === 'string') lines.push(read.data.note.slice(0, 300));
+      if (editions.length) lines.push(`${editions.length} edition${editions.length === 1 ? '' : 's'} listed.`);
+      return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, site: DESK_SITE, source: read.source, book: read.data }, null, 2))] };
     }
-    const entries = handle ? read.entries.filter((e) => e.handle.toLowerCase() === handle) : read.entries;
-    const moneyless = 'Moneyless: prices are intent, pledges are promises, confidence is self-reported.';
+
+    if (view === 'reputation' && handle) {
+      const read = await readDeskJson(fetcher, `${deskRoot(deskBase)}/record?handle=${encodeURIComponent(handle)}`);
+      if (!read.ok) return downResult(read.source, read.reason);
+      const record = read.data?.record ?? read.data;
+      if (!record || record.found === false) {
+        return { content: [text(`No buying-lab record for ${handle} yet. ${MONEYLESS}`)] };
+      }
+      const p = record.pledges ?? {};
+      const rep = record.reputation ?? {};
+      const brier = record.calibration?.brier;
+      const line = `${record.handle ?? handle}: score ${rep.score ?? '—'} (credit ${rep.credit ?? 0}, kept pledges ${rep.keptPledges ?? p.kept ?? 0}), pledges open ${p.open ?? 0} / settled ${p.settled ?? 0} / withdrawn ${p.withdrawn ?? 0}, Brier ${brier ?? 'not yet (no drop settled)'}, contributions ${record.contributions?.accepted ?? 0} accepted of ${record.contributions?.total ?? 0}`;
+      return { content: [text([`Buying-lab record · ${read.source}`, MONEYLESS, line].join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, site: DESK_SITE, source: read.source, record }, null, 2))] };
+    }
+
+    const read = await readDeskLedger(fetcher, deskBase, { limit: 100, handle });
+    if (!read.ok) return downResult(read.source, read.reason);
+    const entries = read.entries;
     if (view === 'ledger') {
       const rows = entries.slice(0, limit);
-      const lines = [`Desk ledger · ${rows.length} of ${entries.length} rows · ${read.source}`, moneyless, ...rows.map((e) => `· ${e.createdAt.slice(0, 16)}Z ${e.handle} ${e.kind}${e.side ? ` ${e.side}` : ''}${e.price != null ? ` $${e.price}` : ''}${e.confidence != null ? ` @${e.confidence}` : ''} on ${e.target.id || e.target.type} [${e.status}]`)];
-      return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, source: read.source, total: entries.length, entries: rows }, null, 2))] };
+      const lines = [`Buying-lab ledger · ${rows.length} of ${entries.length} events read${read.total != null ? ` (${read.total} in all)` : ''} · ${read.source}`, MONEYLESS, ...rows.map((e) => `· ${e.createdAt.slice(0, 16)}Z ${e.handle} ${e.status === 'withdrawn' ? `withdrew a ${e.kind}` : e.kind}${e.contributionType ? ` (${e.contributionType})` : ''}${e.price != null ? ` $${e.price}` : ''}${e.confidence != null ? ` @${e.confidence}` : ''} on ${e.target.id || e.target.type} [${e.status}]`)];
+      return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, site: DESK_SITE, source: read.source, total: read.total ?? entries.length, entries: rows }, null, 2))] };
     }
-    if (view === 'reputation') {
-      const board = buildReputation(entries);
-      const lines = [`Desk reputation · ${board.length} handle${board.length === 1 ? '' : 's'} · ${read.source}`, moneyless, ...board.slice(0, limit).map((r) => `· ${r.handle} (${r.actor}): kept ${r.kept}, broken ${r.broken}, open ${r.open}, accepted ${r.accepted}${r.keptRate != null ? `, kept rate ${r.keptRate}` : ''}${r.brier != null ? `, Brier ${r.brier}` : ''}`)];
-      return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, source: read.source, reputation: board }, null, 2))] };
-    }
-    const book = buildBook(entries);
-    const lines = [`Desk book · ${book.length} item${book.length === 1 ? '' : 's'} with open quotes · ${read.source}`, moneyless, ...book.map((b) => `· ${b.target.id || b.target.type}: bid ${b.bestBid ?? '—'} / ask ${b.bestAsk ?? '—'}${b.crossed ? ' (crossed)' : ''}${b.meanConfidence != null ? ` · confidence ${b.meanConfidence}` : ''}`)];
-    return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, source: read.source, book }, null, 2))] };
+    const board = buildReputation(entries);
+    const lines = [`Buying-lab board from the last ${entries.length} ledger events · ${read.source}`, MONEYLESS, 'Pass handle for a participant\'s full record, scored by the lab itself.', ...board.slice(0, limit).map((r) => `· ${r.handle} (${r.actor}): ${r.entries} events, open ${r.open}, withdrawn ${r.withdrawn}, accepted ${r.accepted}${r.keptRate != null ? `, kept rate ${r.keptRate}` : ''}${r.brier != null ? `, Brier ${r.brier}` : ''}`)];
+    return { content: [text(lines.join('\n')), text(JSON.stringify({ schema: SCHEMA_ID, site: DESK_SITE, source: read.source, reputation: board }, null, 2))] };
   }
   return { content: [text(`unknown contributions tool: ${name}`)], isError: true };
 }

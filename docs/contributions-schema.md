@@ -29,7 +29,7 @@ self-reported.
 | `createdAt`, `resolvedAt` | ISO time | |
 
 Contribution types: `data`, `correction`, `review`, `art`, `code`, `host`,
-`teach`, `group_buy`, `report`, `broadcast`.
+`teach`, `group_buy`, `report`, `broadcast`, `moderation`.
 
 ## Reputation (derived, never stored)
 
@@ -39,11 +39,37 @@ confidence (kept = 1, broken = 0). Lower Brier is better calibrated.
 
 ## Who writes what
 
-- The elsegundo.xyz desk is the writer of record for desk signals and pledges.
-  PointCast reads it through `trading_desk_read` (`DESK_MIRROR_URL`, default
-  `https://elsegundo.xyz/api/v1/desk`, reading `<base>/ledger`) and never
-  writes across sites.
+- The elsegundo.xyz buying lab is the writer of record for pledges, signals,
+  withdrawals and lab contributions. Writes go through its own MCP at
+  `https://elsegundo.xyz/mcp/desk` (`post_pledge`, `post_signal`, `withdraw`,
+  `contribute`, among 12 tools). PointCast never writes across sites.
+- PointCast reads it through `trading_desk_read` (`DESK_MIRROR_URL`, default
+  `https://elsegundo.xyz/api/v1/buying-lab`): `view=book` passes through the
+  lab's own book (`GET <base>`), `view=ledger` normalizes
+  `GET <base>/ledger?limit=100`, and `view=reputation` with a handle passes
+  through `GET <base>/record?handle=`. Without a handle it counts a board from
+  the ledger.
 - PointCast contributions keep their own tools; `contribute_paths` maps each to
-  this vocabulary.
-- `normalizeEntry()` accepts a few aliases (`who`, `note`, `at`, `via`,
-  `itemId`) so a renamed desk field degrades to missing instead of failing.
+  this vocabulary, and names the lab's MCP tools for desk routes.
+
+## Mapping from the buying lab's ledger events
+
+| lab event field | here |
+| --- | --- |
+| `type`: `pledge` \| `signal` \| `contribution` | `kind` |
+| `type`: `withdraw` | `kind` from the event's `kind`, `status: withdrawn` |
+| `by` | `actor` |
+| `confidence` 0–100 integer | `confidence` / 100 (so 1 means 1%) |
+| `item` + `tier` | `target { type: edition, id: "item:tier" }` |
+| `place` | `target { type: place }` |
+| no side (the lab has no asks yet) | a priced pledge or signal is `side: bid` |
+| `kind` on a contribution | `contributionType`: `place-data` → `data`, `group-buy-host` → `group_buy`, `bonfire-host` → `host`, `skill-night-teach` → `teach`; `correction`, `review`, `art`, `code`, `moderation` as is |
+| `status`: `pending` / `not-yet` / `accepted` | `open` / `declined` / `accepted`; `hidden` rows are never mirrored |
+| `note`, else `title` | `body` |
+| `at` | `createdAt` |
+
+`site` is set to `elsegundo.xyz` on every mirrored row. Nicknames only, and no
+money anywhere.
+
+`normalizeEntry()` also accepts a few older aliases (`who`, `note`, `at`,
+`via`, `itemId`) so a renamed field degrades to missing instead of failing.
