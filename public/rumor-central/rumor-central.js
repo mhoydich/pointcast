@@ -16,7 +16,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const slot = (name) => document.querySelector(`[data-rc="${name}"]`);
 const pct = (n) => (n == null ? '—' : `${Math.round(n)}%`);
 const sign = (n) => (n == null ? '' : n > 0 ? `+${n}` : `${n}`);
-const VENUE = { kalshi: 'Kalshi', polymarket: 'Polymarket', baseline: 'Baseline 0' };
+const VENUE = { kalshi: 'Kalshi', polymarket: 'Polymarket', baseline: 'Baseline 0', grok: 'Grok Bot' };
 const HORIZONS = [['week', 'This week'], ['month', 'This month'], ['year', 'This year'], ['open', 'Open / later']];
 const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
