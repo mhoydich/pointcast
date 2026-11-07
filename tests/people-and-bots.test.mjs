@@ -6,32 +6,52 @@ import { PEOPLE_AND_BOTS } from '../src/lib/people-and-bots.mjs';
 const page = readFileSync(new URL('../src/pages/people-and-bots/index.astro', import.meta.url), 'utf8');
 const jsonRoute = readFileSync(new URL('../src/pages/people-and-bots.json.ts', import.meta.url), 'utf8');
 const moduleSource = readFileSync(new URL('../src/lib/people-and-bots.mjs', import.meta.url), 'utf8');
+const layout = readFileSync(new URL('../src/layouts/BlockLayout.astro', import.meta.url), 'utf8');
 const bundle = `${page}\n${jsonRoute}\n${moduleSource}\n${JSON.stringify(PEOPLE_AND_BOTS)}`;
 
-test('the workshop draft is additive, unledgered, and not a live claim', () => {
+test('the workshop is approved for publication, unledgered, and not a live claim', () => {
   assert.equal(PEOPLE_AND_BOTS.path, '/people-and-bots/');
-  assert.equal(PEOPLE_AND_BOTS.status, 'draft');
+  assert.equal(PEOPLE_AND_BOTS.status, 'approved-for-publication');
+  assert.equal(PEOPLE_AND_BOTS.live, false);
   assert.equal(PEOPLE_AND_BOTS.block, null);
   assert.equal(existsSync(new URL('../src/content/blocks/people-and-bots.json', import.meta.url)), false);
-  assert.match(page, /creativeWorkStatus: 'Draft'/);
-  assert.match(page, /Not published by Mike Hoydich/);
-  assert.match(page, /Review pending/);
-  assert.doesNotMatch(bundle, /Published by Mike Hoydich/);
+  assert.match(page, /creativeWorkStatus: 'Approved for publication'/);
+  assert.match(page, /creditText: page\.creditText/);
+  assert.match(jsonRoute, /approved-for-publication/);
+  assert.equal(PEOPLE_AND_BOTS.creditText.includes('Not yet live'), true);
+  assert.equal(bundle.includes('Review pending'), false);
+  assert.equal(bundle.includes('Not published'), false);
   assert.equal(page.includes('<form'), false);
   assert.equal(page.includes('mailto:'), false);
   assert.equal(bundle.includes('bots/board'), false);
+  assert.equal(page.includes('href="/for-agents"'), true);
+  const home = readFileSync(new URL('../src/components/HomeStartHere.astro', import.meta.url), 'utf8');
+  const agents = readFileSync(new URL('../src/pages/for-agents.astro', import.meta.url), 'utf8');
+  const manifest = readFileSync(new URL('../src/pages/agents.json.ts', import.meta.url), 'utf8');
+  assert.equal(home.includes('people-and-bots'), false);
+  assert.equal(agents.includes('people-and-bots'), false);
+  assert.equal(manifest.includes('people-and-bots'), false);
 });
 
-test('Mike’s November 7 requests stay exact quotes, and $20 is not the published price', () => {
+test('Michael’s November 7 requests stay exact quotes, and $20 is not the listed price', () => {
   assert.deepEqual(PEOPLE_AND_BOTS.quotes.items, [
     'various ethos and a custom page on pointcast about this',
     'highlight our resources from claude to manus chat midjourney etc',
     'also very wikitwitter publish for posterity and affirmation of effort',
   ]);
+  assert.equal(PEOPLE_AND_BOTS.quotes.subscription.request, 'request they do the $20 subscription');
+  assert.equal(PEOPLE_AND_BOTS.quotes.subscription.clarification, 'I meant Grok Bot.');
   assert.equal(PEOPLE_AND_BOTS.quotes.subscription.means, 'for managing twitter accounts');
   assert.equal(PEOPLE_AND_BOTS.quotes.subscription.also, 'of course all the other benefits highlight them');
-  assert.match(PEOPLE_AND_BOTS.grokBeyondX.pricing.finding, /Neither official page listed a \$20/);
+  assert.equal(PEOPLE_AND_BOTS.credits.published.quote, 'ok cool publish and let’s keep going check desk');
+  assert.equal(PEOPLE_AND_BOTS.credits.published.time, '6:34 PM ET');
+  assert.equal(PEOPLE_AND_BOTS.credits.curated.date, '2026-11-07');
+  assert.equal(PEOPLE_AND_BOTS.credits.drafted.date, '2026-11-07');
+  assert.match(PEOPLE_AND_BOTS.grokBeyondX.pricing.finding, /did not list a \$20/);
+  assert.match(PEOPLE_AND_BOTS.grokBeyondX.pricing.finding, /Premium at \$30 per month/);
+  assert.match(PEOPLE_AND_BOTS.grokBeyondX.pricing.docs, /existing Cursor, SuperGrok, and X Premium plans continue/);
   assert.doesNotMatch(bundle, /\$20\/(?:month|mo)/);
+  assert.doesNotMatch(bundle, /X API credits/);
   assert.equal((JSON.stringify(PEOPLE_AND_BOTS).match(/\$20(?!\d)/g) ?? []).length, 2);
 });
 
@@ -68,6 +88,13 @@ test('practices, provenance, and Grok Bot benefits are all present', () => {
   assert.equal(page.includes('data-copy-provenance'), true);
   assert.equal(page.includes('type="button"'), true);
   assert.match(jsonRoute, /PEOPLE_AND_BOTS_PUBLIC/);
+  const doors = PEOPLE_AND_BOTS.practices.find((item) => item.id === 'play').links.find((link) => link.href === '/ten-doors/');
+  assert.match(doors.note, /TEN_DOORS_DATE to 2026-11-02/);
+  assert.match(doors.note, /src\/lib\/ten-doors\.mjs/);
+  assert.equal(PEOPLE_AND_BOTS.documentTitle, 'People and their bots | PointCast');
+  assert.equal(PEOPLE_AND_BOTS.documentTitle.includes('—'), false);
+  assert.match(page, /documentTitle=\{page\.documentTitle\}/);
+  assert.match(layout, /const siteTitle = documentTitle/);
 });
 
 test('copy avoids em dashes, private desk material, and vendor or city affiliation', () => {
