@@ -9,16 +9,19 @@ const moduleSource = readFileSync(new URL('../src/lib/people-and-bots.mjs', impo
 const layout = readFileSync(new URL('../src/layouts/BlockLayout.astro', import.meta.url), 'utf8');
 const bundle = `${page}\n${jsonRoute}\n${moduleSource}\n${JSON.stringify(PEOPLE_AND_BOTS)}`;
 
-test('the workshop is approved for publication, unledgered, and not a live claim', () => {
+test('the workshop is approved for publication and does not assert deploy state', () => {
   assert.equal(PEOPLE_AND_BOTS.path, '/people-and-bots/');
   assert.equal(PEOPLE_AND_BOTS.status, 'approved-for-publication');
-  assert.equal(PEOPLE_AND_BOTS.live, false);
+  assert.equal(Object.hasOwn(PEOPLE_AND_BOTS, 'live'), false);
   assert.equal(PEOPLE_AND_BOTS.block, null);
   assert.equal(existsSync(new URL('../src/content/blocks/people-and-bots.json', import.meta.url)), false);
   assert.match(page, /creativeWorkStatus: 'Approved for publication'/);
   assert.match(page, /creditText: page\.creditText/);
   assert.match(jsonRoute, /approved-for-publication/);
-  assert.equal(PEOPLE_AND_BOTS.creditText.includes('Not yet live'), true);
+  assert.match(PEOPLE_AND_BOTS.creditText, /Approved for publication by Michael Hoydich on 2026-11-07 at 6:34 PM ET/);
+  for (const phrase of ['not yet live', 'already live', 'not-live', '"live"']) {
+    assert.equal(bundle.toLowerCase().includes(phrase), false, phrase);
+  }
   assert.equal(bundle.includes('Review pending'), false);
   assert.equal(bundle.includes('Not published'), false);
   assert.equal(page.includes('<form'), false);

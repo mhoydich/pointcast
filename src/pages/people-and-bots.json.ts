@@ -1,6 +1,6 @@
 import { PEOPLE_AND_BOTS_PUBLIC } from '../lib/people-and-bots.mjs';
 
-/** /people-and-bots.json: the same approved page the HTML renders. Not yet live. */
+/** /people-and-bots.json: the same approved page the HTML renders. */
 export const GET = () =>
   new Response(JSON.stringify(PEOPLE_AND_BOTS_PUBLIC, null, 2), {
     headers: {

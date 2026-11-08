@@ -1,7 +1,7 @@
 /**
  * /people-and-bots: participation, resources, and ethos.
  * One module feeds the HTML page and /people-and-bots.json.
- * Approved for publication on 2026-11-07. Not yet live. No block id.
+ * Approved for publication on 2026-11-07. No block id.
  *
  * Primary product pages were refetched on 2026-11-07. A later price or
  * page can change. This module does not sell a subscription or join accounts.
@@ -12,13 +12,12 @@ export const PEOPLE_AND_BOTS = {
   id: 'people-and-bots',
   title: 'People and their bots',
   description:
-    'Approved for publication, not yet live. People publish with their own AI tools: civic notes, memory, art, Tezos provenance, play, and labeled fiction.',
+    'Approved for publication. People publish with their own AI tools: civic notes, memory, art, Tezos provenance, play, and labeled fiction.',
   path: '/people-and-bots/',
   json: '/people-and-bots.json',
   canonical: 'https://pointcast.xyz/people-and-bots/',
   draftedOn: '2026-11-07',
   status: 'approved-for-publication',
-  live: false,
   block: null,
   documentTitle: 'People and their bots | PointCast',
   author: {
@@ -26,7 +25,7 @@ export const PEOPLE_AND_BOTS = {
     also: 'Grok Bot',
     role: 'Drafted the page on 2026-11-07. Not the curator and not the publisher.',
   },
-  kicker: 'Approved for publication · 2026-11-07 · Not yet live',
+  kicker: 'Approved for publication · 2026-11-07',
   credits: {
     curated: {
       by: 'Michael Hoydich',
@@ -43,11 +42,11 @@ export const PEOPLE_AND_BOTS = {
       date: '2026-11-07',
       time: '6:34 PM ET',
       quote: 'ok cool publish and let’s keep going check desk',
-      note: 'Approved for publication. This approval is not a claim that the page is already live.',
+      note: 'Approved for publication on 2026-11-07 at 6:34 PM ET.',
     },
   },
   creditText:
-    'Curated by Michael Hoydich on 2026-11-07. Drafted by Grok Bot (New Bot) on 2026-11-07. Approved for publication by Michael Hoydich on 2026-11-07 at 6:34 PM ET. Not yet live.',
+    'Curated by Michael Hoydich on 2026-11-07. Drafted by Grok Bot (New Bot) on 2026-11-07. Approved for publication by Michael Hoydich on 2026-11-07 at 6:34 PM ET.',
   dek: 'Bring your curiosity and the AI tools you like using. Make something useful, beautiful, playful, or worth remembering. Publish it with its sources and credits, and leave a next step for someone else.',
   standing:
     'PointCast is an independent project. This page is unaffiliated with the City of El Segundo. It is unaffiliated with Anthropic, OpenAI, Manus, Midjourney, xAI, the Tezos Foundation, and Nouns.',
@@ -335,7 +334,7 @@ export const PEOPLE_AND_BOTS = {
       'Choose one artifact: a field note, a useful tool, a picture or an art note, a Tezos project note, a small instrument, a labeled story, or a question.',
       'Name the human owner. A bot may help. The owner decides what is public.',
       'Fill the provenance card before publishing. Private prompts, private conversations, and contact details can stay off the card.',
-      'Keep the durable copy on a page you control, or hold it until a person approves publication. Approval is not the same as the page already being live.',
+      'Keep the durable copy on a page you control, or hold it until a person approves publication.',
       'If you also post on a social account, link back to the durable copy.',
       'A response to someone else’s work should add a source, a correction, or a new angle. Ask before you tag them or act on their account.',
       'Confirm the public action yourself. Nothing on this page joins a bot to a network for you.',
@@ -387,5 +386,5 @@ export const PEOPLE_AND_BOTS = {
 export const PEOPLE_AND_BOTS_PUBLIC = {
   ...PEOPLE_AND_BOTS,
   machineNote:
-    'JSON twin for /people-and-bots/. Status is approved-for-publication. creativeWorkStatus is Approved for publication. live is false. block is null. Do not treat this URL as already live.',
+    'JSON twin for /people-and-bots/. Status is approved-for-publication. creativeWorkStatus is Approved for publication. block is null.',
 };
