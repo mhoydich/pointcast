@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Communicator (prototype)</title>
+<meta name="description" content="A clickable prototype: ask for a pickleball game, invite players, confirm, score it. Everything runs in the page; nothing is sent.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f6f1e4">
+<style>
+:root{
+  --bg:#f6f1e4; --card:#fffdf6; --ink:#1d1b16; --muted:#6b665a; --line:#ddd4bd; --accent:#b4442b; --accent-ink:#fff;
+  --read:#e4e1d8; --read-ink:#4a463c; --write:#dbe7f7; --write-ink:#1f4a85; --consent:#fde6b0; --consent-ink:#7a4a00;
+  --ok:#d9eed5; --ok-ink:#2b5a25; --bad:#b3261e;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#17150f; --card:#201d15; --ink:#efe9d8; --muted:#a39d8c; --line:#3a3628; --accent:#e07a5f; --accent-ink:#17150f;
+  --read:#33302a; --read-ink:#cfc9b8; --write:#1f3350; --write-ink:#a9c8f2; --consent:#4a3710; --consent-ink:#f5cf7a;
+  --ok:#1f3a1c; --ok-ink:#b4dfaa; --bad:#ff8a80;
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 var(--sans);padding-bottom:calc(76px + env(safe-area-inset-bottom));overflow-x:hidden}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 16px;border-bottom:1px solid var(--line);font:12px/1.3 var(--mono);color:var(--muted)}
+main{padding:0 16px 16px;max-width:640px;margin:0 auto}
+h1{font-size:22px;margin:16px 0 4px;line-height:1.2}
+h1 small{display:block;font:500 14px var(--sans);color:var(--muted);margin-top:2px}
+h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px;font-family:var(--mono)}
+p{margin:6px 0}
+.muted{color:var(--muted)} .small{font-size:13px} .mono{font-family:var(--mono)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+.row{display:flex;gap:8px;align-items:center}
+.lbl{display:block;font:12px var(--mono);color:var(--muted);margin-bottom:6px}
+input[type=text],input:not([type]){flex:1;min-width:0;height:48px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:16px var(--sans)}
+input.num{width:100%;flex:none;text-align:center;font:600 20px var(--mono)}
+.btn,.chip,.icon,.link,.tab,.seg button{font:inherit;color:inherit;cursor:pointer}
+.btn{min-height:48px;padding:0 18px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);width:100%;margin-top:10px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.sm{min-height:44px;padding:0 12px;font-size:14px}
+.icon{width:48px;height:48px;flex:none;border-radius:10px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center}
+.icon svg{width:22px;height:22px;fill:var(--ink)}
+.link{background:none;border:0;min-height:44px;padding:0 4px;color:var(--accent);text-decoration:underline;font:12px var(--mono)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.chip{min-height:44px;padding:0 14px;border-radius:22px;border:1px solid var(--line);background:var(--card);font-size:15px}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip.small{min-height:44px;font-size:14px}
+.chip.static{min-height:32px;padding:0 10px;font-size:14px;cursor:default;display:inline-flex;align-items:center;background:var(--bg)}
+.pill{display:inline-block;padding:2px 10px;border-radius:12px;font:600 12px/1.6 var(--mono);background:var(--read);color:var(--read-ink);white-space:nowrap}
+.pill.read{background:var(--read);color:var(--read-ink)} .pill.write{background:var(--write);color:var(--write-ink)} .pill.consent{background:var(--consent);color:var(--consent-ink)}
+.pill.confirmed,.pill.recorded,.pill.filled{background:var(--ok);color:var(--ok-ink)}
+.pill.pending,.pill.inviting,.pill.scoring,.pill.short{background:var(--consent);color:var(--consent-ink)}
+.pill.disputed,.pill.cancelled,.pill.void{background:var(--bad);color:#fff}
+.pill.status{font-size:13px}
+.err{color:var(--bad);font-weight:600;margin:8px 0}
+.note{color:var(--muted);font-size:13px;margin:6px 0}
+.cand{padding:10px 0;border-top:1px solid var(--line)} .cand:first-of-type{border-top:0}
+.cand .l1{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.badge{font:600 11px var(--mono);text-transform:uppercase;padding:2px 8px;border-radius:10px;background:var(--read);color:var(--read-ink)}
+.badge.invite{background:var(--accent);color:var(--accent-ink)}
+.fit{display:flex;align-items:center;gap:8px;margin:4px 0 2px;font-size:13px;color:var(--muted)}
+.bar{flex:1;max-width:140px;height:6px;background:var(--read);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.roster{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.rh{font:12px var(--mono);color:var(--muted);margin-bottom:4px} .rcol .chip{margin:0 6px 6px 0}
+.when{font-size:20px;font-weight:700}
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.side .sh{font:12px var(--mono);color:var(--muted);margin-bottom:6px}
+.side .chip{display:block;width:100%;margin-bottom:6px;text-align:left;border-radius:10px}
+.seg{display:flex;gap:6px;overflow-x:auto;padding:4px 0;margin:12px 0;scrollbar-width:thin}
+.seg button{flex:none;min-height:44px;padding:0 14px;border-radius:22px;border:1px solid var(--line);background:var(--card)}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.msg{margin:12px 0}
+.bub{background:var(--card);border:1px solid var(--line);border-radius:16px 16px 16px 4px;padding:10px 14px;max-width:92%}
+.bub .k{display:block;font:11px var(--mono);color:var(--muted);margin-bottom:2px}
+.foot{font-size:12px;color:var(--muted);margin:4px 0 0 4px}
+.arow{padding:10px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center}
+.arow .nm{font:600 14px var(--mono);overflow-wrap:anywhere} .arow .wh{grid-column:1/-1;font-size:14px}
+.arow .who{grid-column:1/-1;font:12px var(--mono);color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}
+th{font:12px var(--mono);color:var(--muted);border-top:0}
+.lrow{padding:8px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:14px}
+pre{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere;font:13px var(--mono)}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+.tab{flex:1;min-height:56px;background:none;border:0;font-weight:600;color:var(--muted)}
+.tab[aria-selected=true]{color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
+.sr{position:absolute;left:-9999px}
+@media (max-width:520px){.hide-narrow{display:none}}
+</style>
+</head>
+<body>
+<header class="top"><span>The Communicator &middot; prototype &middot; nothing here sends anything</span><button class="link" data-act="reset" type="button">Reset</button></header>
+<h1>The Communicator<small>first job: a pickleball game</small></h1>
+<main id="view" aria-live="polite"></main>
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button class="tab" role="tab" data-act="tab" data-t="host" type="button">Host</button>
+  <button class="tab" role="tab" data-act="tab" data-t="players" type="button">Players</button>
+  <button class="tab" role="tab" data-act="tab" data-t="botmap" type="button">Bot map</button>
+</nav>
+<noscript>This prototype needs JavaScript.</noscript>
+<script type="module" src="app.js"></script>
+</body>
+</html>
