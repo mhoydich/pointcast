@@ -1,0 +1,67 @@
+name: Ship reviewed PRs
+
+# The cloud merge for PointCast, so nothing waits on the Mac. It merges a pull
+# request only when it has what AGENTS.md asks for before main:
+#   - Codex review (X): the Codex GitHub reviewer reviewed the exact head commit
+#     and flagged nothing at P0/P1 (or said it found no major issues);
+#   - Mike's okay (MH): the `ship` label, added only when Mike said to publish
+#     in his own words (quote him in the PR body);
+#   - every check on the head commit green.
+# Then it starts "Deploy PointCast to Cloudflare Pages" on main.
+# A `hold` label or "Publish: hold" in the body keeps a PR open. A PR that
+# changes .github/workflows is left for a person to merge.
+#
+# Every trigger runs from the default branch's copy of this file and script
+# (pull_request_target, workflow_run, issue_comment, schedule, dispatch), so a
+# PR can't loosen its own gate. No PR code is checked out or run here. Each run
+# sweeps every open PR labeled `ship`.
+# Logic and tests: scripts/ship-pr.mjs, tests/ship-pr.test.mjs.
+
+on:
+  pull_request_target:
+    types: [labeled, synchronize, ready_for_review, reopened]
+    branches: [main]
+  workflow_run:
+    workflows: [pr-check]
+    types: [completed]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: read
+  statuses: read
+  issues: read
+
+concurrency:
+  group: ship-pointcast
+  cancel-in-progress: false
+
+jobs:
+  ship:
+    if: >-
+      github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          sparse-checkout: scripts/ship-pr.mjs
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Merge if reviewed, okayed and green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHIP_JOB_NAME: ship
+          SHIP_APPROVERS: mhoydich
+        run: node scripts/ship-pr.mjs
