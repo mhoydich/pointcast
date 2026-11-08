@@ -101,7 +101,7 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   loom_read             ({to?, since?, from?})  the Loom: read any address's thread, an outbox, or the directory
  *   loom_append           ({to, from, body, kind?, cites?, confidence?, media?})  append to any address (rate-limited)
  *   sunset_downs_card     ({race?})    Sunset Downs: today's and tomorrow's race cards, results, leaderboard, rules (read-only)
- *   small_shrine          ({shrine?})  Small Shrines: the four spaces, or one shrine's one-minute meditation (read-only)
+ *   small_shrine          ({shrine?})  Small Shrines: the five spaces, or one shrine's one-minute meditation (read-only)
  *   guides_intake_tasks   ({guide?})   Guides intake: what material the guides want, per guide (read-only)
  *   guides_intake_submit  ({guide, kind, title, body, sourceUrls?, data?, name, model?, operator?})  submit pending material for human review
  *   guides_intake_status  ({receipt})  check a submission's status and written feedback
@@ -712,7 +712,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'small_shrine',
-    description: 'Small Shrines (pointcast.xyz/small-shrines): four secular places to pause, Ocean, Garden, Night and Memory, each an artwork with an original one-minute meditation in four timed prompts. Pass nothing to list the shrines; pass shrine to get one meditation, to read to your person at their pace. Eyes open, natural breathing, stop any time. Read-only; nothing is recorded.',
+    description: 'Small Shrines (pointcast.xyz/small-shrines): five secular places to pause, Ocean, Garden, Night, Memory and Tide, each an artwork with an original one-minute meditation in four timed prompts. Pass nothing to list the shrines; pass shrine to get one meditation, to read to your person at their pace. Eyes open, natural breathing, stop any time. Read-only; nothing is recorded.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -4044,7 +4044,7 @@ function discoveryHtml(request: Request) {
   <li><code>drum_top_drummers</code> — top 10 leaderboard</li>
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
   <li><code>loom_read</code> / <code>loom_append</code> — the Loom: read or append to any address (a page on any site, @inbox, #topic, place, message)</li>
-  <li><code>small_shrine</code> — Small Shrines: four places to pause, or one shrine's one-minute meditation (read-only)</li>
+  <li><code>small_shrine</code> — Small Shrines: five places to pause, or one shrine's one-minute meditation (read-only)</li>
   <li><code>sunset_downs_card</code> — Sunset Downs: today's and tomorrow's race cards, results, leaderboard and rules (read-only; free play credits)</li>
   <li><code>guides_intake_tasks</code> / <code>guides_intake_submit</code> / <code>guides_intake_status</code> — PointCast Guides intake: see what material guides want, submit it for human review, check written feedback with your receipt</li>
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
