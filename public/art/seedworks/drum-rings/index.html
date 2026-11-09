@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drum Rings · PointCast Seedworks</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #f3efe4; overflow: hidden; cursor: pointer; }
+  canvas { display: block; position: absolute; inset: 0; margin: auto; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A generative drum pattern drawn as rings. Tap to play it."></canvas>
+<script>
+/* seedworks-runtime v1 — PointCast Seedworks. Self-contained, fxhash-compatible.
+   Seed comes from $fx.hash when fxhash is present, else ?seed= in the URL,
+   else a fresh random seed. All randomness goes through $sw.rand. */
+(function () {
+  var fx = window.$fx;
+  var q = new URLSearchParams(location.search);
+  function fresh() { var a = '0123456789abcdef', s = 'sw'; for (var i = 0; i < 30; i++) s += a[(Math.random() * 16) | 0]; return s; }
+  var seed = (fx && fx.hash) || q.get('seed') || q.get('fxhash') || fresh();
+  function xmur3(str) { for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return function () { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return (h ^= h >>> 16) >>> 0; }; }
+  function sfc32(a, b, c, d) { return function () { a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0; var t = (a + b) | 0; a = b ^ (b >>> 9); b = (c + (c << 3)) | 0; c = (c << 21) | (c >>> 11); d = (d + 1) | 0; t = (t + d) | 0; c = (c + t) | 0; return (t >>> 0) / 4294967296; }; }
+  var h = xmur3(seed);
+  var rand = fx && fx.rand ? fx.rand : sfc32(h(), h(), h(), h());
+  var sw = {
+    seed: seed,
+    rand: rand,
+    range: function (a, b) { return a + rand() * (b - a); },
+    int: function (a, b) { return Math.floor(a + rand() * (b - a + 1)); },
+    pick: function (arr) { return arr[Math.floor(rand() * arr.length)]; },
+    chance: function (p) { return rand() < p; },
+    done: function (features) {
+      try { if (fx && fx.features) fx.features(features); if (fx && fx.preview) fx.preview(); } catch (e) {}
+      try { if (window.parent !== window) window.parent.postMessage({ type: 'seedworks:done', seed: seed, features: features }, '*'); } catch (e) {}
+    }
+  };
+  window.$sw = sw;
+})();
+/* end seedworks-runtime */
+
+/* Drum Rings — a seeded drum pattern drawn as concentric rings. Each ring is
+   one voice spreading its hits as evenly as it can across its steps (a
+   Euclidean rhythm). Tap or click to hear it; tap again to stop. */
+(function () {
+  var $ = window.$sw;
+  var PALETTES = [
+    { name: 'Chalk', bg: '#f3efe4', ink: '#1c1b18', cols: ['#e8242c', '#2b83f6', '#f3a51b', '#38a86b', '#c04ad8', '#1c1b18'] },
+    { name: 'Night Room', bg: '#14131a', ink: '#efe9da', cols: ['#ff5d73', '#5ec8ff', '#ffd25e', '#7cf0a0', '#d79bff', '#efe9da'] },
+    { name: 'Beach Towel', bg: '#fbe8cf', ink: '#2a1d14', cols: ['#e5532d', '#1c8c9a', '#f0b429', '#7a4fb5', '#3a9b5c', '#2a1d14'] }
+  ];
+  var VOICES = ['kick', 'snare', 'hat', 'tom', 'clap', 'bell'];
+  var pal = $.pick(PALETTES);
+  var n = $.int(3, 6);
+  var bpm = $.int(84, 132);
+  var voices = [];
+  var order = VOICES.slice(); for (var i = order.length - 1; i > 0; i--) { var j = $.int(0, i); var t = order[i]; order[i] = order[j]; order[j] = t; }
+  if (order.indexOf('kick') >= n) order[0] = 'kick';
+  for (var v = 0; v < n; v++) {
+    var steps = $.pick([8, 12, 16, 16, 16, 9, 10, 7, 5]);
+    var pulses = $.int(1, Math.max(1, Math.floor(steps * 0.7)));
+    voices.push({ name: order[v], steps: steps, pulses: pulses, rot: $.int(0, steps - 1), col: pal.cols[v % pal.cols.length], pat: null });
+  }
+  voices.forEach(function (vo) { vo.pat = rotate(euclid(vo.pulses, vo.steps), vo.rot); });
+  var cycle = voices.reduce(function (a, vo) { return lcm(a, vo.steps); }, 1);
+  var hits = voices.reduce(function (a, vo) { return a + vo.pulses; }, 0), slots = voices.reduce(function (a, vo) { return a + vo.steps; }, 0);
+  var density = hits / slots < 0.3 ? 'Sparse' : hits / slots < 0.5 ? 'Even' : 'Busy';
+
+  function euclid(k, nSteps) { var out = []; for (var i = 0; i < nSteps; i++) out.push(Math.floor((i + 1) * k / nSteps) - Math.floor(i * k / nSteps)); return out; }
+  function rotate(a, r) { return a.slice(r).concat(a.slice(0, r)); }
+  function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+  function lcm(a, b) { return a / gcd(a, b) * b; }
+
+  var cv = document.getElementById('c');
+  var ctx = cv.getContext('2d');
+  var tick = -1; // 16th-note counter while playing
+
+  function draw() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var S = Math.min(innerWidth, innerHeight);
+    if (cv.width !== S * dpr) { cv.width = S * dpr; cv.height = S * dpr; cv.style.width = S + 'px'; cv.style.height = S + 'px'; }
+    ctx.setTransform(S * dpr / 1000, 0, 0, S * dpr / 1000, 0, 0);
+    ctx.fillStyle = pal.bg; ctx.fillRect(0, 0, 1000, 1000);
+    ctx.save(); ctx.translate(500, 500);
+    var inner = 120, outer = 440, band = (outer - inner) / n;
+    for (var v = 0; v < n; v++) {
+      var vo = voices[v], r0 = inner + v * band + 8, r1 = r0 + band - 16;
+      var at = tick < 0 ? -1 : tick % vo.steps;
+      for (var s = 0; s < vo.steps; s++) {
+        var a0 = s / vo.steps * Math.PI * 2 - Math.PI / 2, a1 = (s + 1) / vo.steps * Math.PI * 2 - Math.PI / 2, gap = 0.06 / (vo.steps / 8);
+        ctx.beginPath(); ctx.arc(0, 0, r1, a0 + gap, a1 - gap); ctx.arc(0, 0, r0, a1 - gap, a0 + gap, true); ctx.closePath();
+        if (vo.pat[s]) { ctx.fillStyle = vo.col; ctx.globalAlpha = s === at ? 1 : 0.86; ctx.fill(); ctx.globalAlpha = 1; }
+        else { ctx.strokeStyle = pal.ink; ctx.globalAlpha = 0.22; ctx.lineWidth = 1.5; ctx.stroke(); ctx.globalAlpha = 1; }
+        if (s === at) { ctx.strokeStyle = pal.ink; ctx.lineWidth = 3; ctx.stroke(); }
+      }
+    }
+    ctx.fillStyle = pal.ink; ctx.textAlign = 'center';
+    ctx.font = '700 52px Georgia, serif'; ctx.fillText(String(bpm), 0, 4);
+    ctx.font = '600 14px ui-monospace, Menlo, monospace';
+    ctx.fillText('BPM · ' + n + ' VOICES', 0, 30);
+    ctx.fillText(tick < 0 ? 'TAP TO PLAY' : 'TAP TO STOP', 0, 54);
+    ctx.restore();
+    ctx.fillStyle = pal.ink; ctx.font = '600 13px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+    for (var k = 0; k < n; k++) {
+      ctx.fillStyle = voices[k].col; ctx.fillRect(40, 40 + k * 22, 12, 12);
+      ctx.fillStyle = pal.ink; ctx.fillText(voices[k].name.toUpperCase() + '  ' + voices[k].pulses + '/' + voices[k].steps, 60, 51 + k * 22);
+    }
+    ctx.textAlign = 'right'; ctx.fillText('CYCLE ' + cycle + ' STEPS', 960, 51);
+  }
+
+  // Web Audio drum voices, built only after a tap (browsers block autoplay).
+  var ac = null, timer = null;
+  function voice(name, time) {
+    var o, g, f;
+    if (name === 'kick') { o = ac.createOscillator(); g = ac.createGain(); o.frequency.setValueAtTime(140, time); o.frequency.exponentialRampToValueAtTime(42, time + 0.18); g.gain.setValueAtTime(0.9, time); g.gain.exponentialRampToValueAtTime(0.001, time + 0.32); o.connect(g).connect(ac.destination); o.start(time); o.stop(time + 0.34); return; }
+    if (name === 'tom' || name === 'bell') { o = ac.createOscillator(); g = ac.createGain(); o.type = name === 'bell' ? 'triangle' : 'sine'; o.frequency.setValueAtTime(name === 'bell' ? 880 : 200, time); if (name === 'tom') o.frequency.exponentialRampToValueAtTime(110, time + 0.2); g.gain.setValueAtTime(name === 'bell' ? 0.25 : 0.5, time); g.gain.exponentialRampToValueAtTime(0.001, time + (name === 'bell' ? 0.5 : 0.25)); o.connect(g).connect(ac.destination); o.start(time); o.stop(time + 0.55); return; }
+    var len = name === 'hat' ? 0.05 : 0.18, buf = ac.createBuffer(1, Math.ceil(ac.sampleRate * len), ac.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    var src = ac.createBufferSource(); src.buffer = buf; f = ac.createBiquadFilter(); g = ac.createGain();
+    f.type = name === 'hat' ? 'highpass' : 'bandpass'; f.frequency.value = name === 'hat' ? 7000 : name === 'clap' ? 1500 : 1800;
+    g.gain.value = name === 'hat' ? 0.25 : 0.5; src.connect(f).connect(g).connect(ac.destination); src.start(time);
+  }
+  function step() {
+    tick++;
+    var now = ac.currentTime + 0.02;
+    voices.forEach(function (vo) { if (vo.pat[tick % vo.steps]) voice(vo.name, now); });
+    draw();
+  }
+  function toggle() {
+    if (timer) { clearInterval(timer); timer = null; tick = -1; draw(); return; }
+    var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    ac = ac || new AC(); if (ac.resume) ac.resume();
+    timer = setInterval(step, 60000 / bpm / 4);
+    step();
+  }
+
+  draw();
+  addEventListener('resize', draw);
+  addEventListener('pointerdown', toggle);
+  addEventListener('keydown', function (e) { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } });
+  $.done({ Voices: n, Tempo: bpm, Cycle: cycle, Density: density, Palette: pal.name });
+})();
+</script>
+</body>
+</html>
