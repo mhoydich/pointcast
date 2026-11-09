@@ -19,7 +19,7 @@ import { readSessionFromRequest } from '../api/auth/session.ts';
 import type { PointCastUser } from '../../src/lib/auth/types.ts';
 import {
   confirmedLedger, declaredLevels, expireMessagesFor, fail, getGame, getProfileByUser, handleTaken, isPlayerIn, json, laNowIso,
-  listCandidateProfiles, listGamesFor, listPendingMessages, putGame, ratingsFor, unavailable, upsertProfile,
+  listCandidateProfiles, listGamesFor, listPendingMessages, putGame, ratingsFor, recordOkay, unavailable, upsertProfile,
   type CommunicatorEnv, type Game, type Profile, type Venue,
 } from './communicator-store.ts';
 
@@ -68,6 +68,20 @@ async function gate(ctx: Ctx, { write, tier }: { write: boolean; tier: 1 | 2 }):
 const nowOf = (ctx: Ctx) => ctx.now ?? Date.now();
 
 // ---- POST /request ----------------------------------------------------------------------
+/** The proposal logic behind POST /request, shared with the MCP tool: public projections only, stores nothing. */
+export async function proposeFor(db: D1Database, venues: Venue[], body: { text: string; seed?: unknown }, actorHandle: string | null, nowMs: number) {
+  const now = laNowIso(nowMs);
+  const parsed = E.parseRequest(body.text, { now, venues, defaultLadder: LADDER });
+  if (!parsed.ok) return { ok: true, complete: false, request: parsed.request, missing: parsed.missing, slots: [], candidates: [] };
+  const venue = venues.find((v) => v.id === parsed.request.venue);
+  const slots = venue ? E.proposeSlots(parsed.request, venue, { now }) : [];
+  const [profiles, entries, declared] = await Promise.all([listCandidateProfiles(db, LADDER), confirmedLedger(db, LADDER), declaredLevels(db, LADDER)]);
+  const ratings = ratingsFor(profiles.map((p) => p.handle), entries, declared, now);
+  const seed = Number.isInteger(body.seed) ? (body.seed as number) : 1;
+  const candidates = E.findCandidates(parsed.request, { profiles, ratings, now, exclude: actorHandle ? [actorHandle] : [], seed, venues }).slice(0, 20);
+  return { ok: true, complete: true, request: parsed.request, missing: [], slots, candidates };
+}
+
 export async function postRequest(ctx: Ctx): Promise<Response> {
   const a = await gate(ctx, { write: true, tier: 2 });
   if (a instanceof Response) return a;
@@ -75,17 +89,25 @@ export async function postRequest(ctx: Ctx): Promise<Response> {
   if (body instanceof Response) return body;
   if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 500) return fail('bad-request');
   if (body.ladder !== undefined && body.ladder !== LADDER) return fail('unknown-ladder');
-  const db = ctx.env.AUTH_DB as D1Database;
-  const now = laNowIso(nowOf(ctx));
-  const parsed = E.parseRequest(body.text, { now, venues: ctx.venues, defaultLadder: LADDER });
-  if (!parsed.ok) return json({ ok: true, complete: false, request: parsed.request, missing: parsed.missing, slots: [], candidates: [] });
-  const venue = ctx.venues.find((v) => v.id === parsed.request.venue);
-  const slots = venue ? E.proposeSlots(parsed.request, venue, { now }) : [];
-  const [profiles, entries, declared] = await Promise.all([listCandidateProfiles(db, LADDER), confirmedLedger(db, LADDER), declaredLevels(db, LADDER)]);
-  const ratings = ratingsFor(profiles.map((p) => p.handle), entries, declared, now);
-  const seed = Number.isInteger(body.seed) ? body.seed : 1;
-  const candidates = E.findCandidates(parsed.request, { profiles, ratings, now, exclude: a.profile ? [a.profile.handle] : [], seed, venues: ctx.venues }).slice(0, 20);
-  return json({ ok: true, complete: true, request: parsed.request, missing: [], slots, candidates });
+  return json(await proposeFor(ctx.env.AUTH_DB as D1Database, ctx.venues, body as { text: string; seed?: unknown }, a.profile?.handle ?? null, nowOf(ctx)));
+}
+
+// ---- POST /okays ------------------------------------------------------------------------
+export const OKAY_KINDS = ['request', 'invite', 'remind', 'score', 'confirm-score'] as const;
+export const OKAY_TTL_MS = 10 * 60_000;
+
+/** A signed-in person authorizes one bot action on their behalf; the row is good for 10 minutes. */
+export async function postOkay(ctx: Ctx): Promise<Response> {
+  const a = await gate(ctx, { write: true, tier: 1 });
+  if (a instanceof Response) return a;
+  if (!a.profile) return fail('profile-required');
+  const body = await readBody(ctx.request);
+  if (body instanceof Response) return body;
+  if (!(OKAY_KINDS as readonly string[]).includes(body.kind)) return fail('bad-request');
+  if (body.targetGame !== undefined && (typeof body.targetGame !== 'string' || body.targetGame.length > 64)) return fail('bad-request');
+  const at = nowOf(ctx);
+  const id = await recordOkay(ctx.env.AUTH_DB as D1Database, { actor: a.profile.handle, kind: body.kind, targetGame: body.targetGame ?? '', at });
+  return json({ ok: true, okay: { id, expiresAt: new Date(at + OKAY_TTL_MS).toISOString() } });
 }
 
 // ---- POST /games ------------------------------------------------------------------------

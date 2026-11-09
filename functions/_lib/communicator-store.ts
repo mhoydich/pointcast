@@ -236,6 +236,12 @@ export async function hasRecentOkay(db: D1Database, { actor, targetGame, withinM
   return !!(await db.prepare('SELECT 1 AS x FROM communicator_okays WHERE actor = ? AND target_game = ? AND okayed_at >= ? LIMIT 1').bind(actor, targetGame, since).first());
 }
 
+/** Like hasRecentOkay, but the row must also be of one kind ('request' | 'invite' | 'remind' | 'score' | 'confirm-score'). */
+export async function hasRecentOkayOfKind(db: D1Database, { actor, kind, targetGame, withinMs, now }: { actor: string; kind: string; targetGame: string; withinMs: number; now?: string | number }): Promise<boolean> {
+  const since = iso((typeof now === 'number' ? now : now ? Date.parse(now) : Date.now()) - withinMs);
+  return !!(await db.prepare('SELECT 1 AS x FROM communicator_okays WHERE actor = ? AND kind = ? AND target_game = ? AND okayed_at >= ? LIMIT 1').bind(actor, kind, targetGame, since).first());
+}
+
 // ---- ratings for the ledger route and /request -----------------------------------------------
 /** handle -> declared level on one ladder, read through a single json_extract path (never the contact). */
 export async function declaredLevels(db: D1Database, ladder: string): Promise<Record<string, number | null>> {
