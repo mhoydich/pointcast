@@ -229,6 +229,13 @@ import {
   dispatchCivilServiceTool,
 } from '../../src/lib/civil-service-mcp';
 import { RADIO_TOOL_DEFINITIONS, dispatchRadioTool } from '../../src/lib/radio-mcp';
+import schedule from '../../src/data/courts-schedule.json';
+import { venuesFromSchedule } from '../_lib/communicator-store.ts';
+import {
+  COMMUNICATOR_TOOL_DEFINITIONS,
+  COMMUNICATOR_TOOL_NAMES,
+  callCommunicatorTool,
+} from '../_lib/communicator-mcp.ts';
 import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
@@ -286,6 +293,20 @@ const WRITE_TOOL_NAMES = new Set([
   ...CIVIL_SERVICE_WRITE_TOOL_NAMES,
 ]);
 
+// The three effect words (shown as 'pointcast/effect' on every tool and as `effect` in /agents.json):
+//   read    looks at public state and changes nothing.
+//   write   changes state the actor owns or a shared board.
+//   consent reaches a person, so it needs that person's standing opt-in plus the actor's explicit okay.
+// A tool in both sets counts as consent.
+// Empty today: the public MCP is read-only, and consent actions live on the HTTP routes behind a person's okay.
+const CONSENT_TOOL_NAMES = new Set<string>([]);
+
+export type ToolEffect = 'read' | 'write' | 'consent';
+export function toolEffect(name: string): ToolEffect {
+  if (CONSENT_TOOL_NAMES.has(name)) return 'consent';
+  return WRITE_TOOL_NAMES.has(name) ? 'write' : 'read';
+}
+
 function toolTitle(name: string): string {
   return name
     .split('_')
@@ -293,9 +314,11 @@ function toolTitle(name: string): string {
     .join(' ');
 }
 
-function toolAnnotations(name: string) {
-  const isWrite = WRITE_TOOL_NAMES.has(name);
+export function toolAnnotations(name: string) {
+  const effect = toolEffect(name);
+  const isWrite = effect !== 'read';
   return {
+    'pointcast/effect': effect,
     title: toolTitle(name),
     readOnlyHint: !isWrite,
     destructiveHint: false,
@@ -1585,6 +1608,7 @@ const TOOLS = [
   ...WILD_TOOL_DEFINITIONS,
   ...CIVIL_SERVICE_TOOL_DEFINITIONS,
   ...RADIO_TOOL_DEFINITIONS,
+  ...COMMUNICATOR_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -4395,6 +4419,14 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
           ? `Call put out on ${data.call?.spot}/${data.call?.kind}: ${data.call?.question}`
           : `Passed to ${data.call?.agent}.`;
         return rpcResult(id, { content: [{ type: 'text', text: lead }, { type: 'text', text: JSON.stringify(data, null, 2) }] });
+      }
+      if ((COMMUNICATOR_TOOL_NAMES as readonly string[]).includes(name)) {
+        // Read-only tools; writes and consent actions are HTTP-only (POST /api/communicator/okays gate).
+        const out = await callCommunicatorTool(name, args, request, env as never, venuesFromSchedule(schedule));
+        return rpcResult(id, {
+          content: [{ type: 'text', text: out.ok ? JSON.stringify(out, null, 2) : `Communicator declined: ${out.reason}.${out.note ? ' ' + out.note : ''}` }],
+          ...(out.ok ? {} : { isError: true }),
+        });
       }
       if (name === 'wild_field' || name === 'wild_buy_kit') {
         // The WILD service binding avoids Cloudflare 1042 (same-account
