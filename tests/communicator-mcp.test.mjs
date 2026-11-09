@@ -16,7 +16,7 @@ const M = await server.ssrLoadModule('/functions/_lib/communicator-mcp.ts');
 const { toolAnnotations, toolEffect, MCP_TOOL_NAMES } = await server.ssrLoadModule('/functions/api/mcp.ts');
 const { AGENT_CAPABILITIES } = await server.ssrLoadModule('/src/lib/agent-capabilities.ts');
 
-// Communicator v1-c (docs/prd/communicator-v1.md 4.3): the effect label, the okay route, the seven MCP tools.
+// Communicator v1-c (docs/prd/communicator-v1.md 4.3): the effect label, the okay route, the two read MCP tools.
 
 const root = new URL('../', import.meta.url);
 const MIGRATION = await readFile(new URL('migrations/auth/0033_communicator.sql', root), 'utf8');
@@ -43,13 +43,26 @@ async function town() {
 }
 const call = (t, name, args) => M.callCommunicatorTool(name, args, REQ(), t.env, VENUES, NOW);
 
-test('toolAnnotations labels read, write and consent', () => {
+test('toolAnnotations labels read and write', () => {
   assert.equal(toolAnnotations('communicator_ledger')['pointcast/effect'], 'read');
-  assert.equal(toolAnnotations('communicator_request')['pointcast/effect'], 'write');
-  assert.equal(toolAnnotations('communicator_invite')['pointcast/effect'], 'consent');
-  assert.equal(toolAnnotations('communicator_invite').readOnlyHint, false);
   assert.equal(toolAnnotations('communicator_ledger').readOnlyHint, true);
   assert.equal(toolEffect('loom_append'), 'write');
+});
+
+test('the communicator MCP surface is exactly the two read tools', () => {
+  assert.deepEqual([...M.COMMUNICATOR_TOOL_NAMES], ['communicator_ledger', 'communicator_game']);
+  assert.deepEqual(M.COMMUNICATOR_TOOL_DEFINITIONS.map((d) => d.name), ['communicator_ledger', 'communicator_game']);
+  for (const n of M.COMMUNICATOR_TOOL_NAMES) assert.ok(MCP_TOOL_NAMES.includes(n), n);
+  assert.equal(MCP_TOOL_NAMES.some((n) => /^communicator_(request|invite|remind|score|confirm_score)$/.test(n)), false);
+});
+
+test('every communicator tool served is read-only, and no consent tool is served', () => {
+  for (const n of M.COMMUNICATOR_TOOL_NAMES) {
+    assert.equal(toolEffect(n), 'read', n);
+    assert.equal(toolAnnotations(n).readOnlyHint, true, `${n} readOnlyHint`);
+  }
+  // PointCast's other tools (drum, loom, ...) keep their existing write labels; none is consent.
+  assert.deepEqual(MCP_TOOL_NAMES.filter((n) => toolEffect(n) === 'consent'), []);
 });
 
 test('every served tool has an effect and every capability definition carries one', () => {
@@ -72,33 +85,4 @@ test('communicator_ledger returns public ratings and no contact', async () => {
 test('communicator_game refuses unknown ids', async () => {
   const t = await town();
   assert.equal((await call(t, 'communicator_game', { id: 'nope' })).reason, 'not-found');
-});
-
-test('communicator_invite needs a fresh okay row of its kind', async () => {
-  const t = await town();
-  const args = { gameId: 'g_1', actor: HOST, okay: { by: HOST, at: DEMO_NOW } };
-  assert.equal((await call(t, 'communicator_invite', args)).reason, 'okay-required');
-  assert.equal((await call(t, 'communicator_invite', { ...args, okay: { by: 'someoneelse', at: DEMO_NOW } })).reason, 'okay-required');
-  // wrong kind does not count
-  await S.recordOkay(t.db, { actor: HOST, kind: 'remind', targetGame: 'g_1', at: NOW - 60_000 });
-  assert.equal((await call(t, 'communicator_invite', args)).reason, 'okay-required');
-  // stale (11 minutes) does not count
-  await S.recordOkay(t.db, { actor: HOST, kind: 'invite', targetGame: 'g_1', at: NOW - 11 * 60_000 });
-  assert.equal((await call(t, 'communicator_invite', args)).reason, 'okay-required');
-  // fresh does
-  await S.recordOkay(t.db, { actor: HOST, kind: 'invite', targetGame: 'g_1', at: NOW - 60_000 });
-  const out = await call(t, 'communicator_invite', args);
-  assert.notEqual(out.reason, 'okay-required');
-  if (typeof H.inviteGame !== 'function') assert.equal(out.reason, 'not-yet-wired');
-});
-
-test('communicator_request runs the proposal for an actor with a fresh okay', async () => {
-  const t = await town();
-  const handle = DEMO_PROFILES.find((p) => p.identity.tier >= 2).handle;
-  const args = { text: 'Get me a 4.0 doubles game Thursday evening at Rec Park', actor: handle };
-  assert.equal((await call(t, 'communicator_request', args)).reason, 'okay-required');
-  await S.recordOkay(t.db, { actor: handle, kind: 'request', targetGame: '', at: NOW - 1000 });
-  const out = await call(t, 'communicator_request', args);
-  if (out.ok) assert.doesNotMatch(JSON.stringify(out), /@|\d{7}/);
-  else assert.notEqual(out.reason, 'okay-required');
 });

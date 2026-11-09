@@ -4,7 +4,7 @@
 
 ## 1. Problem
 
-The prototype proves the flow in a browser tab. Nothing persists, nobody receives anything, and no bot can call it. The gap between "a nice demo" and "Thursday's 4.0 game actually happened" is: a store, an HTTP surface, reply tokens, the consent-labelled MCP tools, and one channel that can reach a person who opted in.
+The prototype proves the flow in a browser tab. Nothing persists, nobody receives anything, and no bot can call it. The gap between "a nice demo" and "Thursday's 4.0 game actually happened" is: a store, an HTTP surface, reply tokens, two read-only MCP tools, and one channel that can reach a person who opted in.
 
 ## 2. Goal and non-goals
 
@@ -27,7 +27,7 @@ The prototype proves the flow in a browser tab. Nothing persists, nobody receive
 
 - **Host** (tier 2, Google or Tezos): Mike first. Asks for a game by text or voice, okays the invite list, submits the score.
 - **Player** (tier 0 or 1): opted in on their own device. Gets an invite with four chips, taps one. Confirms or disputes a score.
-- **Bot** (`pci_` agent identity acting for a tier 2 person): calls `communicator_request` and `communicator_ledger` freely, `communicator_invite` only with the person's recorded okay.
+- **Bot** (`pci_` agent identity acting for a tier 2 person): reads `communicator_ledger` and `communicator_game` freely over MCP; any write or consent action goes over HTTP and only with the person's recorded okay.
 - **Organizer** (tier 3, later): settles disputes. Out of v1; disputes park the game and tell the host.
 
 ## 4. Scope
@@ -58,7 +58,7 @@ Rate limits through `PC_RATES_KV` as the rest of the API. Every write is attribu
 
 ### 4.3 MCP tools (`functions/api/mcp.ts`)
 
-`communicator_ledger` (read), `communicator_request` (write), `communicator_game` (read), `communicator_invite` (consent), `communicator_remind` (consent), `communicator_score` (write), `communicator_confirm_score` (write). Add `CONSENT_TOOL_NAMES` beside `WRITE_TOOL_NAMES`; `toolAnnotations()` gains `pointcast/effect: 'read' | 'write' | 'consent'`; `/agents.json` tools carry `effect`. A consent tool takes `okay: { by: handle, at: ISO }` and the handler verifies an okay row exists for that actor and game within 10 minutes, or refuses with `okay-required`. `agent-capabilities.ts` gains the same `effect` field.
+The MCP exposes only two read tools: `communicator_ledger` and `communicator_game`. PointCast's public MCP stays read-only (Mike's decision), so request, invite, remind, score and confirm-score run over the HTTP routes in 4.2 with the okay gate (a signed-in person's `POST /api/communicator/okays`, checked for that actor and game within 10 minutes, else `okay-required`). The effect label stays: `CONSENT_TOOL_NAMES` sits beside `WRITE_TOOL_NAMES` (both hold no communicator tool today), `toolAnnotations()` carries `pointcast/effect: 'read' | 'write' | 'consent'`, `/agents.json` tools carry `effect`, and `agent-capabilities.ts` has the same `effect` field.
 
 ### 4.4 Delivery adapter v0 (`functions/_lib/communicator-deliver.ts`)
 
@@ -94,7 +94,7 @@ Rate limits through `PC_RATES_KV` as the rest of the API. Every write is attribu
 |---|---|---|---|
 | v1-a | Migration, store module, `/request`, `/games`, `/games/:id`, `/me`, `/ledger`, tests | 1 PR | #1598 merged |
 | v1-b | `/invite`, `/reply`, `/score`, reply tokens, `/c/r/` page, dark-launched adapter, tests | 1 PR | v1-a |
-| v1-c | MCP tools with `CONSENT_TOOL_NAMES`, `pointcast/effect`, `effect` in agents.json and capabilities; `audit:agents` | 1 PR | v1-a |
+| v1-c | Two read-only MCP tools, `pointcast/effect` label, `effect` in agents.json and capabilities; `audit:agents` | 1 PR | v1-a |
 | v1-d | `/communicator/` store-backed mode and `/communicator/me` | 1 PR | v1-b |
 | Launch | Mike's okay, `COMMUNICATOR_SEND=on`, two-phone Manus test, first game | Mike | all |
 

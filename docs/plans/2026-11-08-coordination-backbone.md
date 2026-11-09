@@ -113,7 +113,7 @@ effect: 'consent'  — reaches a person (invite, reminder, score request, messag
 
 Where it lives.
 
-- PointCast MCP: a `pointcast/effect` annotation beside `readOnlyHint` from `toolAnnotations()`, and an `effect` column in `/agents.json` tools. A `CONSENT_TOOL_NAMES` set joins `WRITE_TOOL_NAMES`. Today the set is empty; the Communicator's `communicator_invite`, `communicator_remind`, `communicator_score_request` are its first members.
+- PointCast MCP: a `pointcast/effect` annotation beside `readOnlyHint` from `toolAnnotations()`, and a `toolEffects` map in `/agents.json`. A `CONSENT_TOOL_NAMES` set sits beside `WRITE_TOOL_NAMES` so the label exists, but by Mike's decision (2026-11-09) the public MCP stays read-only: every served tool is `read`, and both sets stay empty. Write and consent actions live on the HTTP routes behind a signed-in person's okay.
 - PointCast HTTP: `agent-capabilities.ts` gains `effect` beside `auth` and `sideEffects`.
 - elsegundo.xyz: the same `effect` field in `agents.json` endpoints and the `/mcp/desk` tool table; `needsMike` on desk jobs is the same idea for the owner and keeps its name.
 - The prototype renders the Communicator's own action table (`ACTIONS` in `engine.mjs`) so a visiting bot sees the labels before it calls anything.
@@ -180,7 +180,7 @@ Adapters, in order: PointCast `sendMail()` (Resend, exists) → web push (PMM v0
 
 - **Engine**: `public/communicator/{ledger,engine,demo}.mjs`, pure, shared by the browser prototype, Pages Functions and tests. Same pattern as `public/ai-grand-prix/engine.mjs`.
 - **State**: `AUTH_DB` tables `coordination_games`, `coordination_messages`, `coordination_ledger` (append-only) and `coordination_profiles` (or `user_state` payloads) at PointCast; a Netlify Blobs store with the same shapes at elsegundo.xyz. The ledger is also published read-only as `/communicator/ledger.json` per ladder so the elsegundo.xyz build can import confirmed Communicator games into the ladder pages.
-- **MCP** (PointCast `functions/api/mcp.ts`): `communicator_request` (write: parse and propose, returns candidates as public projections), `communicator_invite` (consent), `communicator_reply` (write by the invited player's token), `communicator_remind` (consent), `communicator_score` (write), `communicator_confirm_score` (write), `communicator_ledger` (read). A bot may call the reads freely, the writes with a person's tier, and the consent tools only with a person's explicit okay recorded in the call (`okayedAt`, `okayedBy`).
+- **MCP** (PointCast `functions/api/mcp.ts`): read only, by Mike's decision. `communicator_ledger` (confirmed entries and public ratings for a ladder) and `communicator_game` (one game, names and handles only). A bot that wants to propose, invite, remind, score or confirm uses the HTTP routes below on a person's behalf, and each of those needs that person's okay recorded first at `POST /api/communicator/okays` (ten-minute window).
 - **HTTP**: `/api/communicator/{request,invite,reply,score,ledger}` mirroring the tools, so elsegundo.xyz pages and the Loom can use them.
 
 ### 2.4 Privacy and consent, enforced

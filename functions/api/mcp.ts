@@ -232,10 +232,8 @@ import { RADIO_TOOL_DEFINITIONS, dispatchRadioTool } from '../../src/lib/radio-m
 import schedule from '../../src/data/courts-schedule.json';
 import { venuesFromSchedule } from '../_lib/communicator-store.ts';
 import {
-  COMMUNICATOR_CONSENT_TOOL_NAMES,
   COMMUNICATOR_TOOL_DEFINITIONS,
   COMMUNICATOR_TOOL_NAMES,
-  COMMUNICATOR_WRITE_TOOL_NAMES,
   callCommunicatorTool,
 } from '../_lib/communicator-mcp.ts';
 import { fileAgentRequest } from './station/requests.ts';
@@ -293,7 +291,6 @@ const WRITE_TOOL_NAMES = new Set([
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
   ...CIVIL_SERVICE_WRITE_TOOL_NAMES,
-  ...COMMUNICATOR_WRITE_TOOL_NAMES,
 ]);
 
 // The three effect words (shown as 'pointcast/effect' on every tool and as `effect` in /agents.json):
@@ -301,9 +298,8 @@ const WRITE_TOOL_NAMES = new Set([
 //   write   changes state the actor owns or a shared board.
 //   consent reaches a person, so it needs that person's standing opt-in plus the actor's explicit okay.
 // A tool in both sets counts as consent.
-const CONSENT_TOOL_NAMES = new Set<string>([
-  ...COMMUNICATOR_CONSENT_TOOL_NAMES,
-]);
+// Empty today: the public MCP is read-only, and consent actions live on the HTTP routes behind a person's okay.
+const CONSENT_TOOL_NAMES = new Set<string>([]);
 
 export type ToolEffect = 'read' | 'write' | 'consent';
 export function toolEffect(name: string): ToolEffect {
@@ -4425,7 +4421,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         return rpcResult(id, { content: [{ type: 'text', text: lead }, { type: 'text', text: JSON.stringify(data, null, 2) }] });
       }
       if ((COMMUNICATOR_TOOL_NAMES as readonly string[]).includes(name)) {
-        // In-process so the handler can read the agent-identity headers; the okay row is checked inside.
+        // Read-only tools; writes and consent actions are HTTP-only (POST /api/communicator/okays gate).
         const out = await callCommunicatorTool(name, args, request, env as never, venuesFromSchedule(schedule));
         return rpcResult(id, {
           content: [{ type: 'text', text: out.ok ? JSON.stringify(out, null, 2) : `Communicator declined: ${out.reason}.${out.note ? ' ' + out.note : ''}` }],
