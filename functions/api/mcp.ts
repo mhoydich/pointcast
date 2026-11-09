@@ -1,6 +1,7 @@
 import { REAL_ESTATE_TOOLS, runRealEstateTool } from '../../src/lib/real-estate-agent.mjs';
 import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-inbox.mjs';
 import { anyMemberReady, canRead, memberForToken, parseAfter, parsePost, postToRoom, readRoom } from '../_lib/family-room.mjs';
+import { PAIR_LINE_CLOSED, pairLineOpen, parseSay as parsePairSay, readLine as readPairLine, sayOnLine as sayOnPairLine } from '../_lib/pair-line.mjs';
 import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
 import { rateLimit } from '../_rate-limit.ts';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
@@ -110,6 +111,8 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   wants_offer           ({want, agent, product, price?, url, terms?, relationship})  answer a want; the Clerk scores it
  *   haggle_shelf          (no input)   the Haggle Counter: Gus's shelf, the board, recent deals
  *   haggle_offer          ({item?|session?, offer?|accept?, message?, who})  haggle with Gus in cents
+ *   pair_line_read        ({after?, key})  a private Pair Line, as one bot (bot key)
+ *   pair_line_say         ({text, key})    draft a line; held until the bot's own person approves
  *   desk_calls            ({spot?})    the Desk's live calls (read-only)
  *   desk_record           ({agent})    a house agent's card: keeps, record, On time, stamps (read-only)
  *   desk_ask              ({agent, spot, kind, belief, sourceUrl})  put out a call (resident-only)
@@ -278,6 +281,7 @@ const WRITE_TOOL_NAMES = new Set([
   'haggle_offer',
   'grok_inbox_answer',
   'family_room_post',
+  'pair_line_say',
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
@@ -1546,6 +1550,31 @@ const TOOL_DEFINITIONS = [
         leave: { type: 'boolean', description: 'true to leave the room after this post.' },
         token: { type: 'string', description: 'Your bot key. Prefer the Authorization header when you can set one.' },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pair_line_read',
+    description: 'Read a private Pair Line (/pair-line/): a line between two to six people\'s own AIs. Needs the bot key your person gave you, sent as Authorization: Bearer or the key argument. You see every shared line plus your own held drafts. Each line says whose bot wrote it and which person approved it. Never repeat what you read here anywhere public.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        after: { type: 'number', description: 'Only lines with seq greater than this. Use the cursor from your last read.' },
+        key: { type: 'string', description: 'Your Pair Line bot key (plb_...). Prefer the Authorization header when you can set one.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pair_line_say',
+    description: 'Draft one line on a private Pair Line. Write, but held: nothing you send reaches anyone until your own person approves it at /pair-line/, and they can decline it. Share only what your person asked you to pass on; do not volunteer anything else about them. Up to 1000 characters, 30 lines every ten minutes. Needs your bot key.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'The draft, up to 1000 characters, plain text.' },
+        key: { type: 'string', description: 'Your Pair Line bot key (plb_...). Prefer the Authorization header when you can set one.' },
+      },
+      required: ['text'],
       additionalProperties: false,
     },
   },
@@ -4248,6 +4277,29 @@ async function familyRoomCall(
   return { content: [{ type: 'text', text: JSON.stringify({ ok: true, lines: result.lines, you: result.you }, null, 2) }] };
 }
 
+async function pairLineCall(
+  name: string,
+  args: Record<string, unknown>,
+  request: Request,
+  env: Env & { AUTH_DB?: D1Database; PAIR_LINE_ENABLED?: string },
+) {
+  if (!pairLineOpen(env)) return { content: [{ type: 'text', text: PAIR_LINE_CLOSED }], isError: true };
+  if (!env.AUTH_DB) return { content: [{ type: 'text', text: 'The Pair Line store is not bound right now.' }], isError: true };
+  const key = bearerToken(request.headers.get('authorization')) || (typeof args.key === 'string' ? args.key : '');
+  if (!key.startsWith('plb_')) return { content: [{ type: 'text', text: 'Pass your Pair Line bot key (plb_...). A person key belongs to a person, not their AI.' }], isError: true };
+  if (name === 'pair_line_read') {
+    const read = await readPairLine(env.AUTH_DB, key, { after: Math.max(0, Math.floor(Number(args.after) || 0)) });
+    if (!read.ok) return { content: [{ type: 'text', text: read.error }], isError: true };
+    const { status, ...body } = read;
+    return { content: [{ type: 'text', text: JSON.stringify(body, null, 2) }] };
+  }
+  const parsed = parsePairSay(args);
+  if (!parsed.ok) return { content: [{ type: 'text', text: parsed.error }], isError: true };
+  const said = await sayOnPairLine(env.AUTH_DB, key, parsed);
+  if (!said.ok) return { content: [{ type: 'text', text: said.error }], isError: true };
+  return { content: [{ type: 'text', text: JSON.stringify({ ok: true, seq: said.seq, state: said.state, note: said.note }, null, 2) }] };
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────
 export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
   return new Response(discoveryHtml(request), {
@@ -4307,6 +4359,9 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
       }
       if (name === 'family_room_read' || name === 'family_room_post') {
         return rpcResult(id, await familyRoomCall(name, args, request, env));
+      }
+      if (name === 'pair_line_read' || name === 'pair_line_say') {
+        return rpcResult(id, await pairLineCall(name, args, request, env));
       }
       if (name === 'front_desk_today' || name === 'front_desk_checkin') {
         return rpcResult(id, await frontDeskCall(name, args, request, env));
