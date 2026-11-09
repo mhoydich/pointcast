@@ -1,0 +1,77 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../../lib/channels';
+import { hostOf } from '../../../lib/paddle-calendar';
+import { BASIS_WORDS, GEAR_META, KIND_WORDS, PROS, PROS_URL, gearHref, paddleOf } from '../../../lib/player-gear';
+import '../../../styles/player-gear.css';
+
+export function getStaticPaths() {
+  return PROS.map((pro) => ({ params: { slug: pro.slug }, props: { pro } }));
+}
+
+const { pro } = Astro.props as { pro: (typeof PROS)[number] };
+const court = CHANNELS.CRT;
+const paddle = paddleOf(pro);
+const when = (d?: string | null) => (d ? ` · ${d}` : '');
+const title = `${pro.name}: paddle and gear, with sources`;
+const description = `${pro.name}'s ${paddle ? `paddle (${paddle.brand} ${paddle.model ?? ''})` : 'gear'} and other gear, each with a source and a date, plus a few career facts. Rankings and ratings link out to the official pages.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ProfilePage',
+  '@id': `${PROS_URL}/${pro.slug}`,
+  name: title,
+  description,
+  dateModified: GEAR_META.asOf,
+  mainEntity: { '@type': 'Person', name: pro.name, sameAs: pro.links.map((l) => l.url) },
+  license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+};
+const fix = `${GEAR_META.suggest}${encodeURIComponent(`${pro.name}`)}`;
+---
+
+<BlockLayout title={title} description={description} image="/images/og/paddles.png" jsonLd={jsonLd}>
+  <main class="gp" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span>/</span><a href="/pickleball">pickleball</a><span>/</span><a href="/pickleball/pros">pros</a><span>/</span><span>{pro.name}</span></nav>
+    <header class="hero">
+      <p class="kicker">PRO GEAR · {GEAR_META.asOf}</p>
+      <h1>{pro.name}</h1>
+      {paddle && (
+        <p class="dek">Plays the {gearHref(paddle) ? <a href={gearHref(paddle)!}>{paddle.brand} {paddle.model}</a> : <>{paddle.brand} {paddle.model}</>}{paddle.variant ? ` (${paddle.variant})` : ''}{paddle.signature ? ', a signature model' : ''}.</p>
+      )}
+    </header>
+
+    <section class="sec" aria-label="Gear">
+      <p class="kicker">GEAR</p>
+      <div class="rows">
+        {pro.gear.map((g) => (
+          <div class="row">
+            <strong>{KIND_WORDS[g.kind]}</strong>
+            <span>{gearHref(g) ? <a href={gearHref(g)!}>{g.brand} {g.model}</a> : <>{g.brand}{g.model ? ` ${g.model}` : ''}</>}{g.signature ? ' · signature' : ''}{g.variant && <small>{g.variant}</small>}</span>
+            <span class="soft">{BASIS_WORDS[g.basis]}{when(g.sourceDate)}{g.source && <> · <a href={g.source} rel="noopener">{hostOf(g.source)} ↗</a></>}{g.note ? ` · ${g.note}` : ''}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    {pro.career.length > 0 && (
+      <section class="sec" aria-label="Career">
+        <p class="kicker">ON THE RECORD</p>
+        <ul class="facts">
+          {pro.career.map((c) => (
+            <li>{c.text} <small><a href={c.source} rel="noopener">{hostOf(c.source)} ↗</a>{when(c.sourceDate)}</small></li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <section class="sec" aria-label="Rankings and official pages">
+      <p class="kicker">RANKINGS AND RATINGS</p>
+      <p class="soft">PointCast does not copy tour rankings or ratings. The current numbers are on the official pages.</p>
+      {pro.links.length > 0 && (
+        <ul class="links">{pro.links.map((l) => <li><a href={l.url} rel="noopener">{l.label} ↗</a></li>)}</ul>
+      )}
+    </section>
+
+    <p class="fine">A pro's paddle here is the model the brand or a dated article names; on-court gear changes and most contracts end December 31. Something wrong or missing, or want this page removed? <a href={fix} rel="noopener">Tell us</a> and it is fixed or taken down as soon as it is read.</p>
+    <p class="foot"><a href="/pickleball/pros">all pros</a> · <a href="/pickleball/gear">everyone's gear</a> · <a href="/paddles/pros">who plays what</a> · <a href="/pickleball/gear.json">gear.json</a> · CC0</p>
+  </main>
+</BlockLayout>
