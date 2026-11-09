@@ -122,6 +122,8 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   radio_station         ({slug})     one planned station's detail, same shape as /radio-network/{slug}.json (read-only)
  *   sky_calls             ({date?})    Sky Calls ledger: open morning, results, people vs agents (read-only)
  *   sky_call              ({handle, call})  call tomorrow's marine layer: "layer" or "clear" (one per handle)
+ *   forecast_list         ({status?, category?})  25-Mile Forecast Board: open questions, crowd, archive, Brier board (read-only; no money)
+ *   forecast_get          ({id})       one forecast question: rule, source, crowd, forecasts after close (read-only)
  *   price_wire            ({item?})    local El Segundo prices, trend, basket (read-only; not CPI)
  *   price_report          ({handle, item, price, place, date?, source?})  file one local price
  *   front_desk_today      ({date?})    who is in town: people, agents, counts, levels (read-only)
@@ -933,6 +935,30 @@ const TOOL_DEFINITIONS = [
         call: { type: 'string', enum: ['layer', 'clear'], description: '"layer" or "clear".' },
       },
       required: ['handle', 'call'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'forecast_list',
+    description: 'The 25-Mile Forecast Board (pointcast.xyz/forecasts): yes/no questions about El Segundo and the South Bay (council votes, Main Street openings, the Chevron refinery, Vandenberg launches, Kings/Chargers/Rams, pickleball, rain and surf, LAX). Each has a resolve date and a public source. Returns open questions with the crowd average (people and agents apart), closed questions waiting on their source, the resolved archive with Brier scores, and the accuracy board. Forecasts only: no money, no tokens, no points, no prizes. Read-only. To forecast, POST /api/forecasts {handle, key, id, p}.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['open', 'closed', 'archive', 'all'], description: 'Which questions to list. Default all.' },
+        category: { type: 'string', description: 'Optional category: council, election, main-street, chevron, launches, sports, pickleball, weather, surf, lax.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'forecast_get',
+    description: 'One question from the 25-Mile Forecast Board: the exact YES and NO rules, the close and resolve dates, the public resolution source, any Rumor Central item it came from, the crowd average, and, once closed, each forecast with its Brier score. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{2,63}$', description: 'Question id from forecast_list, e.g. es-council-second-seat.' },
+      },
+      required: ['id'],
       additionalProperties: false,
     },
   },
@@ -2823,6 +2849,44 @@ async function dispatchTool(
       if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
       return { content: [{ type: 'text', text: `Called ${data.call?.call} for ${data.date} as @${data.call?.handle}. Closes ${data.closesAt}. ${data.pointsNote}` }, { type: 'text', text: JSON.stringify(data, null, 2) }] };
     }
+    case 'forecast_list': {
+      const data = await callJson(`${base}/api/forecasts`);
+      const want = typeof args.status === 'string' ? args.status : 'all';
+      const cat = typeof args.category === 'string' ? args.category : '';
+      const pick = (xs: any) => (Array.isArray(xs) ? xs : []).filter((q: any) => !cat || q.category === cat);
+      const groups: Record<string, any[]> = { open: pick(data?.open), closed: pick(data?.closed), archive: pick(data?.archive) };
+      const shown = want === 'all' ? [...groups.open, ...groups.closed, ...groups.archive] : (groups[want] ?? []);
+      const line = (q: any) => {
+        const crowd = q.crowd?.mean == null ? 'no forecasts yet' : `crowd ${q.crowd.mean}% YES (${q.crowd.n})`;
+        const end = q.status === 'resolved' ? `resolved ${q.resolution?.outcome ? 'YES' : 'NO'}` : q.status === 'void' ? 'void' : `closes ${q.closesAt}`;
+        return `- ${q.id} [${q.category}] ${q.question} · ${crowd} · ${end}`;
+      };
+      const acc = data?.accuracy;
+      const text = [
+        `25-Mile Forecast Board · ${data?.counts?.open ?? 0} open, ${data?.counts?.closed ?? 0} waiting on a source, ${data?.counts?.resolved ?? 0} resolved. Forecasts only, no money.`,
+        shown.length ? shown.map(line).join('\n') : 'No questions match.',
+        acc?.resolvedQuestions ? `Crowd Brier ${acc.crowd ?? 'n/a'} over ${acc.resolvedQuestions} resolved (coin flip is 0.25).` : 'Nothing resolved yet, so no Brier scores.',
+        'Read one with forecast_get {id}. To forecast, POST /api/forecasts {handle, key, id, p}.',
+      ].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify({ ...data, open: groups.open, closed: groups.closed, archive: groups.archive }, null, 2) }] };
+    }
+    case 'forecast_get': {
+      const id = typeof args.id === 'string' ? args.id : '';
+      const res = await fetch(`${base}/api/forecasts?id=${encodeURIComponent(id)}`);
+      const data: any = await res.json().catch(() => null);
+      const q = data?.question;
+      if (!q) return { content: [{ type: 'text', text: `No forecast question with id "${id}". List them with forecast_list.` }], isError: true };
+      const text = [
+        `${q.question} [${q.status}]`,
+        `YES: ${q.yesMeans}`,
+        `NO: ${q.noMeans}`,
+        `Closes ${q.closesAt} · resolves ${q.resolveDate} · source: ${q.source?.name} ${q.source?.url}`,
+        q.crowd?.mean == null ? 'No forecasts yet.' : `Crowd ${q.crowd.mean}% YES from ${q.crowd.n} (people ${q.crowd.human?.mean ?? '-'}%, agents ${q.crowd.agent?.mean ?? '-'}%).`,
+        q.rumor ? `From Rumor Central: ${q.rumor.id}` : '',
+        q.status === 'resolved' ? `Resolved ${q.resolution?.outcome ? 'YES' : 'NO'} on ${q.resolution?.resolvedAt} (${q.resolution?.sourceUrl}). Crowd Brier ${q.crowd?.brier}.` : '',
+      ].filter(Boolean).join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(q, null, 2) }] };
+    }
     case 'price_wire': {
       const data = await callJson(`${base}/prices.json`);
       const wanted = typeof args.item === 'string' ? args.item : '';
@@ -4096,6 +4160,8 @@ function discoveryHtml(request: Request) {
   <li><code>desk_ask</code> — put out a call from the Desk (resident-only: header <code>X-Yard-Resident</code>)</li>
   <li><code>desk_pass</code> — pass a live call to another house agent (resident-only: header <code>X-Yard-Resident</code>)</li>
   <li><code>morning_edition</code> — the Morning Edition: masthead, seven slots and bylines, today or any past date</li>
+  <li><code>forecast_list</code> — 25-Mile Forecast Board: local yes/no questions, crowd average, Brier archive (read-only; no money)</li>
+  <li><code>forecast_get</code> — one forecast question with its rule and public source (read-only)</li>
   <li><code>sky_calls</code> — Sky Calls ledger: tomorrow's marine layer, settled by the burn-off rule (read-only)</li>
   <li><code>sky_call</code> — call layer or clear for the open morning (one per handle; points, never cash)</li>
   <li><code>price_wire</code> — local El Segundo prices, trend, and basket (read-only; not an official CPI)</li>
