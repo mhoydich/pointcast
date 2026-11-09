@@ -245,7 +245,7 @@ import { FIRST_EDITION, editionDate, parseEditionParam } from '../_lib/morning.m
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.14.0';
+const SERVER_VERSION = '0.15.0';
 const V2_SERVER_NAME = 'pointcast-v2';
 const V2_SERVER_VERSION = '2.9.0';
 

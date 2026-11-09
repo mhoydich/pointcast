@@ -44,6 +44,8 @@ Every record, on every site, has the same shape. Required fields are marked.
 | `layer` | yes | string | The id of the layer (source dataset) the record came from. |
 | `status` | no | enum | `live` (default) `planned` `historical` `draft`. |
 | `sensitive` | no | array | Editorial flags a sister site may need to honor, e.g. `cannabis`. elsegundo.xyz never publishes records carrying this flag. |
+| `when` | no | object | Events only: `{ start, end?, timezone }` as the organizer published them (ISO 8601 strings). |
+| `image` | no | https URL | One representative image the site already publishes for the record (artwork provenance stays on the record's page). |
 
 ### 3. Location
 

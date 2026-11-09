@@ -16,7 +16,7 @@ export function haversineMiles(a, b) {
 export function bearingDegrees(a, b) {
   const y = Math.sin(rad(b.lon - a.lon)) * Math.cos(rad(b.lat));
   const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lon - a.lon));
-  return Math.round((((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360);
+  return Math.round((((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360) % 360;
 }
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];

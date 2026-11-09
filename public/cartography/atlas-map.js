@@ -7,8 +7,9 @@
  *   <div id="atlas" data-atlas="/atlas.json" data-index="/atlas/index.json" data-site="pointcast.xyz"></div>
  *   <script src="/cartography/atlas-map.js" defer></script>
  *
- * data-index is optional: when present the page offers "all sites" (?site=all). URL state:
- * ?site=all|<host> &type=<type> &layer=<layer> &q=<words> &placed=1, and #<record id> selects a record.
+ * data-index is optional: when present the page offers "all sites" (?site=all) and any ?site=<host> filter
+ * reads the merged index. URL state: ?site=all|<host> &type=<type> &layer=<layer> &q=<words> &placed=1,
+ * and #<record id> selects a record.
  */
 (function () {
   'use strict';
@@ -48,7 +49,9 @@
 
   function readState() {
     const p = new URLSearchParams(location.search);
-    return { site: p.get('site') || '', type: p.get('type') || '', layer: p.get('layer') || '', q: p.get('q') || '', placed: p.get('placed') === '1', id: decodeURIComponent(location.hash.slice(1)) };
+    let id = location.hash.slice(1);
+    try { id = decodeURIComponent(id); } catch (error) { /* a malformed hash selects nothing */ }
+    return { site: p.get('site') || '', type: p.get('type') || '', layer: p.get('layer') || '', q: p.get('q') || '', placed: p.get('placed') === '1', id };
   }
   function writeState(s) {
     const p = new URLSearchParams();
@@ -63,12 +66,12 @@
     const indexUrl = root.dataset.index || '';
     const ownSite = root.dataset.site || '';
     const state = readState();
-    if (state.site === 'all' && !indexUrl) state.site = '';
+    if (state.site && !indexUrl) state.site = ''; // without a merged index there is only this site
     root.classList.add('atlas-map');
     root.innerHTML = '<p class="am-loading">Loading the atlas…</p>';
     let atlas;
     try {
-      const url = state.site === 'all' ? indexUrl : own;
+      const url = state.site && indexUrl ? indexUrl : own; // any ?site= filter needs the merged index
       const res = await fetch(url, { headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       atlas = await res.json();
@@ -245,7 +248,7 @@
       renderStats(); renderLegend(); renderPins(); renderList(); renderDetail();
     }
     svg.addEventListener('click', (e) => { if (e.target === svg || e.target.closest('.am-base')) { if (!(drag && drag.moved)) select(''); } });
-    window.addEventListener('hashchange', () => { const id = decodeURIComponent(location.hash.slice(1)); if (byId.has(id) && id !== selected) select(id); });
+    window.addEventListener('hashchange', () => { let id = location.hash.slice(1); try { id = decodeURIComponent(id); } catch (error) { return; } if (byId.has(id) && id !== selected) select(id); });
     update();
     if (selected) renderDetail();
   }

@@ -136,7 +136,10 @@ export async function dispatchAtlasTool(name: string, args: Record<string, unkno
     if (name === 'atlas_get' || name === 'atlas_links') {
       const id = String(args.id ?? '').trim();
       if (!id) return fail('id is required, for example pc:court:el-segundo.');
-      const doc = await loadDoc(siteUrl(base, !id.startsWith('pc:')));
+      // PointCast hosts the merged index, a superset of atlas.json, so links and incoming links resolve across
+      // sites. Fall back to this site's own atlas only when the index cannot be read.
+      let doc: any;
+      try { doc = await loadDoc(siteUrl(base, true)); } catch (err) { if (id.startsWith('pc:')) doc = await loadDoc(siteUrl(base, false)); else throw err; }
       if (name === 'atlas_get') {
         const rec = atlasGet(doc, id);
         if (!rec) return fail(`Unknown atlas id "${id}". Use atlas_search to find ids.`);

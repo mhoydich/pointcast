@@ -91,7 +91,10 @@ test('atlas_get resolves links and errors on an unknown id', async (t) => {
     const lib = got.data.record.links.find((l) => l.id === 'pc:place:library');
     assert.equal(lib.resolved, true);
     assert.equal(lib.name, 'El Segundo Library');
-    assert.equal(got.data.record.links.find((l) => l.id === 'es:court:recreation-park').resolved, false);
+    // PointCast reads the merged index for atlas_get, so the sister link resolves and the sister's incoming link shows.
+    const sister = got.data.record.links.find((l) => l.id === 'es:court:recreation-park');
+    assert.equal(sister.resolved, true);
+    assert.ok(got.data.record.incoming.some((i) => i.id === 'es:court:recreation-park'));
     const bad = await call(rpc, 'atlas_get', { id: 'pc:court:nope' });
     assert.equal(bad.isError, true);
     assert.match(bad.line, /Unknown atlas id/);
@@ -127,17 +130,18 @@ test('atlas_near sorts by distance, clamps radius to 25, rejects bad lat', async
   });
 });
 
-test('atlas_links returns nodes and edges and marks unresolved sister ids', async (t) => {
+test('atlas_links returns nodes and edges and resolves sister ids through the merged index', async (t) => {
   const { rpc } = await loadMcp(t);
   await withAtlas(async () => {
     const g = await call(rpc, 'atlas_links', { id: 'pc:place:library' });
     assert.deepEqual(g.data.edges.map((e) => `${e.from}|${e.rel}|${e.to}`).sort(), ['pc:agent:desk-bot|about|pc:place:library', 'pc:court:rec-park|near|pc:place:library']);
     const court = await call(rpc, 'atlas_links', { id: 'pc:court:rec-park' });
+    // PointCast reads the merged index for atlas_links, so the sister node resolves with its name.
     const sister = court.data.nodes.find((n) => n.id === 'es:court:recreation-park');
-    assert.equal(sister.resolved, false);
-    assert.match(sister.note, /merged index/);
+    assert.equal(sister.name, 'Recreation Park courts');
+    assert.notEqual(sister.resolved, false);
     const onlySame = await call(rpc, 'atlas_links', { id: 'pc:court:rec-park', rel: 'same-as' });
-    assert.equal(onlySame.data.edges.length, 1);
+    assert.equal(onlySame.data.edges.length, 2, 'same-as both ways once the sister atlas is in the index');
     assert.equal((await call(rpc, 'atlas_links', { id: 'pc:nope:x' })).isError, true);
   });
 });

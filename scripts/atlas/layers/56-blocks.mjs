@@ -8,7 +8,7 @@ export const layer = {
   name: 'Block archive',
   description: 'The PointCast block archive: numbered posts across ten channels, with a JSON feed and an MCP reader.',
   types: ['dataset'],
-  inline: true,
+  inline: false,
   data: 'https://pointcast.xyz/blocks.json',
   page: 'https://pointcast.xyz/archive',
   license: 'CC0-1.0',

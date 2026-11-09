@@ -41,9 +41,11 @@ export async function records({ site, readJson, helpers, resolve, root }) {
       if (!prev || f.checked > prev.checked) sources.set(s.url, src(s.url, f.checked, label, s.label));
     }
     const updated = facts.map((f) => f.checked).sort().pop();
-    const text = facts.map((f) => f.text).filter((t) => !/\d{3}[\s.-]\d{3}[\s.-]\d{4}/.test(t));
+    // courts-schedule.json keys the street address fact as 'address'; everything else is court copy. Not every court has one.
+    const addressFact = facts.find((f) => f.key === 'address');
+    const text = facts.filter((f) => f !== addressFact).map((f) => f.text).filter((t) => !/\d{3}[\s.-]\d{3}[\s.-]\d{4}/.test(t));
     const city = court.city;
-    const body = text.slice(1).join('; ');
+    const body = text.join('; ');
     const rec = {
       id: rid(site.host, 'court', court.id),
       type: 'court',
@@ -62,7 +64,7 @@ export async function records({ site, readJson, helpers, resolve, root }) {
     // never from another repo's working tree, and keep that record's precision and source.
     const v = VENUE[court.id] ? sisterById(root, `es:court:${VENUE[court.id]}`) : null;
     const vAddr = v && v.location ? normAddr(v.location.address).split(' ').slice(0, 3).join(' ') : '';
-    if (v && v.location && vAddr && vAddr === normAddr(facts[0]?.text).split(' ').slice(0, 3).join(' ')) {
+    if (v && v.location && vAddr && addressFact && vAddr === normAddr(addressFact.text).split(' ').slice(0, 3).join(' ')) {
       rec.location = locationFrom(v, { area: slug(city) });
       rec.links = [{ rel: 'same-as', id: v.id }];
     }

@@ -16,9 +16,9 @@ const HOME_INDEX_TOOLS = [
   'home_index_insurance_schedule',
 ];
 
-test('MCP server declares SERVER_VERSION 0.14.0', async () => {
+test('MCP server declares SERVER_VERSION 0.15.0', async () => {
   const source = await readFile(MCP_LIB, 'utf8');
-  assert.match(source, /SERVER_VERSION = '0\.14\.0'/);
+  assert.match(source, /SERVER_VERSION = '0\.15\.0'/);
 });
 
 test('MCP server declares each home_index tool by name', async () => {
