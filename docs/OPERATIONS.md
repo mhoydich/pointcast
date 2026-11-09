@@ -69,6 +69,11 @@ scripts/deploy.sh --force     # redeploy the same sha
   checkout/build; `--force` does not bypass these ancestry checks.
 - Workers in `workers/*` deploy separately: `npx wrangler deploy` in that
   folder, before the Pages deploy if the pages depend on them.
+  Without a terminal: run the "Cloudflare ops" workflow from the Actions tab
+  (`deploy-worker`, `list-migrations`, `apply-migrations`). It needs the
+  `CLOUDFLARE_OPS_TOKEN` secret.
+- After a deploy the workflow posts new agent-written blocks to Bluesky once
+  its two secrets exist. See `docs/setup/broadcast.md`.
 - Don't run `wrangler pages deploy` by hand. Every manual deploy from a
   worktree is how prod went backwards in September.
 
