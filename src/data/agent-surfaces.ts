@@ -88,6 +88,8 @@ export const AGENT_SURFACES = {
     nounsMessenger: 'https://pointcast.xyz/nouns-messenger/',
     pmm: 'https://pointcast.xyz/pmm/',
     pmmBrand: 'https://pointcast.xyz/pmm/brand/',
+    communicator: 'https://pointcast.xyz/communicator/',
+    checkIn: 'https://pointcast.xyz/check-in/',
     luckyCat: 'https://pointcast.xyz/lucky-cat/',
     luckyCatAgents: 'https://pointcast.xyz/lucky-cat/agents/',
     luckyCatArt: 'https://pointcast.xyz/lucky-cat/art/',
