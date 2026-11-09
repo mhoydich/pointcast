@@ -1,7 +1,7 @@
 // Read-only queries over an atlas document (a site atlas or the merged index). Pure functions,
 // no I/O, so both MCP servers and the map pages can share them. Kept identical in
 // mhoydich/pointcast (src/lib/atlas-query.mjs) and mhoydich/hello-token-reserve (netlify/lib/atlas/query.mjs).
-// Spec: docs/cartography/ATLAS.md §6.
+// Spec: docs/ATLAS.md §6 (elsegundo.xyz) / docs/cartography/ATLAS.md §6 (PointCast).
 
 const EARTH_MILES = 3958.7613;
 const rad = (d) => (d * Math.PI) / 180;
@@ -76,26 +76,30 @@ export function get(atlas, id) {
 }
 
 /** Located records within radiusMiles of a point, nearest first. Straight-line, never travel time. */
-export function near(atlas, { lat, lon, radiusMiles, type, layer, limit } = {}) {
+export function near(atlas, { lat, lon, radiusMiles, type, layer, site, limit, offset } = {}) {
   const origin = { lat: Number(lat), lon: Number(lon) };
   if (!Number.isFinite(origin.lat) || !Number.isFinite(origin.lon) || Math.abs(origin.lat) > 90 || Math.abs(origin.lon) > 180) throw new Error('lat and lon are required decimal degrees');
   const radius = Math.min(MAX_RADIUS_MILES, Math.max(0.05, Number.isFinite(Number(radiusMiles)) ? Number(radiusMiles) : 1));
   const lim = clampInt(limit, 1, MAX_LIMIT, 10);
+  const off = clampInt(offset, 0, 100000, 0);
   let rows = atlas.records.filter((r) => r.location);
   if (type) rows = rows.filter((r) => r.type === type);
   if (layer) rows = rows.filter((r) => r.layer === layer);
+  if (site && site !== 'all') rows = rows.filter((r) => r.site === site);
   const hits = rows
     .map((r) => ({ r, distanceMiles: haversineMiles(origin, r.location) }))
     .filter((x) => x.distanceMiles <= radius)
     .sort((a, b) => a.distanceMiles - b.distanceMiles || a.r.name.localeCompare(b.r.name));
   return {
-    origin, radiusMiles: radius, total: hits.length, limit: lim,
+    origin, radiusMiles: radius, total: hits.length, limit: lim, offset: off, nextOffset: off + lim < hits.length ? off + lim : null,
     distanceNote: 'Straight-line great-circle miles from the origin, not a route or travel time.',
-    items: hits.slice(0, lim).map(({ r, distanceMiles }) => { const b = bearingDegrees(origin, r.location); return { ...compactRecord(r), distanceMiles: Math.round(distanceMiles * 100) / 100, bearing: b, compass: compass(b), precision: r.location.precision }; }),
+    items: hits.slice(off, off + lim).map(({ r, distanceMiles }) => { const b = bearingDegrees(origin, r.location); return { ...compactRecord(r), distanceMiles: Math.round(distanceMiles * 100) / 100, bearing: b, compass: compass(b), precision: r.location.precision }; }),
   };
 }
 
-/** A small graph around one id: outgoing and incoming links, one or two hops. */
+export const MAX_GRAPH_NODES = 200;
+
+/** A small graph around one id: outgoing and incoming links, one or two hops, at most MAX_GRAPH_NODES nodes. */
 export function links(atlas, { id, rel, depth } = {}) {
   const start = atlas.records.find((x) => x.id === id);
   if (!start) return null;
@@ -106,7 +110,9 @@ export function links(atlas, { id, rel, depth } = {}) {
   const seenEdge = new Set();
   const addEdge = (from, r, to) => { const k = `${from}|${r}|${to}`; if (seenEdge.has(k)) return; seenEdge.add(k); edges.push({ from, rel: r, to }); };
   let frontier = [start.id];
-  for (let hop = 0; hop < hops; hop += 1) {
+  let truncated = false;
+  const room = () => nodes.size < MAX_GRAPH_NODES || (truncated = true, false);
+  for (let hop = 0; hop < hops && !truncated; hop += 1) {
     const next = [];
     for (const fid of frontier) {
       const f = byId.get(fid);
@@ -115,22 +121,22 @@ export function links(atlas, { id, rel, depth } = {}) {
         if (rel && l.rel !== rel) continue;
         addEdge(f.id, l.rel, l.id);
         const t = byId.get(l.id);
-        if (t && !nodes.has(t.id)) { nodes.set(t.id, t); next.push(t.id); }
-        else if (!t && !nodes.has(l.id)) nodes.set(l.id, null);
+        if (t && !nodes.has(t.id)) { if (!room()) break; nodes.set(t.id, t); next.push(t.id); }
+        else if (!t && !nodes.has(l.id)) { if (!room()) break; nodes.set(l.id, null); }
       }
       for (const other of atlas.records) {
         for (const l of other.links || []) {
           if (l.id !== fid) continue;
           if (rel && l.rel !== rel) continue;
           addEdge(other.id, l.rel, fid);
-          if (!nodes.has(other.id)) { nodes.set(other.id, other); next.push(other.id); }
+          if (!nodes.has(other.id)) { if (!room()) break; nodes.set(other.id, other); next.push(other.id); }
         }
       }
     }
     frontier = next;
   }
   return {
-    id: start.id, depth: hops, rel: rel || null,
+    id: start.id, depth: hops, rel: rel || null, truncated, maxNodes: MAX_GRAPH_NODES,
     nodes: [...nodes.entries()].map(([nid, r]) => (r ? compactRecord(r) : { id: nid, resolved: false, note: 'This id lives in another site atlas; look it up in the merged index at https://pointcast.xyz/atlas/index.json' })),
     edges,
   };

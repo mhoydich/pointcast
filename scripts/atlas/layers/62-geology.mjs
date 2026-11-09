@@ -11,7 +11,6 @@ export const layer = {
   types: ['quiet-place'],
   inline: true,
   data: PAGE,
-  page: PAGE,
   license: 'CC0-1.0',
   updated: '2026-10-06',
   source: { url: PAGE, checked: '2026-10-06', label: 'derived' },

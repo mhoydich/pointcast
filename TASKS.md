@@ -15,7 +15,8 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [x] (CC) Discovery: `agents.json` atlas section, `/for-agents`, `llms.txt`, `llms-full.txt`, `sitemap-discovery` — `done`
 - [x] (CC) Inventory of 352 datasets across both sites (`docs/cartography/INVENTORY.md`) and the ranked `docs/cartography/NEXT-20-LAYERS.md` — `done`
 - [ ] (X) Review the MCP atlas tools and the agent-readable endpoints (input validation, cache, source and sensitive-record handling) — `queued`
-- [ ] (M) After deploy: real-device QA of `/cartography/map` and `?site=all`; results to `docs/manus-logs/2026-11-09-atlas-map.md` — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-09-manus-atlas-map-qa.md` (pins, detail sources, phone layout, `?site=all`, deep link, no-JS list); results to `docs/manus-logs/2026-11-09-atlas-map.md` — `queued`
+- [ ] (MH/CC) Deploy order: merge and deploy hello-token-reserve #288 first (it publishes https://elsegundo.xyz/atlas.json), then `node scripts/atlas/build.mjs --fetch`, commit the refreshed snapshot, then merge and deploy this PR; until then the merged index carries a committed snapshot and says so (`sites[].live: false`) — `queued`
 - [ ] (MH) Deploy with `scripts/deploy.sh` — `waiting-on-mh`
 - [ ] (CC) Refresh the elsegundo snapshot with `node scripts/atlas/build.mjs --fetch` once https://elsegundo.xyz/atlas.json is live — `queued`
 

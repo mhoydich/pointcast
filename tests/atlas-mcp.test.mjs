@@ -146,6 +146,25 @@ test('atlas_links returns nodes and edges and resolves sister ids through the me
   });
 });
 
+test('a sister host as site reads the merged index filtered to that host; bad enum values are errors, not empty answers', async (t) => {
+  const { rpc } = await loadMcp(t);
+  await withAtlas(async (urls) => {
+    const es = await call(rpc, 'atlas_search', { site: 'elsegundo.xyz' });
+    assert.equal(es.isError, false);
+    assert.ok(es.data.items.length >= 1);
+    assert.ok(es.data.items.every((i) => i.site === 'elsegundo.xyz'));
+    assert.ok(urls.includes(`${BASE}/atlas/index.json`));
+    const near = await call(rpc, 'atlas_near', { lat: 33.9217, lon: -118.4114, radiusMiles: 1, site: 'elsegundo.xyz', limit: 1 });
+    assert.ok(near.data.items.every((i) => i.site === 'elsegundo.xyz'));
+    assert.equal(near.data.offset, 0);
+    const badType = await call(rpc, 'atlas_search', { type: 'nonsense' });
+    assert.equal(badType.isError, true);
+    assert.match(badType.line, /type must be one of/);
+    const badRel = await call(rpc, 'atlas_links', { id: 'pc:court:rec-park', rel: 'bogus' });
+    assert.equal(badRel.isError, true);
+  });
+});
+
 test("site: 'all' reads /atlas/index.json, default reads /atlas.json", async (t) => {
   const { rpc } = await loadMcp(t);
   await withAtlas(async (urls) => {

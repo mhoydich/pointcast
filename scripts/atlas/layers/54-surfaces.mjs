@@ -9,7 +9,7 @@ export const layer = {
   types: ['page', 'feed'],
   inline: true,
   data: 'https://pointcast.xyz/agents.json',
-  page: 'https://pointcast.xyz/agents.json',
+  page: 'https://pointcast.xyz/for-agents',
   license: 'CC0-1.0',
   updated: '2026-10-25',
   source: { url: 'https://pointcast.xyz/agents.json', checked: '2026-10-25', label: 'fact', title: 'PointCast agents manifest' },

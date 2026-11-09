@@ -4034,6 +4034,8 @@ const EVENT_SCHEMA = {
 };
 
 // ── HTML discovery page ──────────────────────────────────────────────
+const escapeHtml = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
 function discoveryHtml(request: Request) {
   const path = new URL(request.url).pathname;
   const isV2 = path.endsWith('/api/mcp-v2');
@@ -4211,6 +4213,20 @@ function discoveryHtml(request: Request) {
   <li><code>home_index_insurance_schedule</code> — informational contents schedule of items $200 and up</li>
 </ul>
 <p style="font-size:12px;color:#5F5E5A;">Fictional demo household at <code>/cartography/home/demo.json</code>. Every item, price, and serial is invented; no real inventory data is collected.</p>
+
+<h2>Tools — the Atlas (Cartography)</h2>
+<ul>
+  <li><code>atlas_search</code> — find Atlas records by words, type, layer or site (read-only)</li>
+  <li><code>atlas_get</code> — one Atlas record with its links resolved and its public sources</li>
+  <li><code>atlas_near</code> — located records within a radius of a point, straight-line miles</li>
+  <li><code>atlas_links</code> — the small graph around one Atlas id</li>
+</ul>
+<p style="font-size:12px;color:#5F5E5A;">The Atlas is one open map of everything PointCast and its sister sites know how to place: <a href="/cartography/map">/cartography/map</a>, <a href="/atlas.json">/atlas.json</a>, <a href="/atlas/index.json">/atlas/index.json</a>. No write tools; suggestions arrive as pull requests.</p>
+
+<h2>Every tool, by name</h2>
+<ul>
+${TOOLS.map((tool) => `  <li id="${tool.name}"><code>${tool.name}</code> — ${escapeHtml(String(tool.description || '').split(/(?<=[.!?])\s/)[0]).slice(0, 220)}</li>`).join('\n')}
+</ul>
 
 <h2>Resources</h2>
 <ul>

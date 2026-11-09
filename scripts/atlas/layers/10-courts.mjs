@@ -25,6 +25,9 @@ const VENUE = {
 };
 import { sisterById, locationFrom, norm as sisterNorm } from '../_sister.mjs';
 
+// Atlas ids are permanent, so the source dataset's ambiguous slug "courts" (Manhattan Beach Middle School) gets a clear one.
+const ATLAS_ID = { courts: 'manhattan-middle-school' };
+
 const normAddr = (a) => String(a || '').toLowerCase().replace(/\bavenue\b/g, 'ave').replace(/[^a-z0-9]+/g, ' ').trim();
 
 export async function records({ site, readJson, helpers, resolve, root }) {
@@ -47,7 +50,7 @@ export async function records({ site, readJson, helpers, resolve, root }) {
     const city = court.city;
     const body = text.join('; ');
     const rec = {
-      id: rid(site.host, 'court', court.id),
+      id: rid(site.host, 'court', ATLAS_ID[court.id] || court.id),
       type: 'court',
       name: court.name,
       summary: summary(`${city} public pickleball. ${body}`),

@@ -20,10 +20,11 @@ const RELS = ['near', 'in', 'part-of', 'has-part', 'same-as', 'about', 'plays-at
 const COMMON =
   'Read-only: nothing is written and there is no public write tool. Distances are straight-line great-circle miles, never travel time. Not official; not an official City of El Segundo source. To suggest a correction or a new record, open a pull request at github.com/mhoydich/pointcast.';
 
+const SITES = ['pointcast.xyz', 'elsegundo.xyz', 'all'];
 const SITE_PROP = {
   type: 'string',
-  enum: ['pointcast.xyz', 'all'],
-  description: "'pointcast.xyz' (default) reads this site's atlas.json; 'all' reads the merged cross-site index (/atlas/index.json).",
+  enum: SITES,
+  description: "'pointcast.xyz' (default) reads this site's atlas.json; 'all' reads the merged cross-site index (/atlas/index.json); a sister host such as 'elsegundo.xyz' reads the merged index filtered to that site.",
 };
 
 export const ATLAS_TOOL_DEFINITIONS = [
@@ -36,7 +37,7 @@ export const ATLAS_TOOL_DEFINITIONS = [
       properties: {
         q: { type: 'string', description: 'Words to match; all must match. Omit to list by filter.' },
         type: { type: 'string', enum: TYPES, description: 'Only this record type.' },
-        layer: { type: 'string', description: 'Only this layer id (a source dataset), as listed in atlas.json layers.' },
+        layer: { type: 'string', description: 'Only this layer id (a source dataset), as listed in atlas.json layers. In the merged index a layer whose id collides with another site carries a site prefix (for example es-pickleball); layers[].sourceLayer names the original.' },
         site: SITE_PROP,
         limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Page size, default 10, max 50.' },
         offset: { type: 'integer', minimum: 0, description: 'Skip this many results (paging).' },
@@ -69,6 +70,7 @@ export const ATLAS_TOOL_DEFINITIONS = [
         layer: { type: 'string', description: 'Only this layer id.' },
         site: SITE_PROP,
         limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Max results, default 10, max 50.' },
+        offset: { type: 'integer', minimum: 0, description: 'Skip this many results (paging; nextOffset in the result).' },
       },
       required: ['lat', 'lon'],
       additionalProperties: false,
@@ -119,16 +121,30 @@ async function loadDoc(url: string): Promise<any> {
 }
 
 const siteUrl = (base: string, all: boolean) => (all ? `${base}/atlas/index.json` : `${base}/atlas.json`);
-const wantsAll = (args: Record<string, unknown>) => String(args?.site ?? '') === 'all';
+/** Which document a site argument needs and which site filter to pass to the query: own atlas for the default, the merged index for 'all' or a sister host. */
+const scopeFor = (args: Record<string, unknown>) => {
+  const site = String(args?.site ?? '').trim();
+  if (!site || site === 'pointcast.xyz') return { index: false, filter: undefined as string | undefined };
+  return { index: true, filter: site === 'all' ? 'all' : site };
+};
+/** Enum arguments are checked here too, so a client that skips JSON-schema validation gets an error, not an empty answer. */
+function vocabularyProblem(args: Record<string, unknown>): string | null {
+  if (args.type != null && !TYPES.includes(String(args.type))) return `type must be one of: ${TYPES.join(', ')}`;
+  if (args.rel != null && !RELS.includes(String(args.rel))) return `rel must be one of: ${RELS.join(', ')}`;
+  if (args.site != null && !SITES.includes(String(args.site))) return `site must be one of: ${SITES.join(', ')}`;
+  return null;
+}
 const str = (v: unknown) => (v == null ? undefined : String(v));
 
 export async function dispatchAtlasTool(name: string, args: Record<string, unknown>, base: string): Promise<ToolResult> {
   args = args || {};
   try {
+    const vocab = vocabularyProblem(args);
+    if (vocab) return fail(vocab);
     if (name === 'atlas_search') {
-      const all = wantsAll(args);
-      const doc = await loadDoc(siteUrl(base, all));
-      const result = atlasSearch(doc, { q: str(args.q), type: str(args.type), layer: str(args.layer), site: all ? 'all' : undefined, limit: args.limit as any, offset: args.offset as any });
+      const scope = scopeFor(args);
+      const doc = await loadDoc(siteUrl(base, scope.index));
+      const result = atlasSearch(doc, { q: str(args.q), type: str(args.type), layer: str(args.layer), site: scope.filter, limit: args.limit as any, offset: args.offset as any });
       const line = `${result.total} record${result.total === 1 ? '' : 's'}${args.q ? ` for "${args.q}"` : ''} in ${doc.name} (generated ${doc.generated}); showing ${result.items.length}: ${result.items.map((i: any) => `${i.name} [${i.id}]`).join(' | ') || 'none'}. Read-only, not official.`;
       return { content: [text(line), text(JSON.stringify({ ...result, provenance: provenance(doc) }))] };
     }
@@ -160,8 +176,9 @@ export async function dispatchAtlasTool(name: string, args: Record<string, unkno
       if (args.lat == null || args.lon == null || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
         return fail('lat and lon are required decimal degrees (lat -90..90, lon -180..180).');
       }
-      const doc = await loadDoc(siteUrl(base, wantsAll(args)));
-      const result = atlasNear(doc, { lat, lon, radiusMiles: args.radiusMiles as any, type: str(args.type), layer: str(args.layer), limit: args.limit as any });
+      const scope = scopeFor(args);
+      const doc = await loadDoc(siteUrl(base, scope.index));
+      const result = atlasNear(doc, { lat, lon, radiusMiles: args.radiusMiles as any, type: str(args.type), layer: str(args.layer), site: scope.filter, limit: args.limit as any, offset: args.offset as any });
       const line = `${result.total} located record${result.total === 1 ? '' : 's'} within ${result.radiusMiles} mi (straight-line, not travel time): ${result.items.map((i: any) => `${i.name} ${i.distanceMiles} mi ${i.compass}`).join(' | ') || 'none'}. Not official.`;
       return { content: [text(line), text(JSON.stringify({ ...result, provenance: provenance(doc) }))] };
     }

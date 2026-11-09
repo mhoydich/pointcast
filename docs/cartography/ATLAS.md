@@ -176,7 +176,7 @@ merged index. The renderer is one dependency-free script, `atlas-map.js`, kept i
 repos: a basemap-free geodesic plot (the house style of the civic and dispensary atlases: north up,
 10-, 20- and 25-mile rings, no third-party tiles, no tracking), filters by type and layer, a search
 box, a record list with every source link, deep links by `#id`, and a keyboard path through every
-record. Records without coordinates are listed, grouped by `area`, not hidden.
+record. Records without coordinates are listed after the placed ones, with their `area` shown, not hidden.
 
 ## 8. Adding a layer
 

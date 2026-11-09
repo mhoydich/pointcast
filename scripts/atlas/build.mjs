@@ -64,16 +64,17 @@ async function loadSnapshots({ fetchLive }) {
   const list = [];
   for (const sister of site.index?.sisters || []) {
     const snapPath = resolve(root, sister.snapshot);
-    let atlas = null; let snapshot = null; let ok = true; let note;
+    let atlas = null; let snapshot = null; let ok = true; let note; let live = false;
     if (fetchLive) {
       try {
         const res = await fetch(sister.atlas, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const live = await res.json();
-        const p = atlasProblems(live);
+        const fetched = await res.json();
+        const p = atlasProblems(fetched);
         if (p.length) throw new Error(`live atlas invalid: ${p[0]}`);
-        writeJson(snapPath, live);
-        say(`  fetched ${sister.atlas} (${live.records.length} records) -> ${sister.snapshot}`);
+        writeJson(snapPath, fetched);
+        live = true;
+        say(`  fetched ${sister.atlas} (${fetched.records.length} records) -> ${sister.snapshot}`);
       } catch (error) { note = `fetch failed: ${error.message}; using committed snapshot`; say(`  ${note}`); }
     }
     if (existsSync(snapPath)) {
@@ -83,14 +84,14 @@ async function loadSnapshots({ fetchLive }) {
       if (p.length) { ok = false; note = `${note ? `${note}; ` : ''}snapshot has ${p.length} schema problem(s): ${p[0]}`; }
       else if (!fetchLive) note = `${note ? `${note}; ` : ''}committed snapshot (${sister.snapshot}), not fetched from the live URL in this build; refresh with --fetch`;
     } else { ok = false; note = `${note ? `${note}; ` : ''}no snapshot at ${sister.snapshot}`; }
-    list.push({ atlas, url: sister.atlas, snapshot, ok, note });
+    list.push({ atlas, url: sister.atlas, snapshot, ok, note, live });
   }
   return list;
 }
 
 export async function buildIndex(ownAtlas, { generated = ownAtlas.generated, fetchLive = false } = {}) {
   const sisters = await loadSnapshots({ fetchLive });
-  const index = mergeAtlases({ ...site, ...site.index }, [{ atlas: ownAtlas, url: `https://${site.host}${site.atlasPath}`, snapshot: null, ok: true }, ...sisters], generated);
+  const index = mergeAtlases({ ...site, ...site.index }, [{ atlas: ownAtlas, url: `https://${site.host}${site.atlasPath}`, snapshot: null, ok: true, live: true }, ...sisters], generated);
   const problems = atlasProblems(index, { requireSameSiteLinks: true }).filter((p) => !/unresolved in the merged index/.test(p) || !/-> (in|ues):/.test(p));
   return { index, problems };
 }

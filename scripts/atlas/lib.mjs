@@ -296,10 +296,11 @@ export function mergeAtlases(indexSite, atlases, generated) {
   const ids = new Set();
   const layers = [];
   const sites = [];
-  for (const { atlas, url, snapshot, ok, note } of atlases) {
-    if (!atlas) { sites.push({ site: url.replace(/^https:\/\/([^/]+).*$/, '$1'), atlas: url, generated: null, snapshot: snapshot || null, records: 0, ok: false, note: note || 'atlas unavailable' }); continue; }
-    sites.push(compact({ site: atlas.site, atlas: url, generated: atlas.generated, snapshot: snapshot || null, records: atlas.records.length, ok: ok !== false, note }));
-    for (const l of atlas.layers) layers.push({ ...l, id: layers.some((x) => x.id === l.id) ? `${SITE_PREFIXES[atlas.site] || 'x'}-${l.id}` : l.id, site: atlas.site });
+  for (const { atlas, url, snapshot, ok, note, live } of atlases) {
+    if (!atlas) { sites.push({ site: url.replace(/^https:\/\/([^/]+).*$/, '$1'), atlas: url, generated: null, snapshot: snapshot || null, records: 0, ok: false, live: false, note: note || 'atlas unavailable' }); continue; }
+    // ok = the snapshot validated; live = this build read the atlas from its published URL (false for a committed snapshot).
+    sites.push(compact({ site: atlas.site, atlas: url, generated: atlas.generated, snapshot: snapshot || null, records: atlas.records.length, ok: ok !== false, live: live === true, note }));
+    for (const l of atlas.layers) { const renamed = layers.some((x) => x.id === l.id); layers.push({ ...l, id: renamed ? `${SITE_PREFIXES[atlas.site] || 'x'}-${l.id}` : l.id, site: atlas.site, ...(renamed ? { sourceLayer: l.id } : {}) }); }
     for (const r of atlas.records) {
       if (ids.has(r.id)) continue;
       ids.add(r.id);
@@ -310,7 +311,7 @@ export function mergeAtlases(indexSite, atlases, generated) {
   const sorted = sortRecords(records);
   const crossLinks = [];
   for (const r of sorted) for (const l of r.links || []) if (String(l.id).split(':')[0] !== String(r.id).split(':')[0]) crossLinks.push({ from: r.id, rel: l.rel, to: l.id });
-  const layerMeta = layers.map(({ site, ...l }) => l);
+  const layerMeta = layers; // merged layers keep `site`, and `sourceLayer` when their id was prefixed to avoid a collision
   return {
     $schema: SCHEMA_URL,
     schemaVersion: SCHEMA_VERSION,

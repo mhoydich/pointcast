@@ -3,6 +3,10 @@
 // from MCP_TOOL_NAMES in functions/api/mcp.ts; tests/atlas-tools-layer.test.mjs checks that.
 import { loadTs } from '../_ts.mjs';
 
+// The day this layer's tool list was last reviewed against functions/api/mcp.ts. Bump it when the tool list changes;
+// tests/atlas-tools-layer.test.mjs fails when the names drift, which is the real staleness signal.
+const CATALOGUE_REVIEWED = '2026-11-09';
+
 export const layer = {
   id: 'mcp-tools',
   name: 'MCP tools',
@@ -10,11 +14,11 @@ export const layer = {
   types: ['tool'],
   inline: true,
   data: 'https://pointcast.xyz/api/mcp',
-  page: 'https://pointcast.xyz/api/mcp',
+  page: 'https://pointcast.xyz/mcps',
   license: 'CC0-1.0',
-  updated: '2026-11-08',
-  source: { url: 'https://pointcast.xyz/agents.json', checked: '2026-11-08', label: 'fact', title: 'PointCast agents manifest' },
-  notes: 'Built from tools/list on functions/api/mcp.ts. The mcp.ts header comment carries no dates, so the checked date is the last commit date of that file (2026-11-08). "read-only" follows the server\'s own readOnlyHint annotation; a tool marked write can post, append, tap, play, set, ask, submit, offer or claim.',
+  updated: CATALOGUE_REVIEWED,
+  source: { url: 'https://pointcast.xyz/agents.json', checked: CATALOGUE_REVIEWED, label: 'fact', title: 'PointCast agents manifest' },
+  notes: 'Built from tools/list on functions/api/mcp.ts. checked and updated are the day the list was last reviewed against mcp.ts (CATALOGUE_REVIEWED); tests/atlas-tools-layer.test.mjs fails when the tool names drift. "read-only" follows the server\'s own readOnlyHint annotation; a tool marked write can post, append, tap, play, set, ask, submit, offer or claim.',
 };
 
 const WRITE_RE = /\b(posts?|appends?|taps?|plays?|sets?|asks?|submits?|offers?|claims?)\b/i;
@@ -54,8 +58,8 @@ export async function records(ctx) {
       site: site.host,
       url: `https://pointcast.xyz/api/mcp#${t.name}`,
       data: 'https://pointcast.xyz/api/mcp',
-      source: [src('https://pointcast.xyz/agents.json', '2026-11-08', t.name.startsWith('atlas_') ? 'derived' : 'fact', 'PointCast agents manifest')],
-      updated: '2026-11-08',
+      source: [src('https://pointcast.xyz/agents.json', CATALOGUE_REVIEWED, t.name.startsWith('atlas_') ? 'derived' : 'fact', 'PointCast agents manifest')],
+      updated: CATALOGUE_REVIEWED,
       license: 'CC0-1.0',
       tags: ['mcp', write ? 'write' : 'read-only'],
       layer: 'mcp-tools',
