@@ -34,9 +34,13 @@ export const REDIRECT_PATHS = new Set([
   '/sitemap.xml',
 ]);
 
+// Whole sections kept out of search and the sitemap. /pickleball/rankings/ is a preview
+// until Mike says, naming it, that it goes live.
+export const NOINDEX_PREFIXES = ['/pickleball/rankings/'];
+
 export function isNoindexPath(pathname, now = new Date()) {
   const path = pathname.endsWith('/') ? pathname : `${pathname}/`;
-  return NOINDEX_PATHS.has(path) || isFutureAlmanacCard(pathname, now);
+  return NOINDEX_PATHS.has(path) || NOINDEX_PREFIXES.some((p) => path.startsWith(p)) || isFutureAlmanacCard(pathname, now);
 }
 
 export function isRedirectPath(pathname) {
