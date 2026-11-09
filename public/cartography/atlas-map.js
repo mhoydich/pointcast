@@ -14,7 +14,7 @@
 (function () {
   'use strict';
   const SIZE = 760;
-  const RING = 0.43; // 25 miles -> 326.8 px at SIZE 760, the same scale as the civic and dispensary atlases
+  const RING = 0.43; // 25 miles -> 326.8 px at SIZE 760, the same scale as the sites' other geodesic atlases
   const EARTH_MILES = 3958.7613;
   const TYPE_ORDER = ['place', 'court', 'player', 'gear', 'event', 'league', 'business', 'quiet-place', 'shrine', 'ping', 'page', 'bot', 'agent', 'route', 'area', 'dataset', 'feed', 'tool'];
   const TYPE_LABEL = { place: 'Places', court: 'Courts', player: 'Players', gear: 'Gear', event: 'Events', league: 'Leagues', business: 'Businesses', 'quiet-place': 'Quiet places', shrine: 'Shrines', ping: 'Ping zones', page: 'Pages', bot: 'Bots', agent: 'Agents', route: 'Routes', area: 'Areas', dataset: 'Datasets', feed: 'Feeds', tool: 'Tools' };
@@ -79,6 +79,7 @@
       root.innerHTML = `<p class="am-error">The atlas could not be loaded (${esc(error.message)}). Read it directly: <a href="${esc(own)}">${esc(own)}</a>.</p>`;
       return;
     }
+    root.dispatchEvent(new CustomEvent('atlas:loaded', { detail: atlas, bubbles: true })); // pages reuse the document instead of fetching it again
     const byId = new Map(atlas.records.map((r) => [r.id, r]));
     const center = { lat: atlas.center.lat, lon: atlas.center.lon };
     const radius = atlas.radiusMiles || 25;

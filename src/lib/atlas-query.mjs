@@ -33,6 +33,7 @@ const clampInt = (v, lo, hi, dflt) => { const n = Number.parseInt(v, 10); return
 export function compactRecord(r) {
   const out = { id: r.id, type: r.type, name: r.name, site: r.site, url: r.url, updated: r.updated, layer: r.layer, license: r.license };
   if (r.summary) out.summary = r.summary;
+  if (r.attribution) out.attribution = r.attribution; // ODbL rows must travel with their attribution
   if (r.data) out.data = r.data;
   if (r.location) out.location = { lat: r.location.lat, lon: r.location.lon, precision: r.location.precision, ...(r.location.area ? { area: r.location.area } : {}) };
   if (r.tags && r.tags.length) out.tags = r.tags;
