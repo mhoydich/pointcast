@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectBlocks, buildPost, postedIds, blockUrl, POST_MAX } from '../scripts/broadcast.mjs';
+import { selectBlocks, buildPost, buildCast, postedIds, castIds, blockUrl, POST_MAX, CAST_MAX_BYTES } from '../scripts/broadcast.mjs';
 
 const now = new Date('2026-11-09T20:00:00Z');
 const block = (over) => ({
@@ -62,4 +62,23 @@ test('already-posted blocks are found in text, card and facets', () => {
     {},
   ]);
   assert.deepEqual([...ids].sort(), ['0701', '0702', '0703']);
+});
+
+test('a cast carries the link as its embed and fits the byte limit', () => {
+  const short = buildCast(block());
+  assert.equal(short.text, 'Call or be called\n\nA short dek.');
+  assert.deepEqual(short.embeds, [{ url: 'https://pointcast.xyz/b/0780' }]);
+  const long = buildCast(block({ title: 'Café ☕ '.repeat(10), dek: 'é'.repeat(400) }));
+  assert.ok(new TextEncoder().encode(long.text).length <= CAST_MAX_BYTES);
+  assert.ok(long.text.endsWith('…'));
+});
+
+test('already-cast blocks are found in cast text and embeds', () => {
+  const ids = castIds([
+    { text: 'pointcast.xyz/b/0711' },
+    { text: 'x', embeds: [{ url: 'https://pointcast.xyz/b/0712' }, { cast_id: {} }] },
+    { text: 'nothing' },
+    null,
+  ]);
+  assert.deepEqual([...ids].sort(), ['0711', '0712']);
 });
