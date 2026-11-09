@@ -1,0 +1,81 @@
+---
+/**
+ * /check-in/format/ — "Here", a small open check-in format, draft 0.1, CC0.
+ * The same text lives at elsegundo.xyz/checkins/format/; the JSON Schema is at
+ * elsegundo.xyz/checkins/here.schema.json. Not owned by any company; fork freely.
+ */
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+const sample = `{
+  "v": "here/0.1",
+  "id": "2026-11-08/GULL-382",
+  "at": "2026-11-09T00:26:00Z",
+  "kind": "person",
+  "site": "el-segundo",
+  "name": "Sam",
+  "status": "Coffee before the train",
+  "place": { "label": "Elizabeth, NJ", "slug": "elizabeth-nj" },
+  "stamp": {
+    "line": "Elizabeth, NJ · 7:26 PM · 54° clear · low tide 9:12 PM · sunset 4:44 PM",
+    "localTime": "7:26 PM", "tempF": 54, "sky": "clear", "sunset": "4:44 PM",
+    "tide": { "next": "low", "at": "9:12 PM", "trend": "falling" }, "moon": "waxing crescent"
+  },
+  "badges": ["Sister town"]
+}`;
+---
+<BlockLayout title="Here · an open check-in format · PointCast" description="A small, forkable format for check-ins by people and bots: a coarse place, a postmark, and feeds to subscribe. Draft 0.1, CC0." noindex={true}>
+  <main class="pc-spec">
+<p class="pc-spec__eyebrow">Open format · draft 0.1 · CC0</p>
+<h1>Here</h1>
+<p class="pc-spec__lede">A check-in says I'm here, this is roughly where, this is when, and maybe what I'm up to. People did it on early Twitter and Foursquare. In 2027 bots do it too. Here is a small format for that, not owned by any company, that any site, app or agent can publish, read or fork.</p>
+
+<h2>1. The check-in</h2>
+<p>One JSON object. Only <code>v</code>, <code>id</code>, <code>at</code> and <code>kind</code> are required. The <a href="https://elsegundo.xyz/checkins/here.schema.json">JSON Schema</a> is the reference.</p>
+<pre>{sample}</pre>
+<table>
+<tr><th>Field</th><th>Meaning</th></tr>
+<tr><td><code>kind</code></td><td><code>person</code> or <code>bot</code>. A bot always says it's a bot.</td></tr>
+<tr><td><code>place</code></td><td>Coarse: a town, city, ZIP or neighborhood. Never a street or a GPS fix.</td></tr>
+<tr><td><code>stamp</code></td><td>The postmark: the place's local time and what it was like. A field the source didn't answer is <code>null</code>, which means unavailable, never zero.</td></tr>
+<tr><td><code>name</code>, <code>status</code></td><td>Only when the person chose to show them.</td></tr>
+<tr><td><code>badges</code></td><td>Labels for streaks, firsts and places. Never prizes or money.</td></tr>
+</table>
+
+<h2>2. Privacy rules (must)</h2>
+<ul>
+<li>Publish places no finer than a town or ZIP. If a device location is used, round it to 0.1 degree (about 11 km) before it leaves the device, and don't store it.</li>
+<li>Don't publish or store IP addresses, emails, cookies, user agents or street addresses with a check-in.</li>
+<li>Let people check in without an account, skip it, or be counted with no place at all.</li>
+<li>Names and status lines are opt-in, per check-in.</li>
+<li>Honor Do Not Track and Global Privacy Control by never prompting for a check-in on your own.</li>
+</ul>
+
+<h2>3. Publishing and subscribing</h2>
+<p>Publish check-ins newest first in any of these. Readers subscribe; nobody needs an account, and no follower graph is implied.</p>
+<ul>
+<li><strong>JSON Feed 1.1</strong>: each item carries the check-in under <code>_here</code>.</li>
+<li><strong>Atom</strong>: one <code>entry</code> per check-in, with the site and place slug as <code>category</code> terms.</li>
+<li><strong>MCP</strong>: a read-only tool that returns the same objects. Here, it's <code>read_checkins</code> on <code>https://elsegundo.xyz/mcp</code>.</li>
+<li>Anything else that carries the same JSON: a webhook, a message bus, a text file.</li>
+</ul>
+
+<h2>4. Discovery and federation</h2>
+<p>A site that publishes check-ins puts a small file at <code>/.well-known/here.json</code> with its feeds, its check-in endpoint, its MCP tool and a list of <code>peers</code> (other sites' <code>here.json</code> addresses). A hub merges its peers' feeds into one stream, keyed by origin plus <code>id</code>, so a check-in on any site shows up across the network without a central owner. <a href="/.well-known/here.json">PointCast's is here</a>, and so is <a href="https://elsegundo.xyz/.well-known/here.json">El Segundo's</a>.</p>
+
+<h2>5. Checking in</h2>
+<p>Writing is up to each server. Ours is one HTTP call with a small proof of work: answer the site's call for today, or answer <q>Checking in from somewhere else.</q> with a place. The steps for agents are in <a href="https://elsegundo.xyz/ping/agents.txt">agents.txt</a>.</p>
+
+<h2>6. Versions and forks</h2>
+<p>This is draft 0.1, written November 8, 2026. Add fields freely; readers ignore what they don't know. Breaking changes get a new <code>v</code>. The text and schema are CC0: copy, change and republish them under any name.</p>
+<p class="pc-spec__note">Published on PointCast and elsegundo.xyz. Drafted with Claude (Duet) for Michael Hoydich.</p>
+  </main>
+</BlockLayout>
+<style>
+  .pc-spec { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 4rem; line-height: 1.55; }
+  .pc-spec h1 { font-size: clamp(2rem, 6vw, 3rem); margin: .2rem 0 1rem; }
+  .pc-spec h2 { margin-top: 2.2rem; font-size: 1.15rem; }
+  .pc-spec pre { overflow-x: auto; padding: 1rem; border: 1px solid currentColor; border-radius: 6px; font-size: .78rem; opacity: .9; }
+  .pc-spec table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .pc-spec th, .pc-spec td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid rgba(127,127,127,.35); vertical-align: top; }
+  .pc-spec__eyebrow { font-family: 'JetBrains Mono Variable', monospace; font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  .pc-spec__note { margin-top: 2.5rem; font-size: .85rem; opacity: .75; }
+</style>
