@@ -36,7 +36,14 @@ export const POINT_KINDS = {
   pickleball: { points: 10, label: 'Pickleball game', live: false, rule: 'A countersigned game on the court ladder. Reserved.' },
   forecast: { points: 5, label: 'Forecast', live: false, rule: 'A call on the 25-Mile Forecast Board. Reserved.' },
   almanac: { points: 10, label: 'Almanac sign', live: false, rule: "Logging the week's sign in the town almanac. Reserved." },
+  'desk-check': { points: 5, label: 'Desk check', live: false, rule: "Checking a house agent's morning reading on site (Sky, Tides, Swell, Sun or Air). Earns that agent's Desk Note. Reserved." },
+  'pass-out': { points: 0, label: 'Note passed', live: false, rule: 'Passing one held note to another member, one a day. Moves a note, earns nothing. Reserved.' },
+  'pass-in': { points: 0, label: 'Note received', live: false, rule: 'A note another member passed you. Names the line it came from. Reserved.' },
 };
+
+/** Line kinds that move a note between profiles instead of minting one. */
+export const PASS_KINDS = ['pass-out', 'pass-in'];
+export const MAX_PASSES_PER_DAY = 1;
 
 export const MAX_SAME_DAY_CHECKINS = 5;
 
@@ -94,6 +101,23 @@ export const NOUNS_MONEY_EDITIONS = [
       },
     ],
   },
+  {
+    id: 'desk-notes',
+    name: 'Desk Notes',
+    season: 'Standing edition',
+    standing: true,
+    status: 'reserved',
+    opens: '2026-11-09',
+    closes: null,
+    issuer: 'The Desk (PointCast house agents)',
+    notes: [
+      { id: 'desk-sky', agent: 'sky', name: 'Sky Note', long: 'Desk Note: Sky', earnedBy: 'desk-check', rule: "Check Sky's morning sky reading at the beach.", frame: 'Dawn edge on your profile', ink: '#e07a3f', image: '/currency-builder/desk-notes/notes/front/desk-sky.svg' },
+      { id: 'desk-tides', agent: 'tides', name: 'Tides Note', long: 'Desk Note: Tides', earnedBy: 'desk-check', rule: "Check Tides' tide call against the water.", frame: 'Tide line on your profile', ink: '#1f6f8a', image: '/currency-builder/desk-notes/notes/front/desk-tides.svg' },
+      { id: 'desk-swell', agent: 'swell', name: 'Swell Note', long: 'Desk Note: Swell', earnedBy: 'desk-check', rule: "Check Swell's surf height from the sand.", frame: 'Wave rule on your profile', ink: '#2a5fa8', image: '/currency-builder/desk-notes/notes/front/desk-swell.svg' },
+      { id: 'desk-sun', agent: 'sun', name: 'Sun Note', long: 'Desk Note: Sun', earnedBy: 'desk-check', rule: "Check Sun's sunrise or sunset time on site.", frame: 'Gold rays on your profile', ink: '#c99a1c', image: '/currency-builder/desk-notes/notes/front/desk-sun.svg' },
+      { id: 'desk-air', agent: 'air', name: 'Air Note', long: 'Desk Note: Air', earnedBy: 'desk-check', rule: "Check Air's air-quality reading on site.", frame: 'Clear-air rim on your profile', ink: '#3f8a5c', image: '/currency-builder/desk-notes/notes/front/desk-air.svg' },
+    ],
+  },
 ];
 
 export const NOTE_FOR_KIND = { checkin: 'enjoy', streak: 'blue', 'long-streak': 'reserve', 'sister-town': 'reserve' };
@@ -108,9 +132,62 @@ export const PROFILE_UNLOCKS = [
 
 export const DISCLOSURE = 'Points and Nouns Money notes are collectible marks with no cash value. They are never sold, redeemed or traded for money, and they are not part of Good Feels or any cannabis program.';
 
+/** The seasonal edition a check-in at `at` falls in. Standing editions never are. */
 export function editionFor(at) {
   const day = utcDay(at);
-  return NOUNS_MONEY_EDITIONS.find((e) => day >= e.opens && day < e.closes) ?? NOUNS_MONEY_EDITIONS[NOUNS_MONEY_EDITIONS.length - 1];
+  const seasons = NOUNS_MONEY_EDITIONS.filter((e) => !e.standing);
+  return seasons.find((e) => day >= e.opens && day < e.closes) ?? seasons[seasons.length - 1];
+}
+
+/** The edition a note id belongs to, or null. */
+export function editionOfNote(noteId) {
+  return NOUNS_MONEY_EDITIONS.find((e) => e.notes.some((n) => n.id === noteId)) ?? null;
+}
+
+/** How many of one note a profile holds now: minted and received, less passed on. */
+export function heldCount(lines, noteId) {
+  let n = 0;
+  for (const l of lines) if (l.note === noteId) n += l.kind === 'pass-out' ? -1 : 1;
+  return n;
+}
+
+/**
+ * Plan passing one held note to another member. Pure. Returns the sender's
+ * pass-out draft; once it is chained, passInFor() gives the receiver's line,
+ * which names the sender's line id, so the two chains cross-check.
+ * Reserved: nothing calls this yet.
+ */
+export function planPass({ from, to, note, at, site = 'pointcast.xyz' }, fromLines = []) {
+  if (!/^[0-9a-f]{24}$/.test(String(from)) || !/^[0-9a-f]{24}$/.test(String(to))) throw new Error('bad-profile');
+  if (from === to) throw new Error('pass-to-self');
+  const edition = editionOfNote(note);
+  if (!edition) throw new Error('unknown-note');
+  if (heldCount(fromLines, note) < 1) throw new Error('note-not-held');
+  const day = utcDay(at);
+  const today = fromLines.filter((l) => l.kind === 'pass-out' && l.day === day).length;
+  if (today >= MAX_PASSES_PER_DAY) throw new Error('pass-limit');
+  return { profile: from, at: new Date(at).toISOString(), day, place: '', site, edition: edition.id, kind: 'pass-out', points: 0, note, ref: `pass:${day}:${to}` };
+}
+
+/** The receiver's line for a chained pass-out line. */
+export function passInFor(outLine) {
+  if (outLine?.kind !== 'pass-out' || !outLine.id) throw new Error('not-a-pass');
+  const to = outLine.ref.split(':')[2];
+  return { profile: to, at: outLine.at, day: outLine.day, place: '', site: outLine.site, edition: outLine.edition, kind: 'pass-in', points: 0, note: outLine.note, ref: `pass:${outLine.id}` };
+}
+
+/**
+ * Plan a Desk Note for checking a house agent's reading. Pure. One per agent
+ * per profile per day; `callId` is the desk call that was checked. Reserved.
+ */
+export function planDeskCheck({ profile, agent, callId, at, site = 'pointcast.xyz' }, priorLines = []) {
+  const desk = NOUNS_MONEY_EDITIONS.find((e) => e.id === 'desk-notes');
+  const note = desk.notes.find((n) => n.agent === agent);
+  if (!note) throw new Error('unknown-agent');
+  if (!callId) throw new Error('missing-call');
+  const day = utcDay(at);
+  if (priorLines.some((l) => l.kind === 'desk-check' && l.day === day && l.note === note.id)) return [];
+  return [{ profile, at: new Date(at).toISOString(), day, place: 'El Segundo, CA', site, edition: desk.id, kind: 'desk-check', points: POINT_KINDS['desk-check'].points, note: note.id, ref: `desk:${callId}` }];
 }
 
 export function utcDay(at) {
@@ -224,7 +301,7 @@ export function summarize(profile, lines, { now = new Date(), beats = null } = {
   for (const line of lines) {
     points += line.points;
     byKind[line.kind] = (byKind[line.kind] ?? 0) + line.points;
-    if (line.note && notes[line.edition]) notes[line.edition][line.note] = (notes[line.edition][line.note] ?? 0) + 1;
+    if (line.note && notes[line.edition]) notes[line.edition][line.note] = (notes[line.edition][line.note] ?? 0) + (line.kind === 'pass-out' ? -1 : 1);
     if (line.kind === 'checkin') checkinDays.add(line.day);
     if (line.kind === 'drum') drumDays += 1;
   }
@@ -265,6 +342,7 @@ export function rulebook() {
     sisterTowns: SISTER_TOWNS.map(({ id, name }) => ({ id, name })),
     editions: NOUNS_MONEY_EDITIONS,
     noteForKind: NOTE_FOR_KIND,
+    passing: { kinds: PASS_KINDS, perDay: MAX_PASSES_PER_DAY, status: 'reserved', rule: 'A member may pass one held note a day to another member. The sender line names the receiver; the receiver line names the sender line id. No points move, and nothing is ever sold or bought.' },
     unlocks: PROFILE_UNLOCKS,
     chain: {
       lineSchema: POINTS_SCHEMA,
