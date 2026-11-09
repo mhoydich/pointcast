@@ -6,7 +6,6 @@
 // @ts-ignore — plain modules shared with the tests and the browser
 import * as E from '../../public/communicator/engine.mjs';
 import { readSessionFromRequest } from '../api/auth/session.ts';
-import { tierOf } from './communicator-http.ts';
 import { answersFor, actionableChips, deliver, sha256Hex, type DeliverEnv, type DeliverResult, type OutMail } from './communicator-deliver.ts';
 import { isResident } from './air-desk-store.ts';
 import { sendMail as realSendMail } from './mail.ts';
@@ -22,7 +21,7 @@ Object.assign(REFUSALS, {
 
 export type FlowEnv = CommunicatorEnv & DeliverEnv & { YARD_RESIDENT_KEY?: string };
 export type FlowCtx = {
-  request: Request; env: FlowEnv; now?: number;
+  request?: Request; env: FlowEnv; now?: number;
   sendMail?: (m: OutMail) => Promise<unknown>; capture?: (r: { id: string; to_handle: string; subject: string; text: string }) => void;
 };
 const nowOf = (c: FlowCtx) => c.now ?? Date.now();
@@ -36,18 +35,19 @@ const defaultSend = (env: FlowEnv) => async (m: OutMail) => {
 };
 const deliverWith = (c: FlowCtx, messages: { id: string }[]): Promise<DeliverResult> =>
   deliver(c.env.AUTH_DB as D1Database, c.env, messages, {
-    now: nowOf(c), sendMail: c.sendMail ?? defaultSend(c.env), origin: new URL(c.request.url).origin, capture: c.capture,
+    now: nowOf(c), sendMail: c.sendMail ?? defaultSend(c.env), origin: c.request ? new URL(c.request.url).origin : undefined, capture: c.capture,
   });
 
 // ---- session gate (same rules as communicator-http.ts: db -> origin -> session -> tier -> body) ------
 async function gate(c: FlowCtx, tier: 1 | 2): Promise<{ profile: Profile } | Response> {
   if (!c.env.AUTH_DB) return unavailable();
-  const o = c.request.headers.get('Origin');
-  if (o && o !== new URL(c.request.url).origin) return fail('bad-origin');
+  const req = c.request as Request;
+  const o = req.headers.get('Origin');
+  if (o && o !== new URL(req.url).origin) return fail('bad-origin');
   let s;
-  try { s = await readSessionFromRequest(c.request, c.env as any); } catch { return unavailable(); }
+  try { s = await readSessionFromRequest(req, c.env as any); } catch { return unavailable(); }
   if (!s) return fail('unauthenticated');
-  if (tierOf(s.user) < tier) return fail('tier-2-required');
+  if (((s.user.identities || []).some((i: any) => i.provider === 'google' || i.provider === 'kukai') ? 2 : 1) < tier) return fail('tier-2-required');
   const profile = await getProfileByUser(c.env.AUTH_DB, s.user.userId);
   return profile ? { profile } : fail('profile-required');
 }
@@ -73,16 +73,15 @@ async function queue(db: D1Database, outbox: Outbox, nowIso: string): Promise<{ 
 const tally = (d: DeliverResult) => ({ sent: d.sent, held: d.held, refused: d.refused });
 
 // ---- POST /games/:id/invite --------------------------------------------------------------
-export async function postInvite(c: FlowCtx, id: string): Promise<Response> {
-  const a = await gate(c, 2);
-  if (a instanceof Response) return a;
+/** Host invites the game's stored candidates; shared by POST /invite and the MCP tool (communicator-http.ts inviteGame). */
+export async function inviteCore(c: FlowCtx, actor: string, id: string): Promise<ReplyResult> {
   const db = c.env.AUTH_DB as D1Database;
   const game = await getGame(db, id);
-  if (!game) return fail('not-found');
-  if (game.host !== a.profile.handle) return fail('not-your-game');
-  if (!['proposed', 'inviting', 'short'].includes(game.status)) return fail('bad-state', { status: game.status });
+  if (!game) return refuse('not-found');
+  if (game.host !== actor) return refuse('not-your-game');
+  if (!['proposed', 'inviting', 'short'].includes(game.status)) return refuse('bad-state', { status: game.status });
   const handles: string[] = Array.isArray((game as any).candidates) ? (game as any).candidates : [];
-  if (!handles.length) return fail('bad-candidates');
+  if (!handles.length) return refuse('bad-candidates');
   const now = isoOf(c);
   // Consent is resolved from the profile (consent + display only), then enforced by the engine, then again by the adapter.
   const marks = handles.map(() => '?').join(',');
@@ -97,39 +96,73 @@ export async function postInvite(c: FlowCtx, id: string): Promise<Response> {
     g = structuredClone(g);
     for (const h of bad) g.history.push({ at: now, actor: 'system', op: 'invite-refused', detail: `${h}:consent-required` });
   }
-  if (!ok.length) { await putGame(db, g, { at: nowOf(c) }); return fail('consent-required', { refused: bad.length }); }
-  await recordOkay(db, { actor: a.profile.handle, kind: 'invite', targetGame: id, at: nowOf(c) });
+  if (!ok.length) { await putGame(db, g, { at: nowOf(c) }); return refuse('consent-required', { refused: bad.length }); }
+  await recordOkay(db, { actor: actor, kind: 'invite', targetGame: id, at: nowOf(c) });
   let res;
   try { res = E.invite(g, ok.map((h) => ({ handle: h, display: found.get(h)!.display })), { now, profiles: ok.map((h) => found.get(h)) }); }
-  catch (e) { return fail('consent-required', { detail: String((e as Error).message) }); }
+  catch (e) { return refuse('consent-required', { detail: String((e as Error).message) }); }
   await putGame(db, res.game, { at: nowOf(c) });
   const made = await queue(db, res.outbox, now);
   const d = await deliverWith(c, made);
-  return json({ ok: true, game: res.game, sent: d.sent, held: d.held, refused: d.refused + bad.length });
+  return { status: 200, body: { ok: true, game: res.game, sent: d.sent, held: d.held, refused: d.refused + bad.length } };
+}
+
+export async function postInvite(c: FlowCtx, id: string): Promise<Response> {
+  const a = await gate(c, 2);
+  if (a instanceof Response) return a;
+  const r = await inviteCore(c, a.profile.handle, id);
+  return json(r.body, r.status);
 }
 
 // ---- POST /games/:id/score -----------------------------------------------------------------
-export async function postScore(c: FlowCtx, id: string): Promise<Response> {
-  const a = await gate(c, 1);
-  if (a instanceof Response) return a;
-  const b = await body(c.request);
-  if (b instanceof Response) return b;
+/** A player logs a score; shared by POST /score and the MCP tool (communicator-http.ts scoreGame). */
+export async function scoreCore(c: FlowCtx, actor: string, id: string, b: Record<string, any>): Promise<ReplyResult> {
   const db = c.env.AUTH_DB as D1Database;
   const game = await getGame(db, id);
-  if (!game) return fail('not-found');
-  if (!game.roster.in.includes(a.profile.handle)) return fail('not-your-game');
+  if (!game) return refuse('not-found');
+  if (!game.roster.in.includes(actor)) return refuse('not-your-game');
   const sides = b.sides;
   const names = (s: any) => (Array.isArray(s) ? s : s?.players);
-  if (!Array.isArray(sides) || sides.length !== 2 || sides.some((s) => !Array.isArray(names(s)) || names(s).some((h: any) => typeof h !== 'string'))) return fail('bad-request');
+  if (!Array.isArray(sides) || sides.length !== 2 || sides.some((s) => !Array.isArray(names(s)) || names(s).some((h: any) => typeof h !== 'string'))) return refuse('bad-request');
+  const scoreA = b.scoreA ?? b.scores?.[0] ?? sides[0]?.score, scoreB = b.scoreB ?? b.scores?.[1] ?? sides[1]?.score;
   const now = isoOf(c);
   let res;
   try {
-    res = E.submitScore(game, { by: a.profile.handle, now, sides: [{ players: names(sides[0]), score: b.scoreA }, { players: names(sides[1]), score: b.scoreB }] });
-  } catch (e) { return fail('bad-state', { detail: String((e as Error).message) }); }
+    res = E.submitScore(game, { by: actor, now, sides: [{ players: names(sides[0]), score: scoreA }, { players: names(sides[1]), score: scoreB }] });
+  } catch (e) { return refuse('bad-state', { detail: String((e as Error).message) }); }
   await putGame(db, res.game, { at: nowOf(c) });
   for (const l of res.ledger as LedgerEntry[]) await appendLedger(db, l, { at: nowOf(c) });
   const d = await deliverWith(c, await queue(db, res.outbox, now));
-  return json({ ok: true, game: res.game, ledger: (res.ledger as LedgerEntry[]).map((l) => ({ id: l.id, status: l.status })), ...tally(d) });
+  return { status: 200, body: { ok: true, game: res.game, ledger: (res.ledger as LedgerEntry[]).map((l) => ({ id: l.id, status: l.status })), ...tally(d) } };
+}
+
+export async function postScore(c: FlowCtx, id: string): Promise<Response> {
+  const a = await gate(c, 1);
+  if (a instanceof Response) return a;
+  const b = await body(c.request as Request);
+  if (b instanceof Response) return b;
+  const r = await scoreCore(c, a.profile.handle, id, b);
+  return json(r.body, r.status);
+}
+
+/** A player confirms or disputes the logged score without a token (the MCP tool, communicator-http.ts confirmScoreGame). */
+export async function confirmScoreCore(c: FlowCtx, actor: string, id: string, answer: unknown): Promise<ReplyResult> {
+  if (answer !== 'confirm' && answer !== 'dispute') return refuse('bad-answer');
+  const db = c.env.AUTH_DB as D1Database;
+  const game = await getGame(db, id);
+  if (!game) return refuse('not-found');
+  if (!game.roster.in.includes(actor)) return refuse('not-your-game');
+  const entry = (await latestLedger(db, game.ladder)).find((e) => e.id === (game as any).ledgerEntryId);
+  if (!entry) return refuse('bad-state', { detail: 'no score logged' });
+  const now = isoOf(c);
+  let res: { game: Game; outbox: Outbox; ledger: LedgerEntry[] };
+  try { res = answer === 'confirm' ? E.confirmScore(game, entry, { by: actor, now }) : E.disputeScore(game, entry, { by: actor, now }); }
+  catch (e) { return refuse('bad-state', { detail: String((e as Error).message) }); }
+  await putGame(db, res.game, { at: nowOf(c) });
+  for (const l of res.ledger) await appendLedger(db, l, { at: nowOf(c) });
+  await db.prepare(`UPDATE communicator_messages SET status = 'answered', answered_at = ?, updated_at = ? WHERE to_handle = ? AND game_id = ? AND kind = 'score-confirm' AND status IN ('pending','sent')`).bind(now, now, actor, id).run();
+  const d = await deliverWith(c, await queue(db, res.outbox, now));
+  return { status: 200, body: { ok: true, answered: answer, status: res.game.status, game: { id: res.game.id, status: res.game.status }, ...tally(d) } };
 }
 
 // ---- reply tokens: POST /reply and the /c/r/ page ------------------------------------------
@@ -188,7 +221,7 @@ export async function applyReply(c: FlowCtx, token: string, answer: unknown, slo
 
 export async function postReply(c: FlowCtx): Promise<Response> {
   if (!c.env.AUTH_DB) return unavailable();
-  const b = await body(c.request);
+  const b = await body(c.request as Request);
   if (b instanceof Response) return b;
   if (typeof b.token !== 'string') return fail('bad-request');
   const slot = b.slot && typeof b.slot.start === 'string' && typeof b.slot.end === 'string' ? { start: b.slot.start, end: b.slot.end } : null;
@@ -197,11 +230,9 @@ export async function postReply(c: FlowCtx): Promise<Response> {
 }
 
 // ---- POST /reminders (resident-only; a cron caller) ------------------------------------------
-export async function postReminders(c: FlowCtx): Promise<Response> {
-  if (!c.env.AUTH_DB) return unavailable();
-  if (!c.env.YARD_RESIDENT_KEY) return fail('resident-key-unset');
-  if (!(await isResident(c.request, c.env))) return fail('not-a-resident');
-  const db = c.env.AUTH_DB;
+/** The reminders sweep; shared by POST /reminders and the MCP tool (communicator-http.ts sendDueReminders). */
+export async function remindersCore(c: FlowCtx): Promise<ReplyResult> {
+  const db = c.env.AUTH_DB as D1Database;
   const now = isoOf(c);
   const { results } = await db.prepare(`SELECT state_json FROM communicator_games WHERE status = 'confirmed' ORDER BY slot_start`).all<{ state_json: string }>();
   let games = 0, queued = 0;
@@ -218,5 +249,13 @@ export async function postReminders(c: FlowCtx): Promise<Response> {
   const pending = await db.prepare(`SELECT id FROM communicator_messages WHERE status = 'pending' AND created_at >= ? ORDER BY created_at`)
     .bind(new Date(nowOf(c) - 72 * 3600_000).toISOString()).all<{ id: string }>();
   const d = await deliverWith(c, pending.results || []);
-  return json({ ok: true, games, queued, ...tally(d) });
+  return { status: 200, body: { ok: true, games, queued, ...tally(d) } };
+}
+
+export async function postReminders(c: FlowCtx): Promise<Response> {
+  if (!c.env.AUTH_DB) return unavailable();
+  if (!c.env.YARD_RESIDENT_KEY) return fail('resident-key-unset');
+  if (!(await isResident(c.request as Request, c.env))) return fail('not-a-resident');
+  const r = await remindersCore(c);
+  return json(r.body, r.status);
 }

@@ -288,3 +288,13 @@ export async function getLedger(ctx: Ctx, ladder: string): Promise<Response> {
   const ratings = ratingsFor(handles, entries, await declaredLevels(db, ladder), now);
   return json({ ok: true, ladder, generatedAt: now, entries, ratings: handles.map((h) => L.publicRating(ratings[h])) }, 200, { 'Cache-Control': 'public, max-age=60' });
 }
+
+// ---- shared with the MCP tools (v1-b): one implementation behind the routes and the tools -------------
+// Each takes (db, env, { ...args, actor: handle, gameId, now }) and returns the JSON body ({ ok, ... } or { ok: false, reason }); the logic lives in communicator-flow.ts.
+import { confirmScoreCore, inviteCore, remindersCore, scoreCore, type FlowEnv } from './communicator-flow.ts';
+type ShareArgs = Record<string, any> & { actor?: string; gameId?: string; now?: number };
+const shared = (db: D1Database, env: unknown, a: ShareArgs) => ({ c: { env: { ...(env as FlowEnv), AUTH_DB: db }, now: a.now } });
+export const inviteGame = (db: D1Database, env: unknown, a: ShareArgs) => inviteCore(shared(db, env, a).c, String(a.actor), String(a.gameId)).then((r) => r.body);
+export const scoreGame = (db: D1Database, env: unknown, a: ShareArgs) => scoreCore(shared(db, env, a).c, String(a.actor), String(a.gameId), a).then((r) => r.body);
+export const confirmScoreGame = (db: D1Database, env: unknown, a: ShareArgs) => confirmScoreCore(shared(db, env, a).c, String(a.actor), String(a.gameId), a.answer).then((r) => r.body);
+export const sendDueReminders = (db: D1Database, env: unknown, a: ShareArgs = {}) => remindersCore(shared(db, env, a).c).then((r) => r.body);
