@@ -18,7 +18,7 @@ CREATE TABLE points_ledger (
  profile TEXT NOT NULL REFERENCES points_profiles(profile),
  kind TEXT NOT NULL,
  points INTEGER NOT NULL CHECK(points >= 0 AND points <= 100),
- note TEXT CHECK(note IS NULL OR note IN ('enjoy','blue','reserve')),
+ note TEXT CHECK(note IS NULL OR (length(note) BETWEEN 1 AND 24 AND note NOT GLOB '*[^a-z0-9-]*')),
  edition TEXT NOT NULL,
  site TEXT NOT NULL,
  ref TEXT NOT NULL,
