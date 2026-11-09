@@ -17,6 +17,14 @@ export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 export const TAG_RE = /^[a-z0-9][a-z0-9:._-]*$/;
 export const HOST_RE = /^[a-z0-9.-]+\.[a-z]{2,}$/;
+/**
+ * Hosts whose terms bar extracting or republishing their data (the pickleball directory's
+ * blocked_source_hosts, content/pickleball/players/config.json on elsegundo.xyz). Nothing in the
+ * Atlas is taken from them: they may appear only as a reference link in source[], never as a
+ * record's url, data door or coordinate source (ATLAS.md §5.2).
+ */
+export const BANNED_HOSTS = ['pickleball.com', 'pickleballtournaments.com', 'pickleballbrackets.com', 'ppatour.com', 'usapickleball.org', 'dupr.com', 'pickleballden.com', 'utrsports.net', 'mydupr.com', 'pickleheads.com'];
+export const bannedHost = (url) => { try { const h = new URL(url).hostname.toLowerCase(); return BANNED_HOSTS.some((b) => h === b || h.endsWith(`.${b}`)); } catch { return false; } };
 
 const EARTH_MILES = 3958.7613;
 const rad = (d) => (d * Math.PI) / 180;
@@ -133,6 +141,7 @@ export function recordProblems(r) {
   if (!HOST_RE.test(r.site || '')) p.push('site must be a hostname');
   if (r.id && r.site && SITE_PREFIXES[r.site] && !String(r.id).startsWith(`${SITE_PREFIXES[r.site]}:`) && !String(r.id).startsWith('ues:')) p.push(`id prefix does not match site ${r.site}`);
   if (!isHttps(r.url)) p.push('url must be an https URL');
+  for (const [k, v] of [['url', r.url], ['data', r.data], ['location.source', r.location && r.location.source]]) if (v && bannedHost(v)) p.push(`${k} points at ${new URL(v).hostname}, a host whose terms bar republishing; banned hosts may only be cited in source[]`);
   if (r.data != null && !isHttps(r.data)) p.push('data must be an https URL');
   if (r.image != null && !isHttps(r.image)) p.push('image must be an https URL');
   if (r.location != null) {

@@ -132,9 +132,12 @@ elsegundo.xyz's own atlas and never render them.
    in `layers[].notes`.
 2. **No scraping behind sign-ins, no app-only data.** Facts read from an app screen, a logged-in
    view or a page whose terms forbid reuse do not enter the Atlas. The pickleball directory's
-   banned-hosts rule (pickleball.com, pickleballtournaments.com, pickleballbrackets.com, ppatour.com,
-   usapickleball.org, dupr.com, pickleballden.com) applies to results, ratings and player data on every
-   layer: nothing is extracted or republished from those hosts. Citing one of their public pages as the
+   banned-hosts list (`blocked_source_hosts` in `content/pickleball/players/config.json` on elsegundo.xyz,
+   mirrored as `BANNED_HOSTS` in `scripts/atlas/lib.mjs`: pickleball.com, pickleballtournaments.com,
+   pickleballbrackets.com, ppatour.com, usapickleball.org, dupr.com, pickleballden.com, utrsports.net,
+   mydupr.com, pickleheads.com) applies to results, ratings and player data on every layer: nothing is
+   extracted or republished from those hosts, and the validator refuses a record whose `url`, `data` or
+   coordinate source points at one. Citing one of their public pages as the
    source link for a fact the Atlas states in its own words (for example the USA Pickleball approved-paddle
    listing behind a paddle's approval status) is a reference, not an extract, and is allowed.
 3. **People appear only as they published themselves.** A `player` record exists only for a player
