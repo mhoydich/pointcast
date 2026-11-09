@@ -2,7 +2,7 @@
 
 This is the current rulebook for Claude Code, Codex, and any other agent
 working on PointCast from Mike's iMac. It replaces older advice in
-`AGENTS.md` and `README.md` wherever they disagree. Last revised 2026-10-01.
+`AGENTS.md` and `README.md` wherever they disagree. Last revised 2026-11-09.
 
 ## 1. Work in a worktree, and remove it when the PR merges
 
@@ -38,11 +38,18 @@ scripts/deploy.sh --force     # redeploy the same sha
 - Merge your PR first. The script deploys the tip of `origin/main` from the
   shared `~/pc-deploy` worktree, never from your checkout, so a deploy can't
   roll back work that merged after your branch was cut.
-- Merged is not live. The GitHub workflow "Deploy PointCast to Cloudflare
-  Pages" builds every push to main but skips its deploy step until the
-  `CLOUDFLARE_API_TOKEN` repo secret exists, so a green run does not mean the
-  site changed. `npm run audit:publishing` lists merged blocks that are not
-  live yet; run it before telling anyone a page is up.
+- Since 2026-11-09 a merge to main deploys itself. The GitHub workflow
+  "Deploy PointCast to Cloudflare Pages" builds every push to main, applies
+  the same gates as this script (required pages, 3,000-file floor), uploads
+  with wrangler 4 and smoke-tests production. No computer of Mike's has to be
+  on. Check the run before telling anyone a page is up: a red run means that
+  commit is not live, and a cancelled run was replaced by a newer push.
+  `npm run audit:publishing` lists merged blocks that are not live yet.
+- This script is now the fallback and the tool for pinned releases. It keeps
+  its own record of the last release in `~/.pointcast-deploy.live`, which
+  does not know about GitHub's deploys, so a `--release-sha` pin can be
+  refused or can target a commit older than what GitHub already shipped.
+  Compare against the latest green workflow run before pinning.
 - Run it from any worktree. Concurrent callers queue on one lock. If main is
   already live, it exits in a second, so calling it after every merge is fine.
 - Gates: a failed build retries once (transient `api.tzkt.io` fetches), then

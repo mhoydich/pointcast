@@ -23,9 +23,9 @@ The third is the strongest idea in the repository and the youngest. Most of the 
 
 ### 1. Publishing and global management
 
-**Merged is not live, and going live depends on one computer.** The "Deploy PointCast to Cloudflare Pages" workflow builds every push to main and then skips the upload because the `CLOUDFLARE_API_TOKEN` secret is not set (`.github/workflows/cloudflare-pages.yml`). Real deploys happen only when `scripts/deploy.sh` runs on Mike's iMac. `TASKS.md` has publish items sitting at `waiting-on-mh` for this reason. The script itself is careful: one lock, deploys only `origin/main`, refuses a build missing `/`, `/court` or `/blocks.json` or under 3,000 files, checks ancestry, smoke-tests production.
+**Deploys left the iMac this morning, and the docs had not caught up.** *Corrected the same day: the first version of this audit said the deploy secret was missing. That came from `docs/OPERATIONS.md`, `TASKS.md` and the workflow's own comment, all of which were stale.* The `CLOUDFLARE_API_TOKEN` secret was set on 2026-11-09 and, after #1610 switched the upload to wrangler 4, workflow runs 305, 307 and 308 built and deployed main from GitHub. What was still missing was parity with `scripts/deploy.sh`: the workflow uploaded without that script's gates (required pages, 3,000-file floor) and without its production smoke test. This PR adds both. Still tied to a computer: the ten `workers/*` projects (`npx wrangler deploy` by hand), D1 migrations (`wrangler d1 migrations apply` by hand), the `.env.local` keys for Manus and the image server, and whatever unpushed work sits in the iMac's worktrees.
 
-**No pull request runs the whole test suite.** There are 628 test files and 21 workflows. Twenty of the workflows are scoped to one feature's paths; only `pmm-check.yml` runs tests, and only the PMM ones. `scripts/deploy.sh` runs no tests either. A change that breaks a feature it does not own can merge and deploy green. Two workflows still trigger on finished Codex branches (`cohort-release-check.yml`, `home-share-editions-check.yml`).
+**No pull request runs the whole test suite.** There are 628 test files and 21 workflows. Twenty of the workflows are scoped to one feature's paths; only `pmm-check.yml` runs tests, and only the PMM ones. Neither the deploy workflow nor `scripts/deploy.sh` runs tests. A change that breaks a feature it does not own can merge and deploy green. Two workflows still trigger on finished Codex branches (`cohort-release-check.yml`, `home-share-editions-check.yml`).
 
 **There is no single list of what the network is.** PointCast is a Cloudflare Pages direct-upload project. Industry Next is a separate Cloudflare Pages project in another repository. elsegundo.xyz runs on Netlify functions and Blobs. Around twenty more projects live on `*.mhoydich.chatgpt.site` and `*.workers.dev` hosts; `arcade-60.mhoydich.chatgpt.site` alone is linked 157 times from this repository. The nearest thing to a registry is the ad network's publisher list in `ads.json` (five publishers), plus a static `federation-peers.ts` with five entries, three of which are PointCast itself. Which site owns what, who deploys it and how is recorded in prose across several repos and in Mike's head.
 
@@ -33,7 +33,7 @@ The third is the strongest idea in the repository and the youngest. Most of the 
 
 **The repository is heavy.** `public/` is 2.0 GB across 7,186 files and `.git` is another 2.0 GB. `docs/OPERATIONS.md` records 21 forgotten worktrees holding about 30 GB and a nightly disk sweep to cope. Media in git is the cause.
 
-**Pace.** 464 commits in the last 30 days, roughly half by Mike and half by agents. The process above is holding at that pace, which is a real achievement, but it is holding because Mike is the release valve.
+**Pace.** 464 commits in the last 30 days, roughly half by Mike and half by agents. The process is holding at that pace, which is a real achievement.
 
 ### 2. Readiness for bots
 
@@ -86,7 +86,7 @@ Two observations. Attribution is a text field, so nothing proves who wrote a blo
 
 ### Now: two weeks, small PRs
 
-1. **Make merged mean live.** Add the `CLOUDFLARE_API_TOKEN` repository secret (scope: Cloudflare Pages edit only). Port the three `deploy.sh` gates into the workflow: required paths, file-count floor, production smoke test. Keep `deploy.sh` as the fallback and for pinned releases. *Needs Mike: creating the secret.*
+1. **Finish leaving the iMac.** Site deploys already run from GitHub; this PR adds the gates and the smoke test. Remaining: a manually triggered workflow that deploys one named worker, a step that applies pending D1 migrations before the upload, and a sweep of the iMac's worktrees for unpushed work. *Needs Mike: widening the Cloudflare token to Workers and D1, or a second token for those.*
 2. **One check on every pull request:** `npm test`, `npm run build:bare`, `npm run audit:agents`. Remove the two dead-branch triggers. Add a check that fails on duplicate migration numbers.
 3. **A network registry.** One file, published at `/network.json`: each property's domain, repository, host, deploy path, owner, identity provider, agent doors and status, including the `chatgpt.site` satellites marked as platform-hosted. Make `ads.json` publishers, `federation-peers.ts` and the `project-ticket` allow-list read from it.
 4. **Generate `robots.txt`** from one policy and one agent list, add an explicit usage preference line, and offer the same generator to the sister sites.
@@ -134,7 +134,7 @@ Page views say little here. Games played and neighbors met are the quality-of-li
 
 ## Decisions for Mike
 
-1. Create the Cloudflare deploy secret so GitHub can publish, or keep the iMac as the only path?
+1. Widen the Cloudflare token (or add a second one) so GitHub can also deploy workers and apply D1 migrations?
 2. Go ahead with pointcast.xyz as the sign-in provider for the whole network?
 3. AT Protocol or ActivityPub for federation?
 4. Does elsegundo.xyz stay on Netlify?
@@ -142,7 +142,7 @@ Page views say little here. Games played and neighbors met are the quality-of-li
 
 ## For whoever picks this up
 
-- Files changed: this document only.
-- Build and tests: not run; no code, route, feed or JSON surface changed.
+- Files changed: this document, `.github/workflows/cloudflare-pages.yml` (gates and smoke test), `docs/OPERATIONS.md` (deploy section).
+- Build and tests: not run; no route, feed or JSON surface changed. The workflow change is first exercised by the next push to main. Codex review requested, since it touches publishing.
 - Remaining risk: the sister-site findings are second-hand, and the standards references are unverified, as noted at the top.
-- Manus follow-up: after item 1 ships, verify on production that a merged block is live without the iMac. After item 5, check the home page on a real phone for stale presence.
+- Manus follow-up: after this merges, confirm the next deploy run is green through the smoke step and the merged block is live. After item 5, check the home page on a real phone for stale presence.
