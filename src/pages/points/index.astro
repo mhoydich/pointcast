@@ -1,0 +1,123 @@
+---
+/**
+ * /points/ — the open Network Points ledger: the rules, the notes they earn,
+ * and the latest lines, in public. Rules live in src/lib/network-points.mjs.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ProfileLedgerCard from '../../components/ProfileLedgerCard.astro';
+import { POINT_KINDS, SISTER_TOWNS, NOUNS_MONEY_EDITIONS, PROFILE_UNLOCKS, DISCLOSURE, MAX_SAME_DAY_CHECKINS } from '../../lib/network-points.mjs';
+import '../../styles/currency-builder.css';
+
+const edition = NOUNS_MONEY_EDITIONS[0];
+const kinds = Object.entries(POINT_KINDS);
+const description = 'One open points ledger across PointCast, elsegundo.xyz, Industry Next and the University of El Segundo. Check in and drum to earn points and Nouns Money Series 1 notes. Every line is public and hash-chained. No cash value.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'Network Points · the open ledger',
+  description,
+  url: 'https://pointcast.xyz/points/',
+  license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+};
+---
+<BlockLayout title="Network Points · the open ledger" description={description} image="/currency-builder/series-1/notes/front/enjoy.svg" imageAlt="The Enjoy. note from Nouns Money Series 1" themeColor="#f6f1e6" immersive hideAds showNetworkStrip={false} jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/points.json', title: 'Network Points rules' }, { type: 'application/schema+json', href: '/points/schema.json', title: 'Ledger line schema' }]}>
+  <div class="cb">
+    <div class="cb-wrap">
+      <section class="cb-hero" aria-labelledby="pts-title" style="grid-template-columns:minmax(0,1fr)">
+        <div>
+          <p class="cb-kicker">Network Points · open ledger</p>
+          <h1 id="pts-title">Show up.<br />It counts<em>.</em></h1>
+          <p class="cb-dek" style="max-width:56ch">One points ledger for the whole network: PointCast, elsegundo.xyz, Industry Next and the University of El Segundo. Check in from anywhere, drum, keep a streak. Every line is public, says what it was for, and is chained to the one before it, so anyone can check that nothing was changed. Points start here; the same lines can be anchored on Tezos later without changing a field.</p>
+          <p class="cb-disclose">{DISCLOSURE}</p>
+        </div>
+      </section>
+
+      <section class="cb-section" aria-labelledby="pts-earn">
+        <h2 id="pts-earn">What earns points</h2>
+        <table class="pts-table">
+          <thead><tr><th>Kind</th><th>Points</th><th>Rule</th><th>Note</th></tr></thead>
+          <tbody>
+            {kinds.map(([id, k]) => (
+              <tr class={k.live ? '' : 'is-reserved'}>
+                <td><code>{id}</code></td>
+                <td>{k.points}</td>
+                <td>{k.rule}</td>
+                <td>{id === 'checkin' ? 'Enjoy.' : id === 'streak' ? 'Blue Note' : id === 'long-streak' || id === 'sister-town' ? 'Nouns Reserve' : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="pts-small">Up to {MAX_SAME_DAY_CHECKINS} check-ins count each day. Network towns: {SISTER_TOWNS.map((t) => t.name).join(' · ')}. Reserved kinds are named now so other sites can plan for them; they earn nothing yet.</p>
+      </section>
+
+      <section class="cb-section" aria-labelledby="pts-notes">
+        <h2 id="pts-notes">Nouns Money · {edition.name}, {edition.season}</h2>
+        <p class="pts-small">Issued by {edition.issuer}. Open {edition.opens} to {edition.closes}; the next season starts a new series and earlier notes stay on your profile. <a href="/currency-builder/series-1/">See the three notes →</a></p>
+        <div class="pts-notes">
+          {edition.notes.map((n) => (
+            <figure>
+              <img src={n.image} width="1200" height="600" alt={n.long} loading="lazy" />
+              <figcaption><strong>{n.long}</strong> {n.rule} <em>{n.frame}.</em></figcaption>
+            </figure>
+          ))}
+        </div>
+        <p class="pts-small">Profile marks: {PROFILE_UNLOCKS.map((u) => u.label).join(' · ')}. Marks are looks, nothing more.</p>
+      </section>
+
+      <ProfileLedgerCard mode="me" app="points" />
+
+      <section class="cb-section" aria-labelledby="pts-recent">
+        <h2 id="pts-recent">Latest lines</h2>
+        <ol class="pts-recent" data-pts-recent><li>Reading the ledger…</li></ol>
+      </section>
+
+      <section class="cb-section" aria-labelledby="pts-open">
+        <h2 id="pts-open">Open, by design</h2>
+        <ul class="pts-small">
+          <li>Join by choice from your profile. Your id is an opaque hash; a name shows only if you set one. Places are town names, never GPS.</li>
+          <li>Each line's id is the SHA-256 of its fields in a fixed order; <code>prev</code> names the line before. Re-hash a profile's lines and the chain either holds or it doesn't.</li>
+          <li>Rules: <a href="/points.json">/points.json</a> · line schema: <a href="/points/schema.json">/points/schema.json</a> · summary: <code>/api/points?profile=&lt;id&gt;</code> · every line: <code>&amp;lines=1</code> · latest: <code>/api/points?recent=1</code>. CC0; fork it.</li>
+          <li>Any site can award points by posting a check-in through the shared Here check-in. Nothing is sold, redeemed or traded for money.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  (async () => {
+    const list = document.querySelector('[data-pts-recent]');
+    if (!list) return;
+    const label = { enjoy: 'Enjoy.', blue: 'Blue Note', reserve: 'Nouns Reserve' };
+    try {
+      const data = await (await fetch('/api/points?recent=1&limit=25')).json();
+      if (data.enabled === false) { list.innerHTML = '<li>The ledger is built and switched off until launch. The rules above are final for Series 1.</li>'; return; }
+      const lines = data.lines || [];
+      if (!lines.length) { list.innerHTML = '<li>No lines yet. Be the first check-in.</li>'; return; }
+      list.innerHTML = '';
+      for (const l of lines) {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = `/points/p/?id=${l.profile}`;
+        a.textContent = l.profile.slice(0, 8);
+        li.append(a, ` +${l.points} ${l.kind}${l.note ? ` · ${label[l.note] || l.note}` : ''}${l.place ? ` · ${l.place}` : ''} · ${l.day} · ${l.site}`);
+        list.append(li);
+      }
+    } catch {
+      list.innerHTML = '<li>The ledger is not answering right now.</li>';
+    }
+  })();
+</script>
+
+<style>
+  .pts-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .pts-table th, .pts-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--cb-line); vertical-align: top; }
+  .pts-table tr.is-reserved { color: var(--cb-muted); }
+  .pts-small { font-size: 14px; color: var(--cb-muted); line-height: 1.5; }
+  .pts-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .pts-notes img { width: 100%; height: auto; display: block; border: 1px solid var(--cb-line); }
+  .pts-notes figcaption { font-size: 14px; margin-top: 6px; line-height: 1.4; }
+  .pts-recent { font: 13px/1.6 var(--cb-mono); padding-left: 20px; }
+  .pts-recent a { color: inherit; }
+  @media (max-width: 640px) { .pts-notes { grid-template-columns: minmax(0, 1fr); } .pts-table { font-size: 13px; } }
+</style>
