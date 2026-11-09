@@ -10,7 +10,9 @@
  *                    Records a human visit with the client-chosen noun.
  *                    Rate-limited to one log entry per IP per hour.
  *
- * GET  /api/visit    → { count, present, log: [{t,type,country,city?,region?,nounId,firsts?}] }
+ * GET  /api/visit    → { count, present, log: [{t,type,nounId,firsts?,note?}] }
+ *                    The public log carries no place: no city, region or country per visit
+ *                    (the 'country' first badge stays, without naming the country).
  *                    Cached at the edge for 10s.
  *
  * No text fields — visits are visual-only (no moderation surface).
@@ -24,9 +26,9 @@ export interface Env {
 export interface VisitEntry {
   t: number;
   type: string;
-  country: string;
-  city: string;
-  region: string;
+  country?: string;      // no longer stored; older entries are stripped on read
+  city?: string;
+  region?: string;
   nounId: number;
   firsts?: string[];     // ['type', 'country'] when this was first-of-a-kind
   note?: string;         // visitor's optional ≤140-char note attached at commit time
@@ -305,8 +307,6 @@ export async function recordVisit(opts: {
   // Clamp nounId early so it's available for presence too.
   const nid = Math.max(0, Math.min(NOUN_ID_RANGE - 1, Math.floor(nounId)));
   const country = typeof cf?.country === 'string' ? cf.country : '';
-  const city = typeof cf?.city === 'string' ? cf.city : '';
-  const region = typeof cf?.region === 'string' ? cf.region : '';
 
   const ipHash = await sha256(ip || 'unknown');
   const presenceKey = `${PRESENCE_PREFIX}${ipHash}`;
@@ -370,12 +370,11 @@ export async function recordVisit(opts: {
     safeNote = '';
   }
 
+  // No place goes in the public log. Country is only read above for the
+  // first-of-a-kind badge; city and region are not read at all.
   const entry: VisitEntry = {
     t: now,
     type,
-    country,
-    city: type === 'human' ? city : '',
-    region: type === 'human' ? region : '',
     nounId: nid,
     ...(badges.length ? { firsts: badges } : {}),
     ...(safeNote ? { note: safeNote } : {}),
@@ -401,6 +400,12 @@ export async function recordVisit(opts: {
 
 // -- GET /api/visit ----------------------------------------------------------
 
+/** Drop any place fields from a log entry, including ones stored before they were retired. */
+export function publicEntry(entry: VisitEntry): VisitEntry {
+  const { country: _country, city: _city, region: _region, ...rest } = entry;
+  return rest;
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   // Derive the caller's pid from their IP so the client knows which
   // presence entry is "self". We compute it every request (uncached by
@@ -411,11 +416,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
   const yourPid = (await sha256(ip)).slice(0, 12);
 
-  const [count, log, present] = await Promise.all([
+  const [count, storedLog, present] = await Promise.all([
     loadCount(env),
     loadLog(env),
     listPresent(env),
   ]);
+  const log = storedLog.map(publicEntry);
   // Pull reactions for all currently-present pids in one batch so the client
   // gets a fully-composed "live room" payload in a single request.
   const pids = present

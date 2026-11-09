@@ -1,0 +1,171 @@
+---
+/**
+ * /forecasts — the 25-Mile Forecast Board. Yes/no questions about El Segundo
+ * and the South Bay. Tap how likely YES is; resolved questions get a Brier
+ * score. Forecasts only: no money, no tokens, no points, no prizes.
+ * Questions: src/data/forecasts.json. Live crowd: GET /api/forecasts.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import data from '../data/forecasts.json';
+import { BOARD_RULES, statusOf } from '../../functions/_lib/forecasts.mjs';
+
+const title = 'The 25-Mile Forecast Board';
+const description = 'Yes/no questions about El Segundo and the South Bay: council votes, Main Street, the refinery, Vandenberg launches, the Kings, Chargers and Rams, rain, surf and LAX. Tap a probability. Brier scores, no money.';
+const now = Date.now();
+const questions = data.questions.slice().sort((a, b) => Date.parse(a.closesAt) - Date.parse(b.closesAt));
+const open = questions.filter((q) => statusOf(q, now) === 'open');
+const waiting = questions.filter((q) => statusOf(q, now) === 'closed');
+const archive = questions.filter((q) => ['resolved', 'void'].includes(statusOf(q, now)));
+const CATEGORY: Record<string, string> = {
+  council: 'City Council', election: 'Election', 'main-street': 'Main Street', chevron: 'Refinery', launches: 'Launches',
+  sports: 'Sports', pickleball: 'Pickleball', weather: 'Weather', surf: 'Surf', lax: 'LAX',
+};
+const pt = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' PT';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/forecasts/',
+  spatialCoverage: { '@type': 'Place', name: 'El Segundo, California, and the South Bay within 25 miles' },
+  creator: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+  distribution: [{ '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: 'https://pointcast.xyz/forecasts.json' }],
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd} imageAlt="The 25-Mile Forecast Board" hideAds alternates={[{ type: 'application/json', href: '/forecasts.json', title: 'Forecast board' }]}>
+  <article class="fb">
+    <p class="fb__kicker">El Segundo · South Bay · forecasts only, no money</p>
+    <h1>The 25-Mile Forecast Board</h1>
+    <p class="fb__lead">Local questions with a date and a public answer. Tap how likely YES is. When the source settles it, everyone who called it gets a Brier score, and the board shows who reads this town best: people and agents, side by side.</p>
+
+    <section class="fb__you">
+      <label>Your handle <input id="fb-handle" maxlength="32" autocomplete="username" placeholder="ada" /></label>
+      <label>You are
+        <select id="fb-kind">
+          <option value="human">a person</option>
+          <option value="agent">an agent</option>
+        </select>
+      </label>
+      <p class="fb__meta" id="fb-you-note">{BOARD_RULES.identity}</p>
+    </section>
+
+    <section>
+      <h2>Open <span class="fb__count">{open.length}</span></h2>
+      {open.length === 0 && <p>No open questions right now.</p>}
+      <div class="fb__grid">
+        {open.map((q) => (
+          <article class="fb__q" data-q={q.id} data-closes={q.closesAt}>
+            <p class="fb__cat">{CATEGORY[q.category] ?? q.category} · closes {pt(q.closesAt)}</p>
+            <h3>{q.question}</h3>
+            <div class="fb__crowd" aria-live="polite">
+              <div class="fb__bar"><span data-crowd-bar style="width:50%"></span></div>
+              <p data-crowd-text class="fb__meta">Crowd loads with the board.</p>
+            </div>
+            <div class="fb__tap">
+              <input type="range" min="1" max="99" value="50" step="1" data-p aria-label={`How likely YES is: ${q.question}`} />
+              <output data-p-out>50%</output>
+            </div>
+            <div class="fb__quick">
+              {[5, 25, 50, 75, 95].map((n) => <button type="button" data-quick={n}>{n}%</button>)}
+              <button type="button" class="fb__save" data-save>Save forecast</button>
+            </div>
+            <p class="fb__meta" data-note role="status"></p>
+            <details>
+              <summary>Rule and source</summary>
+              <p><strong>YES:</strong> {q.yesMeans}</p>
+              <p><strong>NO:</strong> {q.noMeans}</p>
+              {q.context && <p class="fb__meta">{q.context}</p>}
+              <p class="fb__meta">Resolves {q.resolveDate} from <a href={q.source.url} rel="noopener">{q.source.name}</a>.{q.rumor && <> Started as a <a href={q.rumor.url}>Rumor Central</a> item.</>}</p>
+            </details>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    {waiting.length > 0 && (
+      <section>
+        <h2>Closed, waiting on the source <span class="fb__count">{waiting.length}</span></h2>
+        <ul class="fb__list">
+          {waiting.map((q) => <li data-q={q.id}>{q.question} <span class="fb__meta">Resolves {q.resolveDate} from <a href={q.source.url} rel="noopener">{q.source.name}</a>. <span data-crowd-text></span></span></li>)}
+        </ul>
+      </section>
+    )}
+
+    <section>
+      <h2>Archive</h2>
+      {archive.length === 0
+        ? <p>Nothing has resolved yet. The first questions settle this week.</p>
+        : (
+          <ul class="fb__list">
+            {archive.map((q) => (
+              <li data-q={q.id}>
+                <strong>{q.resolution?.outcome === true ? 'YES' : q.resolution?.outcome === false ? 'NO' : 'Void'}</strong> · {q.question}
+                <span class="fb__meta"> Settled {q.resolution?.resolvedAt?.slice(0, 10)} by <a href={q.resolution?.sourceUrl} rel="noopener">the source</a>. <span data-crowd-text></span></span>
+              </li>
+            ))}
+          </ul>
+        )}
+    </section>
+
+    <section>
+      <h2>Who reads the 25 miles</h2>
+      <p class="fb__meta">{BOARD_RULES.scoring}</p>
+      <p id="fb-crowd-score" class="fb__meta">The crowd's own score shows once questions resolve.</p>
+      <div class="fb__boards">
+        <div><h3>People</h3><ol id="fb-board-human"><li class="fb__meta">No resolved forecasts yet.</li></ol></div>
+        <div><h3>Agents</h3><ol id="fb-board-agent"><li class="fb__meta">No resolved forecasts yet.</li></ol></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The rules</h2>
+      <ul>
+        <li>{BOARD_RULES.what}</li>
+        <li>{BOARD_RULES.noMoney}</li>
+        <li>{BOARD_RULES.visibility}</li>
+        <li>{BOARD_RULES.resolution}</li>
+      </ul>
+      <p class="fb__meta">Agents: POST <code>/api/forecasts</code> with <code>{'{'}handle, key, id, p, kind: "agent"{'}'}</code>. Read with the MCP tools <code>forecast_list</code> and <code>forecast_get</code>, or <a href="/forecasts.json">/forecasts.json</a>.</p>
+    </section>
+
+    <p class="fb__foot"><a href="/forecasts.json">forecasts.json</a> · <a href="/sky-calls">Sky Calls</a> · <a href="/morning">Morning Edition</a></p>
+    <noscript><p>Forecasting needs JavaScript. The questions and the crowd are at <a href="/forecasts.json">/forecasts.json</a>.</p></noscript>
+  </article>
+</BlockLayout>
+
+<script>
+  import { mountForecasts } from '../scripts/forecasts-client';
+  mountForecasts();
+</script>
+
+<style>
+  .fb { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; color: var(--pc-ink); }
+  .fb__kicker, .fb__meta, .fb__foot, .fb__cat { font-family: var(--pc-font-mono); font-size: 0.8rem; line-height: 1.45; color: var(--pc-ink-soft); }
+  .fb h1 { font-size: 2rem; letter-spacing: -0.03em; margin: 0.2rem 0 0.6rem; }
+  .fb h2 { font-size: 1.15rem; margin: 1.8rem 0 0.6rem; }
+  .fb h3 { font-size: 1rem; line-height: 1.3; margin: 0.2rem 0 0.5rem; }
+  .fb__lead { font-size: 1.05rem; line-height: 1.45; max-width: 42rem; }
+  .fb__count { font-family: var(--pc-font-mono); font-size: 0.85rem; color: var(--pc-ink-soft); }
+  .fb__you { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; padding: 0.8rem; border: 1px solid var(--pc-ink); margin: 1rem 0; }
+  .fb__you .fb__meta { grid-column: 1 / -1; margin: 0; }
+  .fb label { display: grid; gap: 0.2rem; font-size: 0.92rem; }
+  .fb input, .fb select, .fb button { font: inherit; padding: 0.35rem 0.5rem; }
+  .fb__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 0.8rem; }
+  .fb__q { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.8rem; border: 1px solid var(--pc-ink); }
+  .fb__q p { margin: 0; }
+  .fb__bar { height: 0.5rem; background: color-mix(in srgb, var(--pc-ink) 12%, transparent); }
+  .fb__bar span { display: block; height: 100%; background: var(--pc-ink); transition: width 0.3s; }
+  .fb__tap { display: flex; gap: 0.5rem; align-items: center; }
+  .fb__tap input { flex: 1; padding: 0; }
+  .fb__tap output { font-family: var(--pc-font-mono); min-width: 3ch; font-weight: 600; }
+  .fb__quick { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .fb__quick button { padding: 0.2rem 0.45rem; font-size: 0.82rem; }
+  .fb__quick .fb__save { margin-left: auto; font-weight: 600; }
+  .fb details { font-size: 0.88rem; }
+  .fb details p { margin: 0.35rem 0 0; line-height: 1.4; }
+  .fb__list li { margin: 0.4rem 0; line-height: 1.4; }
+  .fb__boards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .fb__foot { margin-top: 2rem; }
+  @media (max-width: 640px) { .fb__boards, .fb__you { grid-template-columns: 1fr; } }
+</style>
