@@ -113,7 +113,7 @@ effect: 'consent'  — reaches a person (invite, reminder, score request, messag
 
 Where it lives.
 
-- PointCast MCP: a `pointcast/effect` annotation beside `readOnlyHint` from `toolAnnotations()`, and a `toolEffects` map in `/agents.json`. A `CONSENT_TOOL_NAMES` set sits beside `WRITE_TOOL_NAMES` so the label exists, but by Mike's decision (2026-11-09) the public MCP stays read-only: every served tool is `read`, and both sets stay empty. Write and consent actions live on the HTTP routes behind a signed-in person's okay.
+- PointCast MCP: a `pointcast/effect` annotation beside `readOnlyHint` from `toolAnnotations()`, and a `toolEffects` map in `/agents.json`. A `CONSENT_TOOL_NAMES` set sits beside `WRITE_TOOL_NAMES` so the label exists. By Mike's decision (2026-11-09) the Communicator adds only read tools to the MCP and no consent tool; `CONSENT_TOOL_NAMES` stays empty. The server's pre-existing write tools (`drum_tap`, `loom_append` and the rest of `WRITE_TOOL_NAMES`) are unchanged by this work. Communicator write and consent actions live on the HTTP routes behind a signed-in person's okay.
 - PointCast HTTP: `agent-capabilities.ts` gains `effect` beside `auth` and `sideEffects`.
 - elsegundo.xyz: the same `effect` field in `agents.json` endpoints and the `/mcp/desk` tool table; `needsMike` on desk jobs is the same idea for the owner and keeps its name.
 - The prototype renders the Communicator's own action table (`ACTIONS` in `engine.mjs`) so a visiting bot sees the labels before it calls anything.
