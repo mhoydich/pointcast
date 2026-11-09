@@ -138,10 +138,11 @@
     const toSvg = (e) => { const b = svg.getBoundingClientRect(); return { x: ((e.clientX - b.left) / b.width) * SIZE, y: ((e.clientY - b.top) / b.height) * SIZE }; };
     svg.addEventListener('wheel', (e) => { e.preventDefault(); const p = toSvg(e); zoom(e.deltaY < 0 ? 1.2 : 1 / 1.2, p.x, p.y); }, { passive: false });
     let drag = null;
-    svg.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; drag = { ...toSvg(e), vx: view.x, vy: view.y, moved: false }; svg.setPointerCapture(e.pointerId); });
+    let justDragged = false; // set on pointerup after a pan so the click that follows does not change the selection
+    svg.addEventListener('pointerdown', (e) => { if (e.button !== 0) return; justDragged = false; drag = { ...toSvg(e), vx: view.x, vy: view.y, moved: false }; svg.setPointerCapture(e.pointerId); });
     svg.addEventListener('pointermove', (e) => { if (!drag) return; const p = toSvg(e); const dx = p.x - drag.x, dy = p.y - drag.y; if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true; view.x = drag.vx + dx; view.y = drag.vy + dy; applyView(); });
-    svg.addEventListener('pointerup', () => { drag = null; });
-    svg.addEventListener('pointercancel', () => { drag = null; });
+    svg.addEventListener('pointerup', () => { justDragged = Boolean(drag && drag.moved); drag = null; });
+    svg.addEventListener('pointercancel', () => { justDragged = Boolean(drag && drag.moved); drag = null; });
 
     /* ---------- filtering ---------- */
     const norm = (s) => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -168,7 +169,7 @@
         const p = project(center, r.location, radius);
         const c = svgEl('circle', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: r.id === selected ? 7 : 4.3, class: `am-pin${p.beyond ? ' am-beyond' : ''}${r.id === selected ? ' am-selected' : ''}`, fill: COLORS[r.type] || '#333', 'data-id': r.id, tabindex: 0, role: 'button', 'aria-label': `${r.name}, ${TYPE_LABEL[r.type] || r.type}, ${p.miles.toFixed(1)} miles` });
         const t = svgEl('title'); t.textContent = `${r.name} · ${TYPE_LABEL[r.type] || r.type} · ${p.miles.toFixed(1)} mi${p.beyond ? ' (beyond the ring)' : ''}`; c.append(t);
-        c.addEventListener('click', (e) => { if (drag && drag.moved) return; e.stopPropagation(); select(r.id); });
+        c.addEventListener('click', (e) => { if (justDragged) { justDragged = false; return; } e.stopPropagation(); select(r.id); });
         c.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(r.id); } });
         pins.append(c);
       }
@@ -247,7 +248,7 @@
       writeState(state);
       renderStats(); renderLegend(); renderPins(); renderList(); renderDetail();
     }
-    svg.addEventListener('click', (e) => { if (e.target === svg || e.target.closest('.am-base')) { if (!(drag && drag.moved)) select(''); } });
+    svg.addEventListener('click', (e) => { if (justDragged) { justDragged = false; return; } if (e.target === svg || e.target.closest('.am-base')) select(''); });
     window.addEventListener('hashchange', () => { let id = location.hash.slice(1); try { id = decodeURIComponent(id); } catch (error) { return; } if (byId.has(id) && id !== selected) select(id); });
     update();
     if (selected) renderDetail();

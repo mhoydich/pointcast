@@ -144,7 +144,8 @@ elsegundo.xyz's own atlas and never render them.
    whose directory entry carries a verified `claim` (fields they asked for: self rating, home courts,
    paddle, bio). Unclaimed names stay in the directory pages they already have; the Atlas carries the
    `league` record (the ladder, the method, the count) and links to the directory, not the names.
-   No phones, emails, home addresses, ages, photos or employers anywhere. Public officials appear
+   No phones, emails, home addresses, ages, photos or employers for people anywhere; a venue's public desk
+   line may appear in a `business`, `place` or `court` summary and nowhere else. Public officials appear
    with office contact only (the representatives register already enforces this). The do-not-list
    is honored by every build.
 4. **Open license.** Our records are CC0-1.0. Derived records keep the upstream license and
@@ -165,7 +166,7 @@ They read `atlas.json` (and, on PointCast, the merged index). None writes anythi
 | --- | --- | --- |
 | `atlas_search` | `q?` words (all must match name, summary, tags, layer, type), `type?`, `layer?`, `site?` (PointCast only; `all` searches the merged index), `limit?` (default 10, max 50), `offset?` | `total`, `items` (compact records: id, type, name, summary, url, location, updated, layer), paging |
 | `atlas_get` | `id` | the full record, with each link resolved to `{ rel, id, name, type, url }` where the target is known |
-| `atlas_near` | `lat`, `lon`, `radiusMiles?` (default 1, max 25), `type?`, `limit?` | located records sorted by great-circle distance, each with `distanceMiles` and `bearing`; says straight-line, not travel |
+| `atlas_near` | `lat`, `lon`, `radiusMiles?` (default 1, max 25), `type?`, `layer?`, `limit?`, `offset?` | located records sorted by great-circle distance, each with `distanceMiles` and `bearing`; says straight-line, not travel |
 | `atlas_links` | `id`, `rel?`, `depth?` (1 or 2) | outgoing links and incoming links (records that point at this id), as a small graph `{ nodes, edges }` |
 
 Every result carries the atlas `generated` date, the record `updated` dates, the license line
