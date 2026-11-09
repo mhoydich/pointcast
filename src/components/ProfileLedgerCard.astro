@@ -1,0 +1,174 @@
+---
+/**
+ * <ProfileLedgerCard /> — a person's points, Nouns Money and drum, on any profile.
+ *
+ * mode="me"      the signed-in member's own card (GET /api/points?me=1), with
+ *                join / leave for the open ledger.
+ * mode="public"  anyone's card by profile id (GET /api/points?profile=<id>);
+ *                the id comes from the `profile` prop or the page's ?id=.
+ *
+ * Shows: points total, check-in streak, Nouns Money Series 1 notes held
+ * (Enjoy. · Blue Note · Nouns Reserve), the profile marks those notes unlock,
+ * the drum count, and a playable drum. The drum always plays, ledger or not.
+ *
+ * Collectible marks only. Rules: /points/ and /points.json.
+ */
+import { NOUNS_MONEY_EDITIONS, PROFILE_UNLOCKS, DISCLOSURE } from '../lib/network-points.mjs';
+
+interface Props { mode?: 'me' | 'public'; profile?: string; app?: string }
+const { mode = 'me', profile = '', app = 'profile' } = Astro.props;
+const edition = NOUNS_MONEY_EDITIONS[0];
+---
+
+<section class={`plc plc--${mode}`} data-plc data-mode={mode} data-profile={profile} aria-label="Points, Nouns Money and drum">
+  <header class="plc__head">
+    <p class="plc__kicker">OPEN LEDGER · NOUNS MONEY {edition.name.toUpperCase()}</p>
+    <p class="plc__name" data-plc-name>{mode === 'me' ? 'Your profile' : 'Profile'}</p>
+  </header>
+
+  <div class="plc__stats">
+    <div><strong data-plc-points>—</strong><span>points</span></div>
+    <div><strong data-plc-streak>—</strong><span>day streak</span></div>
+    <div><strong data-plc-days>—</strong><span>check-in days</span></div>
+    <div><strong data-plc-beats>—</strong><span>times drummed</span></div>
+  </div>
+
+  <ul class="plc__notes" aria-label={`Nouns Money ${edition.name} notes held`}>
+    {edition.notes.map((note) => (
+      <li data-plc-note={note.id} style={`--ink:${note.ink}`}>
+        <img src={note.image} width="1200" height="600" alt={`${note.long}`} loading="lazy" />
+        <p><strong data-plc-count>0</strong> × {note.name}</p>
+        <span>{note.rule}</span>
+      </li>
+    ))}
+  </ul>
+
+  <ul class="plc__unlocks" aria-label="Profile marks">
+    {PROFILE_UNLOCKS.map((u) => <li data-plc-unlock={u.id}>{u.label}</li>)}
+  </ul>
+
+  <div class="plc__drum">
+    <pointcast-drum look="round" size="96" app={app} count="false"></pointcast-drum>
+    <p>Tap the drum. {mode === 'me' ? 'Beats you play anywhere on PointCast while signed in count here, and each day you drum adds a line to the ledger.' : 'This is their drum; your beats count toward your own profile.'}</p>
+  </div>
+
+  <p class="plc__line" data-plc-line>Reading the ledger…</p>
+  {mode === 'me' && (
+    <div class="plc__actions" data-plc-actions hidden>
+      <button type="button" data-plc-join>Join the open ledger</button>
+      <button type="button" data-plc-leave hidden>Leave the ledger</button>
+      <a data-plc-public hidden href="/points/p/">Your public card</a>
+    </div>
+  )}
+  <p class="plc__links"><a href="/points/">How points work</a><a href="/currency-builder/series-1/">Series 1 notes</a><a href="/drum">Play /drum</a></p>
+  <p class="plc__disclose">{DISCLOSURE}</p>
+</section>
+
+<script is:inline src="/drum.js" data-app="profile" data-sound="true"></script>
+<script is:inline>
+  (() => {
+    const cards = document.querySelectorAll('[data-plc]:not([data-plc-ready])');
+    if (!cards.length) return;
+    const fmt = (n) => (typeof n === 'number' ? n.toLocaleString('en-US') : '—');
+    const post = (path) => fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((r) => r.json());
+
+    function paint(card, s, opts = {}) {
+      const set = (sel, v) => { const el = card.querySelector(sel); if (el) el.textContent = v; };
+      set('[data-plc-points]', fmt(s?.points ?? 0));
+      set('[data-plc-streak]', fmt(s?.checkins?.streak ?? 0));
+      set('[data-plc-days]', fmt(s?.checkins?.days ?? 0));
+      if (opts.beats !== undefined || s?.drums?.beats != null) set('[data-plc-beats]', fmt(opts.beats ?? s.drums.beats));
+      if (s?.name) set('[data-plc-name]', s.name);
+      const held = s?.held ?? {};
+      card.querySelectorAll('[data-plc-note]').forEach((li) => {
+        const n = held[li.dataset.plcNote] ?? 0;
+        li.querySelector('[data-plc-count]').textContent = fmt(n);
+        li.classList.toggle('is-held', n > 0);
+      });
+      const unlocks = new Set(s?.unlocks ?? []);
+      card.querySelectorAll('[data-plc-unlock]').forEach((li) => li.classList.toggle('is-on', unlocks.has(li.dataset.plcUnlock)));
+      unlocks.forEach((u) => card.classList.add(`plc--${u}`));
+    }
+
+    async function loadMe(card) {
+      const line = card.querySelector('[data-plc-line]');
+      const actions = card.querySelector('[data-plc-actions]');
+      const join = card.querySelector('[data-plc-join]');
+      const leave = card.querySelector('[data-plc-leave]');
+      const pub = card.querySelector('[data-plc-public]');
+      // The drum count comes from the drum itself, ledger or not.
+      fetch('/api/drum/me', { credentials: 'same-origin' }).then((r) => r.json()).then((d) => {
+        if (d && d.signedIn && typeof d.total === 'number') paint(card, null, { beats: d.total });
+      }).catch(() => {});
+      let me;
+      try { me = await (await fetch('/api/points?me=1', { credentials: 'same-origin' })).json(); } catch { me = null; }
+      if (!me) { line.textContent = 'The ledger is not answering right now. Your drum still plays.'; return; }
+      if (!me.enabled) { line.textContent = 'The open ledger switches on soon. Check-ins will earn Series 1 notes; the rules are on /points/.'; paint(card, null); return; }
+      if (!me.signedIn) { line.innerHTML = '<a href="/auth?returnTo=' + encodeURIComponent(location.pathname) + '">Sign in</a> to join the open ledger. Your drum plays either way.'; paint(card, null); return; }
+      actions.hidden = false;
+      paint(card, me.summary);
+      join.hidden = me.member; leave.hidden = !me.member;
+      if (me.profile) { pub.href = `/points/p/?id=${me.profile}`; pub.hidden = !me.member; }
+      line.textContent = me.member
+        ? 'You are on the open ledger. Check in anywhere on the network to earn notes.'
+        : 'Join the open ledger to earn points and Series 1 notes when you check in. Your lines are public under an opaque id.';
+      join.onclick = async () => { join.disabled = true; await post('/api/points/join').catch(() => null); join.disabled = false; loadMe(card); };
+      leave.onclick = async () => { leave.disabled = true; await post('/api/points/leave').catch(() => null); leave.disabled = false; loadMe(card); };
+    }
+
+    async function loadPublic(card) {
+      const line = card.querySelector('[data-plc-line]');
+      const id = card.dataset.profile || new URLSearchParams(location.search).get('id') || '';
+      if (!/^[0-9a-f]{24}$/.test(id)) { line.textContent = 'No profile picked. Open a card from the ledger on /points/.'; return; }
+      let s;
+      try { s = await (await fetch(`/api/points?profile=${id}`)).json(); } catch { s = null; }
+      if (!s) { line.textContent = 'The ledger is not answering right now.'; return; }
+      if (s.enabled === false) { line.textContent = 'The open ledger switches on soon.'; paint(card, null); return; }
+      if (!s.ok) { line.textContent = 'No ledger lines for this profile yet.'; paint(card, null); return; }
+      paint(card, s);
+      line.innerHTML = `${fmt(s.lines)} ledger lines · chain head <code>${String(s.head).slice(0, 12)}…</code> · <a href="/api/points?profile=${id}&lines=1">every line</a>`;
+    }
+
+    cards.forEach((card) => {
+      card.setAttribute('data-plc-ready', '');
+      (card.dataset.mode === 'public' ? loadPublic : loadMe)(card);
+    });
+  })();
+</script>
+
+<style>
+  .plc { --plc-ink: #1c1a17; --plc-muted: #5d574d; --plc-line: #d8cfbd; --plc-card: #fffdf7; border: 1px solid var(--plc-line); background: var(--plc-card); color: var(--plc-ink); padding: 18px; margin: 24px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .plc { --plc-ink: #f3eee2; --plc-muted: #b9b1a1; --plc-line: #3a362c; --plc-card: #1f1d16; } }
+  :root[data-theme="dark"] .plc { --plc-ink: #f3eee2; --plc-muted: #b9b1a1; --plc-line: #3a362c; --plc-card: #1f1d16; }
+  .plc--enjoy-frame { box-shadow: inset 0 0 0 4px #f6efe0, inset 0 0 0 6px #d9622b; }
+  .plc--cobalt-border { border: 3px solid #1f4fa8; }
+  .plc--gold-seal .plc__head::after { content: '★ Series 1'; float: right; font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; color: #2a0f0f; background: #c9a227; padding: 6px 8px; border-radius: 99px; }
+  .plc__kicker { font: 12px/1.3 ui-monospace, Menlo, monospace; letter-spacing: .12em; color: #b23a24; margin: 0; }
+  .plc__name { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin: 4px 0 12px; }
+  .plc__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .plc__stats div { border-top: 2px solid var(--plc-ink); padding-top: 6px; }
+  .plc__stats strong { display: block; font-size: 28px; letter-spacing: -.03em; }
+  .plc__stats span { font: 11px ui-monospace, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--plc-muted); }
+  .plc__notes { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .plc__notes li { opacity: .5; filter: grayscale(.7); transition: opacity .2s, filter .2s; }
+  .plc__notes li.is-held { opacity: 1; filter: none; }
+  .plc__notes img { width: 100%; height: auto; display: block; border: 1px solid var(--plc-line); }
+  .plc__notes p { margin: 6px 0 2px; font-weight: 700; color: var(--ink); }
+  .plc__notes span { font-size: 12px; color: var(--plc-muted); }
+  .plc__unlocks { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .plc__unlocks li { font: 11px ui-monospace, Menlo, monospace; letter-spacing: .06em; border: 1px dashed var(--plc-line); padding: 4px 8px; border-radius: 99px; color: var(--plc-muted); }
+  .plc__unlocks li.is-on { border-style: solid; border-color: var(--plc-ink); color: var(--plc-ink); }
+  .plc__drum { display: flex; gap: 14px; align-items: center; margin: 8px 0 12px; }
+  .plc__drum p { margin: 0; font-size: 14px; color: var(--plc-muted); }
+  .plc__line { font-size: 14px; margin: 0 0 10px; }
+  .plc__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .plc__actions button, .plc__actions a { font: 700 13px 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 8px 12px; border: 2px solid var(--plc-ink); background: transparent; color: var(--plc-ink); cursor: pointer; text-decoration: none; }
+  .plc__actions [hidden] { display: none; }
+  .plc__links { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; margin: 0 0 8px; }
+  .plc__links a, .plc__line a { color: inherit; }
+  .plc__disclose { font-size: 11px; color: var(--plc-muted); margin: 0; }
+  @media (max-width: 560px) {
+    .plc__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .plc__notes { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

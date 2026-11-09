@@ -27,6 +27,7 @@
 
 import { sha256, type Env as VisitsEnv } from './visit.ts';
 import { drumMemberKey, requestCountry, resolveSource } from '../_lib/drum-signal.ts';
+import { awardDrumDay, pointsEnabled, type PointsEnv } from '../_lib/network-points.ts';
 import { readSessionFromRequest, type AuthEnv } from './auth/session.ts';
 
 interface Env extends VisitsEnv {
@@ -97,7 +98,21 @@ async function memberKey(request: Request, env: Env): Promise<string | undefined
   }
 }
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+/**
+ * Network Points: a signed-in member who joined the open ledger gets one
+ * "drum day" line the first time they drum each day. Off unless
+ * POINTS_LEDGER_ENABLED is "1"; never blocks or slows the beat itself.
+ */
+function creditDrumDay(request: Request, env: Env, delta: number, waitUntil: (p: Promise<unknown>) => void) {
+  const pointsEnv = env as unknown as PointsEnv;
+  if (delta <= 0 || !pointsEnabled(pointsEnv)) return;
+  waitUntil((async () => {
+    const current = await readSessionFromRequest(request, env as unknown as AuthEnv).catch(() => null);
+    if (current) await awardDrumDay(pointsEnv, current.user.userId).catch(() => []);
+  })());
+}
+
+export const onRequestPost: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   if (!env.VISITS) return json({ ok: false, reason: 'kv-not-bound' });
 
   let body: { delta?: unknown; sessionId?: unknown; source?: unknown };
@@ -113,6 +128,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId.slice(0, 128) : '';
   if (!sessionId) return json({ ok: false, reason: 'missing-session' }, { status: 400 });
   const delta = Math.max(0, Math.min(MAX_DELTA_PER_REQ, deltaRaw));
+  creditDrumDay(request, env, delta, waitUntil);
   const sessionHash = await hashSession(sessionId);
   const leaderboardHash = (await sha256(sessionId)).slice(0, 8);
   const nounId = parseInt((await sha256(`${sessionId}:noun`)).slice(0, 6), 16) % 1200;
