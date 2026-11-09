@@ -10,6 +10,8 @@
  * the endpoint was then made cheap on 2026-09-02 (#1012: sampled 1-in-10, batched per isolate
  * every ten seconds). It was never mounted again until 2026-09-21. `data-astro-rerun` makes it
  * fire on view-transition navigations too, not only on the first page of a visit.
+ *
+ * It also fills any [data-page-views] slot with the open estimate from /api/views (one cached read).
  */
 ---
 <script is:inline data-astro-rerun>
@@ -21,6 +23,14 @@
       var body = JSON.stringify({ event: 'pageview', meta: { path: path.slice(0, 120) } });
       if (navigator.sendBeacon) navigator.sendBeacon('/api/analytics', new Blob([body], { type: 'application/json' }));
       else fetch('/api/analytics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, keepalive: true }).catch(function () {});
+      var slots = document.querySelectorAll('[data-page-views]');
+      if (slots.length && window.fetch) {
+        fetch('/api/views?path=' + encodeURIComponent(path)).then(function (r) { return r.json(); }).then(function (d) {
+          if (!d || d.status !== 'ok' || typeof d.views !== 'number' || d.views < 1) return;
+          var text = '· about ' + d.views + (d.views === 1 ? ' view' : ' views') + ' of this page this week';
+          slots.forEach(function (el) { el.textContent = text; el.hidden = false; });
+        }).catch(function () {});
+      }
     } catch (e) {}
   })();
 </script>
