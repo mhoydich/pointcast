@@ -52,6 +52,9 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *           contents schedule of every item at or above $200, with serials
  *           and matching receipt ids). Read-only, and still the same
  *           fictional demo household.
+ * v0.15.0 — Cartography atlas tools (read-only, from /atlas.json and the
+ *           merged /atlas/index.json): atlas_search, atlas_get, atlas_near,
+ *           atlas_links. No write tools; suggestions go in as pull requests.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -227,6 +230,7 @@ import {
   dispatchCivilServiceTool,
 } from '../../src/lib/civil-service-mcp';
 import { RADIO_TOOL_DEFINITIONS, dispatchRadioTool } from '../../src/lib/radio-mcp';
+import { ATLAS_TOOL_DEFINITIONS, dispatchAtlasTool } from '../../src/lib/atlas-mcp';
 import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
@@ -1559,6 +1563,7 @@ const TOOLS = [
   ...WILD_TOOL_DEFINITIONS,
   ...CIVIL_SERVICE_TOOL_DEFINITIONS,
   ...RADIO_TOOL_DEFINITIONS,
+  ...ATLAS_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -3716,6 +3721,11 @@ async function dispatchTool(
     case 'radio_network':
     case 'radio_station':
       return dispatchRadioTool(name, args);
+    case 'atlas_search':
+    case 'atlas_get':
+    case 'atlas_near':
+    case 'atlas_links':
+      return dispatchAtlasTool(name, args, base);
 
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
