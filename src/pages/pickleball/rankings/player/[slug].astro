@@ -1,0 +1,72 @@
+---
+import RankShell from '../../../../components/pickleball-rankings/RankShell.astro';
+import { TIERS, BASE, PEOPLE, PLACE, fmtDate, fix2, mailto, slugOf, coverage } from '../../../../lib/pickleball-rankings/data.mjs';
+
+export function getStaticPaths() {
+  return [...PEOPLE.keys()].map((slug) => ({ params: { slug } }));
+}
+const { slug } = Astro.params as { slug: string };
+const p: any = PEOPLE.get(slug);
+const rankIn = (t: any) => t.players.find((x: any) => x.slug === slug);
+const tiers = [
+  ['National (US rollup)', `${BASE}national/`, rankIn(TIERS.national), TIERS.national.players.length],
+  ...TIERS.regional.map((t: any) => [t.label, `${BASE}regional/${t.feeds[0].feed_id}/`, rankIn(t), t.players.length]),
+].filter(([, , r]) => r);
+const partnerCell = (ids: (string | null)[]) => ids.length === 0 ? 'singles' : ids.map((id) => {
+  if (!id) return { text: 'a player who asked to be left out' };
+  const q = PEOPLE.get(slugOf(id));
+  return q ? { text: q.name, href: `${BASE}player/${q.slug}/` } : { text: 'a player who asked to be left out' };
+});
+const upstream = TIERS.regional.find((t: any) => p.feed_ids.includes(t.feeds[0].feed_id))?.feeds[0]?.upstream;
+const upstreamSlug = slug.split('--')[1];
+---
+<RankShell title={p.name} description={`${p.name}: public tournament finishes and Court Rating on PointCast pickleball rankings. Preview.`} eyebrow="PICKLEBALL · RANKINGS · PLAYER">
+  <h1>{p.name}</h1>
+  <p class="pr-dek">Name as the organizer listed it. {p.results.length} public tournament finish{p.results.length === 1 ? '' : 'es'}. This page is unclaimed: it shows only what organizers published, and our rating from it.</p>
+  <dl class="pr-facts">
+    <div><dt>Court Rating</dt><dd>{fix2(p.court_rating)}</dd></div>
+    <div><dt>Band</dt><dd>±{fix2(p.band)}</dd></div>
+    <div><dt>Level</dt><dd>{p.level}</dd></div>
+    <div><dt>Tag</dt><dd>{p.tag}</dd></div>
+    <div><dt>Results weight</dt><dd>{fix2(p.weight)}</dd></div>
+    <div><dt>Self-declared</dt><dd>unavailable</dd></div>
+  </dl>
+  <h2>Ranks</h2>
+  <ul class="pr-list">
+    {tiers.map(([label, href, r, n]: any) => <li><a href={href}>{label}</a>: #{r.rank} of {n}</li>)}
+    <li>Level {p.level}: <a href={`${BASE}level/${p.level}/`}>see the level view</a></li>
+    <li>Global: unavailable (one country so far)</li>
+  </ul>
+  <h2>Results</h2>
+  <div class="pr-tablewrap">
+    <table class="pr-table">
+      <thead><tr><th scope="col">Date</th><th scope="col">Event</th><th scope="col">Division</th><th scope="col">Level</th><th scope="col">Place</th><th scope="col">Teams</th><th scope="col">Partner</th><th scope="col">Source</th></tr></thead>
+      <tbody>
+        {p.results.map((r: any) => (
+          <tr>
+            <td>{fmtDate(r.event.end_date || r.event.start_date)}</td>
+            <td class="name">{r.event.name}<br /><span class="pr-small">{r.event.organizer} · {r.event.city}</span></td>
+            <td class="name">{r.row.division}{r.row.age_bracket ? ` (${r.row.age_bracket})` : ''}</td>
+            <td>{r.row.skill_level || 'unavailable'}</td>
+            <td>{PLACE[r.row.place]}</td>
+            <td class="num">{r.row.draw_size ?? 'unavailable'}</td>
+            <td class="name">{(() => { const c = partnerCell(r.partners); return typeof c === 'string' ? c : c.map((x: any, i: number) => <>{i ? ', ' : ''}{x.href ? <a href={x.href}>{x.text}</a> : x.text}</>); })()}</td>
+            <td><a href={r.row.source_url} rel="noopener nofollow">organizer page</a>{r.recency > 0 ? '' : ' · too old to count'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <p class="pr-small">Feeds: {p.feed_ids.join(', ')}. Recency halves each year from the event's last day; finishes over two years old drop off.</p>
+
+  <section class="pr-claim" id="claim" aria-labelledby="claim-h">
+    <h2 id="claim-h">Is this you, {p.name}?</h2>
+    <ul class="pr-list">
+      <li><strong>Claim:</strong> <a href={mailto('claim', p.name)}>email us</a> with anything you'd like shown, such as a self-declared level. An editor checks it's you before anything appears. A self-declared level counts like three results and is always labelled.</li>
+      <li><strong>Correct:</strong> <a href={mailto('correct', p.name)}>email us</a> what's wrong, with a public results link if you have one. We check it against the organizer's page.</li>
+      <li><strong>Remove:</strong> <a href={mailto('remove', p.name)}>email us</a>. No proof needed. We take you off every tier the same day, add you to the <a href={`${BASE}method/#do-not-list`}>do-not-list</a>, and show you only as "a player who asked to be left out" on partners' pages.</li>
+      {upstream ? <li>These results come from the <a href={`${upstream.directory}${upstreamSlug}/`}>El Segundo directory page</a>, which has its own claim and remove links. We pass removals on so both sites drop you.</li> : null}
+    </ul>
+    <p class="pr-small">We never add addresses, contacts, photos, social links, ages beyond a published age bracket, or guesses about anyone.</p>
+  </section>
+</RankShell>
