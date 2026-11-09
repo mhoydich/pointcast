@@ -1,0 +1,274 @@
+---
+/**
+ * /local/yc — YC in the 25 miles. Y Combinator companies whose public YC
+ * listing puts them within about 25 miles of El Segundo, grouped by city.
+ * Data: src/data/yc-25-mile.json via src/lib/local-yc.ts (shared with
+ * /local/yc.json). Public YC pages only; descriptions are PointCast's words.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  YC_SNAPSHOT,
+  YC_CANONICAL,
+  YC_MACHINE,
+  YC_HARD_TECH_TAGS,
+  cityGroups,
+  companiesTagged,
+  ycCounts,
+} from '../../lib/local-yc';
+
+const groups = cityGroups();
+const counts = ycCounts();
+const hardTech = companiesTagged(YC_HARD_TECH_TAGS);
+const hardTech2026 = hardTech.filter((c) => c.batch.endsWith('2026'));
+
+const title = 'YC in the 25 miles · Y Combinator companies near El Segundo';
+const description = `${counts.total} Y Combinator companies whose public YC listing puts them within about 25 miles of El Segundo, grouped by city, from YC's public directory as of ${YC_SNAPSHOT.asOfLabel}. Not affiliated with YC.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  '@id': `${YC_CANONICAL}#dataset`,
+  name: 'YC in the 25 miles',
+  description,
+  url: YC_CANONICAL,
+  dateModified: YC_SNAPSHOT.asOf,
+  creator: { '@type': 'Organization', name: 'PointCast' },
+  isBasedOn: YC_SNAPSHOT.sources.map((s) => s.url),
+  spatialCoverage: {
+    '@type': 'Place',
+    name: '25 miles around El Segundo, California',
+    geo: { '@type': 'GeoCircle', geoMidpoint: { '@type': 'GeoCoordinates', latitude: 33.9192, longitude: -118.4165 }, geoRadius: 40234 },
+  },
+  distribution: { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: YC_MACHINE },
+};
+
+const statusOrder = ['Active', 'Acquired', 'Public', 'Inactive', 'Not shown'];
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/local/yc.json', title: 'YC in the 25 miles dataset' }]}
+>
+  <div class="page">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/">← All blocks</a>
+      <span aria-hidden="true">/</span>
+      <a href="/local">local</a>
+      <span aria-hidden="true">/</span>
+      <span>yc</span>
+    </nav>
+
+    <header class="masthead">
+      <p class="masthead__kicker mono">LOCAL · 25 MILES FROM EL SEGUNDO · DIRECTORY</p>
+      <h1 class="masthead__title">YC in <em>the 25 miles</em></h1>
+      <p class="masthead__date mono">From YC's public directory, as of {YC_SNAPSHOT.asOfLabel}</p>
+      <p class="masthead__lede">
+        Every Y Combinator company whose public YC listing puts it within about
+        twenty-five miles of El Segundo, grouped by city, nearest first. Each
+        name links to the company's own public page on ycombinator.com. The
+        one-liners are ours.
+      </p>
+    </header>
+
+    <section class="stats" aria-label="Counts">
+      <div class="stat"><strong>{counts.total}</strong><span>companies</span></div>
+      <div class="stat"><strong>{groups.length}</strong><span>cities</span></div>
+      <div class="stat"><strong>{counts.byStatus['Active'] ?? 0}</strong><span>active</span></div>
+      <div class="stat"><strong>{counts.batches2026}</strong><span>from 2026 batches</span></div>
+    </section>
+
+    <section class="section" aria-label="What stands out">
+      <h2 class="section__kicker mono">WHAT STANDS OUT</h2>
+      <ul class="notes">
+        <li>
+          <strong>Hard tech is the local accent.</strong> {hardTech.length} of the {counts.total} are
+          aerospace, defense, drones, robotics or manufacturing companies, and the newest batches lean
+          harder: {hardTech2026.length} of the {counts.batches2026} from 2026 are. That fits the corridor: El Segundo and Hawthorne have
+          built aircraft and spacecraft for most of a century.
+        </li>
+        <li>
+          <strong>Most listings just say "Los Angeles".</strong> YC's public data names a neighborhood
+          for only a few companies, so the big Los Angeles group below likely includes Santa Monica,
+          Venice and Culver City companies that YC doesn't break out.
+        </li>
+        <li>
+          <strong>Where YC puts LA companies.</strong> The
+          <a href={YC_SNAPSHOT.sources[0].url} rel="noopener">Los Angeles location page</a> is YC's
+          curated list; the <a href={YC_SNAPSHOT.sources[1].url} rel="noopener">Startup Directory</a>
+          search finds more. This page merges both and drops anything outside the radius (Irvine,
+          Newport Beach, Santa Barbara and San Diego County companies show up on YC's LA lists too).
+        </li>
+      </ul>
+    </section>
+
+    <section class="section" aria-label="Find a company">
+      <label class="search">
+        <span class="mono">FILTER</span>
+        <input type="search" placeholder="drones, fintech, Santa Monica, 2026…" data-filter />
+      </label>
+      <nav class="jump" aria-label="Cities">
+        {groups.map((g) => (
+          <a href={`#${g.city.slug}`}>{g.city.name} <span class="mono">{g.companies.length}</span></a>
+        ))}
+      </nav>
+    </section>
+
+    {groups.map((g) => (
+      <section class="section city" id={g.city.slug} aria-label={g.city.name} data-city>
+        <div class="section__head">
+          <h2 class="city__name">{g.city.name}</h2>
+          <span class="section__sub mono">
+            {g.city.miles === 0 ? 'HOME BASE' : `~${g.city.miles} MI`} · {g.companies.length} {g.companies.length === 1 ? 'COMPANY' : 'COMPANIES'}
+          </span>
+        </div>
+        <p class="section__lede">{g.city.note}</p>
+        <ul class="cos">
+          {g.companies.map((c) => (
+            <li
+              class="co"
+              data-co
+              data-text={`${c.name} ${c.line} ${c.tags.join(' ')} ${c.batch} ${c.ycLocation} ${c.status ?? ''}`.toLowerCase()}
+            >
+              <a class="co__name" href={c.ycUrl} rel="noopener">{c.name}</a>
+              <span class="co__meta mono">
+                {c.batch}{c.status ? ` · ${c.status}` : ''}{c.ycLocation !== g.city.name && c.ycLocation !== 'Los Angeles' ? ` · ${c.ycLocation.replace(', USA', '')}` : ''}
+              </span>
+              <span class="co__line">{c.line}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+
+    <p class="empty mono" data-empty hidden>No company matches that filter.</p>
+
+    <section class="section section--fine" aria-label="Sources and notes">
+      <h2 class="section__kicker mono">SOURCES · HOW THIS WAS MADE</h2>
+      <ul class="fine">
+        {YC_SNAPSHOT.sources.map((s) => (
+          <li><a href={s.url} rel="noopener">{s.label}</a> — {s.note}</li>
+        ))}
+        <li>
+          Status (Active, Acquired, Public) is shown where YC's location page shows it. Companies found
+          only through the directory search don't show a status on their card, so none is listed here;
+          their YC page has it.
+        </li>
+        <li>
+          Distances are straight-line miles from El Segundo Rec Park to a rough city centre. A company's
+          real office may sit anywhere in its city.
+        </li>
+        <li>
+          Counts by status: {statusOrder.filter((s) => counts.byStatus[s]).map((s) => `${s} ${counts.byStatus[s]}`).join(' · ')}.
+        </li>
+        <li>
+          <strong>Not affiliated with Y Combinator.</strong> PointCast is an independent El Segundo
+          publication. This is a reader's index of YC's public listings, not a YC product or an
+          endorsement of any company. Spot something wrong or missing? YC's own page for the company
+          is the record.
+        </li>
+      </ul>
+    </section>
+
+    <aside class="agent-strip">
+      <p class="agent-strip__label">MACHINE-READABLE</p>
+      <ul>
+        <li><a href="/local/yc.json">/local/yc.json</a></li>
+        <li><a href="/local">/local</a></li>
+        <li><a href="/beacon">/beacon</a></li>
+      </ul>
+    </aside>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const input = document.querySelector('[data-filter]');
+    const cos = Array.from(document.querySelectorAll('[data-co]'));
+    const cities = Array.from(document.querySelectorAll('[data-city]'));
+    const empty = document.querySelector('[data-empty]');
+    if (!input) return;
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      let shown = 0;
+      for (const co of cos) {
+        const hit = !q || co.dataset.text.includes(q) || (co.closest('[data-city]')?.getAttribute('aria-label') || '').toLowerCase().includes(q);
+        co.hidden = !hit;
+        if (hit) shown += 1;
+      }
+      for (const city of cities) city.hidden = !city.querySelector('[data-co]:not([hidden])');
+      if (empty) empty.hidden = shown > 0;
+    });
+  })();
+</script>
+
+<style>
+  .page { max-width: 980px; margin: 0 auto; padding: 20px 20px 80px; }
+  .mono { font-family: var(--pc-font-mono); }
+
+  .breadcrumb {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--pc-ink-muted); margin-bottom: 20px;
+  }
+  .breadcrumb a { color: var(--pc-accent); }
+
+  .masthead { padding-bottom: 18px; border-bottom: 1.5px solid var(--pc-ink); margin-bottom: 24px; }
+  .masthead__kicker { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.16em; color: #8a2432; font-weight: 600; }
+  .masthead__title {
+    margin: 0 0 6px; font-family: var(--pc-font-heading, var(--pc-font-serif));
+    font-size: 36px; font-weight: 500; color: #12110E; letter-spacing: -0.01em;
+  }
+  .masthead__title em { font-style: italic; color: #8a2432; }
+  .masthead__date { margin: 0 0 14px; font-size: 11px; letter-spacing: 0.14em; color: var(--pc-ink-soft); }
+  .masthead__lede { margin: 0; max-width: 62ch; font-size: 15px; line-height: 1.55; color: #2a2925; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 28px; }
+  .stat { border: 1px solid #d9d4c7; padding: 12px 14px; background: #fbf9f3; }
+  .stat strong { display: block; font-family: var(--pc-font-heading, var(--pc-font-serif)); font-size: 30px; font-weight: 500; color: #12110E; }
+  .stat span { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pc-ink-soft); }
+
+  .section { margin: 30px 0; }
+  .section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid #d9d4c7; padding-bottom: 6px; margin-bottom: 8px; }
+  .section__kicker { margin: 0 0 10px; font-size: 10px; letter-spacing: 0.18em; color: var(--pc-ink-soft); font-weight: 700; }
+  .section__sub { font-size: 10px; color: var(--pc-ink-muted); letter-spacing: 0.12em; }
+  .section__lede { margin: 0 0 12px; max-width: 62ch; font-size: 13px; line-height: 1.5; color: #5a574f; }
+
+  .notes { margin: 0; padding-left: 18px; display: grid; gap: 10px; max-width: 72ch; }
+  .notes li { font-size: 14px; line-height: 1.55; color: #2a2925; }
+  .notes a, .fine a { color: var(--pc-accent); }
+
+  .search { display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--pc-ink); padding: 8px 12px; background: #fff; }
+  .search span { font-size: 10px; letter-spacing: 0.16em; color: var(--pc-ink-soft); }
+  .search input { flex: 1; min-width: 0; border: 0; outline: none; font-size: 15px; background: transparent; }
+  .jump { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 13px; }
+  .jump a { color: var(--pc-accent); }
+  .jump span { font-size: 10px; color: var(--pc-ink-muted); }
+
+  .city__name { margin: 0; font-family: var(--pc-font-heading, var(--pc-font-serif)); font-size: 24px; font-weight: 500; color: #12110E; }
+
+  .cos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+  .co { display: grid; gap: 2px; padding: 10px 0; border-bottom: 1px dotted #d9d4c7; min-width: 0; }
+  .co[hidden] { display: none; }
+  .co__name { font-weight: 600; font-size: 15px; color: #12110E; text-decoration: none; }
+  .co__name:hover { color: #8a2432; text-decoration: underline; }
+  .co__meta { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--pc-ink-soft); }
+  .co__line { font-size: 13px; line-height: 1.45; color: #2a2925; }
+
+  .empty { font-size: 12px; color: var(--pc-ink-soft); }
+
+  .section--fine { border-top: 1.5px solid var(--pc-ink); padding-top: 16px; }
+  .fine { margin: 0; padding-left: 18px; display: grid; gap: 8px; max-width: 72ch; font-size: 13px; line-height: 1.5; color: #5a574f; }
+
+  .agent-strip { margin-top: 36px; padding: 12px 14px; border: 1px dashed #c9c3b4; }
+  .agent-strip__label { margin: 0 0 6px; font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.16em; color: var(--pc-ink-soft); }
+  .agent-strip ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--pc-font-mono); font-size: 12px; }
+  .agent-strip a { color: var(--pc-accent); }
+
+  @media (max-width: 640px) {
+    .masthead__title { font-size: 30px; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cos { grid-template-columns: 1fr; }
+  }
+</style>
