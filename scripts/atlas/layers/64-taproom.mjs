@@ -10,20 +10,15 @@ export const layer = {
   license: 'CC0-1.0',
   updated: '2026-04-24',
   source: { url: 'https://pointcast.xyz/taproom.json', checked: '2026-04-24', label: 'derived' },
-  notes: 'Names, neighborhoods and founding years come from src/data/taproom.json (_lastReviewed 2026-04-24). Each record cites the brewery\'s own website. Vibe copy and beer lists stay on the page. Coordinates come from the OpenStreetMap-derived elsegundo.xyz business directory only when exactly one row matches the brewery name exactly; those records carry ODbL attribution for the position.',
+  notes: 'Names, neighborhoods and founding years come from src/data/taproom.json (_lastReviewed 2026-04-24). Each record cites the brewery\'s own website. Vibe copy and beer lists stay on the page. Coordinates come from the committed elsegundo.xyz atlas snapshot only when exactly one located business there has the same name; the position keeps that record\'s precision, source and license.',
 };
 
-const DIRECTORY = '/home/user/hello-token-reserve/public/businesses/directory-lite.json';
-const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+import { sisterByName, locationFrom } from '../_sister.mjs';
 
-export async function records({ site, readJson, helpers, resolve }) {
-  const { rid, slug, src, loc, summary, compact } = helpers;
-  const { existsSync } = await import('node:fs');
+export async function records({ site, readJson, helpers, resolve, root }) {
+  const { rid, slug, src, summary, compact } = helpers;
   const data = readJson(resolve('src/data/taproom.json'));
   const date = data._lastReviewed;
-  const rows = existsSync(DIRECTORY) ? readJson(DIRECTORY).rows || [] : [];
-  const byName = new Map();
-  for (const row of rows) { const k = norm(row[1]); if (!byName.has(k)) byName.set(k, []); byName.get(k).push(row); }
 
   return data.breweries.map((b) => {
     const rec = {
@@ -40,17 +35,13 @@ export async function records({ site, readJson, helpers, resolve }) {
       tags: ['brewery', slug(b.neighborhood)].filter(Boolean),
       layer: 'taprooms',
     };
-    const hits = byName.get(norm(b.name)) || [];
-    if (hits.length === 1) {
-      const row = hits[0];
-      rec.location = loc(row[6], row[7], 'point', {
-        address: row[4],
-        area: slug(row[5]),
-        method: 'OpenStreetMap position of the matching business record',
-        source: 'https://www.openstreetmap.org/' + String(row[0]).replace('osm-', '').replace('-', '/'),
-        license: 'ODbL-1.0',
-      });
-      if (rec.location) rec.attribution = '© OpenStreetMap contributors';
+    // Placed only when the committed elsegundo.xyz atlas snapshot has exactly one located business of the same name
+    // (its breweries guide or hand-checked directory); the coordinate keeps that record's precision, source and license.
+    const m = sisterByName(root, 'business', b.name);
+    if (m) {
+      rec.location = locationFrom(m, { area: slug(b.neighborhood) });
+      if (rec.location && rec.location.license === 'ODbL-1.0') rec.attribution = '© OpenStreetMap contributors';
+      rec.links = [{ rel: 'same-as', id: m.id }];
     }
     return compact(rec);
   });

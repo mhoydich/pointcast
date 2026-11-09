@@ -9,7 +9,7 @@
 One open map of what PointCast and elsegundo.xyz can place, CC0, every record sourced. `/cartography/map`, `/atlas.json`, `/atlas/index.json`.
 
 - [x] (CC) Spec and schema: `docs/cartography/ATLAS.md`, `public/atlas/schema.json`, validator and merge in `scripts/atlas/` — `done`
-- [x] (CC) Layers built: 15 layers, 701 records, 33 with sourced coordinates (courts 11, pickleball 2, paddles 92, quiet 14, atlases 26, dispensary 1, areas-ues 49, agents 28, mcp-tools 120, surfaces 302, blocks 1 reference record for 506 blocks, outdoors 25, geology 4, taprooms 8, market-lenses 18); elsegundo.xyz snapshot 487 records, merged index 1,188 records with 12 cross-site links — `done`
+- [x] (CC) Layers built: 15 layers, 702 records, 16 with sourced coordinates (courts 11, pickleball 1, paddles 92, quiet 14, atlases 26, dispensary 1, areas-ues 49, agents 28, mcp-tools 122, surfaces 302, blocks 1 reference record for 506 blocks, outdoors 25, geology 4, taprooms 8, market-lenses 18); elsegundo.xyz snapshot 487 records, merged index 1,189 records with 15 cross-site links. Sister coordinates come only from the committed snapshot; town areas and unsourced market anchors are listed without coordinates; The Squeeze desk is held back (app-only data, named people) — `done`
 - [x] (CC) MCP: read-only `atlas_search`, `atlas_get`, `atlas_near`, `atlas_links` in `src/lib/atlas-mcp.ts`, routed in `functions/api/mcp.ts` — `done`
 - [x] (CC) Map pages: `/cartography/map` (with `?site=all`) and `/cartography/atlas` — `done`
 - [x] (CC) Discovery: `agents.json` atlas section, `/for-agents`, `llms.txt`, `llms-full.txt`, `sitemap-discovery` — `done`

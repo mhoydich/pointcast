@@ -37,7 +37,7 @@ export async function records({ site, readJson, helpers, resolve }) {
       id: tidePlaceId,
       type: 'place',
       name: 'NOAA CO-OPS Santa Monica tide station 9410840',
-      summary: summary('NOAA tide and water-level station at Santa Monica. The Tide shrine and the Pacific guide read its predictions and observed water level for the El Segundo coast, about 12 km away.'),
+      summary: summary('NOAA tide and water-level station at Santa Monica. The Tide shrine and the Pacific guide read its predictions and observed water level for the El Segundo coast, about 7.5 miles away in a straight line.'),
       site: site.host,
       url: 'https://pointcast.xyz/pacific/',
       data: 'https://pointcast.xyz/pacific.json',

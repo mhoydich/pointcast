@@ -38,7 +38,7 @@ Every record, on every site, has the same shape. Required fields are marked.
 | `source` | yes | array ≥ 1 | `{ url, title?, checked (YYYY-MM-DD), label }`. `label` is the elsegundo.xyz vocabulary: `fact` (official), `listing` (organizer or venue), `reported` (single outlet), `estimate` (model output), `derived` (computed from other records, e.g. a distance). Every fact in the record is covered by at least one source link. |
 | `updated` | yes | YYYY-MM-DD | The day the record's facts were last checked, copied from the source dataset's as-of field. Not the build time. |
 | `links` | no | array | `{ rel, id, note? }`. `rel`: `near` `in` `part-of` `has-part` `same-as` `about` `plays-at` `hosted-at` `made-by` `sells` `reads` `answers` `see-also`. `id` is an Atlas id, possibly on another site. |
-| `license` | yes | SPDX id | `CC0-1.0` for records the sites wrote. `ODbL-1.0` for anything derived from OpenStreetMap. Others as the source requires. |
+| `license` | yes | SPDX id, or `public-domain-us-government` | `CC0-1.0` for records the sites wrote. `ODbL-1.0` for anything derived from OpenStreetMap. `public-domain-us-government` (not an SPDX id; a named value in the schema enum) for US federal works such as NOAA and Census data. Others as the source requires. |
 | `attribution` | no | string | Required when `license` is not CC0, e.g. `© OpenStreetMap contributors`. |
 | `tags` | no | array | Short lowercase facets: `pickleball`, `ues`, `industry-next`, `do:sit`, `free:yes`. Reuse the Here-card tag vocabulary where it fits. |
 | `layer` | yes | string | The id of the layer (source dataset) the record came from. |
@@ -128,9 +128,13 @@ elsegundo.xyz's own atlas and never render them.
 1. **Every fact links a public source.** A record with no `source` fails the schema. A layer whose
    source dataset has no per-record sources gets dataset-level sources on every record and says so
    in `layers[].notes`.
-2. **No scraping behind sign-ins, no app-only data.** The pickleball directory's banned-hosts rule
-   (pickleball.com, pickleballtournaments.com, pickleballbrackets.com, ppatour.com, usapickleball.org,
-   dupr.com, pickleballden.com) applies to the whole Atlas.
+2. **No scraping behind sign-ins, no app-only data.** Facts read from an app screen, a logged-in
+   view or a page whose terms forbid reuse do not enter the Atlas. The pickleball directory's
+   banned-hosts rule (pickleball.com, pickleballtournaments.com, pickleballbrackets.com, ppatour.com,
+   usapickleball.org, dupr.com, pickleballden.com) applies to results, ratings and player data on every
+   layer: nothing is extracted or republished from those hosts. Citing one of their public pages as the
+   source link for a fact the Atlas states in its own words (for example the USA Pickleball approved-paddle
+   listing behind a paddle's approval status) is a reference, not an extract, and is allowed.
 3. **People appear only as they published themselves.** A `player` record exists only for a player
    whose directory entry carries a verified `claim` (fields they asked for: self rating, home courts,
    paddle, bio). Unclaimed names stay in the directory pages they already have; the Atlas carries the

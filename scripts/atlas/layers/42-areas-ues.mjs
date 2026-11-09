@@ -13,7 +13,7 @@ export const layer = {
   license: 'CC0-1.0',
   updated: '2026-10-20',
   source: { url: 'https://pointcast.xyz/agents.json', checked: '2026-10-06', label: 'derived', title: 'PointCast agents manifest' },
-  notes: 'Area coordinates are NOT surveyed centroids: they are dead-reckoned from the beacon center (33.9194, -118.4088) along each town\'s stated distance (miles) and compass bearing in src/lib/neighborhoods.ts, so expect error of a mile or more; precision is "city". The neighborhoods file carries no as-of date, so 2026-10-06 is its last commit date. UES and local-area pages use the same commit date (2026-10-06) because those files carry no as-of field. Radio stations are a plan: nothing is on air. UES-104 and UES-207 mention cannabis education and carry sensitive: ["cannabis"].',
+  notes: 'Area records carry no coordinates: the beacon list in src/lib/neighborhoods.ts states only a rounded distance and a compass bearing, which would put different towns on the same point, so they list and filter by area until a sourced representative point (Census place or GNIS) is added (NEXT-20-LAYERS layer 17). The neighborhoods file carries no as-of date, so 2026-10-06 is its last commit date. UES and local-area pages use the same commit date (2026-10-06) because those files carry no as-of field. Radio stations are a plan: nothing is on air. UES-104 and UES-207 mention cannabis education and carry sensitive: ["cannabis"].',
 };
 
 const R_MILES = 3958.7613;
@@ -49,9 +49,7 @@ export async function records(ctx) {
     const s = slug(n.name);
     const brg = BEARINGS[n.bearing];
     let p;
-    if (n.distance === 0) p = { lat: C.lat, lon: C.lng };
-    else if (brg == null) continue;
-    else p = destination(C.lat, C.lng, n.distance, brg);
+    if (n.distance !== 0 && brg == null) continue;
     const id = rid(site.host, 'area', s);
     areaIds.set(s, id);
     out.push({
@@ -64,10 +62,6 @@ export async function records(ctx) {
       site: site.host,
       url: 'https://pointcast.xyz/beacon',
       data: 'https://pointcast.xyz/beacon.json',
-      location: loc(p.lat, p.lon, 'city', {
-        method: 'derived: stated distance and compass bearing from the PointCast beacon center; coarse, not a surveyed centroid',
-        source: AGENTS,
-      }),
       source: [src(AGENTS, SRC_DATE, 'derived', 'PointCast agents manifest (beacon radius)')],
       updated: SRC_DATE,
       license: 'CC0-1.0',

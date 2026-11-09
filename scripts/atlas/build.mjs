@@ -81,6 +81,7 @@ async function loadSnapshots({ fetchLive }) {
       snapshot = (atlas.generated || '').slice(0, 10) || null;
       const p = atlasProblems(atlas);
       if (p.length) { ok = false; note = `${note ? `${note}; ` : ''}snapshot has ${p.length} schema problem(s): ${p[0]}`; }
+      else if (!fetchLive) note = `${note ? `${note}; ` : ''}committed snapshot (${sister.snapshot}), not fetched from the live URL in this build; refresh with --fetch`;
     } else { ok = false; note = `${note ? `${note}; ` : ''}no snapshot at ${sister.snapshot}`; }
     list.push({ atlas, url: sister.atlas, snapshot, ok, note });
   }

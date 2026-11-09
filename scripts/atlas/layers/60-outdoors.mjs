@@ -5,8 +5,7 @@ import { loadTs } from '../_ts.mjs';
 
 const PAGE = 'https://pointcast.xyz/beach-commons/v18/outdoors';
 const DATA = 'https://pointcast.xyz/beach-commons/v18/outdoors.json';
-const CURATED = '/home/user/hello-token-reserve/content/places/curated.json';
-const BUILDINGS = '/home/user/hello-token-reserve/public/architecture/buildings.json';
+import { sisterById, sisterByName, locationFrom } from '../_sister.mjs';
 
 export const layer = {
   id: 'outdoors',
@@ -22,18 +21,11 @@ export const layer = {
   notes: 'Facts come from OUTDOOR_RESOURCES in src/lib/radius25-outdoors.ts (25 resources). The module carries one edition date (OPEN_AIR_COMMONS.updatedAt, 2026-08-02) and no per-resource dates, so every record uses that date as checked/updated. Coordinates exist only where the elsegundo.xyz curated places register (or architecture catalog, non-estimated points) holds the same place; other resources carry no location.',
 };
 
-const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-export async function records({ site, readJson, helpers }) {
-  const { rid, slug, src, loc, summary, compact } = helpers;
-  const { existsSync } = await import('node:fs');
+export async function records({ site, helpers, root }) {
+  const { rid, slug, src, summary, compact } = helpers;
   const mod = await loadTs('src/lib/radius25-outdoors.ts');
   const date = String(mod.OPEN_AIR_COMMONS.updatedAt).slice(0, 10);
-  const places = existsSync(CURATED) ? readJson(CURATED).places || [] : [];
-  const buildings = existsSync(BUILDINGS) ? readJson(BUILDINGS).buildings || [] : [];
-  const byId = new Map(places.map((p) => [p.id, p]));
-  const byName = new Map(places.map((p) => [norm(p.name), p]));
-  const bByName = new Map(buildings.map((b) => [norm(b.name), b]));
 
   return mod.OUTDOOR_RESOURCES.map((r) => {
     const quiet = r.modes.includes('quiet');
@@ -54,22 +46,12 @@ export async function records({ site, readJson, helpers }) {
       tags: ['outdoors', r.arc, ...r.modes],
       layer: 'outdoors',
     };
-    const p = byId.get(r.id) || byName.get(norm(r.name));
-    if (p && Number.isFinite(p.latitude) && Number.isFinite(p.longitude)) {
-      rec.location = loc(p.latitude, p.longitude, 'address', {
-        address: p.address,
-        area: slug(r.city),
-        method: 'coordinates of the matching elsegundo.xyz curated place',
-        source: p.sources?.[0]?.url,
-      });
-      rec.links = [{ rel: 'same-as', id: `es:place:${p.id}` }];
-    } else {
-      const b = bByName.get(norm(r.name));
-      if (b && b.coordSource && b.coordSource !== 'estimate') {
-        const first = (b.claims || []).map((c) => c.source).find(Boolean);
-        const srcUrl = (b.sources || []).find?.((s) => s.id === first)?.url;
-        if (srcUrl) rec.location = loc(b.lat, b.lng, 'point', { area: slug(r.city), method: 'coordinates from the elsegundo.xyz architecture catalog', source: srcUrl });
-      }
+    // Place it only where the committed elsegundo.xyz atlas snapshot already holds a sourced coordinate for
+    // the same place (curated places, Here cards or architecture landmarks that are not estimates).
+    const p = sisterById(root, `es:place:${r.id}`) || sisterByName(root, ['place', 'quiet-place'], r.name);
+    if (p && p.location && p.location.precision !== 'neighborhood') {
+      rec.location = locationFrom(p, { area: slug(r.city) });
+      rec.links = [{ rel: 'same-as', id: p.id }];
     }
     return compact(rec);
   });

@@ -1,38 +1,23 @@
-// Layer: pickleball. The Squeeze league desk and the pickleball home page. No rosters, no player names.
+// Layer: pickleball. The pickleball home page. The Squeeze league desk is held back (app-only data, named people).
 export const layer = {
   id: 'pickleball',
   name: 'Pickleball',
-  description: 'The Squeeze PTL team desk and the Pickleball Home page, as a league and page records.',
-  types: ['league', 'page'],
+  description: 'The Pickleball Home page. The Squeeze team desk is held back until a public source exists.',
+  types: ['page'],
   inline: true,
-  data: 'https://pointcast.xyz/pickleball/the-squeeze.json',
-  page: 'https://pointcast.xyz/pickleball/the-squeeze/',
+  data: 'https://pointcast.xyz/pickleball/home.json',
+  page: 'https://pointcast.xyz/pickleball/home',
   license: 'CC0-1.0',
-  updated: '2026-10-06',
-  source: { url: 'https://pointcast.xyz/pickleball/the-squeeze.json', checked: '2026-10-06', label: 'derived' },
-  notes: 'The league desk is transcribed from app screenshots and has no public PTL page, so its source is the desk JSON itself (derived). Roster and player names are deliberately not published. The paddle exchange page has no dated data and is left out.',
+  updated: '2026-10-03',
+  source: { url: 'https://pointcast.xyz/pickleball/home.json', checked: '2026-10-03', label: 'derived' },
+  notes: 'The Squeeze league desk is omitted: its facts are transcribed from league-app screenshots with no public PTL page, it carries a DUPR figure, and the desk names people. It can be added as a league record once Mike approves a first-party exception in ATLAS.md §5. No rosters or player names anywhere.',
 };
 
 export async function records({ site, readJson, helpers, resolve }) {
   const { rid, src, summary, compact } = helpers;
-  const sq = readJson(resolve('src/data/squeeze-league.json'));
+  // The Squeeze desk (src/data/squeeze-league.json) is transcribed from league-app screenshots with no public
+  // source page and names people, so it has no record until Mike approves a first-party exception (ATLAS.md §5).
   const out = [];
-  const court = rid(site.host, 'court', 'el-segundo');
-  out.push(compact({
-    id: rid(site.host, 'league', sq.id),
-    type: 'league',
-    name: sq.title,
-    summary: summary(`Rec-park team desk for a ${sq.league.name} ${sq.league.division} team, ${sq.league.season}: standings, results and schedule, transcribed from league app screenshots.`),
-    site: site.host,
-    url: sq.url,
-    data: sq.json,
-    source: [src(sq.json, sq.transcribedAbout, 'derived', 'The Squeeze desk data')],
-    updated: sq.transcribedAbout,
-    license: 'CC0-1.0',
-    tags: ['pickleball', 'ptl', 'mixed-4.0'],
-    links: [{ rel: 'plays-at', id: court }],
-    layer: 'pickleball',
-  }));
   out.push(compact({
     id: rid(site.host, 'page', 'pickleball-home'),
     type: 'page',

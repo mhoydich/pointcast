@@ -29,6 +29,9 @@ export async function records(ctx) {
   const { AGENT_SURFACES } = await loadTs('src/data/agent-surfaces.ts');
   const { CHANNEL_LIST } = await loadTs('src/lib/channels.ts');
   const REG = '2026-10-25';
+  // Surfaces added by the Atlas pull request itself: dated to that work and labeled derived until the manifest is live.
+  const NEW_IN_ATLAS_PR = new Set(['cartographyMap', 'cartographyAtlasSpec', 'atlasJson', 'atlasIndex', 'atlasSchema']);
+  const ATLAS_PR_DATE = '2026-11-08';
   const humans = AGENT_SURFACES.human || {};
   const out = [];
   const used = new Map(); // id -> data/url signature
@@ -59,8 +62,8 @@ export async function records(ctx) {
         site: site.host,
         url: page,
         data: feed ? url : undefined,
-        source: [src('https://pointcast.xyz/agents.json', REG, 'fact', 'PointCast agents manifest')],
-        updated: REG,
+        source: [src('https://pointcast.xyz/agents.json', NEW_IN_ATLAS_PR.has(key) ? ATLAS_PR_DATE : REG, NEW_IN_ATLAS_PR.has(key) ? 'derived' : 'fact', 'PointCast agents manifest')],
+        updated: NEW_IN_ATLAS_PR.has(key) ? ATLAS_PR_DATE : REG,
         license: 'CC0-1.0',
         tags: ['surface', section],
         layer: 'surfaces',

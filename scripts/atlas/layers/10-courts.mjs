@@ -23,17 +23,13 @@ const VENUE = {
   ainsworth: 'haw-betty-ainsworth',
   kelly: 'hb-kelly-courts',
 };
-const VENUES_PATH = '/home/user/hello-token-reserve/public/pickleball/static.json';
+import { sisterById, locationFrom, norm as sisterNorm } from '../_sister.mjs';
 
 const normAddr = (a) => String(a || '').toLowerCase().replace(/\bavenue\b/g, 'ave').replace(/[^a-z0-9]+/g, ' ').trim();
 
-export async function records({ site, readJson, helpers, resolve }) {
-  const { rid, slug, src, loc, summary, compact } = helpers;
-  const { existsSync } = await import('node:fs');
+export async function records({ site, readJson, helpers, resolve, root }) {
+  const { rid, slug, src, summary, compact } = helpers;
   const sched = readJson(resolve('src/data/courts-schedule.json'));
-  let venues = [];
-  if (existsSync(VENUES_PATH)) venues = readJson(VENUES_PATH).venues || [];
-  const byId = new Map(venues.map((v) => [v.id, v]));
 
   return sched.courts.map((court) => {
     const facts = (court.facts || []).filter((f) => sched.sources[f.src]?.url);
@@ -62,15 +58,13 @@ export async function records({ site, readJson, helpers, resolve }) {
       tags: ['pickleball', slug(court.shape), slug(city)].filter(Boolean),
       layer: 'courts',
     };
-    const v = byId.get(VENUE[court.id]);
-    if (v && normAddr(v.address).split(' ').slice(0, 3).join(' ') === normAddr(facts[0]?.text).split(' ').slice(0, 3).join(' ')) {
-      rec.location = loc(v.lat, v.lng, 'address', {
-        address: v.address,
-        area: slug(v.city),
-        method: 'coordinates from the elsegundo.xyz pickleball venue register, which cites the venue page',
-        source: 'https://elsegundo.xyz/pickleball/static.json',
-      });
-      rec.links = [{ rel: 'same-as', id: `es:court:${v.id}` }];
+    // Coordinates come from the committed elsegundo.xyz atlas snapshot (its pickleball venue layer),
+    // never from another repo's working tree, and keep that record's precision and source.
+    const v = VENUE[court.id] ? sisterById(root, `es:court:${VENUE[court.id]}`) : null;
+    const vAddr = v && v.location ? normAddr(v.location.address).split(' ').slice(0, 3).join(' ') : '';
+    if (v && v.location && vAddr && vAddr === normAddr(facts[0]?.text).split(' ').slice(0, 3).join(' ')) {
+      rec.location = locationFrom(v, { area: slug(city) });
+      rec.links = [{ rel: 'same-as', id: v.id }];
     }
     return compact(rec);
   });

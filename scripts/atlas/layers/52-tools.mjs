@@ -54,7 +54,7 @@ export async function records(ctx) {
       site: site.host,
       url: `https://pointcast.xyz/api/mcp#${t.name}`,
       data: 'https://pointcast.xyz/api/mcp',
-      source: [src('https://pointcast.xyz/agents.json', '2026-11-08', 'fact', 'PointCast agents manifest')],
+      source: [src('https://pointcast.xyz/agents.json', '2026-11-08', t.name.startsWith('atlas_') ? 'derived' : 'fact', 'PointCast agents manifest')],
       updated: '2026-11-08',
       license: 'CC0-1.0',
       tags: ['mcp', write ? 'write' : 'read-only'],
