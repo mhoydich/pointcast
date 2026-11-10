@@ -1,0 +1,24 @@
+---
+import RankShell from '../../../../components/pickleball-rankings/RankShell.astro';
+import RankTable from '../../../../components/pickleball-rankings/RankTable.astro';
+import { TIERS, BASE, LEVEL_BANDS, byLevel, coverage, fmtDate } from '../../../../lib/pickleball-rankings/data.mjs';
+
+export function getStaticPaths() {
+  return TIERS.regional.map((t: any) => ({ params: { feed: t.feeds[0].feed_id }, props: { t } }));
+}
+const { t } = Astro.props as any;
+const f = t.feeds[0];
+const c = coverage(t);
+const region = (f.upstream && f.region) ? f.region : null;
+---
+<RankShell title={t.label} description={`${t.label}: Court Rating over public, organizer-published results. Preview.`} active="regional" eyebrow="PICKLEBALL · RANKINGS · REGIONAL">
+  <h1>{t.label}</h1>
+  <p class="pr-dek">The first regional feed. It comes from the <a href={f.upstream.directory}>El Segundo player directory</a>, which publishes its data openly (<a href={f.upstream.feed}>players.json</a>, <a href={f.upstream.method}>method</a>).</p>
+  <div class="pr-status ok"><strong>What "25-mile" means</strong>
+    The ladder serves players around El Segundo, but it is event-based: nobody's home is recorded or guessed. A player is on it because they finished at a tournament whose venue is within {f.region?.event_radius_miles} miles of {f.region?.center}. {c.events} events so far: {t.events.map((e: any) => `${e.name} (${e.city})`).join('; ')}.
+  </div>
+  <nav class="pr-chips" aria-label="Level">
+    {LEVEL_BANDS.map((b) => { const n = byLevel(t.players, b).length; return n ? <a href={`${BASE}level/${b}/`}>{b} · {n}</a> : <span>{b}</span>; })}
+  </nav>
+  <RankTable players={t.players} caption={`${t.label}, as of ${fmtDate(t.as_of)}. Court Rating, then narrower band, then name.`} />
+</RankShell>

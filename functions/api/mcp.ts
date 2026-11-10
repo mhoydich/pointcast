@@ -52,6 +52,9 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *           contents schedule of every item at or above $200, with serials
  *           and matching receipt ids). Read-only, and still the same
  *           fictional demo household.
+ * v0.15.0 — Cartography atlas tools (read-only, from /atlas.json and the
+ *           merged /atlas/index.json): atlas_search, atlas_get, atlas_near,
+ *           atlas_links. No write tools; suggestions go in as pull requests.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -229,6 +232,14 @@ import {
   dispatchCivilServiceTool,
 } from '../../src/lib/civil-service-mcp';
 import { RADIO_TOOL_DEFINITIONS, dispatchRadioTool } from '../../src/lib/radio-mcp';
+import { ATLAS_TOOL_DEFINITIONS, dispatchAtlasTool } from '../../src/lib/atlas-mcp';
+import schedule from '../../src/data/courts-schedule.json';
+import { venuesFromSchedule } from '../_lib/communicator-store.ts';
+import {
+  COMMUNICATOR_TOOL_DEFINITIONS,
+  COMMUNICATOR_TOOL_NAMES,
+  callCommunicatorTool,
+} from '../_lib/communicator-mcp.ts';
 import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
@@ -241,7 +252,7 @@ import { FIRST_EDITION, editionDate, parseEditionParam } from '../_lib/morning.m
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.14.0';
+const SERVER_VERSION = '0.15.0';
 const V2_SERVER_NAME = 'pointcast-v2';
 const V2_SERVER_VERSION = '2.9.0';
 
@@ -286,6 +297,20 @@ const WRITE_TOOL_NAMES = new Set([
   ...CIVIL_SERVICE_WRITE_TOOL_NAMES,
 ]);
 
+// The three effect words (shown as 'pointcast/effect' on every tool and as `effect` in /agents.json):
+//   read    looks at public state and changes nothing.
+//   write   changes state the actor owns or a shared board.
+//   consent reaches a person, so it needs that person's standing opt-in plus the actor's explicit okay.
+// A tool in both sets counts as consent.
+// Empty today: the public MCP is read-only, and consent actions live on the HTTP routes behind a person's okay.
+const CONSENT_TOOL_NAMES = new Set<string>([]);
+
+export type ToolEffect = 'read' | 'write' | 'consent';
+export function toolEffect(name: string): ToolEffect {
+  if (CONSENT_TOOL_NAMES.has(name)) return 'consent';
+  return WRITE_TOOL_NAMES.has(name) ? 'write' : 'read';
+}
+
 function toolTitle(name: string): string {
   return name
     .split('_')
@@ -293,9 +318,11 @@ function toolTitle(name: string): string {
     .join(' ');
 }
 
-function toolAnnotations(name: string) {
-  const isWrite = WRITE_TOOL_NAMES.has(name);
+export function toolAnnotations(name: string) {
+  const effect = toolEffect(name);
+  const isWrite = effect !== 'read';
   return {
+    'pointcast/effect': effect,
     title: toolTitle(name),
     readOnlyHint: !isWrite,
     destructiveHint: false,
@@ -1585,6 +1612,8 @@ const TOOLS = [
   ...WILD_TOOL_DEFINITIONS,
   ...CIVIL_SERVICE_TOOL_DEFINITIONS,
   ...RADIO_TOOL_DEFINITIONS,
+  ...ATLAS_TOOL_DEFINITIONS,
+  ...COMMUNICATOR_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -3780,6 +3809,11 @@ async function dispatchTool(
     case 'radio_network':
     case 'radio_station':
       return dispatchRadioTool(name, args);
+    case 'atlas_search':
+    case 'atlas_get':
+    case 'atlas_near':
+    case 'atlas_links':
+      return dispatchAtlasTool(name, args, base);
 
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
@@ -4024,6 +4058,8 @@ const EVENT_SCHEMA = {
 };
 
 // ── HTML discovery page ──────────────────────────────────────────────
+const escapeHtml = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
 function discoveryHtml(request: Request) {
   const path = new URL(request.url).pathname;
   const isV2 = path.endsWith('/api/mcp-v2');
@@ -4201,6 +4237,20 @@ function discoveryHtml(request: Request) {
   <li><code>home_index_insurance_schedule</code> — informational contents schedule of items $200 and up</li>
 </ul>
 <p style="font-size:12px;color:#5F5E5A;">Fictional demo household at <code>/cartography/home/demo.json</code>. Every item, price, and serial is invented; no real inventory data is collected.</p>
+
+<h2>Tools — the Atlas (Cartography)</h2>
+<ul>
+  <li><code>atlas_search</code> — find Atlas records by words, type, layer or site (read-only)</li>
+  <li><code>atlas_get</code> — one Atlas record with its links resolved and its public sources</li>
+  <li><code>atlas_near</code> — located records within a radius of a point, straight-line miles</li>
+  <li><code>atlas_links</code> — the small graph around one Atlas id</li>
+</ul>
+<p style="font-size:12px;color:#5F5E5A;">The Atlas is one open map of everything PointCast and its sister sites know how to place: <a href="/cartography/map">/cartography/map</a>, <a href="/atlas.json">/atlas.json</a>, <a href="/atlas/index.json">/atlas/index.json</a>. No write tools; suggestions arrive as pull requests.</p>
+
+<h2>Every tool, by name</h2>
+<ul>
+${TOOLS.map((tool) => `  <li id="${tool.name}"><code>${tool.name}</code> — ${escapeHtml(String(tool.description || '').split(/(?<=[.!?])\s/)[0]).slice(0, 220)}</li>`).join('\n')}
+</ul>
 
 <h2>Resources</h2>
 <ul>
@@ -4395,6 +4445,14 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
           ? `Call put out on ${data.call?.spot}/${data.call?.kind}: ${data.call?.question}`
           : `Passed to ${data.call?.agent}.`;
         return rpcResult(id, { content: [{ type: 'text', text: lead }, { type: 'text', text: JSON.stringify(data, null, 2) }] });
+      }
+      if ((COMMUNICATOR_TOOL_NAMES as readonly string[]).includes(name)) {
+        // Read-only tools; writes and consent actions are HTTP-only (POST /api/communicator/okays gate).
+        const out = await callCommunicatorTool(name, args, request, env as never, venuesFromSchedule(schedule));
+        return rpcResult(id, {
+          content: [{ type: 'text', text: out.ok ? JSON.stringify(out, null, 2) : `Communicator declined: ${out.reason}.${out.note ? ' ' + out.note : ''}` }],
+          ...(out.ok ? {} : { isError: true }),
+        });
       }
       if (name === 'wild_field' || name === 'wild_buy_kit') {
         // The WILD service binding avoids Cloudflare 1042 (same-account

@@ -5,6 +5,8 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    cartographyMap: 'https://pointcast.xyz/cartography/map',
+    cartographyAtlasSpec: 'https://pointcast.xyz/cartography/atlas',
     openChannel: 'https://pointcast.xyz/open-channel/',
     openChannelPitchRoom: 'https://pointcast.xyz/open-channel/pitch-room/',
     openChannelStoryBooth: 'https://pointcast.xyz/open-channel/story-booth/',
@@ -86,6 +88,8 @@ export const AGENT_SURFACES = {
     nounsMessenger: 'https://pointcast.xyz/nouns-messenger/',
     pmm: 'https://pointcast.xyz/pmm/',
     pmmBrand: 'https://pointcast.xyz/pmm/brand/',
+    communicator: 'https://pointcast.xyz/communicator/',
+    checkIn: 'https://pointcast.xyz/check-in/',
     luckyCat: 'https://pointcast.xyz/lucky-cat/',
     luckyCatAgents: 'https://pointcast.xyz/lucky-cat/agents/',
     luckyCatArt: 'https://pointcast.xyz/lucky-cat/art/',
@@ -172,6 +176,9 @@ export const AGENT_SURFACES = {
     standardsRegistry: 'https://pointcast.xyz/standards/registry/',
   },
   json: {
+    atlasJson: 'https://pointcast.xyz/atlas.json',
+    atlasIndex: 'https://pointcast.xyz/atlas/index.json',
+    atlasSchema: 'https://pointcast.xyz/atlas/schema.json',
     smallShrines: 'https://pointcast.xyz/small-shrines.json',
     guides: 'https://pointcast.xyz/guides.json',
     radioNetwork: 'https://pointcast.xyz/radio-network.json',

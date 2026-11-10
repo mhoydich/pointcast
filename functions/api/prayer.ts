@@ -16,8 +16,15 @@
  *   prayer:state → JSON { counts:Record<station, n>, recent:{station,t,pid}[8] }
  *   prayer:rate:{pid}:{station} → ms timestamp · 60s TTL · 5s window
  *
- * GET → { ok, stations, counts, recent, total, now }
- * POST { sessionId, station } → offer a prayer
+ * The night hours (/night-hours, added 2026-11-09) are six more stations
+ * that follow the real night over El Segundo. That page also runs on
+ * elsegundo.xyz and posts here with room 'es', so both rooms share one
+ * ledger. `ledger` is the wider feed (24, with rooms) the night wing uses
+ * to hear other people; `recent` stays the last 8 daytime-chamber prayers
+ * so the older pages render exactly what they did before.
+ *
+ * GET → { ok, stations, counts, recent, ledger, rooms, total, now }
+ * POST { sessionId, station, room? } → offer a prayer
  */
 
 import { sha256, type Env } from './visit';
@@ -38,6 +45,8 @@ export const STATIONS = [
   'angelus',
   // the walk — /prayer-labyrinth
   'labyrinth',
+  // the night hours — /night-hours (also served from elsegundo.xyz)
+  'night-dusk', 'night-shore', 'night-niche', 'night-bell', 'night-moon', 'night-light',
 ] as const;
 type Station = (typeof STATIONS)[number];
 
@@ -47,15 +56,31 @@ type Station = (typeof STATIONS)[number];
 const RATE_WINDOW_MS = 5000;
 const RATE_KV_TTL_SECONDS = 60;
 const RECENT_CAP = 8;
+// Stored feed. Wide enough for the night wing to count who rang a bell together.
+const LEDGER_CAP = 24;
 const STATE_KEY = 'prayer:state';
+const ROOMS = ['pc', 'es'] as const;
+type Room = (typeof ROOMS)[number];
+
+interface PrayerEntry {
+  station: Station;
+  t: number;
+  pid: string;
+  room?: Room;
+}
 
 interface PrayerState {
   counts: Record<string, number>;
-  recent: Array<{ station: Station; t: number; pid: string }>;
+  recent: PrayerEntry[];
+  rooms: Record<string, number>;
 }
 
 function freshState(): PrayerState {
-  return { counts: {}, recent: [] };
+  return { counts: {}, recent: [], rooms: {} };
+}
+
+function isNight(station: string): boolean {
+  return station.startsWith('night-');
 }
 
 function json(body: unknown, init?: ResponseInit): Response {
@@ -73,7 +98,8 @@ async function loadState(env: Env): Promise<PrayerState> {
     const parsed = JSON.parse(raw) as Partial<PrayerState>;
     return {
       counts: parsed.counts ?? {},
-      recent: Array.isArray(parsed.recent) ? parsed.recent.slice(0, RECENT_CAP) : [],
+      recent: Array.isArray(parsed.recent) ? parsed.recent.slice(0, LEDGER_CAP) : [],
+      rooms: parsed.rooms ?? {},
     };
   } catch {
     return freshState();
@@ -109,7 +135,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
       ok: true,
       stations: STATIONS,
       counts: state.counts,
-      recent: state.recent,
+      recent: state.recent.filter((e) => !isNight(e.station)).slice(0, RECENT_CAP),
+      ledger: state.recent,
+      rooms: state.rooms,
       total: total(state),
       now: Date.now(),
     },
@@ -120,7 +148,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.VISITS) return json({ ok: false, reason: 'kv-not-bound' }, { status: 503 });
 
-  let body: { sessionId?: unknown; station?: unknown };
+  let body: { sessionId?: unknown; station?: unknown; room?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -135,6 +163,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!station || !STATIONS.includes(station)) {
     return json({ ok: false, reason: 'not-a-station', stations: STATIONS }, { status: 400 });
   }
+
+  const room = ROOMS.includes(body.room as Room) ? (body.room as Room) : undefined;
 
   const pid = (await sha256(sessionId)).slice(0, 10);
   const rateKey = `prayer:rate:${pid}:${station}`;
@@ -152,8 +182,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const state = await loadState(env);
   state.counts[station] = (state.counts[station] ?? 0) + 1;
-  state.recent.unshift({ station, t: Date.now(), pid });
-  state.recent = state.recent.slice(0, RECENT_CAP);
+  state.recent.unshift(room ? { station, t: Date.now(), pid, room } : { station, t: Date.now(), pid });
+  state.recent = state.recent.slice(0, LEDGER_CAP);
+  if (room) state.rooms[room] = (state.rooms[room] ?? 0) + 1;
   await saveState(env, state);
 
   return json({
