@@ -4,6 +4,24 @@
 
 ---
 
+## Cartography: the Atlas (2026-11-08)
+
+One open map of what PointCast and elsegundo.xyz can place, CC0, every record sourced. `/cartography/map`, `/atlas.json`, `/atlas/index.json`.
+
+- [x] (CC) Spec and schema: `docs/cartography/ATLAS.md`, `public/atlas/schema.json`, validator and merge in `scripts/atlas/` — `done`
+- [x] (CC) Layers built: 15 layers, 702 records, 16 with sourced coordinates (courts 11, pickleball 1, paddles 92, quiet 14, atlases 26, dispensary 1, areas-ues 49, agents 28, mcp-tools 122, surfaces 302, blocks 1 reference record for 506 blocks, outdoors 25, geology 4, taprooms 8, market-lenses 18); elsegundo.xyz snapshot 487 records, merged index 1,189 records with 15 cross-site links. Sister coordinates come only from the committed snapshot; town areas and unsourced market anchors are listed without coordinates; The Squeeze desk is held back (app-only data, named people) — `done`
+- [x] (CC) MCP: read-only `atlas_search`, `atlas_get`, `atlas_near`, `atlas_links` in `src/lib/atlas-mcp.ts`, routed in `functions/api/mcp.ts` — `done`
+- [x] (CC) Map pages: `/cartography/map` (with `?site=all`) and `/cartography/atlas` — `done`
+- [x] (CC) Discovery: `agents.json` atlas section, `/for-agents`, `llms.txt`, `llms-full.txt`, `sitemap-discovery` — `done`
+- [x] (CC) Inventory of 352 datasets across both sites (`docs/cartography/INVENTORY.md`) and the ranked `docs/cartography/NEXT-20-LAYERS.md` — `done`
+- [ ] (X) Review the MCP atlas tools and the agent-readable endpoints (input validation, cache, source and sensitive-record handling) — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-09-manus-atlas-map-qa.md` (pins, detail sources, phone layout, `?site=all`, deep link, no-JS list); results to `docs/manus-logs/2026-11-09-atlas-map.md` — `queued`
+- [ ] (MH/CC) Deploy order: merge and deploy hello-token-reserve #288 first (it publishes https://elsegundo.xyz/atlas.json), then `node scripts/atlas/build.mjs --fetch`, commit the refreshed snapshot, then merge and deploy this PR; until then the merged index carries a committed snapshot and says so (`sites[].live: false`) — `queued`
+- [ ] (MH) Deploy with `scripts/deploy.sh` — `waiting-on-mh`
+- [ ] (CC) Refresh the elsegundo snapshot with `node scripts/atlas/build.mjs --fetch` once https://elsegundo.xyz/atlas.json is live — `queued`
+
+---
+
 ## Gridtown — a browser-first city builder (2026-10-22)
 
 `/gridtown`, `/gridtown.json`, Block 0742 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."

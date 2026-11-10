@@ -1248,6 +1248,19 @@ export const GET: APIRoute = async () => {
       footerHint: t.footerHint,
     })),
 
+    atlas: {
+      spec: 'https://pointcast.xyz/cartography/atlas',
+      schema: 'https://pointcast.xyz/atlas/schema.json',
+      atlas: 'https://pointcast.xyz/atlas.json',
+      index: 'https://pointcast.xyz/atlas/index.json',
+      map: 'https://pointcast.xyz/cartography/map',
+      crossSite: 'https://pointcast.xyz/cartography/map?site=all',
+      mcpTools: ['atlas_search', 'atlas_get', 'atlas_near', 'atlas_links'],
+      license: 'CC0-1.0',
+      writes: 'none; suggestions by pull request',
+      sisterAtlases: ['https://elsegundo.xyz/atlas.json'],
+    },
+
     contracts: {
       ...contractSources,
       visitNouns: {

@@ -52,6 +52,9 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *           contents schedule of every item at or above $200, with serials
  *           and matching receipt ids). Read-only, and still the same
  *           fictional demo household.
+ * v0.15.0 — Cartography atlas tools (read-only, from /atlas.json and the
+ *           merged /atlas/index.json): atlas_search, atlas_get, atlas_near,
+ *           atlas_links. No write tools; suggestions go in as pull requests.
  *
  * Any MCP-aware agent (Claude custom connectors, Claude Desktop, Cursor,
  * Claude Code, ChatGPT-style app clients, etc.) can connect over JSON-RPC
@@ -229,6 +232,7 @@ import {
   dispatchCivilServiceTool,
 } from '../../src/lib/civil-service-mcp';
 import { RADIO_TOOL_DEFINITIONS, dispatchRadioTool } from '../../src/lib/radio-mcp';
+import { ATLAS_TOOL_DEFINITIONS, dispatchAtlasTool } from '../../src/lib/atlas-mcp';
 import schedule from '../../src/data/courts-schedule.json';
 import { venuesFromSchedule } from '../_lib/communicator-store.ts';
 import {
@@ -248,7 +252,7 @@ import { FIRST_EDITION, editionDate, parseEditionParam } from '../_lib/morning.m
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
-const SERVER_VERSION = '0.14.0';
+const SERVER_VERSION = '0.15.0';
 const V2_SERVER_NAME = 'pointcast-v2';
 const V2_SERVER_VERSION = '2.9.0';
 
@@ -1608,6 +1612,7 @@ const TOOLS = [
   ...WILD_TOOL_DEFINITIONS,
   ...CIVIL_SERVICE_TOOL_DEFINITIONS,
   ...RADIO_TOOL_DEFINITIONS,
+  ...ATLAS_TOOL_DEFINITIONS,
   ...COMMUNICATOR_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
@@ -3804,6 +3809,11 @@ async function dispatchTool(
     case 'radio_network':
     case 'radio_station':
       return dispatchRadioTool(name, args);
+    case 'atlas_search':
+    case 'atlas_get':
+    case 'atlas_near':
+    case 'atlas_links':
+      return dispatchAtlasTool(name, args, base);
 
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
@@ -4048,6 +4058,8 @@ const EVENT_SCHEMA = {
 };
 
 // ── HTML discovery page ──────────────────────────────────────────────
+const escapeHtml = (t: string) => t.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
 function discoveryHtml(request: Request) {
   const path = new URL(request.url).pathname;
   const isV2 = path.endsWith('/api/mcp-v2');
@@ -4225,6 +4237,20 @@ function discoveryHtml(request: Request) {
   <li><code>home_index_insurance_schedule</code> — informational contents schedule of items $200 and up</li>
 </ul>
 <p style="font-size:12px;color:#5F5E5A;">Fictional demo household at <code>/cartography/home/demo.json</code>. Every item, price, and serial is invented; no real inventory data is collected.</p>
+
+<h2>Tools — the Atlas (Cartography)</h2>
+<ul>
+  <li><code>atlas_search</code> — find Atlas records by words, type, layer or site (read-only)</li>
+  <li><code>atlas_get</code> — one Atlas record with its links resolved and its public sources</li>
+  <li><code>atlas_near</code> — located records within a radius of a point, straight-line miles</li>
+  <li><code>atlas_links</code> — the small graph around one Atlas id</li>
+</ul>
+<p style="font-size:12px;color:#5F5E5A;">The Atlas is one open map of everything PointCast and its sister sites know how to place: <a href="/cartography/map">/cartography/map</a>, <a href="/atlas.json">/atlas.json</a>, <a href="/atlas/index.json">/atlas/index.json</a>. No write tools; suggestions arrive as pull requests.</p>
+
+<h2>Every tool, by name</h2>
+<ul>
+${TOOLS.map((tool) => `  <li id="${tool.name}"><code>${tool.name}</code> — ${escapeHtml(String(tool.description || '').split(/(?<=[.!?])\s/)[0]).slice(0, 220)}</li>`).join('\n')}
+</ul>
 
 <h2>Resources</h2>
 <ul>
