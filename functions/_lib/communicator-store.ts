@@ -29,10 +29,17 @@ export const json = (body: unknown, status = 200, extra: Record<string, string> 
 export const REFUSALS: Record<string, number> = {
   'bad-json': 400, 'bad-request': 400, 'bad-field': 400, 'unknown-field': 400, 'contact-not-editable': 400, 'unknown-ladder': 404,
   'bad-slot': 400, 'bad-candidates': 400, 'unauthenticated': 401, 'bad-origin': 403, 'tier-2-required': 403, 'not-your-game': 403,
-  'not-found': 404, 'profile-required': 409, 'db-not-bound': 503, 'unavailable': 503,
+  'not-found': 404, 'profile-required': 409, 'db-not-bound': 503, 'db-not-ready': 503, 'unavailable': 503,
 };
-export const fail = (reason: string, extra: Record<string, unknown> = {}) => json({ ok: false, reason, ...extra }, REFUSALS[reason] ?? 400);
+export const fail = (reason: string, extra: Record<string, unknown> = {}, headers: Record<string, string> = {}) => json({ ok: false, reason, ...extra }, REFUSALS[reason] ?? 400, headers);
 export const unavailable = () => fail('db-not-bound');
+
+/** The migrations every communicator table comes from; named in the 503 so the operator knows what to run. */
+export const COMMUNICATOR_MIGRATIONS = ['0033_communicator', '0034_communicator_delivery'] as const;
+/** True for the D1 (and node:sqlite) error a query raises when the communicator migrations have not been applied. */
+export const isSchemaMissing = (err: unknown): boolean => /no such (table|column)(: )?communicator_/i.test(String((err as { message?: unknown })?.message ?? err));
+/** 503 db-not-ready: the database is bound but the communicator tables are not there yet. */
+export const notReady = () => fail('db-not-ready', { migrations: COMMUNICATOR_MIGRATIONS }, { 'Retry-After': '300' });
 
 // ---- shapes ------------------------------------------------------------------------------
 export type Profile = {

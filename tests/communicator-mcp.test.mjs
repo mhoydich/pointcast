@@ -86,3 +86,16 @@ test('communicator_game refuses unknown ids', async () => {
   const t = await town();
   assert.equal((await call(t, 'communicator_game', { id: 'nope' })).reason, 'not-found');
 });
+
+test('before the migrations run, both read tools refuse db-not-ready and never surface the D1 message', async () => {
+  const bare = new DatabaseSync(':memory:');
+  const db = { prepare: (sql) => new SqliteD1().prepare.call({ db: bare }, sql) };
+  const env = { AUTH_DB: db };
+  for (const [name, args] of [['communicator_ledger', {}], ['communicator_game', { id: 'g-1' }]]) {
+    const out = await M.callCommunicatorTool(name, args, REQ(), env, VENUES, NOW);
+    assert.equal(out.ok, false, name);
+    assert.equal(out.reason, 'db-not-ready', name);
+    assert.deepEqual(out.migrations, ['0033_communicator', '0034_communicator_delivery']);
+    assert.ok(!JSON.stringify(out).includes('no such table'), 'no D1 message');
+  }
+});

@@ -4,7 +4,7 @@
  * Writes and consent actions (request, invite, remind, score, confirm-score) run over the HTTP routes in
  * functions/api/communicator/*, behind a signed-in person's okay (POST /api/communicator/okays).
  */
-import { confirmedLedger, declaredLevels, getGame, ratingsFor, type CommunicatorEnv, type Game, type Venue } from './communicator-store.ts';
+import { COMMUNICATOR_MIGRATIONS, confirmedLedger, declaredLevels, getGame, isSchemaMissing, ratingsFor, type CommunicatorEnv, type Game, type Venue } from './communicator-store.ts';
 // @ts-ignore — plain module shared with the tests and the browser
 import * as L from '../../public/communicator/ledger.mjs';
 
@@ -42,8 +42,14 @@ async function game(env: CommunicatorEnv, args: Record<string, unknown>): Promis
 export async function callCommunicatorTool(
   name: string, args: Record<string, unknown>, _request: Request, env: CommunicatorEnv, _venues: Venue[], nowMs = Date.now(),
 ): Promise<ToolOut> {
-  if (name === 'communicator_ledger') return ledger(env, args, nowMs);
-  if (name === 'communicator_game') return game(env, args);
+  try {
+    if (name === 'communicator_ledger') return await ledger(env, args, nowMs);
+    if (name === 'communicator_game') return await game(env, args);
+  } catch (err) {
+    // The database is bound but the communicator migrations have not run: say so, without the D1 message.
+    if (isSchemaMissing(err)) return refuse('db-not-ready', { migrations: COMMUNICATOR_MIGRATIONS });
+    throw err;
+  }
   return refuse('unknown-tool');
 }
 
