@@ -81,3 +81,21 @@ Track them, in aggregate only, the same way page views are counted (no cookies, 
 - On-site search terms and zero-result terms, stored as counts per day.
 - Drop any term seen fewer than 3 times in 30 days, so a name typed once is never kept.
 - Which player pages are opened is already the best demand signal and is in `/api/v1/views`.
+
+## Profile and sign-in
+
+The player page grows into one place to run a pickleball life. Public side: level with band and tag, ladders, results, partners, stamps. Private side, owner only: games waiting on confirmation, next sessions, crews, paddle setups with hours, and what is shared with whom.
+
+Sign-in is a ladder; each rung is asked for only when an action needs it.
+
+| Rung | What it is | Unlocks |
+| --- | --- | --- |
+| 0 | Nothing | Read everything, download the data |
+| 1 | A device key made silently in the browser | Check in, declare a level, give feedback, collect stamps |
+| 2 | A magic link or passkey on pointcast.xyz | Carry the profile across devices and sites, record and confirm games |
+| 3 | Claim: an editor check, or two confirmed players who vouch | Own a results-based page, edit it, merge spellings, remove it |
+| 4 | Signed attestation (Tezos wallet, as SLSaaS does) or organizer key | Publish a results feed, run a town, sign a level |
+
+Rules: no passwords anywhere; a rung-1 profile upgrades in place and keeps its stamps; removal never needs sign-in; anything written at rung 1 is labelled unverified.
+
+Across sites: pointcast.xyz is the sign-in provider and holds the one profile; each site (elsegundo.xyz, thasher.xyz, a town site) reads it and adds its own panel. Check-ins, stamps and declared levels are published as open records an AT Protocol account can also carry, so a profile is portable and bots can subscribe over MCP without followers.
