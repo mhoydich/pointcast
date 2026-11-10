@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nouns Note · PointCast Seedworks</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #e9e3d4; overflow: hidden; }
+  canvas { display: block; position: absolute; inset: 0; margin: auto; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A generative Nouns Money banknote"></canvas>
+<script>
+/* seedworks-runtime v1 — PointCast Seedworks. Self-contained, fxhash-compatible.
+   Seed comes from $fx.hash when fxhash is present, else ?seed= in the URL,
+   else a fresh random seed. All randomness goes through $sw.rand. */
+(function () {
+  var fx = window.$fx;
+  var q = new URLSearchParams(location.search);
+  function fresh() { var a = '0123456789abcdef', s = 'sw'; for (var i = 0; i < 30; i++) s += a[(Math.random() * 16) | 0]; return s; }
+  var seed = (fx && fx.hash) || q.get('seed') || q.get('fxhash') || fresh();
+  function xmur3(str) { for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return function () { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return (h ^= h >>> 16) >>> 0; }; }
+  function sfc32(a, b, c, d) { return function () { a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0; var t = (a + b) | 0; a = b ^ (b >>> 9); b = (c + (c << 3)) | 0; c = (c << 21) | (c >>> 11); d = (d + 1) | 0; t = (t + d) | 0; c = (c + t) | 0; return (t >>> 0) / 4294967296; }; }
+  var h = xmur3(seed);
+  var rand = fx && fx.rand ? fx.rand : sfc32(h(), h(), h(), h());
+  var sw = {
+    seed: seed,
+    rand: rand,
+    range: function (a, b) { return a + rand() * (b - a); },
+    int: function (a, b) { return Math.floor(a + rand() * (b - a + 1)); },
+    pick: function (arr) { return arr[Math.floor(rand() * arr.length)]; },
+    chance: function (p) { return rand() < p; },
+    done: function (features) {
+      try { if (fx && fx.features) fx.features(features); if (fx && fx.preview) fx.preview(); } catch (e) {}
+      try { if (window.parent !== window) window.parent.postMessage({ type: 'seedworks:done', seed: seed, features: features }, '*'); } catch (e) {}
+    }
+  };
+  window.$sw = sw;
+})();
+/* end seedworks-runtime */
+
+/* Nouns Note — a banknote from the Nouns Money press. Guilloche border and
+   rosette, a pixel noggles portrait, denomination and serial all come from the seed. */
+(function () {
+  var $ = window.$sw;
+  var INKS = [
+    { name: 'Reserve Green', ink: '#1f5a3d', light: '#d9e6d2', paper: '#f1eedf' },
+    { name: 'Oxblood', ink: '#7a2230', light: '#efd9d4', paper: '#f4ece2' },
+    { name: 'Cobalt', ink: '#1f3f86', light: '#d6def0', paper: '#eef0ec' },
+    { name: 'Violet Press', ink: '#4b2a78', light: '#e1d8ee', paper: '#f2eee8' },
+    { name: 'Brass', ink: '#7a5a12', light: '#efe3c2', paper: '#f6f0de' },
+    { name: 'Ink Black', ink: '#1c1b18', light: '#dedbd2', paper: '#f3f1ea' }
+  ];
+  var NOGGLE = ['#e8242c', '#2b83f6', '#f3a51b', '#38a86b', '#c04ad8', '#1c1b18', '#ff7a1a'];
+  var DENOMS = [1, 1, 2, 5, 5, 10, 10, 20, 25, 50, 100];
+  var MOTTOS = ['ENJOY.', 'ONE A DAY, FOREVER', 'GOOD FOR ONE NOUN OF ATTENTION', 'PAYABLE IN PROPS', 'FOR THE PUBLIC GOOD', 'BACKED BY VIBES'];
+
+  var ink = $.pick(INKS);
+  var noggle = $.pick(NOGGLE);
+  var denom = $.pick(DENOMS);
+  var motto = $.pick(MOTTOS);
+  var petals = $.int(5, 13);
+  var rings = $.int(5, 11);
+  var tilt = $.range(-4, 4);
+  var harm = $.int(3, 9);
+  var borderWave = $.int(28, 64);
+  var serial = (function () { var L = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; var s = $.pick(L.split('')) + $.pick(L.split('')) + ' '; for (var i = 0; i < 8; i++) s += $.int(0, 9); return s + ' ' + $.pick(L.split('')); })();
+  var face = (function () { var f = []; for (var i = 0; i < 64; i++) f.push($.rand()); return f; })();
+  var headHue = $.int(0, 359);
+
+  var cv = document.getElementById('c');
+  var ctx = cv.getContext('2d');
+
+  function draw() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var S = Math.min(innerWidth, innerHeight);
+    cv.width = S * dpr; cv.height = S * dpr; cv.style.width = S + 'px'; cv.style.height = S + 'px';
+    ctx.setTransform(S * dpr / 1000, 0, 0, S * dpr / 1000, 0, 0);
+    ctx.fillStyle = '#e9e3d4'; ctx.fillRect(0, 0, 1000, 1000);
+
+    ctx.save();
+    ctx.translate(500, 500); ctx.rotate(tilt * Math.PI / 180);
+    var W = 860, H = 430, x0 = -W / 2, y0 = -H / 2;
+    ctx.shadowColor = 'rgba(30,25,15,.28)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+    ctx.fillStyle = ink.paper; ctx.fillRect(x0, y0, W, H);
+    ctx.shadowColor = 'transparent';
+
+    // background lathe lines
+    ctx.strokeStyle = ink.light; ctx.lineWidth = 1;
+    for (var k = 0; k < 70; k++) {
+      ctx.beginPath();
+      for (var x = 0; x <= W; x += 6) {
+        var y = y0 + 20 + k * 6 + Math.sin(x / 40 + k * 0.35) * 5;
+        if (x === 0) ctx.moveTo(x0 + x, y); else ctx.lineTo(x0 + x, y);
+      }
+      ctx.stroke();
+    }
+
+    // guilloche border
+    ctx.strokeStyle = ink.ink; ctx.lineWidth = 0.8;
+    for (var b = 0; b < 6; b++) {
+      ctx.beginPath();
+      var per = 2 * (W + H) - 80, steps = 900;
+      for (var i = 0; i <= steps; i++) {
+        var t = i / steps * per, p = pointOnRect(t, W - 40, H - 40);
+        var off = Math.sin(t / per * Math.PI * 2 * borderWave + b * 0.9) * 7;
+        var px = x0 + 20 + p[0] + p[2] * off, py = y0 + 20 + p[1] + p[3] * off;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.lineWidth = 2; ctx.strokeRect(x0 + 34, y0 + 34, W - 68, H - 68);
+
+    // rosette, right side
+    rosette(x0 + W - 210, 0, 128);
+    // portrait oval, left side
+    portrait(x0 + 230, 6);
+
+    // type
+    ctx.fillStyle = ink.ink; ctx.textAlign = 'center';
+    ctx.font = '600 22px Georgia, "Times New Roman", serif';
+    ctx.fillText('THE NOUNS MONEY PRESS', 0, y0 + 76);
+    ctx.font = 'italic 15px Georgia, serif';
+    ctx.fillText('El Segundo · Series 1 · printed in code', 0, y0 + 98);
+    ctx.font = '600 15px ui-monospace, Menlo, monospace';
+    ctx.textAlign = 'left'; ctx.fillText(serial, x0 + 56, y0 + H - 54);
+    ctx.textAlign = 'right'; ctx.fillText(serial, x0 + W - 56, y0 + 74);
+
+    // denominations
+    ctx.font = '700 54px Georgia, serif';
+    ctx.textAlign = 'left'; ctx.fillText(String(denom), x0 + 54, y0 + 96);
+    ctx.textAlign = 'right'; ctx.fillText(String(denom), x0 + W - 54, y0 + H - 50);
+    ctx.textAlign = 'center';
+    ctx.font = '700 24px Georgia, serif';
+    ctx.fillText(word(denom).toUpperCase() + (denom === 1 ? ' NOUN' : ' NOUNS'), 0, y0 + H - 78);
+    ctx.font = '600 13px ui-monospace, Menlo, monospace';
+    ctx.fillText(motto, 0, y0 + H - 50);
+    ctx.restore();
+  }
+
+  function pointOnRect(t, w, h) {
+    // returns [x, y, nx, ny] walking the perimeter, with outward normal
+    if (t < w) return [t, 0, 0, -1]; t -= w;
+    if (t < h) return [w, t, 1, 0]; t -= h;
+    if (t < w) return [w - t, h, 0, 1]; t -= w;
+    return [0, Math.max(0, h - t), -1, 0];
+  }
+
+  function rosette(cx, cy, R) {
+    ctx.save(); ctx.translate(cx, cy);
+    ctx.strokeStyle = ink.ink; ctx.lineWidth = 0.7;
+    for (var r = 0; r < rings; r++) {
+      ctx.beginPath();
+      var base = R * (0.35 + r / rings * 0.65);
+      for (var i = 0; i <= 720; i++) {
+        var a = i / 720 * Math.PI * 2;
+        var rr = base + Math.sin(a * petals + r * 0.6) * R * 0.08 + Math.sin(a * petals * harm) * R * 0.025;
+        var px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle = ink.paper; ctx.beginPath(); ctx.arc(0, 0, R * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = ink.ink; ctx.textAlign = 'center';
+    ctx.font = '700 46px Georgia, serif'; ctx.fillText(String(denom), 0, 16);
+    ctx.restore();
+  }
+
+  function portrait(cx, cy) {
+    ctx.save(); ctx.translate(cx, cy);
+    ctx.beginPath(); ctx.ellipse(0, 0, 118, 132, 0, 0, Math.PI * 2);
+    ctx.fillStyle = ink.light; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = ink.ink; ctx.stroke();
+    ctx.lineWidth = 0.8;
+    for (var i = 0; i < 4; i++) { ctx.beginPath(); ctx.ellipse(0, 0, 126 + i * 5, 140 + i * 5, 0, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.clip();
+    var px = 14; // pixel size
+    // head: 8x6 blocky shape with seeded notches
+    var hc = 'hsl(' + headHue + ',45%,58%)';
+    for (var gy = 0; gy < 6; gy++) for (var gx = 0; gx < 8; gx++) {
+      var v = face[gy * 8 + gx];
+      if ((gy === 0 && (gx === 0 || gx === 7) && v < 0.6)) continue;
+      ctx.fillStyle = v < 0.08 ? ink.ink : hc;
+      ctx.fillRect(-56 + gx * px, -78 + gy * px, px, px);
+    }
+    // body
+    ctx.fillStyle = ink.ink; ctx.fillRect(-70, 20, 140, 120);
+    ctx.fillStyle = hc; ctx.fillRect(-42, 6, 84, 14);
+    // noggles ⌐◨-◨
+    ctx.fillStyle = noggle;
+    ctx.fillRect(-70, -50, 14, 14); // temple
+    ctx.fillRect(-56, -50, 112, 6);
+    lens(-52); lens(8);
+    ctx.restore();
+    function lens(x) {
+      ctx.fillStyle = noggle; ctx.fillRect(x, -56, 44, 36);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 6, -50, 16, 24);
+      ctx.fillStyle = '#111111'; ctx.fillRect(x + 22, -50, 16, 24);
+    }
+  }
+
+  function word(n) {
+    return ({ 1: 'One', 2: 'Two', 5: 'Five', 10: 'Ten', 20: 'Twenty', 25: 'Twenty-Five', 50: 'Fifty', 100: 'One Hundred' })[n];
+  }
+
+  draw();
+  addEventListener('resize', draw);
+  $.done({ Denomination: denom, Ink: ink.name, Petals: petals, Rings: rings, Motto: motto });
+})();
+</script>
+</body>
+</html>
