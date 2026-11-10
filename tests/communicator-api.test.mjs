@@ -8,6 +8,7 @@ import { DEMO_PROFILES, DEMO_LADDER, DEMO_NOW } from '../public/communicator/dem
 import * as L from '../public/communicator/ledger.mjs';
 import * as S from '../functions/_lib/communicator-store.ts';
 import * as H from '../functions/_lib/communicator-http.ts';
+import { onRequest as communicatorMiddleware } from '../functions/api/communicator/_middleware.ts';
 
 // Communicator v1-a (docs/prd/communicator-v1.md 4.1, 4.2, 5): the migration, the store, and the
 // request handlers behind functions/api/communicator/*. D1 is node:sqlite running the real migration
@@ -258,4 +259,24 @@ test('route files stay thin: every route imports the shared handlers and venuesF
     assert.match(src, /communicator-http\.ts/, f);
     assert.ok(!/AUTH_DB/.test(src.replace(/\/\*[\s\S]*?\*\//, '')), `${f} leaves the db to the store`);
   }
+});
+
+test('before the migrations run, the routes answer 503 db-not-ready through the middleware, not a thrown D1 error', async () => {
+  const bare = new DatabaseSync(':memory:'); // bound, but no communicator tables
+  const db = { prepare: (sql) => new SqliteD1().prepare.call({ db: bare }, sql) };
+  const env = { AUTH_DB: db };
+  const request = new Request(`https://pointcast.xyz/api/communicator/ledger/${LADDER}.json`);
+  const next = () => H.getLedger({ request, env, venues: VENUES, now: NOW }, `${LADDER}.json`);
+  await assert.rejects(next, /no such table: communicator_/);
+  const res = await communicatorMiddleware({ request, env, next, params: {}, data: {}, waitUntil() {}, passThroughOnException() {} });
+  assert.equal(res.status, 503);
+  assert.equal(res.headers.get('Retry-After'), '300');
+  const body = await res.json();
+  assert.deepEqual(body, { ok: false, reason: 'db-not-ready', migrations: ['0033_communicator', '0034_communicator_delivery'] });
+  // Other errors are not swallowed.
+  await assert.rejects(() => communicatorMiddleware({ request, env, next: async () => { throw new Error('boom'); } }), /boom/);
+  // With the migration applied, the same request succeeds.
+  const t = town();
+  const ok = await communicatorMiddleware({ request, env: t.env, next: () => H.getLedger({ request, env: t.env, venues: VENUES, now: NOW }, `${LADDER}.json`) });
+  assert.equal(ok.status, 200);
 });
