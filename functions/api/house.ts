@@ -13,7 +13,7 @@
  * POST { action: "join", code }              { ok, room, expiresAt }   404 no-such-code
  * POST { action: "end",  room, key }         the code and the room record are deleted
  *
- * Limits: 512-byte bodies; 8 join tries a minute and 20 opens per ten minutes
+ * Limits: 512-byte bodies; 8 join tries a minute and 6 opens per ten minutes
  * per caller; codes last ten minutes; a room record lasts six hours at most.
  * The caller is counted by a hash of its address that changes every UTC day;
  * no address is written anywhere by this endpoint.
@@ -83,7 +83,7 @@ export const onRequestPost: PagesFunction<HouseEnv> = async ({ request, env }) =
   const store = storeFor(env);
   try {
     if (action === 'open') {
-      const limited = await rateLimit(request, env, { bucket: 'house:open', windowSec: 600, maxRequests: 20, clientId: await callerKey(request) });
+      const limited = await rateLimit(request, env, { bucket: 'house:open', windowSec: 600, maxRequests: 6, clientId: await callerKey(request) });
       if (!limited.allowed) return json({ ok: false, error: 'rate-limited', message: 'Too many new codes from here. Try again in a few minutes.' }, 429, { 'Retry-After': String(limited.retryAfter) });
       const args = body.room !== undefined || body.key !== undefined ? { room: body.room, key: body.key } : {};
       const result = await openPairing(store, args);

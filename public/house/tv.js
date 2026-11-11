@@ -11,9 +11,12 @@ import { makeDrumRoom, makeParty, postJson } from './party.js';
 
 var $ = function (id) { return document.getElementById(id); };
 var canvas = $('stage'), g = canvas.getContext('2d');
-var els = { pair: $('pair'), code: $('pairCode'), note: $('pairNote'), url: $('pairUrl'), chip: $('chip'), toast: $('toast'), tap: $('tap'), dim: $('dim'), black: $('black'), fs: $('fsHint') };
+var els = { blackNote: $('blackNote'), pair: $('pair'), code: $('pairCode'), note: $('pairNote'), url: $('pairUrl'), chip: $('chip'), toast: $('toast'), tap: $('tap'), dim: $('dim'), black: $('black'), fs: $('fsHint') };
 var SAVE_KEY = 'hc.tv.v0';
 var MAX_UNPAIRED_RENEWALS = 12; // two hours of codes with no phone, then stop asking
+var MAX_FAILURES = 8;           // store errors in a row before the TV stops asking and waits for a press
+var PAIR_COOLDOWN_MS = 60000;   // one fresh code a minute from a phone's Pair button
+function backoff(n) { return Math.min(600000, 15000 * Math.pow(2, Math.max(0, n - 1))); }
 
 var S = {
   session: null,        // { room, key, drum }
@@ -22,7 +25,7 @@ var S = {
   phones: {},           // pid → last heard (ms)
   lastPhoneAt: 0,
   code: '', codeExpiresAt: 0, renewals: 0, store: '',
-  ended: false, starting: false, everPaired: false, opening: false, nextOpenAt: 0, chip: false,
+  ended: false, failures: 0, lastPairAt: 0, starting: false, everPaired: false, opening: false, nextOpenAt: 0, chip: false,
   flare: 0, spark: 0, sparks: [], smoke: 0,
   live: null, liveFor: '', liveTimer: 0,
   lightApi: null, lightsStatus: 'none', members: [], litAt: {}, lightsTimer: 0, lightsFor: '',
@@ -176,16 +179,19 @@ function openCode() {
   postJson('/api/house', { action: 'open', room: S.session.room, key: S.session.key }).then(function (r) {
     S.opening = false;
     if (S.ended || !S.session) return;
-    if (r.ok) { S.code = cleanCode(r.code); S.codeExpiresAt = r.expiresAt; S.store = r.store || ''; showPairing(); queueSend(); return; }
-    if (r.error === 'room-gone' || r.error === 'not-your-room' || r.error === 'bad-room') { forget(); start(); return; }
+    if (r.ok) { S.failures = 0; S.code = cleanCode(r.code); S.codeExpiresAt = r.expiresAt; S.store = r.store || ''; showPairing(); queueSend(); return; }
+    // the room ran out on the server: open a new one but keep the fire, the view and the sound as they are
+    if (r.error === 'room-gone' || r.error === 'not-your-room' || r.error === 'bad-room') { var keep = S.state; forget(); start(keep); return; }
     S.code = ''; showPairing();
+    S.failures += 1;
+    if (S.failures >= MAX_FAILURES) { els.note.textContent = 'The pairing service is not answering. Reload this page for a new code.'; S.nextOpenAt = Infinity; return; }
     els.note.textContent = r.error === 'rate-limited' ? 'Too many codes from here. Trying again in a few minutes.' : 'The pairing service is not answering. Trying again.';
-    S.nextOpenAt = Date.now() + (r.error === 'rate-limited' ? 180000 : 15000);
+    S.nextOpenAt = Date.now() + (r.error === 'rate-limited' ? Math.max(180000, backoff(S.failures)) : backoff(S.failures));
   });
 }
-function start() {
+function start(keep) {
   if (S.starting) return;
-  S.starting = true; S.ended = false; els.black.hidden = true;
+  S.starting = true; S.ended = false; els.black.hidden = true; if (els.blackNote) els.blackNote.hidden = true;
   S.phones = {}; S.code = ''; S.renewals = 0; S.everPaired = false; S.chip = false; S.opening = false; S.nextOpenAt = 0; S.flare = 0; S.spark = 0; S.live = null; S.liveFor = ''; S.members = []; S.lightsFor = '';
   var saved = null;
   try { saved = JSON.parse(sessionStorage.getItem(SAVE_KEY) || 'null'); } catch (e) {}
@@ -196,7 +202,7 @@ function start() {
     S.party = makeParty({ room: session.room, pid: 'tv', onFrame: onFrame, onStatus: function () { queueSend(); } });
     save(); showPairing(); wakeSync(); viewChanged();
   };
-  if (saved && saved.session && saved.state && saved.state.hearth && saved.state.sky) {
+  if (!keep && saved && saved.session && saved.state && saved.state.hearth && saved.state.sky) {
     saved.state.sound.on = false; // a reloaded page starts silent again
     S.everPaired = !!saved.everPaired;
     begin(saved.session, saved.state, null);
@@ -206,11 +212,17 @@ function start() {
   postJson('/api/house', { action: 'open' }).then(function (r) {
     if (!r.ok) {
       S.starting = false;
+      S.failures += 1;
+      if (S.failures >= MAX_FAILURES) { els.note.textContent = 'The pairing service is not answering. Reload this page to try again.'; return; }
       els.note.textContent = r.error === 'rate-limited' ? 'Too many codes from here. Trying again in a few minutes.' : 'The pairing service is not answering. Trying again.';
-      setTimeout(start, r.error === 'rate-limited' ? 180000 : 15000);
+      var wait = r.error === 'rate-limited' ? Math.max(180000, backoff(S.failures)) : backoff(S.failures);
+      setTimeout(function () { start(keep); }, wait);
       return;
     }
-    begin({ room: r.room, key: r.key, drum: r.drum }, newState(r.drum), r);
+    S.failures = 0;
+    var state = newState(r.drum);
+    if (keep && keep.hearth && keep.sky) { keep.drum = state.drum; state = keep; }
+    begin({ room: r.room, key: r.key, drum: r.drum }, state, r);
   });
 }
 function forget() {
@@ -221,7 +233,7 @@ function forget() {
   els.chip.hidden = true; els.tap.hidden = true; els.dim.className = 'dim';
 }
 /** End: tell the phones, delete the pairing, forget everything, go black. */
-function endSession(restart) {
+function endSession(restart, idle) {
   if (!S.session) return;
   var session = S.session;
   if (S.party) S.party.send({ t: 'bye' });
@@ -231,6 +243,7 @@ function endSession(restart) {
     forget();
     if (restart) { start(); return; }
     S.ended = true; els.pair.hidden = true; els.black.hidden = false; wakeSync();
+    if (els.blackNote) els.blackNote.hidden = !idle;
   }, 250);
 }
 
@@ -274,7 +287,7 @@ function onEvent(ev, res) {
   else if (ev === 'lit') { S.flare = 0.6; S.spark = 0; spawnSparks(10); blip('whoosh', 0.6); }
   else if (ev === 'snuffed') { S.smoke = 1; S.flare = 0; blip('hiss'); }
   else if (ev === 'stacked') blip('thunk');
-  else if (ev === 'pair') { S.renewals = 0; S.chip = true; openCode(); }
+  else if (ev === 'pair') { S.chip = true; var t = Date.now(); if (t - S.lastPairAt > PAIR_COOLDOWN_MS || !S.code) { S.lastPairAt = t; S.renewals = 0; openCode(); } else { showPairing(); queueSend(); } }
   else if (ev === 'end') endSession(false);
   else if (ev === 'circle') { S.lightsFor = ''; S.members = []; S.litAt = {}; }
   else if (ev === 'place') { S.liveFor = ''; }
@@ -582,9 +595,11 @@ function second() {
     else if (!S.everPaired) els.note.textContent = 'Reload this page for a new code.';
   }
   els.dim.className = shouldDim(S.state, now) ? 'dim on' : 'dim';
-  if (phoneCount() === 0 && roomIsIdle(S.state, S.lastPhoneAt, now)) { endSession(true); return; }
+  // an hour with no phone and no fire: go dark and stop asking the server; a press on the TV starts it again
+  if (phoneCount() === 0 && roomIsIdle(S.state, S.lastPhoneAt, now)) { endSession(false, true); return; }
   skyRefresh(now); lightsRefresh(now); audioBeds(now); audioSync();
-  if (now - S.lastSent > 4000) queueSend();
+  // keepalive frames only while a phone is listening, so the relay can sleep when nobody is
+  if (phoneCount() > 0 && now - S.lastSent > 4000) queueSend();
 }
 setInterval(second, 1000);
 requestAnimationFrame(frame);
