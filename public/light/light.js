@@ -3,7 +3,7 @@
   'use strict';
 
   var API = '/api/light';
-  var POLL_MS = 4000;
+  var POLL_MS = 15000;
   var POLL_HIDDEN_MS = 30000;
   var LOST_AFTER_MS = 10000;
   var HOLD_MS = 800;

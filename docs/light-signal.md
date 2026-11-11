@@ -40,7 +40,7 @@ One encoded signal is at most 200 bytes.
 
 ## What carries it today
 
-HTTP only. A browser reads `GET /api/light` every few seconds and the response
+HTTP only. A browser reads `GET /api/light` every 15 seconds and the response
 includes one current signal per member that has ever lit a light
 (`signals`). Lighting and snuffing are `POST /api/light`. The server keeps the
 latest state per member; it does not keep a log of signals.

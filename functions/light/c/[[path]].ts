@@ -20,6 +20,9 @@ const PRIVATE = {
   'Cache-Control': 'no-store',
   'X-Robots-Tag': 'noindex, nofollow, noarchive',
   'Referrer-Policy': 'no-referrer',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Content-Security-Policy': "frame-ancestors 'none'",
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, params, env }) => {
