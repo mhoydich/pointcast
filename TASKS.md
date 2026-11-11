@@ -4,6 +4,18 @@
 
 ---
 
+## Baby Bonfire: Prayer Fire (2026-11-11)
+
+`/baby-bonfire/prayer/`, listed in `/baby-bonfire.json` under `screens`. Mike in chat on 2026-11-11, after seeing a generated film of the fireplace: "turn that into a prayer site with animations audio multi media". The one Baby Bonfire page that is a screen on purpose: it plays a film and recorded sound from its own folder. A concept sketch; nothing is for sale; it lights no real flame.
+
+- [x] (CC) The page: light it, eight things to bring (money, the business, a win, game day, someone, thanks, a change, just sit), optional words that fly to the flame and play one note each, a four-line sit of about a minute, a gong to close; press and hold to blow; sound and haptics only after a tap; reduced motion honoured. Static under `public/baby-bonfire/prayer/` with seven media files, 2.6 MB in all — `done`
+- [x] (CC) Hub section "One screen, for now", JSON twin (`screens`, and the privacy line), sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire-prayer.test.mjs`. The street, the scene count, Block 0782 and `agent-surfaces.ts` are unchanged — `done`
+- [x] (CC) Scripted run in headless Chrome at 390x844 and 1280x800: every state reached, the audio context running, four sound files decoded, no request off the page's own host, reduced motion holds the film still. Nobody has heard it and it has not run on a phone — `done`
+- [ ] (X) Review the words (eight sets of four lines, by Claude), the footer notices and the rules in the test — `queued`
+- [ ] (M) After deploy: real-phone QA per `docs/briefs/2026-11-11-manus-prayer-fire-qa.md`, the sound mix and iPhone first; results to `docs/manus-logs/2026-11-11-prayer-fire-qa.md` — `queued`
+- [ ] (MH) Decide: whether a page with a film belongs inside Baby Bonfire or at a path of its own; whether the words read the way you meant; whether the music bed stays; whether it gets a share card of its own (it wears the generated card for now) — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
 ## Baby Bonfire: third pass (2026-11-11)
 
 `/baby-bonfire/the-helper/`, `/baby-bonfire/home-press/`, `/baby-bonfire/house-power/`, `/baby-bonfire/the-table/`, `/baby-bonfire/creatures/`, `/baby-bonfire/four-seasons/`. Mike in chat on 2026-11-11: "publish all". Six finished private scenes brought in as public scenes; the street now has twenty-one windows. Concept sketches; nothing is for sale.
