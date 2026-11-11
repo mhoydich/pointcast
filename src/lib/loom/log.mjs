@@ -1,16 +1,23 @@
 /**
- * Pure helpers for the shapes the Loom keeps: a log (meta + op list), a capped
- * list (the directory index, an outbox, the peer roll) and a versioned record
- * (a sealed-inbox key set). Shared by the KV store (src/lib/loom/store.mjs) and
- * the Durable Object (workers/loom), so both stamp, trim and order the same way.
+ * Pure helpers for the shapes the Loom keeps: a log (meta + op list) and a
+ * capped list (the directory index, an outbox), shared by service.mjs and the
+ * stores in store.mjs.
  */
 export const MAX_OPS = 600;
 
 /**
  * Strip the private parts of an op before it leaves the server.
- * @param {Record<string, any>} op
  */
 export const publicOp = ({ tokenHash, ...op }) => op;
+
+/**
+ * The address an append is filed under in its sender's outbox: their declared
+ * address, or an @handle made from their display name.
+ */
+export const senderAddress = (from) => from.address || `@${String(from.name ?? '').toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'anon'}`;
+
+/** One line of a message, for the directory and outboxes. */
+export const excerpt = (s, n = 140) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
 /** A log as it exists before its first write. */
 export function emptyLog(address, key, describe) {
@@ -21,11 +28,6 @@ export function emptyLog(address, key, describe) {
  * Stamp ops onto a log in order (seq, at), trim to the newest MAX_OPS and
  * return the stamped ops. Mutates `log`. A title is only taken by a log that
  * has never been written to.
- * @param {any} log
- * @param {Record<string, any>[]} ops
- * @param {string} now
- * @param {{ title?: string | null, maxOps?: number }} [options]
- * @returns {any[]}
  */
 export function stampOps(log, ops, now, { title = null, maxOps = MAX_OPS } = {}) {
   if (title && !log.title && log.seq === 0) log.title = title;
@@ -51,11 +53,8 @@ export function stampOps(log, ops, now, { title = null, maxOps = MAX_OPS } = {})
 
 /**
  * Put `entry` at the front of a capped list. With `keyField`, an older entry
- * with the same key is replaced (the directory, the peer roll); without it the
- * list is a plain newest-first feed (an outbox).
- * @param {any[] | null | undefined} list
- * @param {any} entry
- * @param {{ keyField?: string | null, cap?: number }} [options]
+ * with the same key is replaced (the directory); without it the list is a
+ * plain newest-first feed (an outbox).
  */
 export function upsertFront(list, entry, { keyField = null, cap = 300 } = {}) {
   const rest = keyField ? (list ?? []).filter((e) => e?.[keyField] !== entry[keyField]) : (list ?? []);

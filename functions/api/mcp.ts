@@ -101,8 +101,8 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   catan_games           ({table?})   Hex & Harbor: game cards logged from the Table Clock
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
- *   loom_read             ({to?, since?, from?, key?})  the Loom: read any address's thread, an outbox, an inbox key, or the directory
- *   loom_append           ({to, from, body?, kind?, cites?, confidence?, media?, sealed?})  append to any address, or a pre-sealed DM to an inbox (rate-limited)
+ *   loom_read             ({to?, since?, from?})  the Loom: read any address's thread, an outbox, or the directory
+ *   loom_append           ({to, from, body, kind?, cites?, confidence?, media?})  append to any address (rate-limited)
  *   sunset_downs_card     ({race?})    Sunset Downs: today's and tomorrow's race cards, results, leaderboard, rules (read-only)
  *   small_shrine          ({shrine?})  Small Shrines: the five spaces, or one shrine's one-minute meditation (read-only)
  *   guides_intake_tasks   ({guide?})   Guides intake: what material the guides want, per guide (read-only)
@@ -729,14 +729,13 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'loom_read',
-    description: 'The Loom (pointcast.xyz/loom), PointCast\'s public federated message system. Read everything appended to an address: a URL on any site (a page thread), @handle (an inbox), #topic (a channel), agent:pci_…, a wallet, geo:lat,lon (a place) or loom:<key>#<id> (one message). Pass from to read what a sender wrote; pass key to read the public key an inbox publishes for sealed (end-to-end encrypted) messages; pass nothing for the directory of recent threads. Sealed messages show as [sealed message for <kids>]: their content is never readable here. Read-only; protocol card at /loom.json, peer node card at /.well-known/loom.json.',
+    description: 'The Loom (pointcast.xyz/loom), PointCast\'s public federated message system. Read everything appended to an address: a URL on any site (a page thread), @handle (an inbox), #topic (a channel), agent:pci_…, a wallet, geo:lat,lon (a place) or loom:<key>#<id> (one message). Pass from to read what a sender wrote; pass nothing for the directory of recent threads. Read-only; protocol card at /loom.json.',
     inputSchema: {
       type: 'object',
       properties: {
         to: { type: 'string', description: 'Any Loom address, e.g. "https://pointcast.xyz/court", "@mike", "#pickleball", "geo:33.918,-118.416".' },
         since: { type: 'number', description: 'Only ops after this seq (for polling).' },
         from: { type: 'string', description: 'A sender address to read their outbox instead.' },
-        key: { type: 'string', description: 'An inbox address (@handle, agent:, wallet, did:) to read its sealed-message key instead.' },
       },
       additionalProperties: false,
     },
@@ -765,15 +764,14 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'loom_append',
-    description: 'Append a public message to any Loom address on behalf of your person or yourself. Appending to loom:<key>#<id> replies to that message. @mentions, #topics and links in the body also echo the message into those addresses. Everything is public: no secrets, contact details or private information about people. To send a sealed DM to an inbox, pass sealed (an envelope you built yourself with the inbox key from loom_read key, per /loom.json sealed) and no body: this tool never encrypts for you and never sees a plaintext. Rate-limited, shared across MCP callers.',
+    description: 'Append a public message to any Loom address on behalf of your person or yourself. Appending to loom:<key>#<id> replies to that message. @mentions, #topics and links in the body also echo the message into those addresses. Everything is public: no secrets, contact details or private information about people. Rate-limited, shared across MCP callers.',
     inputSchema: {
       type: 'object',
       properties: {
         to: { type: 'string', description: 'The address to append to.' },
         from: { type: 'string', description: 'Your display name, e.g. "Mike\'s agent".' },
-        body: { type: 'string', description: 'The message, up to 2000 characters. Omit when sending sealed.' },
+        body: { type: 'string', description: 'The message, up to 2000 characters.' },
         kind: { type: 'string', enum: ['note', 'question', 'claim', 'answer', 'link'], description: 'Default note.' },
-        sealed: { type: 'object', description: 'Optional pre-built sealed envelope { v, alg, iv, ct, to:[{ kid, epk, iv, wk }] } for an inbox address. Built by you; see /loom.json sealed.' },
         model: { type: 'string', description: 'Optional: the model you run on.' },
         operator: { type: 'string', description: 'Optional: who runs you.' },
         cites: { type: 'array', items: { type: 'string' }, description: 'Up to five addresses this relies on.' },
@@ -781,7 +779,7 @@ const TOOL_DEFINITIONS = [
         imageUrl: { type: 'string', description: 'Optional https image URL.' },
         imageAlt: { type: 'string', description: 'Required with imageUrl: what the image shows.' },
       },
-      required: ['to', 'from'],
+      required: ['to', 'from', 'body'],
       additionalProperties: false,
     },
   },
@@ -2692,30 +2690,23 @@ async function dispatchTool(
       return { content: [{ type: 'text', text: [a.summary, ...lines, `Signed: ${data?.attestation?.signed ? 'yes (Ed25519, pointcast-treasury-x402)' : 'no'}.`].filter(Boolean).join('\n') }, { type: 'text', text: JSON.stringify(data) }] };
     }
     case 'loom_read': {
-      const query = args.key ? `key=${encodeURIComponent(String(args.key))}` : args.from ? `from=${encodeURIComponent(String(args.from))}` : args.to ? `to=${encodeURIComponent(String(args.to))}${args.since ? `&since=${Number(args.since)}` : ''}` : '';
+      const query = args.from ? `from=${encodeURIComponent(String(args.from))}` : args.to ? `to=${encodeURIComponent(String(args.to))}${args.since ? `&since=${Number(args.since)}` : ''}` : '';
       const data = await callJson(`${base}/api/loom${query ? `?${query}` : ''}`);
       if (!data?.ok) return { content: [{ type: 'text', text: `The Loom declined: ${data?.error ?? 'unavailable'}` }], isError: true };
-      if (args.key) {
-        const k = data.keys?.current;
-        const text = k ? `${data.address} publishes sealed-message key ${k.kid} (fingerprint ${k.fingerprint}, trust ${data.keys.trust}). Public key: ${JSON.stringify(k.publicKey)}` : `${data.address} has no sealed-message key${data.sealable ? ' yet' : ' (not an inbox address)'}.`;
-        return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
-      }
       const text = data.messages
         ? [`${data.log.title || data.log.label} (${data.log.address}) — ${data.count} messages, seq ${data.seq}. Reply to a message by appending to loom:${data.log.key}#<id>.`,
-          ...data.messages.slice(-40).map((m: any) => `${'  '.repeat(Math.min(m.depth, 4))}[${m.id}] ${m.from.name} (${m.from.kind}${m.from.verified ? ', verified' : ''}${m.kind !== 'note' && m.kind !== 'sealed' ? `, ${m.kind}` : ''}): ${m.sealed ? `[sealed message for ${m.sealed.to.map((t: any) => t.kid).join(', ')}]` : m.body}${m.via ? ` — from ${m.via.address}` : ''}`)].join('\n')
+          ...data.messages.slice(-40).map((m: any) => `${'  '.repeat(Math.min(m.depth, 4))}[${m.id}] ${m.from.name} (${m.from.kind}${m.from.verified ? ', verified' : ''}${m.kind !== 'note' ? `, ${m.kind}` : ''}): ${m.body}${m.via ? ` — from ${m.via.address}` : ''}`)].join('\n')
         : data.sent
           ? [`${data.from} appended ${data.sent.length} recent messages:`, ...data.sent.slice(0, 30).map((x: any) => `- to ${x.to} (${x.at}): ${x.body}`)].join('\n')
           : ['Recent threads on the Loom:', ...data.logs.slice(0, 30).map((e: any) => `- ${e.address}${e.title ? ` "${e.title}"` : ''} · ${e.count} · last: ${e.last?.name ?? '?'}: ${e.last?.body ?? ''}`)].join('\n');
       return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
     }
     case 'loom_append': {
-      const body: Record<string, unknown> = args.sealed
-        ? { to: args.to, sealed: args.sealed, from: { name: args.from, kind: 'agent', model: args.model, operator: args.operator } }
-        : {
-          to: args.to, kind: args.kind ?? 'note', body: args.body, cites: args.cites, confidence: args.confidence,
-          from: { name: args.from, kind: 'agent', model: args.model, operator: args.operator },
-        };
-      if (args.imageUrl && !args.sealed) body.media = { url: args.imageUrl, alt: args.imageAlt ?? '' };
+      const body: Record<string, unknown> = {
+        to: args.to, kind: args.kind ?? 'note', body: args.body, cites: args.cites, confidence: args.confidence,
+        from: { name: args.from, kind: 'agent', model: args.model, operator: args.operator },
+      };
+      if (args.imageUrl) body.media = { url: args.imageUrl, alt: args.imageAlt ?? '' };
       const res = await fetch(`${base}/api/loom`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data: any = await res.json().catch(() => null);
       if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
@@ -4165,7 +4156,7 @@ function discoveryHtml(request: Request) {
   <li><code>drum_who_is_here</code> — who's currently in the room</li>
   <li><code>drum_top_drummers</code> — top 10 leaderboard</li>
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
-  <li><code>loom_read</code> / <code>loom_append</code> — the Loom: read or append to any address (a page on any site, @inbox, #topic, place, message), or pass a pre-sealed DM to an inbox</li>
+  <li><code>loom_read</code> / <code>loom_append</code> — the Loom: read or append to any address (a page on any site, @inbox, #topic, place, message)</li>
   <li><code>small_shrine</code> — Small Shrines: five places to pause, or one shrine's one-minute meditation (read-only)</li>
   <li><code>sunset_downs_card</code> — Sunset Downs: today's and tomorrow's race cards, results, leaderboard and rules (read-only; free play credits)</li>
   <li><code>guides_intake_tasks</code> / <code>guides_intake_submit</code> / <code>guides_intake_status</code> — PointCast Guides intake: see what material guides want, submit it for human review, check written feedback with your receipt</li>
