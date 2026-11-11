@@ -326,6 +326,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/for-agents', 'weekly', '0.9'],
   ['https://pointcast.xyz/spellframe', 'weekly', '0.94'],
   ['https://pointcast.xyz/spellframe.json', 'weekly', '0.90'],
+  ['https://pointcast.xyz/light/', 'weekly', '0.9'],
+  ['https://pointcast.xyz/light.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/wild', 'daily', '0.96'],
   ['https://pointcast.xyz/wild.json', 'daily', '0.94'],
   ['https://pointcast.xyz/connectors', 'weekly', '0.92'],
