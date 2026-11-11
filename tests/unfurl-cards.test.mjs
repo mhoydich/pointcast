@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { CARDS, DESCRIPTION_MAX, H, STATUS, TITLE_MAX, W, cardFor, cardUrl, pngFile, pngSize, shareHead, stale, stampHead } from '../scripts/unfurl-cards/cards.mjs';
 import { cardSvg } from '../scripts/unfurl-cards/draw.mjs';
 import { versionedImageUrl } from '../src/lib/og-version.mjs';
+import { normalizeGeneratedSeo } from '../src/lib/seo-build.mjs';
 import { planUnfurl } from '../src/lib/unfurl/plan.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -89,6 +90,26 @@ test('the URL carries a hash of the PNG, the same one the layouts use, so new pi
 test('pages and PNGs are in step with the card list, and the generator agrees', () => {
   assert.deepEqual(stale(), []);
   execFileSync(process.execPath, [fileURLToPath(new URL('scripts/unfurl-cards/build.mjs', root)), '--check'], { stdio: 'pipe' });
+});
+
+test('the build\'s SEO pass keeps each card instead of falling back to the generic image', () => {
+  // astro.config.mjs runs normalizeGeneratedSeo over every built page. It drops og:image and
+  // twitter:image, and writes the fallback, unless a page has exactly one og:image whose file exists.
+  const dist = mkdtempSync(path.join(tmpdir(), 'pc-cards-dist-'));
+  for (const card of CARDS) {
+    mkdirSync(path.join(dist, card.path), { recursive: true });
+    cpSync(new URL(`public${card.path}index.html`, root), path.join(dist, card.path, 'index.html'));
+  }
+  normalizeGeneratedSeo(dist, {});
+  for (const card of CARDS) {
+    const built = readFileSync(path.join(dist, card.path, 'index.html'), 'utf8');
+    const h = built.slice(0, built.indexOf('</head>'));
+    assert.equal(one(h, 'property', 'og:image', card.path), cardUrl(card));
+    assert.equal(one(h, 'name', 'twitter:image', card.path), cardUrl(card));
+    assert.equal(one(h, 'name', 'twitter:card', card.path), 'summary_large_image');
+    assert.equal(plain(one(h, 'property', 'og:image:alt', card.path)), card.alt);
+    assert.doesNotMatch(h, /og-home-v\d/, `${card.path} keeps its own card`);
+  }
 });
 
 test('the request-time unfurl leaves a page with its own card alone', () => {
