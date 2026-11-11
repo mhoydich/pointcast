@@ -38,6 +38,7 @@ import {
   type PermitStatus,
 } from '../../../src/lib/yard';
 import { rateLimit, rateLimitResponse } from '../../_rate-limit';
+import { presentsResidentKey } from '../../_lib/resident-key.ts';
 
 interface Env {
   PC_QUEUE_KV?: KVNamespace;
@@ -150,7 +151,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     return json({ ok: false, error: 'bad-action', valid: Array.from(VALID_ACTIONS) }, 400);
   }
 
-  const isResident = Boolean(env.YARD_RESIDENT_KEY) && request.headers.get('X-Yard-Resident') === env.YARD_RESIDENT_KEY;
+  const isResident = presentsResidentKey(request, env);
 
   // A valid resident key skips the public bucket (the hourly pass must
   // never starve) — but a confirm with a WRONG key is metered like any
@@ -377,8 +378,7 @@ async function confirm(env: Env, request: Request, body: YardPayload): Promise<R
   if (!env.YARD_RESIDENT_KEY) {
     return json({ ok: false, reason: 'resident-key-unset', hint: 'Set YARD_RESIDENT_KEY as a Cloudflare Pages secret before countersigning can work.' }, 503);
   }
-  const presented = request.headers.get('X-Yard-Resident') || '';
-  if (presented !== env.YARD_RESIDENT_KEY) {
+  if (!presentsResidentKey(request, env)) {
     return json({ ok: false, error: 'not-a-resident', hint: 'confirm is resident-only; everything else on this desk is open' }, 403);
   }
 

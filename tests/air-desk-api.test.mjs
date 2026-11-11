@@ -429,5 +429,6 @@ test('source contract: desk.ts carries no SQL of its own; every D1 call in air-d
   // (noHashes) are the real proof no view ever carries one out.
   for (const line of store.split('\n')) if (/SELECT/i.test(line)) assert.doesNotMatch(line, /pid_hash|ip_hash/, line.trim());
   assert.doesNotMatch(store, /rateLimit\(|_rate-limit|PC_RATES_KV/, 'caps come from D1 counts, never the KV limiter');
-  assert.match(store, /function timingSafeEqual\(/, 'isResident compares in constant time');
+  assert.match(store, /presentsResidentKey\(request, env\)/, 'isResident delegates to the shared constant-time resident-key helper');
+  assert.match(await read('functions/_lib/resident-key.ts'), /function timingSafeEqual\(/, 'the shared helper compares in constant time');
 });

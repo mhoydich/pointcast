@@ -1,13 +1,20 @@
 # PointCast Auth Architecture
 
-PointCast is moving from local-only identity (`pc:drumName`, `pc:wallet`) to a cookie-backed session model with provider-specific identities stored in Cloudflare KV. This scaffold keeps the existing Kukai wallet flow intact while adding a stable user model that can eventually span OAuth and wallet providers.
+PointCast is moving from local-only identity (`pc:drumName`, `pc:wallet`) to a cookie-backed session model with provider-specific identities stored in Cloudflare D1 (`AUTH_DB`) when that binding is present, with the `USERS` KV namespace as the fallback and as a lazy-migration source. This scaffold keeps the existing Kukai wallet flow intact while adding a stable user model that can eventually span OAuth and wallet providers.
 
 `/auth` is the public Super Auth switchboard. It separates identity providers
 from broadcaster integrations: Google names the operator, Spotify supplies a
 sound signal, Shopify supplies a read-only catalog signal, and Tezos proves an
 object or wallet relationship.
 
-## KV Model
+## Storage Model
+
+`functions/api/auth/session.ts` uses D1 (`AUTH_DB`) whenever it is bound, with
+tables `users`, `identities`, `sessions` and `oauth_states`. When a record is
+missing in D1 and `USERS` is also bound, it reads the legacy KV record and
+copies it into D1. When `AUTH_DB` is not bound, it reads and writes KV only.
+
+The KV key layout:
 
 - `user:{userId}` -> `PointCastUser`
 - `identity:{provider}:{providerId}` -> canonical `userId`
@@ -24,10 +31,10 @@ flowchart LR
   A[Browser / AuthMenu] -->|Beacon permission + sign| B[Kukai / Beacon]
   A -->|POST address + pk + sig + message| C[/api/auth/tezos]
   C -->|verifySignature + getPkhfromPk| D[Tezos verification]
-  C -->|read/write| E[(KV: USERS)]
+  C -->|read/write| E[(D1 AUTH_DB, or KV USERS)]
   C -->|Set-Cookie pc_session| A
   A -->|GET /api/auth/session| F[/api/auth/session]
-  F -->|read session + user| E
+  F -->|read session + user: D1 first, KV fallback| E
 ```
 
 ### Live: Google OAuth
@@ -40,7 +47,7 @@ flowchart LR
   C -->|302 when env is ready| E[Apple OAuth]
   D -->|verified OIDC callback| F[/api/auth/google/callback]
   E -->|callback TBD| G[/api/auth/apple/callback]
-  F --> H[(KV: USERS)]
+  F --> H[(D1 AUTH_DB, or KV USERS)]
   G --> H
 ```
 
@@ -60,9 +67,12 @@ flowchart LR
 
 ## Environment And Bindings
 
-### Required binding
+### Storage bindings
 
-- `USERS` KV namespace binding for all auth routes and session storage.
+- `AUTH_DB` (D1) and/or `USERS` (KV). Auth routes need at least one of them.
+  Session storage uses D1 when `AUTH_DB` is bound; `USERS` is then the
+  fallback for records not yet migrated. With only `USERS` bound, sessions are
+  stored in KV.
 
 ### Google
 
@@ -125,7 +135,7 @@ disconnect control deletes the encrypted credential immediately.
 
 ## Privacy
 
-- Store the minimum viable identity payload in KV: provider, provider-native id, display name, optional avatar, and verification timestamp.
+- Store the minimum viable identity payload in D1 (or KV when `AUTH_DB` is unbound): provider, provider-native id, display name, optional avatar, and verification timestamp.
 - Keep the session token in an `HttpOnly` cookie so client JS does not need raw session secrets.
 - Wallet addresses are treated as provider ids; no additional profile enrichment is stored yet.
 - The identity map is provider-scoped, which makes single-provider disconnects straightforward when the unlink UI/API is added.
