@@ -31,7 +31,9 @@ that and nothing else. The API and protocol are unchanged (`pointcast.loom/v1`).
   table" and every call falls through to KV, so the code can deploy before or
   after the migration.
 
-To switch on:
+To switch on, run the "D1 migrations (pointcast-auth)" workflow from the Actions
+tab with `apply` (`.github/workflows/d1-migrations.yml`), or from a machine with
+wrangler signed in:
 
 ```sh
 npx wrangler d1 migrations apply pointcast-auth --remote
@@ -59,6 +61,10 @@ those paid for its extra Worker, crypto review and upkeep. Bring them back when:
 ```sh
 node --test tests/loom.test.mjs tests/loom-d1.test.mjs
 ```
+
+The same flows were also run once against the real D1 engine (Miniflare) on
+2026-11-11: fallback before the migration, import, 40 concurrent appends with
+ripple, directory, outbox, seed and poll.
 
 `tests/loom-d1.test.mjs` runs the real migration on `node:sqlite` with a few
 milliseconds of delay per call. It covers four cases:
