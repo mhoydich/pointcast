@@ -47,6 +47,8 @@ export const STATIONS = [
   'labyrinth',
   // the night hours — /night-hours (also served from elsegundo.xyz)
   'night-dusk', 'night-shore', 'night-niche', 'night-bell', 'night-moon', 'night-light',
+  // the open hours — /open-hours, the working day (added 2026-11-10)
+  'open-bell', 'open-coin', 'open-noon', 'open-deal', 'open-count', 'open-shelf',
 ] as const;
 type Station = (typeof STATIONS)[number];
 
@@ -81,6 +83,12 @@ function freshState(): PrayerState {
 
 function isNight(station: string): boolean {
   return station.startsWith('night-');
+}
+
+// The open hours keep their own counts. They stay out of the altar feed and
+// out of the night wing's ledger, which counts who rang a bell together.
+function isOpen(station: string): boolean {
+  return station.startsWith('open-');
 }
 
 function json(body: unknown, init?: ResponseInit): Response {
@@ -135,8 +143,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
       ok: true,
       stations: STATIONS,
       counts: state.counts,
-      recent: state.recent.filter((e) => !isNight(e.station)).slice(0, RECENT_CAP),
-      ledger: state.recent,
+      recent: state.recent.filter((e) => !isNight(e.station) && !isOpen(e.station)).slice(0, RECENT_CAP),
+      ledger: state.recent.filter((e) => !isOpen(e.station)),
       rooms: state.rooms,
       total: total(state),
       now: Date.now(),
@@ -182,9 +190,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const state = await loadState(env);
   state.counts[station] = (state.counts[station] ?? 0) + 1;
-  state.recent.unshift(room ? { station, t: Date.now(), pid, room } : { station, t: Date.now(), pid });
-  state.recent = state.recent.slice(0, LEDGER_CAP);
-  if (room) state.rooms[room] = (state.rooms[room] ?? 0) + 1;
+  // Open-hours prayers are counted but kept out of the stored feed, so they
+  // never push night-wing entries off the end of it.
+  if (!isOpen(station)) {
+    state.recent.unshift(room ? { station, t: Date.now(), pid, room } : { station, t: Date.now(), pid });
+    state.recent = state.recent.slice(0, LEDGER_CAP);
+    if (room) state.rooms[room] = (state.rooms[room] ?? 0) + 1;
+  }
   await saveState(env, state);
 
   return json({
