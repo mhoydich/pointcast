@@ -23,10 +23,11 @@ const tags = (h, attr, name) => [...h.matchAll(new RegExp(`<meta ${attr}="${name
 const one = (h, attr, name, where) => { const all = tags(h, attr, name); assert.equal(all.length, 1, `${where}: exactly one ${name}`); return all[0]; };
 const plain = (s) => s.replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 const street = JSON.parse(read('public/baby-bonfire.json')).scenes.map((s) => s.slug);
-// The fifteen scenes on the street when the cards were made (2026-11-11).
-const SCENES = ['light-the-hearth', 'the-shelf', 'pieces-roam', 'the-rounds', 'any-object', 'paired-hearths', 'mesh-street', 'stations', 'weather-in-the-house', 'five-levels', 'seven-homes', 'cabinet-of-no-bounds', 'ritual-atlas', 'anchors-and-open-time', 'precedents'];
+// The scenes with a card, in street order: fifteen first (2026-11-11), then the six of the
+// third pass the same day.
+const SCENES = ['light-the-hearth', 'the-shelf', 'pieces-roam', 'the-rounds', 'the-helper', 'any-object', 'home-press', 'paired-hearths', 'mesh-street', 'house-power', 'stations', 'the-table', 'weather-in-the-house', 'creatures', 'four-seasons', 'five-levels', 'seven-homes', 'cabinet-of-no-bounds', 'ritual-atlas', 'anchors-and-open-time', 'precedents'];
 
-test('every page that was asked for has a card: the hubs, fifteen scenes, the studies', () => {
+test('every page that was asked for has a card: the hubs, the street\'s scenes, the studies', () => {
   const want = [
     '/baby-bonfire/', ...SCENES.map((s) => `/baby-bonfire/${s}/`),
     '/coast-commons/', '/coast-commons/el-segundo/', '/coast-commons/pattern/', '/coast-commons/sb-surf-house/', '/coast-commons/fresh-milk/',

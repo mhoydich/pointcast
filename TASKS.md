@@ -4,6 +4,19 @@
 
 ---
 
+## Baby Bonfire: third pass (2026-11-11)
+
+`/baby-bonfire/the-helper/`, `/baby-bonfire/home-press/`, `/baby-bonfire/house-power/`, `/baby-bonfire/the-table/`, `/baby-bonfire/creatures/`, `/baby-bonfire/four-seasons/`. Mike in chat on 2026-11-11: "publish all". Six finished private scenes brought in as public scenes; the street now has twenty-one windows. Concept sketches; nothing is for sale.
+
+- [x] (CC) Six scenes imported with the same wrapper as Mesh Street (head tags, back link, street marker) — `done`
+- [x] (CC) Editorial pass, every page read end to end. Changed: Home Press clay recipe no longer says a second glaze firing makes a piece fit for food or drink (it is a potter's call, and the recipe does not settle it); Home Press sources line now reads "as read Nov 11, 2026"; House Power lede no longer calls every tap "real size" (sized from a source where one was read, illustrative where none was); Four Seasons gained a line saying a release is the sketch's word for a set of ideas, nothing is for sale or ships, and the temperatures and flame nights are illustrative. The Helper, The Table and Creatures needed no change. Source names appear only inside the two sources drawers — `done`
+- [x] (CC) Hub (21 windows), JSON twin, sitemap-discovery, `llms.txt`, `llms-full.txt`, make a piece (links the Home Press), `tests/baby-bonfire.test.mjs`. Block 0782 now says twenty-one; only the count wording changed. The atlas needed no new records; `node scripts/atlas/build.mjs --check` passes — `done`
+- [ ] (CC) Re-read the twelve cited pages against the figures quoted from them. This pass checked only that the links answer: nine did, and three refused a scripted request (the Southampton ePrints PDF, the Cricut help article, the MDPI paper) — `queued`
+- [ ] (X) Review the fire and food wording on The Helper, The Home Press and The Table, the sums in House Power, and the new rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-pass-3.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-pass-3.md` — `queued`
+- [ ] (MH) Decide: whether "release" is the right word on Four Seasons; whether The Helper putting out a flame when everyone is out reads the way you meant it — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
 ## Baby Bonfire: an open exploration (2026-11-11)
 
 `/baby-bonfire/`, `/baby-bonfire.json`, Block 0782 (0781 is held by #1618). Mike in chat on 2026-11-11: publish it on PointCast as an open-source exploration, with trade between makers and networked objects each owner can switch on or off. Concept sketches; nothing is for sale; no licence chosen.
