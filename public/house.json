@@ -1,0 +1,50 @@
+{
+  "schema": "pointcast.house/v0",
+  "name": "House Channel",
+  "summary": "A TV page and a phone remote, paired by a short code. The TV as the hearth: an ambient layer for when nobody is watching anything. No accounts, no app.",
+  "status": "v0. Checked in desktop Chrome with two browser contexts. Not yet checked on a real TV browser, a cast tab, an iPhone or an Android phone.",
+  "started": "2026-11-11",
+  "pages": {
+    "tv": "https://pointcast.xyz/house/",
+    "remote": "https://pointcast.xyz/house/r/",
+    "about": "https://pointcast.xyz/house/about/",
+    "block": "https://pointcast.xyz/b/0784"
+  },
+  "views": [
+    { "id": "hearth", "what": "A drawn fire. Stack up to five logs, hold to light (two logs minimum), hold to breathe, lid to snuff. Burns down in 15, 45 or 90 minutes; a log on a burning fire adds ten minutes, never more than ninety left." },
+    { "id": "window", "what": "Sky, cloud, wind and tide for El Segundo, Manhattan Beach, Santa Monica or San Pedro.", "liveSources": ["/api/weather (Open-Meteo)", "/api/tide (NOAA CO-OPS predictions; the height between two predictions is interpolated and labelled 'about')"], "computed": "Sun position is computed, not observed.", "fallback": "If neither source can be read the TV shows a simulated sky with manual controls and labels it SIMULATED. Simulated values are never mixed with live ones." },
+    { "id": "lights", "what": "A hillside of windows for one Light Companion circle, read with GET /api/light and the X-Light-Circle header, once every 15 seconds.", "featureCheck": "GET /api/light must answer with schema pointcast.light/v0. If it does not, the TV shows a demo circle labelled DEMO.", "privacy": "The circle link is sent to the TV over the pairing relay for the session, is never sent back to phones, and is never written to storage." },
+    { "id": "drum", "what": "Paired phones are pads in an ordinary PointCast drum room (the same rooms as /drum-room-v2); the TV shows hits and synthesizes the sound." },
+    { "id": "off", "what": "A black screen. Nothing is drawn, the wake lock is released." }
+  ],
+  "pairing": {
+    "endpoint": "https://pointcast.xyz/api/house",
+    "open": "POST { action: 'open' } from the TV → { code, room, key, drum, expiresAt }",
+    "refresh": "POST { action: 'open', room, key } → a new code for the same room; the old code stops working",
+    "join": "POST { action: 'join', code } from a phone → { room }",
+    "end": "POST { action: 'end', room, key } → the code and the room record are deleted",
+    "code": "Five letters from ABCDEFGHJKMNPQRSTUVWXYZ. Lives ten minutes.",
+    "limits": "512-byte bodies. 8 join tries a minute and 20 opens per ten minutes per caller. A room record lives six hours at most. The TV lets a room go after an hour with no phone and no fire.",
+    "stored": "house:code:<CODE> → { room, exp } and house:room:<room> → { keyHash, drum, code, createdAt }. No names, no addresses, nothing about what is on the TV. Callers are counted by a daily-rotating hash."
+  },
+  "transport": {
+    "relay": "wss://pointcast.xyz/api/drum/room?room=<room>&sid=<id>, the existing drum-room Durable Object in party mode (rooms named bc-…). It relays frames of 512 bytes or less to every peer but the sender and stores nothing.",
+    "authority": "The TV page. It holds the state, applies commands, and broadcasts a compact state frame on change and every four seconds.",
+    "phoneToTv": ["{ t: 'hi' }", "{ t: 'hb' }", "{ t: 'cmd', c: 'view'|'stack'|'clear'|'minutes'|'spark'|'light'|'breath'|'snuff'|'sound'|'vol'|'mute'|'place'|'sky'|'sim'|'circle'|'names'|'pair'|'end'|'wake', … }", "{ t: 'left' }"],
+    "tvToPhones": ["{ t: 'st', r, v, s, h, w, l, d, p, k, m }", "{ t: 'bye' }", "{ t: 'full', to }", "{ t: 'tv-away' }"],
+    "phones": "Up to eight per TV."
+  },
+  "sound": "Synthesized on the TV page with Web Audio. Off until a phone turns it on. If the TV's browser needs a press on the TV page first, the TV shows a prompt and the phone is told.",
+  "code": {
+    "rules": "public/house/core.js",
+    "tv": "public/house/tv.js",
+    "remote": "public/house/remote.js",
+    "relayClient": "public/house/party.js",
+    "pairing": "functions/api/house.ts, functions/_lib/house-pairing.mjs",
+    "tests": "tests/house-channel.test.mjs",
+    "localServer": "node scripts/house-dev.mjs",
+    "twoScreenCheck": "node scripts/e2e-house-channel.mjs"
+  },
+  "notFor": "It does not control the TV's power, input or hardware volume, and it does not talk to lights or other home devices. See docs/research/2026-11-11-web-home-capabilities.md for what a web page can and cannot reach.",
+  "author": "cc (Claude Code). Not in Mike's voice."
+}
