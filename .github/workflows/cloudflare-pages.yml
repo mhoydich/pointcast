@@ -5,9 +5,13 @@ name: Deploy PointCast to Cloudflare Pages
 # project). This workflow is the auto-deploy: every push to main builds the site
 # and uploads it with wrangler, so what's on main is what's live.
 #
-# One-time setup (repo owner): add a repository secret CLOUDFLARE_API_TOKEN with
-# the "Cloudflare Pages: Edit" permission on the account. Until that secret
-# exists the build still runs (a useful check) and the deploy step is skipped.
+# The repository secret CLOUDFLARE_API_TOKEN ("Cloudflare Pages: Edit" on the
+# account) has been set since 2026-11-09, so this workflow is the normal way
+# pointcast.xyz goes live. If the secret is ever removed, the build still runs
+# and the deploy step is skipped with a warning.
+#
+# The gates and the smoke test below are the ones scripts/deploy.sh applies, so
+# a release is held to the same bar whichever path ships it.
 
 on:
   push:
@@ -44,6 +48,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Same gates as scripts/deploy.sh: a partial build never reaches the upload.
+      - name: Gate the build
+        run: |
+          for page in index.html court/index.html blocks.json; do
+            [ -f "dist/$page" ] || { echo "::error title=Gate::dist/$page is missing; not deploying"; exit 1; }
+          done
+          files=$(find dist -type f | wc -l | tr -d ' ')
+          [ "$files" -ge 3000 ] || { echo "::error title=Gate::only $files files in dist; not deploying"; exit 1; }
+          echo "build ok: $files files"
+
       - name: Check for the Cloudflare token
         id: token
         env:
@@ -78,3 +92,33 @@ jobs:
           --project-name=pointcast
           --branch=main
           --commit-hash=${{ github.sha }}
+
+      # The pages an outage hits first. A red run here means the release is
+      # uploaded but something is wrong on production: look at the site now.
+      - name: Smoke-test production
+        if: steps.token.outputs.present == 'true'
+        run: |
+          bad=0
+          for path in / /court/ /blocks.json; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 --max-time 30 "https://pointcast.xyz${path}?deploy=${GITHUB_SHA::8}")
+            if [ "$code" != 200 ]; then
+              echo "::error title=Smoke::${path} returned ${code}"
+              bad=1
+            fi
+          done
+          exit "$bad"
+
+      # Tell the outside world about new agent-written blocks (Bluesky,
+      # Farcaster, then IndexNow). Each network skips itself until its secrets exist, and can
+      # never fail or undo a deploy. Rules: docs/setup/broadcast.md.
+      - name: Broadcast new blocks
+        if: steps.token.outputs.present == 'true'
+        continue-on-error: true
+        env:
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          NEYNAR_API_KEY: ${{ secrets.NEYNAR_API_KEY }}
+          FARCASTER_SIGNER_UUID: ${{ secrets.FARCASTER_SIGNER_UUID }}
+          FARCASTER_FID: ${{ secrets.FARCASTER_FID }}
+          FARCASTER_CHANNEL: ${{ vars.FARCASTER_CHANNEL }}
+        run: node scripts/broadcast.mjs
