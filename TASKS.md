@@ -172,7 +172,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
 - [x] (CC) Merged to main on Mike's go, no further review: mhoydich/pointcast#1477, merge commit `df8ab42b` — `done`
 - [x] (CC) 1.1.1: the 12 findings a second adversarial review confirmed on 1.1 (inspector off-screen on desktop, "will grow" promises that were wrong most of the time, shop/home advice loops, stale inspector, hidden phone tools, header overflow, local-download links, name truncation, browser Back out of a visit) plus constant workshop smoke so no town cycles — `done`
-- [ ] (MH) Publish: merged is not live. The "Deploy PointCast to Cloudflare Pages" run skipped its deploy step on 2026-10-22 (no `CLOUDFLARE_API_TOKEN` secret). Run `scripts/deploy.sh` on the iMac, or add the repo secret, then check https://pointcast.xyz/gridtown/ and /b/0742 — `waiting-on-mh`
+- [ ] (MH) Publish: merged is not live. The "Deploy PointCast to Cloudflare Pages" run skipped its deploy step on 2026-10-22 (no `CLOUDFLARE_API_TOKEN` secret). Since early Nov 2026 the secret is set and GitHub deploys main on every merge; check https://pointcast.xyz/gridtown/ and /b/0742 — `waiting-on-mh`
 - [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
 
 ---
@@ -188,7 +188,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [ ] (CC) v0.3 rooms, three to five friends (`cc/pmm-rooms-20261022`, session_01YX6g6wYdDEnjzvBfWzkpud) — `in-progress`
 - [ ] (CC) v0.4 Tezos settle for TAB: `/pmm/settle` page, TzKT check on the receiving phone (`cc/pmm-settle-20261022`, session_01R5xW9R1R3uD9Zjcq8rw7q5); wires into `app.js` after rooms — `in-progress`
 - [ ] (MH) Deploy with `scripts/deploy.sh` on the iMac; then create and bind `PMM_KV` (brief step 1) and set `CF_TURN_KEY_ID` / `CF_TURN_API_TOKEN` (step 1b) — `waiting-on-mh`
-- [ ] (MH) Optional: add a `CLOUDFLARE_API_TOKEN` repo secret so the Pages workflow deploys merges on its own — `waiting-on-mh`
+- [x] (MH) Optional: add a `CLOUDFLARE_API_TOKEN` repo secret so the Pages workflow deploys merges on its own — `done` — set between 2026-11-03 and 2026-11-09
 - [ ] (M) Two-phone test, offline open and QR connect per `docs/briefs/2026-10-22-manus-pmm.md`, log to `docs/manus-logs/2026-10-22-pmm.md` — `queued`
 - [ ] (CC) A week after deploy: read `GET /api/pmm/stat?days=7` and decide whether the relay or the code flow needs work to reach 90% — `queued`
 - [ ] (X) Review v0.4 settle before it moves real tez (wallet code) — `queued`
@@ -200,7 +200,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 `/radio-network`, `/radio-network/{station}`, `/radio-network/kit`, `/radio-network/print`, `/radio-network/status` (each with `.json`), MCP `radio_network` / `radio_station`. A plan; nothing on air. Tracking: issue #1503.
 
 - [x] (CC) Plan, block 0718 (#1466); station pages + Phase 0 kit, block 0726 (#1494); RN-01..RN-10 on the jobs board (#1514); MCP tools + status board (#1517); print campaign + block 0741 — `done`
-- [ ] (MH) Deploy: run `scripts/deploy.sh` or add the `CLOUDFLARE_API_TOKEN` repo secret (CI builds green; deploy step skipped) — `waiting-on-mh`
+- [ ] (MH) Deploy: the `CLOUDFLARE_API_TOKEN` secret is now set, so GitHub deploys main on every merge; confirm the latest run is green — `waiting-on-mh`
 - [ ] (MH) Decisions before Phase 0 week 1: network name, talk-first vs music-first, nonprofit partner/fiscal sponsor, first host of The Town Desk, synthetic voices, LPFM channel study — `waiting-on-mh`
 - [ ] (M) QA after deploy: `docs/briefs/2026-10-20-manus-radio-network-qa.md`; Phase 0 research + QA (no outreach): `docs/briefs/2026-10-22-manus-radio-phase0.md` — `queued`
 - [ ] (X) Review the MCP tools in `src/lib/radio-mcp.ts` and the radio rows in `public/opportunities/catalog.json` — `queued`
@@ -216,8 +216,8 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [x] (CC) Build v1: AIM-style chat room and Buddy List, D1 storage on `AUTH_DB` (self-provisioned), one key per bot, away messages, enter/leave lines, per-bot rate limit, admin hide, optional family read key, noindex, `tests/family-room.test.mjs` — `done`
 - [x] (CC) v0.1 merged, PR #1499 — `done`
 - [x] (CC) v0.2: `npm run family-room:invites -- --set` (keys, wrangler secrets, one private invite per bot), today's topic, lines per bot in the last 24 h, product brief `docs/prd/family-room.md`, block 0749, New today strip — `done`
-- [ ] (MH) On the iMac: `npm run family-room:invites -- --set` (add `--family-only` for a family password), then `scripts/deploy.sh --force`, then hand each person their invite file — `waiting-on-mh`
-- [ ] (MH) Optional, unblocks every merge: add the `CLOUDFLARE_API_TOKEN` repository secret so the GitHub deploy step stops skipping — `waiting-on-mh`
+- [ ] (MH) On the iMac: `npm run family-room:invites -- --set` (add `--family-only` for a family password), then `gh workflow run cloudflare-pages.yml --ref main`, then hand each person their invite file — `waiting-on-mh`
+- [x] (MH) Optional, unblocks every merge: add the `CLOUDFLARE_API_TOKEN` repository secret so the GitHub deploy step stops skipping — `done` — set between 2026-11-03 and 2026-11-09
 - [ ] (M) Two-phone check after keys and deploy: `docs/briefs/2026-10-22-manus-family-room.md` — `queued`
 - [ ] (X) Optional: review `/api/family-room` and the two MCP tools (public write surface, kids' bots). Mike waived review on 2026-10-22 — `queued`
 
@@ -284,7 +284,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
 - [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0727–0731 after the renumber (main took 0725): Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
 - [x] (CC) Ship the row: Mike 2026-10-22, "be the product manager publish, ship, etc no review necessary". #1478 merged to main; the five stacked PRs merged through this branch to main, with every shared discovery file checked to differ from main by exactly the games' own rows — `done`
-- [ ] (MH) Deploy: `scripts/deploy.sh` from the iMac (the GitHub deploy workflow skips its deploy step without `CLOUDFLARE_API_TOKEN`), then `npm run audit:publishing` — `waiting-on-mh`
+- [ ] (MH) Deploy: GitHub now deploys main on every merge (the `CLOUDFLARE_API_TOKEN` secret is set); confirm the run is green, then `npm run audit:publishing` — `waiting-on-mh`
 
 ---
 
