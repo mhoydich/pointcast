@@ -40,6 +40,17 @@
 
 ---
 
+## Front page rethink: `/home-next/` prototype (2026-11-11)
+
+Mike: "reconsider homepage redesign ... bell labs pixel utility with style design minimal smart readable fonts". Note: `docs/briefs/2026-11-11-homepage-rethink.md`. Static prototype at `public/home-next/`, tests in `tests/home-next.test.mjs`. The current homepage is untouched.
+
+- [x] (CC) Design note, prototype, tests, screenshots at 390/768/1280 light and dark — `done`
+- [ ] (MH) Decide the three open questions in the note (the one button, the dock, how to swap) — `waiting-on-mh`
+- [ ] (M) After deploy: open https://pointcast.xyz/home-next/ on an iPhone (Safari) and an Android phone (Chrome), light and dark; confirm the four gauges fill or say "unavailable", newest posts load, every link opens; log to `docs/manus-logs/2026-11-11-home-next.md` — `queued`
+- [ ] (CC) If Mike says go: port to `src/pages/index.astro` with newest posts rendered at build time, update homepage tests — `queued`
+
+---
+
 ## Cartography: the Atlas (2026-11-08)
 
 One open map of what PointCast and elsegundo.xyz can place, CC0, every record sourced. `/cartography/map`, `/atlas.json`, `/atlas/index.json`.
