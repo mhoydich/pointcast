@@ -69,6 +69,20 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 
 ---
 
+## House Channel — the TV as the hearth (2026-11-11)
+
+`/house/` (the TV page), `/house/r/` (the phone remote), `/house/about/`, `/house.json`, `/api/house`, Block 0784. Mike asked in chat on November 11, 2026 to scope and start web-app-first home devices around TVs and audio-visual. Research: `docs/research/2026-11-11-web-home-capabilities.md`.
+
+- [x] (CC) v0: pairing by a five-letter code that lasts ten minutes (`functions/api/house.ts`, `functions/_lib/house-pairing.mjs`), TV-authoritative state over the existing drum-room party relay (`bc-` rooms, no new Worker), four views (Hearth, Window, Lights, Drum) plus Off, sound made on the TV and off until asked, idle dim, End, rules in `public/house/core.js`, `tests/house-channel.test.mjs`, local server `scripts/house-dev.mjs`, two-screen check `scripts/e2e-house-channel.mjs` — `done`
+- [x] (CC) `/api/weather` now also returns `windMph`, `windDirDeg`, `cloudCover` (additive; null when Open-Meteo does not report them) — `done`
+- [ ] (X) Review `/api/house` (public write surface: code space, rate limits, what is stored, use of `PC_RATES_KV`), the command reducer in `public/house/core.js` (input from any paired phone) and the additive `/api/weather` fields — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-house-channel.md` (a smart TV browser, a cast tab, an iPhone, an Android phone); results to `docs/manus-logs/2026-11-11-house-channel.md` — `queued`
+- [ ] (MH) Decide: is an hour the right time for an unattended TV to let its room go, or should a Window left up all afternoon stay; and should pairing get its own `HOUSE_KV` namespace instead of sharing `PC_RATES_KV` — `waiting-on-mh`
+- [ ] (MH) Deploy with `scripts/deploy.sh` after review. Nothing new to provision for v0 — `waiting-on-mh`
+- [ ] (CC) When Light Companion (`/api/light`) is live, re-run the Lights view against a real circle and drop the demo wording from Block 0784 — `queued`
+
+---
+
 ## Gridtown — a browser-first city builder (2026-10-22)
 
 `/gridtown`, `/gridtown.json`, Block 0742 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
