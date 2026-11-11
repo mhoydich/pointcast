@@ -14,6 +14,20 @@
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
 - [ ] (MH) Choose a licence for the Baby Bonfire files and designs — `waiting-on-mh`
 - [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
+## Coast Commons studies: SB Surf House and Fresh Milk, Local (2026-11-11)
+
+`/coast-commons/sb-surf-house/`, `/coast-commons/fresh-milk/`, listed on `/coast-commons/` and in `/coast-commons.json` (`studies`), Block 0786. Mike in chat on 2026-11-11: publish all, and publish the beach-town commons work as a public good. Two private studies edited for public release. Studies, not offers; nothing bought, sold or raised; not legal, tax, health or investment advice.
+
+- [x] (CC) Both pages generated into `public/coast-commons/` by `node scripts/coast-commons-studies/build.mjs` from the `.src.html` and `.sources.mjs` files beside it; shared plain box, licence note and footer; hub section and JSON entry through `scripts/coast-commons/build.mjs` — `done`
+- [x] (CC) Editorial pass for public release: unverified points repeated beside the claim, businesses named only where their own site or an official page is linked, no listings, no health-benefit claims, byline Claude — `done`
+- [x] (CC) `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, atlas rebuild, `tests/coast-commons-studies.test.mjs` — `done`
+- [ ] (X) Review the plain box, the securities section of the surf house study, the dairy-law and food-safety sections of the milk study, and the rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-commons-studies-qa.md`; results to `docs/manus-logs/2026-11-11-commons-studies-qa.md` — `queued`
+- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [ ] (MH) Decide: whether a lawyer should read the securities and dairy-law sections before the studies are shared widely; whether the groups described without a name in the precedents (only news reports were read) should be named; whether market index figures from Zillow and Zumper stay, given the hub's own pages avoid those names — `waiting-on-mh`
+- [ ] (CC) Fill the "not verified" points (City of Santa Barbara ordinance text, County ordinance page, Carpinteria caps on the City's code, El Segundo, Manhattan Beach and Redondo Beach animal codes, 2026 status of the dairies) and re-read every source each quarter — `queued`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
 ## Coast Commons: an open study for the beach towns (2026-11-11)
 
 `/coast-commons/`, `/coast-commons/el-segundo/` (flagship), `/coast-commons/pattern/`, fourteen more town pages, `/coast-commons.json`, Block 0785. Mike in chat on 2026-11-11: publish to PointCast, for El Segundo, Manhattan Beach, PV and the other beach towns within 25 miles, as a public good; make El Segundo the flagship. A study, not an offer; nothing for sale; no money raised.
