@@ -1,0 +1,948 @@
+---
+/**
+ * /breakwater — a breakout for the 8-bit heart.
+ *
+ * Brief by Michael Hoydich, 2026-10-22: 80s innocence, the joy of the compute
+ * and flow, start very breakout, mood-state symbiosis, mobile and full screen,
+ * audio-visual multimedia, Atari and Commodore inspired, rendered modern.
+ *
+ * Everything in the playfield is drawn from a 3x5 pixel font and plain rects on
+ * a canvas; every sound is synthesized in the browser. Pure logic lives in
+ * src/lib/breakwater (font, waves, mood) and is covered by tests/breakwater.test.mjs.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { DIALS } from '../lib/breakwater/mood.mjs';
+
+const description = 'A breakout game with 1980s innocence: Atari 800XL or Commodore 64 blue, a wall of fourteen by eight, synthesized chip sound, and a mood the game and you keep together. Phone or full screen.';
+const canonical = 'https://pointcast.xyz/breakwater';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': `${canonical}#game`,
+      name: 'Breakwater',
+      alternateName: 'Breakwater: a breakout for the 8-bit heart',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/breakwater/og.png',
+      gamePlatform: 'Web browser',
+      genre: 'Breakout',
+      playMode: 'SinglePlayer',
+      inLanguage: 'en-US',
+      isAccessibleForFree: true,
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      datePublished: '2026-10-22',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Breakwater', item: canonical },
+      ],
+    },
+  ],
+};
+const machines = Object.values(MACHINES);
+const dials = Object.values(DIALS);
+---
+
+<BlockLayout
+  title="Breakwater"
+  description={description}
+  image="/images/breakwater/og.png"
+  imageAlt="A blue playfield with a rainbow wall of bricks, a gold paddle and a white ball beside the words Breakwater, a breakout for the 8-bit heart."
+  themeColor="#2545a8"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/breakwater.json', title: 'Breakwater rules, moods and machines (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/breakwater/og.png',
+    buttons: [
+      { label: 'Play Breakwater', action: 'link', target: canonical },
+      { label: 'Game JSON', action: 'link', target: `${canonical}.json` },
+    ],
+  }}
+>
+  <div class="bw" data-bw data-machine="xl" data-crt="on">
+    <div class="bw-stage" data-stage>
+      <header class="bw-bar">
+        <a class="bw-home" href="/" aria-label="PointCast home">POINTCAST</a>
+        <span class="bw-name" aria-hidden="true">BREAKWATER</span>
+        <div class="bw-controls" role="group" aria-label="Game settings">
+          <button type="button" data-machine-btn title="Switch machine (1 / 2)">800XL</button>
+          <button type="button" data-dial-btn title="Mood dial (3)">PLAY</button>
+          <button type="button" data-sound-btn aria-pressed="true" title="Sound (M)">SND</button>
+          <button type="button" data-crt-btn aria-pressed="true" title="CRT scanlines (C)">CRT</button>
+          <button type="button" data-full-btn title="Full screen (F)">FULL</button>
+        </div>
+      </header>
+      <div class="bw-screen" data-screen>
+        <canvas data-canvas role="img" aria-label="Breakwater playfield. Steer the paddle, tap or press space to launch."></canvas>
+        <div class="bw-scan" aria-hidden="true"></div>
+        <noscript><p class="bw-noscript">Breakwater needs JavaScript to draw the wall and make its sounds. The rules and moods are readable at <a href="/breakwater.json">/breakwater.json</a>.</p></noscript>
+      </div>
+      <footer class="bw-readout" aria-label="Live readout">
+        <span data-r-mood>DAWN</span>
+        <span data-r-tempo>96 BPM</span>
+        <span data-r-wave>WAVE 1</span>
+        <span data-r-fps>-- FPS</span>
+        <span data-r-vec>V 0,0</span>
+        <a href="#notes" data-notes-link>notes ↓</a>
+      </footer>
+      <p class="sr-only" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <section id="notes" class="bw-notes">
+      <p class="bw-eyebrow">PointCast / Games / Breakwater</p>
+      <h1>A breakout for the 8-bit heart.</h1>
+      <p class="bw-lede">Fourteen columns, eight rows, a paddle that follows your finger, and a wall that answers how you play. Pick the blue you grew up with.</p>
+
+      <div class="bw-grid">
+        <article>
+          <h2>Mood, both ways</h2>
+          <p>The game keeps two numbers with you. Rallies raise its <strong>energy</strong>. A lost ball lowers its <strong>calm</strong>. Time brings both back toward the dial you set. Four words name where it is.</p>
+          <ul class="bw-moods">
+            <li><b>DAWN</b> warming up. Cool colors, a slow major arpeggio, a slightly wide paddle.</li>
+            <li><b>FLOW</b> a long rally. Bright colors, the music opens up.</li>
+            <li><b>RUSH</b> hot colors, raster bars in the border, faster tempo, and in a long rally a second ball.</li>
+            <li><b>DRIFT</b> after losses. The paddle widens, the ball slows, the notes thin out.</li>
+          </ul>
+          <p>Your side is the dial: {dials.map((d, i) => <span><b>{d.label}</b> ({d.blurb.toLowerCase().replace(/\.$/, '')}){i < dials.length - 1 ? '; ' : '.'}</span>)} The game relaxes toward it. The mood tape from your session stays in this browser, and when you leave, the game hands its mood to the town.</p>
+        </article>
+        <article>
+          <h2>Two machines</h2>
+          {machines.map((m) => (
+            <p><b style={`color:${m.bands.yellow}`}>{m.name}</b> ({m.year}, {m.chip}). {m.id === 'xl' ? 'The Graphics 0 blue with a black border and light-blue text. Raw square waves with a noise bite, in the POKEY spirit. A blue READY and a RUN before the wall.' : 'The blue field inside a light-blue border. A resonant filter sweep on every voice, in the SID spirit. 38911 BASIC BYTES FREE, then LOAD, then RUN.'}</p>
+          ))}
+          <p>Nothing is emulated and nothing is copied. The pixel font, the six wall patterns, the music and the palettes were written for this page. Read the <a href="https://github.com/mhoydich/pointcast/blob/main/docs/notes/2026-10-22-breakwater-c64-atari-800xl.md">research note on both machines</a>, or visit the <a href="/atari-bbs">Death Star BBS</a>, Mike's own Atari 8-bit history.</p>
+        </article>
+        <article>
+          <h2>The rules</h2>
+          <p>Two rows each of red (7), orange (5), green (3) and yellow (1), the 1976 arcade's own scoring. The ball speeds up after the fourth and twelfth hit of a wave and when it first touches orange and red. Three balls; an extra ball every 400 points; no game over on CALM. Six wall patterns cycle, and one spells your machine.</p>
+          <h2>Controls</h2>
+          <ul>
+            <li>Move the mouse or drag anywhere on the field. Tap or click to launch.</li>
+            <li>Keys: ← → or A D steer, Space launches, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial.</li>
+            <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead; add to Home Screen for the whole display.</li>
+          </ul>
+        </article>
+      </div>
+
+      <footer class="bw-credits">
+        <p>Directed by Michael Hoydich. Designed and built by Claude Code on October 22, 2026. Original code, art and synthesized sound; no ROMs, no recordings. Machine names are tributes.</p>
+        <p><a href="/cabinet-row">Cabinet Row</a> · <a href="/breakwater.json">breakwater.json</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a> · <a href="/">PointCast</a></p>
+      </footer>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .bw { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
+  .bw[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
+  .bw-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .bw-stage:fullscreen { height: 100%; min-height: 0; }
+  .bw-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .bw-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .bw-home { color: var(--text); text-decoration: none; font-weight: 700; }
+  .bw-home:hover { color: #fff; }
+  .bw-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .bw-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .bw-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
+  .bw-controls button:hover { background: #1f2456; }
+  .bw-controls button[aria-pressed='false'] { color: #9aa1cc; text-decoration: line-through; }
+  .bw-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+  .bw-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
+  .bw-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .bw-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; opacity: 0.55; }
+  .bw[data-crt='off'] .bw-scan { display: none; }
+  .bw-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
+  .bw-noscript a { color: var(--paddle); }
+  .bw-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .bw-readout span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .bw-readout a { margin-left: auto; flex-shrink: 0; color: var(--text); text-decoration: none; }
+  .bw-readout a:hover { color: #fff; }
+  .bw-stage:fullscreen .bw-readout a { display: none; }
+  .bw-stage:-webkit-full-screen .bw-readout a { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .bw-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
+  .bw-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
+  .bw-notes h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; margin: 0 0 16px; color: #fff; }
+  .bw-lede { font-size: 18px; line-height: 1.5; max-width: 60ch; color: #c9cfee; margin: 0 0 36px; }
+  .bw-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .bw-grid article { border-top: 2px solid #2b3070; padding-top: 18px; font-size: 14px; line-height: 1.55; }
+  .bw-grid h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); margin: 0 0 10px; }
+  .bw-grid h2 + h2, .bw-grid p + h2, .bw-grid ul + h2 { margin-top: 22px; }
+  .bw-grid p { margin: 0 0 12px; }
+  .bw-grid ul { margin: 0 0 12px; padding-left: 18px; }
+  .bw-grid li { margin-bottom: 6px; }
+  .bw-moods { list-style: none; padding: 0; }
+  .bw-moods b { display: inline-block; min-width: 54px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; color: #fff; }
+  .bw-notes a { color: #a9b9f5; }
+  .bw-notes a:hover { color: #fff; }
+  .bw-credits { margin-top: 44px; border-top: 1px solid #2b3070; padding-top: 18px; font-size: 13px; line-height: 1.6; color: #9aa1cc; }
+  .bw-credits p { margin: 0 0 8px; }
+  @media (max-width: 760px) {
+    .bw-stage { min-height: 0; }
+    .bw-bar { gap: 8px; padding: 6px 10px; }
+    .bw-name { display: none; }
+    .bw-controls { gap: 4px; }
+    .bw-controls button { padding: 7px 7px; min-width: 40px; font-size: 9px; }
+    .bw-readout { gap: 10px; font-size: 9px; height: 26px; }
+    .bw-readout [data-r-vec], .bw-readout [data-r-fps] { display: none; }
+    .bw-grid { grid-template-columns: 1fr; gap: 20px; }
+    .bw-notes { padding: 40px 16px 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .bw-scan { opacity: 0.35; } }
+</style>
+
+<script>
+  import { COLS, ROWS, MACHINES, MACHINE_IDS, buildWave, speedStepsFor } from '../lib/breakwater/waves.mjs';
+  import { DIALS, DIAL_IDS, LABELS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
+
+  const root = document.querySelector('[data-bw]');
+  if (root) main(root);
+
+  function main(root) {
+    // ---------- geometry (logical pixels) ----------
+    const W = 288, H_MIN = 384, H_MAX = 480, WALL = 8, HUD = 32;
+    let H = H_MIN;
+    const BW = 18, BH = 8, PX = 19, PY = 10, GRID_X = 11, GRID_Y = 48;
+    let PADDLE_Y = H - 32;
+    const PADDLE_H = 6, PADDLE_W = 40, BALL = 4;
+    const BASE_SPEED = 150, MAX_SPEED = 340, EXTRA_EVERY = 400;
+    const STORE = 'breakwater:v1';
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+
+    const stage = root.querySelector('[data-stage]');
+    const screen = root.querySelector('[data-screen]');
+    const canvas = root.querySelector('[data-canvas]');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const live = root.querySelector('[data-live]');
+    const btn = {
+      machine: root.querySelector('[data-machine-btn]'),
+      dial: root.querySelector('[data-dial-btn]'),
+      sound: root.querySelector('[data-sound-btn]'),
+      crt: root.querySelector('[data-crt-btn]'),
+      full: root.querySelector('[data-full-btn]'),
+    };
+    const readout = {
+      mood: root.querySelector('[data-r-mood]'),
+      tempo: root.querySelector('[data-r-tempo]'),
+      wave: root.querySelector('[data-r-wave]'),
+      fps: root.querySelector('[data-r-fps]'),
+      vec: root.querySelector('[data-r-vec]'),
+    };
+
+    // ---------- settings ----------
+    const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch { return {}; } };
+    const readSiteMood = () => { try { return localStorage.getItem('pc:mood'); } catch { return null; } };
+    const settings = load();
+    let machineId = MACHINES[settings.machine] ? settings.machine : 'xl';
+    let soundOn = settings.sound !== false;
+    let crtOn = settings.crt !== false;
+    let best = Number.isFinite(settings.best) ? settings.best : 0;
+    let mood = restoreMood(settings.mood, DIALS[settings.dial] ? settings.dial : dialFromSiteMood(readSiteMood()));
+    let response = moodResponse(mood);
+    const save = () => {
+      try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, mood: serializeMood(mood) })); } catch {}
+    };
+    // The town only inherits a mood from a game that was actually played, never from a glance at the title.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+
+    // ---------- helpers ----------
+    const M = () => MACHINES[machineId];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return rgb([0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * t))); };
+    const announce = (text) => { if (live) live.textContent = text; };
+    const buzz = (ms) => { if (COARSE && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} } };
+
+    // ---------- audio ----------
+    const audio = (() => {
+      let ac = null, master, sfx, music;
+      let tempo = 110, scale = 'major', density = 0.5, musicOn = false, wantMusic = false;
+      let nextNote = 0, step = 0, timer = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      const PROG = {
+        major: [[60, 64, 67, 72], [57, 60, 64, 69], [53, 57, 60, 65], [55, 59, 62, 67]],
+        bright: [[60, 64, 67, 71], [62, 66, 69, 74], [65, 69, 72, 76], [67, 71, 74, 78]],
+        minor: [[57, 60, 64, 69], [53, 57, 60, 65], [55, 59, 62, 67], [57, 60, 64, 69]],
+        soft: [[60, 67, 72, 76], [53, 60, 65, 69], [57, 64, 69, 72], [55, 62, 67, 71]],
+      };
+      const ARP = [0, 1, 2, 3, 2, 1, 0, 2];
+      const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31];
+      function ensure() {
+        if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return ac; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 6;
+        master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0;
+        master.connect(comp); comp.connect(ac.destination);
+        sfx = ac.createGain(); sfx.gain.value = 0.7; sfx.connect(master);
+        music = ac.createGain(); music.gain.value = 0.32; music.connect(master);
+        return ac;
+      }
+      function voice({ freq, type = 'square', t = ac.currentTime, dur = 0.12, vol = 0.3, slide = 0, dest = sfx, a = 0.004, r = 0.05, detune = 0 }) {
+        if (!ac) return;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+        o.detune.value = detune;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + a);
+        g.gain.setTargetAtTime(vol * 0.55, t + a + dur * 0.25, Math.max(0.01, dur * 0.25));
+        g.gain.setTargetAtTime(0.0001, t + dur, r);
+        o.connect(g);
+        let out = g;
+        if (machineId === 'c64') {
+          const f = ac.createBiquadFilter();
+          f.type = 'lowpass'; f.Q.value = 4;
+          f.frequency.setValueAtTime(Math.min(12000, freq * 7), t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 1.3), t + dur + 0.05);
+          g.connect(f); out = f;
+        }
+        out.connect(dest);
+        o.start(t); o.stop(t + dur + r * 5 + 0.05);
+      }
+      function noise(t, dur = 0.05, vol = 0.12) {
+        if (!ac) return;
+        const len = Math.max(1, Math.floor(ac.sampleRate * dur));
+        const buf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const s = ac.createBufferSource(); s.buffer = buf;
+        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = 0.8;
+        const g = ac.createGain(); g.gain.value = vol;
+        s.connect(f); f.connect(g); g.connect(sfx); s.start(t);
+      }
+      const lead = () => (machineId === 'c64' ? 'square' : 'square');
+      const bass = () => (machineId === 'c64' ? 'triangle' : 'square');
+      function playStep(s, t) {
+        const chords = PROG[scale] || PROG.major;
+        const chord = chords[Math.floor(s / 16) % chords.length];
+        const idx = s % 16;
+        if (idx % 8 === 0) voice({ freq: midi(chord[0] - 24), type: bass(), t, dur: 0.22, vol: 0.18, dest: music, r: 0.08 });
+        const gate = scale === 'soft' ? 0.35 : 0.55 + density * 0.45;
+        if (Math.random() < gate) {
+          const n = chord[ARP[idx % ARP.length]] + (scale === 'minor' && idx % 4 === 2 ? 12 : 0);
+          voice({ freq: midi(n), type: lead(), t, dur: scale === 'soft' ? 0.2 : 0.09, vol: scale === 'soft' ? 0.09 : 0.11, dest: music, r: 0.04, detune: machineId === 'xl' ? 4 : 0 });
+        }
+        if (scale === 'minor' && (idx === 4 || idx === 12)) noise(t, 0.03, 0.05);
+      }
+      function schedule() {
+        if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed step as one burst.
+        if (nextNote < ac.currentTime - 0.1) { nextNote = ac.currentTime + 0.05; step += 1; }
+        while (nextNote < ac.currentTime + 0.14) {
+          playStep(step, nextNote);
+          nextNote += 60 / tempo / 4;
+          step += 1;
+        }
+      }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+      }
+      return {
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
+        },
+        setMusic,
+        wantsMusic: () => wantMusic,
+        set(t, sc, d) { tempo = t; scale = sc; density = d; },
+        mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
+        brick(c, r) {
+          if (!ac) return;
+          const t = ac.currentTime;
+          voice({ freq: midi(55 + PENTA[c % PENTA.length] + (r < 2 ? 12 : 0)), type: lead(), t, dur: 0.1, vol: 0.22, r: 0.06 });
+          if (machineId === 'xl') noise(t, 0.04, 0.09);
+        },
+        paddle() { if (ac) voice({ freq: 110, type: machineId === 'c64' ? 'triangle' : 'square', dur: 0.07, vol: 0.2, slide: 1.4, r: 0.03 }); },
+        wall() { if (ac) voice({ freq: 880, type: 'triangle', dur: 0.03, vol: 0.09, r: 0.02 }); },
+        loss() { if (ac) { voice({ freq: 440, type: 'sawtooth', dur: 0.38, vol: 0.22, slide: 0.18, r: 0.1 }); noise(ac.currentTime + 0.05, 0.12, 0.08); } },
+        clear() { if (!ac) return; const t = ac.currentTime; [60, 64, 67, 72, 76].forEach((n, i) => voice({ freq: midi(n), type: lead(), t: t + i * 0.07, dur: 0.14, vol: 0.2, r: 0.08 })); },
+        extra() { if (!ac) return; const t = ac.currentTime; voice({ freq: midi(79), type: 'triangle', t, dur: 0.1, vol: 0.2 }); voice({ freq: midi(84), type: 'triangle', t: t + 0.1, dur: 0.22, vol: 0.2, r: 0.1 }); },
+        second() { if (!ac) return; const t = ac.currentTime; [67, 74, 79].forEach((n, i) => voice({ freq: midi(n), type: 'square', t: t + i * 0.05, dur: 0.1, vol: 0.18 })); },
+        key() { if (ac) voice({ freq: 1800, type: 'square', dur: 0.012, vol: 0.05, r: 0.01 }); },
+        sio() { if (!ac) return; const t = ac.currentTime; for (let i = 0; i < 4; i += 1) voice({ freq: i % 2 ? 1046 : 1318, type: 'square', t: t + i * 0.12, dur: 0.07, vol: 0.14, r: 0.02 }); },
+        jingle() { if (!ac) return; const t = ac.currentTime; [60, 67, 72, 76, 79, 84].forEach((n, i) => voice({ freq: midi(n), type: lead(), t: t + i * 0.06, dur: 0.12, vol: 0.16, r: 0.1 })); },
+        ready: () => !!ac,
+      };
+    })();
+
+    // ---------- game state ----------
+    const G = {
+      phase: 'boot', t: 0, boot: { lines: [], chars: 0, done: false, beeped: false }, wave: null, waveIndex: 0,
+      score: 0, balls: 3, nextExtra: EXTRA_EVERY, paddleX: W / 2, paddleW: PADDLE_W, paddleTarget: PADDLE_W,
+      ballList: [], hits: 0, orange: false, red: false, particles: [], flash: 0, msg: '', msgT: 0, msgScale: 3,
+      pointerX: null, keys: {}, attract: true, loading: 0, multiballUsed: false, fps: 60, fpsAcc: 0, fpsN: 0,
+      sinceLoss: 0, shake: 0, paused: false, lastTouch: 0, over: false, pendingOver: false, musicResume: false, played: false,
+    };
+
+    function bootScript() {
+      if (machineId === 'c64') return ['', '  **** POINTCAST 64 BASIC V2 ****', '', ' 64K RAM SYSTEM', ' 38911 BASIC BYTES FREE', '', 'READY.', 'LOAD"BREAKWATER",8,1', '', 'SEARCHING FOR BREAKWATER', 'LOADING', 'READY.', 'RUN'];
+      return ['READY', 'RUN "D:BREAKWATER"', '', 'LOADING', 'READY', 'RUN'];
+    }
+    function beginBoot() {
+      G.phase = 'boot'; G.t = 0;
+      G.boot = { lines: bootScript(), chars: 0, done: false, beeped: false, total: 0 };
+      G.boot.total = G.boot.lines.reduce((n, l) => n + l.length + 1, 0);
+      audio.setMusic(false);
+    }
+    function newBall(x, y, vx, vy, stuck) {
+      return { x, y, vx, vy, speed: BASE_SPEED, stuck: !!stuck, trail: [] };
+    }
+    function serveBall() {
+      G.ballList = [newBall(G.paddleX - BALL / 2, PADDLE_Y - BALL - 1, 0, 0, true)];
+    }
+    function startWave(index) {
+      G.waveIndex = index;
+      G.wave = buildWave(index, machineId);
+      G.hits = 0; G.orange = false; G.red = false; G.multiballUsed = false;
+      G.loading = 0.7;
+      serveBall();
+      G.phase = 'serve';
+      readout.wave.textContent = `WAVE ${index + 1} ${G.wave.pattern.toUpperCase()}`;
+    }
+    function newGame() {
+      G.score = 0; G.balls = 3; G.nextExtra = EXTRA_EVERY; G.attract = false; G.over = false; G.pendingOver = false; G.particles = []; G.played = true;
+      beginGame(mood); response = moodResponse(mood);
+      G.paddleX = W / 2;
+      startWave(0);
+      audio.setMusic(true);
+      announce('New game. Tap or press space to launch.');
+    }
+    function enterTitle() {
+      G.phase = 'title'; G.t = 0; G.attract = true; G.score = 0; G.waveIndex = 0;
+      G.wave = buildWave(0, machineId);
+      G.ballList = [newBall(W / 2, 200, 90, -150, false)];
+      G.ballList[0].speed = 170;
+      audio.setMusic(true);
+    }
+    function showMsg(text, scale = 3, time = 1.2) { G.msg = text; G.msgScale = scale; G.msgT = time; }
+
+    // ---------- physics ----------
+    function targetSpeed() {
+      const steps = speedStepsFor(G.hits, G.orange, G.red);
+      return clamp((BASE_SPEED + 22 * steps + 9 * G.waveIndex) * (G.attract ? 1 : response.speed), 90, MAX_SPEED);
+    }
+    function normalize(b) {
+      let len = Math.hypot(b.vx, b.vy) || 1;
+      b.vx = (b.vx / len) * b.speed; b.vy = (b.vy / len) * b.speed;
+      const minY = 0.28 * b.speed;
+      if (Math.abs(b.vy) < minY) {
+        b.vy = (b.vy < 0 ? -1 : 1) * minY;
+        const sx = b.vx < 0 ? -1 : 1;
+        b.vx = sx * Math.sqrt(Math.max(0, b.speed * b.speed - b.vy * b.vy));
+      }
+    }
+    function spawnParticles(x, y, color, n) {
+      for (let i = 0; i < n; i += 1) G.particles.push({ x, y, vx: rnd(-90, 90), vy: rnd(-140, 20), life: rnd(0.3, 0.7), t: 0, color });
+      if (G.particles.length > 220) G.particles.splice(0, G.particles.length - 220);
+    }
+    function hitBrick(b, brick) {
+      brick.alive = false;
+      const bx = GRID_X + brick.c * PX, by = GRID_Y + brick.r * PY;
+      const ox = Math.min(b.x + BALL, bx + BW) - Math.max(b.x, bx);
+      const oy = Math.min(b.y + BALL, by + BH) - Math.max(b.y, by);
+      if (ox < oy) { b.vx = -b.vx; b.x += b.vx > 0 ? ox : -ox; } else { b.vy = -b.vy; b.y += b.vy > 0 ? oy : -oy; }
+      if (!G.attract) {
+        G.score += brick.points; G.hits += 1;
+        if (brick.band === 'orange') G.orange = true;
+        if (brick.band === 'red') G.red = true;
+        moodEvent(mood, 'brick');
+        if (G.score >= G.nextExtra && !response.unlimitedBalls) { G.balls += 1; G.nextExtra += EXTRA_EVERY; audio.extra(); showMsg('EXTRA BALL', 3, 1); announce('Extra ball.'); }
+        else if (G.score >= G.nextExtra) G.nextExtra += EXTRA_EVERY;
+        buzz(8);
+      }
+      audio.brick(brick.c, brick.r);
+      spawnParticles(bx + BW / 2, by + BH / 2, M().bands[brick.band], REDUCED ? 2 : 3 + Math.round(9 * response.density));
+    }
+    function collide(b) {
+      if (b.x < WALL) { b.x = WALL; b.vx = Math.abs(b.vx); audio.wall(); }
+      if (b.x + BALL > W - WALL) { b.x = W - WALL - BALL; b.vx = -Math.abs(b.vx); audio.wall(); }
+      if (b.y < HUD) { b.y = HUD; b.vy = Math.abs(b.vy); audio.wall(); }
+      const pw = G.paddleW, px0 = G.paddleX - pw / 2, px1 = G.paddleX + pw / 2;
+      if (b.vy > 0 && b.y + BALL >= PADDLE_Y && b.y + BALL <= PADDLE_Y + PADDLE_H + 3 && b.x + BALL >= px0 && b.x <= px1) {
+        const rel = clamp(((b.x + BALL / 2) - G.paddleX) / (pw / 2), -1, 1);
+        const ang = rel * (Math.PI / 3);
+        b.vx = Math.sin(ang) * b.speed; b.vy = -Math.cos(ang) * b.speed; b.y = PADDLE_Y - BALL;
+        if (!G.attract) { moodEvent(mood, 'paddle'); buzz(4); }
+        audio.paddle();
+      }
+      if (G.wave) {
+        const c0 = Math.floor((b.x - GRID_X) / PX), c1 = Math.floor((b.x + BALL - GRID_X) / PX);
+        const r0 = Math.floor((b.y - GRID_Y) / PY), r1 = Math.floor((b.y + BALL - GRID_Y) / PY);
+        if (r1 >= 0 && r0 < ROWS && c1 >= 0 && c0 < COLS) {
+          for (const brick of G.wave.bricks) {
+            if (!brick.alive || brick.c < c0 || brick.c > c1 || brick.r < r0 || brick.r > r1) continue;
+            const bx = GRID_X + brick.c * PX, by = GRID_Y + brick.r * PY;
+            if (b.x < bx + BW && b.x + BALL > bx && b.y < by + BH && b.y + BALL > by) { hitBrick(b, brick); break; }
+          }
+        }
+      }
+    }
+    function stepBall(b, dt) {
+      if (b.stuck) { b.x = G.paddleX - BALL / 2; b.y = PADDLE_Y - BALL - 1; return; }
+      const ts = targetSpeed();
+      b.speed += (ts - b.speed) * Math.min(1, 2 * dt);
+      normalize(b);
+      const dist = Math.hypot(b.vx, b.vy) * dt;
+      const n = Math.max(1, Math.ceil(dist / 3));
+      const sdt = dt / n;
+      for (let i = 0; i < n; i += 1) {
+        b.x += b.vx * sdt; b.y += b.vy * sdt;
+        collide(b);
+        if (b.y > H) return;
+      }
+      b.trail.push([b.x, b.y]);
+      if (b.trail.length > 7) b.trail.shift();
+    }
+    function launch(b) {
+      // The tap that serves may also have moved the paddle this frame: seat the ball on it first.
+      G.paddleX = clamp(G.paddleX, WALL + G.paddleW / 2, W - WALL - G.paddleW / 2);
+      b.x = G.paddleX - BALL / 2; b.y = PADDLE_Y - BALL - 1; b.trail = [];
+      b.stuck = false;
+      const dir = G.pointerDir || (Math.random() < 0.5 ? -1 : 1);
+      b.speed = targetSpeed();
+      b.vx = dir * 0.42; b.vy = -1; normalize(b);
+    }
+    function loseBall() {
+      moodEvent(mood, 'loss');
+      audio.loss(); buzz(30);
+      G.flash = 0.35; G.shake = REDUCED ? 0 : 0.25;
+      G.phase = 'lost'; G.t = 0;
+      if (response.unlimitedBalls || DIALS[mood.dial].unlimitedBalls) { showMsg('AGAIN', 3, 0.9); announce('Ball lost. Serve again.'); return; }
+      G.balls -= 1;
+      if (G.balls <= 0) { G.pendingOver = true; showMsg('', 3, 0); announce(`Game over. Score ${G.score}.`); }
+      else { showMsg('BALL LOST', 3, 0.9); announce(`Ball lost. ${G.balls} left.`); }
+    }
+    function gameOver() {
+      G.phase = 'over'; G.t = 0; G.over = true;
+      if (G.score > best) best = G.score;
+      save(); handMoodToTown();
+      audio.setMusic(false);
+    }
+
+    // ---------- update ----------
+    function update(dt) {
+      G.t += dt;
+      if (G.msgT > 0) G.msgT -= dt;
+      if (G.flash > 0) G.flash -= dt;
+      if (G.shake > 0) G.shake -= dt;
+      if (G.loading > 0) G.loading -= dt;
+      for (const p of G.particles) { p.t += dt; p.vy += 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+      G.particles = G.particles.filter((p) => p.t < p.life);
+
+      if (G.phase === 'boot') {
+        const rate = machineId === 'c64' ? 48 : 30;
+        G.boot.chars += rate * dt;
+        if (machineId === 'xl' && !G.boot.beeped && G.boot.chars > 22) { G.boot.beeped = true; audio.sio(); }
+        if (machineId === 'c64' && !G.boot.beeped && G.boot.chars > 80) { G.boot.beeped = true; G.loading = 1.4; }
+        if (G.boot.chars >= G.boot.total + 20) { audio.jingle(); enterTitle(); }
+        return;
+      }
+
+      // paddle from keys (pointer sets paddleX directly)
+      const kx = (G.keys.ArrowRight || G.keys.KeyD ? 1 : 0) - (G.keys.ArrowLeft || G.keys.KeyA ? 1 : 0);
+      if (kx) { G.paddleX += kx * 260 * dt; G.pointerDir = kx; }
+      if (G.attract) {
+        const b = G.ballList[0];
+        if (b) G.paddleX += ((b.x + BALL / 2 + Math.sin(G.t * 1.7) * 9) - G.paddleX) * Math.min(1, 6 * dt);
+      }
+      G.paddleTarget = G.attract ? PADDLE_W : PADDLE_W * response.paddle;
+      G.paddleW += (G.paddleTarget - G.paddleW) * Math.min(1, 3 * dt);
+      G.paddleX = clamp(G.paddleX, WALL + G.paddleW / 2, W - WALL - G.paddleW / 2);
+
+      if (G.phase === 'title') {
+        for (const b of G.ballList) { stepBall(b, dt); if (b.y > H) { b.x = W / 2; b.y = 220; b.vx = rnd(-120, 120); b.vy = -150; b.trail = []; } }
+        if (G.wave && !G.wave.bricks.some((x) => x.alive)) G.wave = buildWave(G.waveIndex += 1, machineId);
+        audio.set(104, 'major', 0.25);
+        return;
+      }
+      if (G.phase === 'paused' || G.phase === 'over') return;
+
+      moodStep(mood, dt);
+      response = moodResponse(mood);
+      audio.set(response.tempo, response.scale, response.density);
+
+      if (G.phase === 'serve') { for (const b of G.ballList) stepBall(b, dt); return; }
+      if (G.phase === 'lost') {
+        if (G.t > 0.9) {
+          if (G.pendingOver) { G.pendingOver = false; gameOver(); }
+          else { serveBall(); G.phase = 'serve'; }
+        }
+        return;
+      }
+      if (G.phase === 'clear') {
+        if (G.t > 1.4) startWave(G.waveIndex + 1);
+        return;
+      }
+      if (G.phase === 'play') {
+        for (const b of G.ballList) stepBall(b, dt);
+        const before = G.ballList.length;
+        G.ballList = G.ballList.filter((b) => b.y <= H);
+        if (G.ballList.length === 0) { loseBall(); return; }
+        if (G.ballList.length < before) audio.wall();
+        if (response.multiball && !G.multiballUsed && G.ballList.length === 1) {
+          const b = G.ballList[0];
+          const twin = newBall(b.x, b.y, -b.vx, b.vy, false); twin.speed = b.speed;
+          G.ballList.push(twin); G.multiballUsed = true; audio.second(); showMsg('SECOND BALL', 3, 1.1); announce('Second ball.');
+        }
+        if (!G.wave.bricks.some((x) => x.alive)) {
+          G.score += 50; moodEvent(mood, 'wave'); audio.clear(); G.phase = 'clear'; G.t = 0;
+          showMsg(`WAVE ${G.waveIndex + 1} CLEAR`, 3, 1.4); announce(`Wave ${G.waveIndex + 1} clear.`);
+        }
+      }
+    }
+
+    // ---------- rendering ----------
+    let dpr = 1, cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
+    function resize() {
+      const r = screen.getBoundingClientRect();
+      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H_MIN) * 4) / 4);
+      // A tall phone gets a taller field (more room under the wall), never a shorter one.
+      const nextH = clamp(Math.floor(cssH / scale), H_MIN, H_MAX);
+      if (nextH !== H) applyHeight(nextH);
+      offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function applyHeight(nextH) {
+      // Only a real viewport change reaches here (rotation, fullscreen); the readout row is fixed-height.
+      const shift = nextH - H;
+      H = nextH; PADDLE_Y = H - 32;
+      for (const b of G.ballList) { if (b.stuck) b.y = PADDLE_Y - BALL - 1; else if (shift < 0 && b.y > PADDLE_Y - 20) b.y = PADDLE_Y - 20; }
+    }
+    function text(str, x, y, s, color, align = 'left') {
+      if (!str) return;
+      const w = textWidth(str, s);
+      const ox = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? Math.round(x - w) : x;
+      ctx.fillStyle = color;
+      eachPixel(str, ox, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+    }
+    function rainbowText(str, x, y, s, colors) {
+      const w = textWidth(str, s);
+      const ox = Math.round(x - w / 2);
+      for (let i = 0; i < str.length; i += 1) {
+        ctx.fillStyle = colors[i % colors.length];
+        eachPixel(str[i], ox + i * 4 * s, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+      }
+    }
+    function bandColor(band) {
+      const m = M(); const base = m.bands[band];
+      const label = response.label;
+      if (G.attract) return base;
+      if (label === 'FLOW') return mix(base, '#ffffff', 0.18);
+      if (label === 'RUSH') return mix(base, m.raster[0], 0.22 + 0.2 * Math.sin(G.t * 6) * 0.5);
+      if (label === 'DRIFT') return mix(base, m.field, 0.35);
+      return base;
+    }
+    function drawBorder() {
+      const m = M();
+      ctx.fillStyle = m.border;
+      ctx.fillRect(0, 0, cssW, cssH);
+      const label = G.attract ? 'DAWN' : response.label;
+      const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.62 : label === 'FLOW' ? 0.34 : label === 'DAWN' ? 0.12 : 0;
+      if (bars === 'load') {
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else if (bars > 0) {
+        const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
+        const shift = (G.t * speed) % (m.raster.length * h * 2);
+        ctx.globalAlpha = bars;
+        const f = shift % h, base = shift - f, period = m.raster.length * 2;
+        for (let y = -period * h; y < cssH + h; y += h) {
+          const idx = Math.round((y - base) / h);
+          const k = ((idx % period) + period) % period;
+          if (k >= m.raster.length) continue;
+          ctx.fillStyle = m.raster[k];
+          ctx.fillRect(0, y + f, cssW, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    function drawField() {
+      const m = M();
+      ctx.fillStyle = m.field;
+      ctx.fillRect(0, 0, W, H);
+      if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.12 : 0.5, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    }
+    function drawHud() {
+      const m = M();
+      text(String(G.score).padStart(6, '0'), WALL + 2, 8, 3, m.bright);
+      const label = G.attract ? 'ATTRACT' : response.label;
+      const col = G.attract ? m.dim : label === 'RUSH' ? m.bands.red : label === 'FLOW' ? m.bands.yellow : label === 'DRIFT' ? m.text : m.bands.green;
+      text(label, W / 2 + 10, 11, 2, col, 'center');
+      if (!G.attract) {
+        if (response.unlimitedBalls) text('CALM', W - WALL - 2, 11, 2, m.text, 'right');
+        else { ctx.fillStyle = m.paddle; for (let i = 0; i < Math.min(G.balls, 8); i += 1) ctx.fillRect(W - WALL - 2 - (i + 1) * 8, 12, 6, 4); }
+      }
+      ctx.fillStyle = m.text; ctx.globalAlpha = 0.5; ctx.fillRect(WALL, HUD - 2, W - 2 * WALL, 1); ctx.globalAlpha = 1;
+      // mood tape along the top edge
+      if (!G.attract && mood.tape.length) {
+        const n = Math.min(60, mood.tape.length), start = mood.tape.length - n;
+        for (let i = 0; i < n; i += 1) {
+          const v = mood.tape[start + i];
+          ctx.fillStyle = v === 2 ? m.bands.red : v === 1 ? m.bands.yellow : v === 3 ? m.text : m.bands.green;
+          ctx.fillRect(WALL + i * 3, HUD - 6, 2, 2);
+        }
+      }
+    }
+    function drawWall(alpha) {
+      if (!G.wave) return;
+      ctx.globalAlpha = alpha;
+      for (const brick of G.wave.bricks) {
+        if (!brick.alive) continue;
+        ctx.fillStyle = bandColor(brick.band);
+        ctx.fillRect(GRID_X + brick.c * PX, GRID_Y + brick.r * PY, BW, BH);
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawPaddleAndBalls(alpha) {
+      const m = M();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = m.paddle;
+      ctx.fillRect(Math.round(G.paddleX - G.paddleW / 2), PADDLE_Y, Math.round(G.paddleW), PADDLE_H);
+      for (const b of G.ballList) {
+        if (!REDUCED) {
+          for (let i = 0; i < b.trail.length; i += 1) {
+            ctx.globalAlpha = alpha * ((i + 1) / b.trail.length) * 0.35 * (0.4 + response.glow);
+            ctx.fillStyle = m.ball;
+            ctx.fillRect(Math.round(b.trail[i][0]), Math.round(b.trail[i][1]), BALL, BALL);
+          }
+          ctx.globalAlpha = alpha;
+        }
+        ctx.fillStyle = m.ball;
+        ctx.fillRect(Math.round(b.x), Math.round(b.y), BALL, BALL);
+      }
+      for (const p of G.particles) {
+        ctx.globalAlpha = alpha * (1 - p.t / p.life);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawBoot() {
+      const m = M();
+      ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H);
+      let left = Math.floor(G.boot.chars);
+      let y = 12;
+      for (const line of G.boot.lines) {
+        if (left <= 0) break;
+        const shown = line.slice(0, Math.min(line.length, left));
+        text(shown, 10, y, 2, m.text);
+        left -= line.length + 1;
+        if (left <= 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10 + textWidth(shown, 2) + (shown ? 2 : 0), y, 6, 10); }
+        y += 12;
+      }
+      if (G.boot.lines.length && left > 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10, y, 6, 10); }
+    }
+    function drawTitle() {
+      const m = M();
+      drawWall(0.3); drawPaddleAndBalls(0.3);
+      rainbowText('BREAKWATER', W / 2, 92, 6, [m.bands.red, m.bands.orange, m.bands.yellow, m.bands.green]);
+      text('A BREAKOUT FOR THE 8-BIT HEART', W / 2, 150, 2, m.bright, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, 170, 2, m.bright, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 186, 2, m.bright, 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY' : 'TAP OR PRESS SPACE', W / 2, 250, 2, m.paddle, 'center');
+      if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, 280, 2, m.bright, 'center');
+      text('2026 HOYDICH / POINTCAST', W / 2, H - 26, 2, m.dim, 'center');
+    }
+    function drawOver() {
+      const m = M();
+      drawWall(0.35); drawPaddleAndBalls(0.35);
+      text('GAME OVER', W / 2, 118, 5, m.bright, 'center');
+      text(`SCORE ${String(G.score).padStart(6, '0')}`, W / 2, 172, 2, m.bright, 'center');
+      text(`BEST  ${String(best).padStart(6, '0')}`, W / 2, 188, 2, m.bands.yellow, 'center');
+      text(`WAVES ${G.waveIndex + 1}  PEAK ${mood.peak}`, W / 2, 204, 2, m.text, 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY AGAIN' : 'TAP OR SPACE TO PLAY AGAIN', W / 2, 256, 2, m.paddle, 'center');
+    }
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBorder();
+      let sx = offX, sy = offY;
+      if (G.shake > 0) { sx += Math.round(rnd(-2, 2)); sy += Math.round(rnd(-2, 2)); }
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, sx * dpr, sy * dpr);
+      if (G.phase === 'boot') { drawBoot(); return; }
+      drawField();
+      if (G.phase === 'title') { drawTitle(); return; }
+      if (G.phase === 'over') { drawHud(); drawOver(); return; }
+      drawHud(); drawWall(1); drawPaddleAndBalls(1);
+      const m = M();
+      if (G.phase === 'serve' && Math.floor(G.t * 2) % 2 === 0 && G.msgT <= 0) text(COARSE ? 'TAP TO SERVE' : 'TAP OR SPACE TO SERVE', W / 2, 220, 2, m.paddle, 'center');
+      if (G.phase === 'paused') { text('PAUSED', W / 2, 200, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 232, 2, m.paddle, 'center'); }
+      if (G.msgT > 0 && G.msg) text(G.msg, W / 2, 196, G.msgScale, m.bright, 'center');
+    }
+
+    // ---------- loop ----------
+    let last = performance.now(), readoutClock = 0;
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000));
+      last = now;
+      G.fpsAcc += dt; G.fpsN += 1;
+      if (G.fpsAcc >= 0.5) { G.fps = Math.round(G.fpsN / G.fpsAcc); G.fpsAcc = 0; G.fpsN = 0; }
+      update(dt);
+      render();
+      readoutClock += dt;
+      if (readoutClock > 0.25) {
+        readoutClock = 0;
+        const b = G.ballList[0];
+        readout.mood.textContent = `${G.attract ? 'ATTRACT' : response.label} E${mood.energy.toFixed(2)} C${mood.calm.toFixed(2)}`;
+        readout.tempo.textContent = `${G.attract ? 104 : response.tempo} BPM ${G.attract ? 'MAJOR' : response.scale.toUpperCase()}`;
+        readout.fps.textContent = `${G.fps} FPS`;
+        readout.vec.textContent = b ? `V ${Math.round(b.vx)},${Math.round(b.vy)}` : 'V 0,0';
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
+    }
+    function action() {
+      audio.unlock();
+      if (G.phase === 'boot') { audio.jingle(); enterTitle(); return; }
+      if (G.phase === 'title' || G.phase === 'over') { newGame(); return; }
+      if (G.phase === 'serve') { for (const b of G.ballList) if (b.stuck) launch(b); G.phase = 'play'; return; }
+      if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); }
+    }
+    canvas.addEventListener('pointermove', (e) => {
+      if (G.attract && G.phase === 'title') return;
+      const p = pointerToField(e);
+      if (G.pointerX != null) G.pointerDir = p.x > G.pointerX ? 1 : p.x < G.pointerX ? -1 : G.pointerDir;
+      G.pointerX = p.x;
+      G.paddleX = p.x;
+    });
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      const p = pointerToField(e);
+      if (!(G.attract && G.phase === 'title')) { G.pointerX = p.x; G.paddleX = p.x; }
+      action();
+    });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      const k = e.code;
+      if (t && typeof t.closest === 'function') {
+        if (t.closest('input, textarea, select, [contenteditable]')) return;
+        // Enter and Space belong to a focused link or button; arrows and letters still steer from there.
+        if ((k === 'Space' || k === 'Enter') && t.closest('a, button')) return;
+      }
+      if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'KeyA' || k === 'KeyD') { G.keys[k] = true; e.preventDefault(); audio.unlock(); return; }
+      if (k === 'Space' || k === 'Enter') { e.preventDefault(); action(); return; }
+      if (k === 'KeyP') { togglePause(); return; }
+      if (k === 'KeyF') { toggleFull(); return; }
+      if (k === 'KeyM') { toggleSound(); return; }
+      if (k === 'KeyC') { toggleCrt(); return; }
+      if (k === 'Digit1') { setMachine('xl'); return; }
+      if (k === 'Digit2') { setMachine('c64'); return; }
+      if (k === 'Digit3') { cycleDial(); }
+    });
+    document.addEventListener('keyup', (e) => { G.keys[e.code] = false; });
+    function togglePause() {
+      if (G.phase === 'play' || G.phase === 'serve') { G.resume = G.phase; G.phase = 'paused'; audio.setMusic(false); }
+      else if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        G.keys = {};
+        if (G.phase === 'play' || G.phase === 'serve') { G.resume = G.phase; G.phase = 'paused'; }
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
+    });
+    window.addEventListener('blur', () => { G.keys = {}; });
+    window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
+
+    // ---------- settings UI ----------
+    function syncButtons() {
+      btn.machine.textContent = M().label;
+      btn.dial.textContent = DIALS[mood.dial].label;
+      btn.sound.setAttribute('aria-pressed', String(soundOn));
+      btn.crt.setAttribute('aria-pressed', String(crtOn));
+      root.dataset.machine = machineId;
+      root.dataset.crt = crtOn ? 'on' : 'off';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
+    }
+    function setMachine(id) {
+      if (!MACHINES[id] || id === machineId) return;
+      machineId = id;
+      if (G.wave) { const alive = new Set(G.wave.bricks.filter((b) => !b.alive).map((b) => `${b.c},${b.r}`)); G.wave = buildWave(G.waveIndex, machineId); for (const b of G.wave.bricks) if (alive.has(`${b.c},${b.r}`)) b.alive = false; }
+      G.loading = 0.5;
+      syncButtons(); save();
+      announce(`${M().name} mode.`);
+    }
+    function cycleDial() {
+      const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
+      setDial(mood, next); response = moodResponse(mood);
+      if (!G.attract && !response.unlimitedBalls && G.balls <= 0) G.balls = 1;
+      syncButtons(); save();
+      announce(`Dial ${DIALS[next].label}. ${DIALS[next].blurb}`);
+      showMsg(DIALS[next].label, 3, 0.8);
+    }
+    function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); syncButtons(); save(); }
+    function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function toggleFull() {
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
+    }
+    // A mouse or touch click leaves focus on the button; hand it back so Space serves again. Keyboard activation keeps focus.
+    const press = (el, fn) => el.addEventListener('click', (e) => { fn(); if (e.detail > 0) el.blur(); });
+    press(btn.machine, () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    press(btn.dial, () => { audio.unlock(); cycleDial(); });
+    press(btn.sound, toggleSound);
+    press(btn.crt, toggleCrt);
+    press(btn.full, toggleFull);
+    if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
+    document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
+    document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
+
+    // ---------- go ----------
+    syncButtons();
+    resize();
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(screen); else window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    beginBoot();
+    requestAnimationFrame(frame);
+  }
+</script>

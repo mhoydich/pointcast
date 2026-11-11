@@ -35,6 +35,26 @@ test('every scenario under every rule set is deterministic, conserves credits an
   }
 });
 
+// The live board asks the viewer about trades above a bot's approval line by default ('queue'), so those runs are pinned
+// too: a board run with no presses ends on these hashes. quiet-launch has no such trades, so its hashes match 'deny'.
+const PINNED_QUEUE = {
+  'quiet-launch': { naked: '150a4a131a7122b0', auction: 'e311f6e8a05c6fd7', 'sniper-fee': '3c946d3a88578214', fair: '00c2851e027dd21d' },
+  'snipe-war': { naked: '030d3a92aa90222d', auction: '5ea373ab5e62ab0f', 'sniper-fee': 'ad58c2e61c1a430a', fair: 'd06d29d0cf96105f' },
+  'dev-dump': { naked: '6dd7968b52f5718c', auction: '0c6f7f4137adf25b', 'sniper-fee': 'edf9366f32270d4e', fair: '561208729b47078f' },
+  'graduation-run': { naked: '9dbf2b32ca85342a', auction: '8ec4602ec3c9f02f', 'sniper-fee': 'b840d1639ead6319', fair: '0f69d69188d2448b' },
+};
+
+test('with approvals queued for a person, every run is pinned too, conserves credits, and queues instead of refusing', () => {
+  for (const id of IDS) {
+    for (const rules of Object.keys(RULES)) {
+      const { sim, summary } = runScenario({ scenario: load(id), rules, approvals: 'queue' });
+      assert.equal(summary.logHash, PINNED_QUEUE[id][rules], `${id}/${rules} queue hash is pinned`);
+      assert.equal(summary.quoteConserved, true);
+      assert.ok(!sim.world.events.some((e) => e.type === 'GATE_REFUSE' && e.reason === 'NEEDS_APPROVAL'), `${id}/${rules}: nothing is refused for want of approval`);
+    }
+  }
+});
+
 test('A/B: fair rules cut the snipers’ share of first-minute supply by at least half', () => {
   const naked = runScenario({ scenario: load('snipe-war'), rules: 'naked' });
   const fair = runScenario({ scenario: load('snipe-war'), rules: 'fair' });

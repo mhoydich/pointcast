@@ -1,0 +1,547 @@
+---
+/**
+ * /haunted-drum — The Haunted Drum Room, built for Halloween 2026.
+ *
+ * Weekend project, 2026-10-30. Everyone in the room plays on one beat: the
+ * beat grid is derived from the DrumRoomV2 server clock (serverAt in the
+ * welcome frame, refined by ping/pong), so two phones in two cities count
+ * the same "one". Transport is the existing /api/drum/room WebSocket with
+ * the six legacy pads, so nothing new had to be deployed server-side.
+ *
+ * Ghosts: the room stores its last 24 hits; on arrival they play back with
+ * their original spacing as the previous visitors. This device also keeps
+ * your last phrase and plays it back on the grid next visit. Every 300 room
+ * hits the house answers with a closing fill that every connected player
+ * hears at the same moment (they all watch the same counter cross).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const description = 'The Haunted Drum Room: one beat for everyone, the taps of earlier visitors playing back as ghosts, and a closing fill when the crowd hits its number. Built for Halloween night.';
+const canonical = 'https://pointcast.xyz/haunted-drum';
+const pads = [
+  { pad: 'kick', key: 'A', name: 'Pumpkin' },
+  { pad: 'snare', key: 'S', name: 'Coffin' },
+  { pad: 'hat', key: 'D', name: 'Bones' },
+  { pad: 'tom', key: 'F', name: 'Cauldron' },
+  { pad: 'clap', key: 'G', name: 'Shutters' },
+  { pad: 'bell', key: 'H', name: 'Bell' },
+];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoGame',
+  '@id': `${canonical}#game`,
+  name: 'The Haunted Drum Room',
+  description,
+  url: canonical,
+  gamePlatform: 'Web browser',
+  genre: 'Music',
+  playMode: 'MultiPlayer',
+  isAccessibleForFree: true,
+  author: { '@type': 'Person', name: 'Michael Hoydich' },
+  contributor: { '@type': 'Organization', name: 'Claude Code' },
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+  datePublished: '2026-10-30',
+};
+---
+
+<BlockLayout
+  title="The Haunted Drum Room"
+  description={description}
+  image="/images/other-worlds/night-orchard.webp"
+  imageAlt="A night orchard glowing under a dark sky, from Michael Hoydich's Los Angeles / Other Worlds series."
+  themeColor="#14081a"
+  immersive
+  jsonLd={jsonLd}
+>
+  <main class="hd" data-hd>
+    <div class="hd-bg" aria-hidden="true"></div>
+    <div class="hd-flash" data-flash aria-hidden="true"></div>
+
+    <header class="hd-top">
+      <a class="hd-home" href="/" aria-label="PointCast home">POINTCAST</a>
+      <p class="hd-status"><span class="hd-light" data-state="wait" data-status>CONNECTING</span> <span data-here>1</span> here · room <span data-room>haunted</span></p>
+    </header>
+
+    <section class="hd-head">
+      <p class="hd-eyebrow">Halloween night · one beat for everyone</p>
+      <h1>The Haunted Drum Room</h1>
+      <p class="hd-lede">Everyone here plays on the same beat. The last people who visited still play: their taps come back as ghosts. Leave a phrase of your own for whoever comes next.</p>
+    </section>
+
+    <section class="hd-stage" aria-label="The beat">
+      <div class="hd-ring" data-ring aria-hidden="true">
+        {Array.from({ length: 8 }, (_, i) => (<span class="hd-candle" style={`--i:${i}`}><span class="hd-flame"></span></span>))}
+        <div class="hd-ghosts" data-ghosts></div>
+        <div class="hd-count">
+          <strong data-pocket>0</strong>
+          <span>on the beat</span>
+        </div>
+      </div>
+      <p class="sr-only" data-live role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="hd-pads" role="group" aria-label="Six drums. Keys A S D F G H also play.">
+      {pads.map((p) => (
+        <button type="button" class="hd-pad" data-pad={p.pad} aria-label={`${p.name} (${p.pad}, key ${p.key})`}>
+          <span class="hd-pad-name">{p.name}</span>
+          <span class="hd-pad-key">{p.key}</span>
+        </button>
+      ))}
+    </section>
+
+    <section class="hd-house" aria-label="The house">
+      <div class="hd-meter"><span data-meter-fill></span></div>
+      <p><span data-meter-text>The house answers every 300 beats.</span></p>
+      <div class="hd-faces" data-faces aria-label="Who is here"></div>
+      <div class="hd-actions">
+        <button type="button" data-metro aria-pressed="true">Heartbeat on</button>
+        <button type="button" data-replay>Play the ghosts again</button>
+        <a href="/hour">The Hour</a>
+        <a href="/hallway">The Hallway</a>
+      </div>
+      <p class="hd-note" data-note>Ghosts from the room arrive when you do.</p>
+    </section>
+
+    <noscript><p class="hd-noscript">The drum room needs JavaScript for sound and the shared beat.</p></noscript>
+  </main>
+</BlockLayout>
+
+<style>
+  .hd {
+    --ink: #fbeee0;
+    --dim: rgba(251, 238, 224, 0.7);
+    --orange: #ff7a1a;
+    --violet: #8d5cff;
+    position: relative; min-height: 100svh; overflow: hidden;
+    color: var(--ink); background: #0d0612;
+    font-family: Inter, system-ui, sans-serif;
+    padding-bottom: 32px;
+  }
+  .hd-bg { position: absolute; inset: 0; background:
+      linear-gradient(180deg, rgba(13, 6, 18, 0.55), rgba(13, 6, 18, 0.95) 70%),
+      url('/images/other-worlds/night-orchard.webp') center / cover no-repeat;
+    filter: saturate(0.75) hue-rotate(-14deg); }
+  .hd-flash { position: absolute; inset: 0; background: #e8e2ff; opacity: 0; pointer-events: none; mix-blend-mode: screen; }
+  .hd-flash.is-on { animation: hd-flash 1.4s ease-out; }
+  @keyframes hd-flash { 0% { opacity: 0.85; } 10% { opacity: 0.1; } 18% { opacity: 0.6; } 100% { opacity: 0; } }
+  .hd > :not(.hd-bg):not(.hd-flash) { position: relative; z-index: 1; }
+
+  .hd-top { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 16px clamp(16px, 4vw, 40px); font: 500 12px/1.3 'JetBrains Mono', ui-monospace, monospace; }
+  .hd-home { color: var(--ink); text-decoration: none; letter-spacing: 0.18em; font-weight: 700; }
+  .hd-status { margin: 0; color: var(--dim); }
+  .hd-light::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #777; vertical-align: 1px; }
+  .hd-light[data-state='on']::before { background: #7dff9a; box-shadow: 0 0 8px #7dff9a; }
+  .hd-light[data-state='off']::before { background: var(--orange); }
+
+  .hd-head { padding: 8px clamp(16px, 6vw, 72px) 0; max-width: 760px; }
+  .hd-eyebrow { margin: 0 0 8px; color: var(--orange); font: 600 12px/1 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.18em; text-transform: uppercase; }
+  .hd-head h1 { margin: 0; font: 600 clamp(32px, 6vw, 60px)/1.02 Georgia, serif; }
+  .hd-lede { color: var(--dim); font-size: 16px; line-height: 1.5; margin: 12px 0 0; }
+
+  .hd-stage { display: grid; place-items: center; padding: 18px 16px 8px; }
+  .hd-ring { position: relative; width: min(78vw, 340px); aspect-ratio: 1; }
+  .hd-candle { --r: 44%; position: absolute; left: 50%; top: 50%; width: 18px; height: 34px; margin: -17px 0 0 -9px; border-radius: 4px 4px 2px 2px; background: linear-gradient(#f3e6c8, #b9a37a);
+    transform: rotate(calc(var(--i) * 45deg)) translateY(calc(var(--r) * -1)) rotate(calc(var(--i) * -45deg)); box-shadow: 0 6px 12px rgba(0,0,0,0.5); }
+  .hd-flame { position: absolute; left: 50%; top: -16px; width: 10px; height: 16px; margin-left: -5px; border-radius: 50% 50% 40% 40%; background: radial-gradient(circle at 50% 70%, #fff6b8, var(--orange) 60%, transparent 70%); opacity: 0.35; transition: opacity 0.3s ease, transform 0.3s ease; }
+  .hd-candle.is-now .hd-flame { opacity: 1; transform: scale(1.5); transition: none; }
+  .hd-candle.is-flare .hd-flame { filter: drop-shadow(0 0 10px #ffd27a); transform: scale(2.1); }
+  .hd-count { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .hd-count strong { font: 600 46px/1 Georgia, serif; }
+  .hd-count span { color: var(--dim); font-size: 13px; }
+  .hd-ghosts { position: absolute; inset: 0; pointer-events: none; }
+  .hd-ghost { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; opacity: 0; filter: grayscale(1) brightness(1.6) drop-shadow(0 0 10px var(--g, #cfc6ff)); animation: hd-rise 2.6s ease-out forwards; }
+  .hd-ghost.is-live { filter: drop-shadow(0 0 10px var(--g, #cfc6ff)); }
+  @keyframes hd-rise { 0% { opacity: 0; transform: translateY(10px) scale(0.8); } 15% { opacity: 0.85; } 100% { opacity: 0; transform: translateY(-70px) scale(1.15); } }
+
+  .hd-pads { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 10px clamp(16px, 6vw, 72px); max-width: 900px; margin: 0 auto; }
+  .hd-pad { aspect-ratio: 1; border-radius: 50% 50% 46% 46%; border: 0; cursor: pointer; touch-action: manipulation; color: #240b00;
+    background: radial-gradient(circle at 50% 35%, #ffb46a, var(--orange) 55%, #a33d00); box-shadow: inset 0 -8px 0 rgba(0,0,0,0.25), 0 8px 24px rgba(255, 122, 26, 0.25);
+    display: grid; place-content: center; gap: 2px; font-weight: 700; transition: transform 0.12s ease, filter 0.2s ease; }
+  .hd-pad[data-pad='bell'] { background: radial-gradient(circle at 50% 35%, #d9c8ff, var(--violet) 60%, #3c1d8a); color: #0f0326; }
+  .hd-pad.is-hit { transform: scale(0.92); filter: brightness(1.35); transition: none; }
+  .hd-pad-name { font-size: clamp(10px, 2.4vw, 15px); }
+  .hd-pad-key { font: 600 11px/1 'JetBrains Mono', ui-monospace, monospace; opacity: 0.6; }
+
+  .hd-house { max-width: 760px; margin: 0 auto; padding: 14px clamp(16px, 6vw, 72px) 0; }
+  .hd-meter { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.12); overflow: hidden; }
+  .hd-meter span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--violet), var(--orange)); transition: width 0.4s ease; }
+  .hd-house p { margin: 8px 0; color: var(--dim); font-size: 14px; }
+  .hd-faces { display: flex; flex-wrap: wrap; gap: 4px; min-height: 28px; }
+  .hd-faces img { width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.1); }
+  .hd-faces img.is-you { outline: 2px solid var(--orange); }
+  .hd-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+  .hd-actions button { font: 600 13px/1 Inter, system-ui, sans-serif; padding: 10px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.06); color: var(--ink); cursor: pointer; }
+  .hd-actions a { color: var(--ink); font-size: 14px; }
+  .hd-note { font-size: 13px !important; }
+  .hd-noscript { padding: 16px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (max-width: 560px) {
+    .hd-pads { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hd-flash.is-on { animation: none; }
+    .hd-ghost { animation-duration: 0.01s; }
+  }
+</style>
+
+<script>
+  type Pad = 'kick' | 'snare' | 'hat' | 'tom' | 'clap' | 'bell';
+  const PADS: Pad[] = ['kick', 'snare', 'hat', 'tom', 'clap', 'bell'];
+  const BPM = 100;
+  const STEP_MS = 60000 / BPM / 2; // eighth notes, 8 per bar
+  const ANSWER_EVERY = 300;
+  const POCKET_MS = 70;
+  const GHOST_KEY = 'pc-haunted-drum-ghost-v1';
+
+  const root = document.querySelector<HTMLElement>('[data-hd]')!;
+  const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
+  const candles = Array.from(root.querySelectorAll<HTMLElement>('.hd-candle'));
+  const padEls = new Map<Pad, HTMLButtonElement>();
+  root.querySelectorAll<HTMLButtonElement>('[data-pad]').forEach((b) => padEls.set(b.dataset.pad as Pad, b));
+
+  // ── room name ───────────────────────────────────────────────
+  function normalizeRoom(raw: string | null): string {
+    const cleaned = (raw || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24).replace(/^-+|-+$/g, '');
+    return /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(cleaned) && !cleaned.startsWith('ndc-') ? cleaned : 'haunted';
+  }
+  const room = normalizeRoom(new URLSearchParams(location.search).get('room'));
+  $<HTMLElement>('[data-room]').textContent = room;
+
+  // ── shared clock ────────────────────────────────────────────
+  let offset = 0; // server time minus local time
+  const serverNow = () => Date.now() + offset;
+  const stepAt = (t: number) => Math.floor(t / STEP_MS);
+
+  // ── audio ───────────────────────────────────────────────────
+  let ctx: AudioContext | null = null;
+  let master: GainNode;
+  let verb: ConvolverNode;
+  function ensureAudio() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return ctx; }
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    ctx = new Ctx();
+    master = ctx.createGain();
+    master.gain.value = 0.8;
+    master.connect(ctx.destination);
+    // a cheap haunted-hall reverb: decaying noise impulse
+    verb = ctx.createConvolver();
+    const len = ctx.sampleRate * 2.6;
+    const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch += 1) {
+      const data = ir.getChannelData(ch);
+      for (let i = 0; i < len; i += 1) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+    }
+    verb.buffer = ir;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.35;
+    verb.connect(wet).connect(ctx.destination);
+    return ctx;
+  }
+  function out(node: AudioNode) { node.connect(master); node.connect(verb); }
+  function noise(c: AudioContext, dur: number) {
+    const b = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * dur)), c.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i += 1) d[i] = Math.random() * 2 - 1;
+    const s = c.createBufferSource();
+    s.buffer = b;
+    return s;
+  }
+  function env(c: AudioContext, t: number, peak: number, dur: number) {
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    return g;
+  }
+  function play(pad: Pad, vel = 0.9, when = 0) {
+    const c = ensureAudio();
+    const t = c.currentTime + when;
+    if (pad === 'kick') {
+      const o = c.createOscillator(); const g = env(c, t, vel, 0.7);
+      o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(34, t + 0.5);
+      o.connect(g); out(g); o.start(t); o.stop(t + 0.75);
+    } else if (pad === 'snare') {
+      const n = noise(c, 0.35); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1500; f.Q.value = 0.8;
+      const g = env(c, t, vel * 0.7, 0.32); n.connect(f).connect(g); out(g); n.start(t);
+      const o = c.createOscillator(); const g2 = env(c, t, vel * 0.3, 0.12); o.frequency.value = 180; o.connect(g2); out(g2); o.start(t); o.stop(t + 0.15);
+    } else if (pad === 'hat') {
+      const n = noise(c, 0.1); const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
+      const g = env(c, t, vel * 0.35, 0.07); n.connect(f).connect(g); out(g); n.start(t);
+    } else if (pad === 'tom') {
+      const o = c.createOscillator(); o.type = 'triangle'; const g = env(c, t, vel * 0.8, 0.6);
+      o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.5);
+      o.connect(g); out(g); o.start(t); o.stop(t + 0.65);
+    } else if (pad === 'clap') {
+      [0, 0.012, 0.026].forEach((d) => {
+        const n = noise(c, 0.2); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 1.2;
+        const g = env(c, t + d, vel * 0.45, 0.18); n.connect(f).connect(g); out(g); n.start(t + d);
+      });
+    } else {
+      // bell: inharmonic partials, a church bell down the lane
+      [1, 2.76, 5.4].forEach((m, i) => {
+        const o = c.createOscillator(); const g = env(c, t, vel * (0.22 / (i + 1)), 2.8 / (i + 1));
+        o.frequency.value = 196 * m; o.connect(g); out(g); o.start(t); o.stop(t + 3);
+      });
+    }
+  }
+
+  // ── ghosts on screen ────────────────────────────────────────
+  const ghostLayer = $<HTMLElement>('[data-ghosts]');
+  function showGhost(avatar: number, hue: number, live: boolean) {
+    const img = document.createElement('img');
+    img.className = live ? 'hd-ghost is-live' : 'hd-ghost';
+    img.src = `https://noun.pics/${Math.abs(avatar) % 1200}.svg`;
+    img.alt = '';
+    img.style.left = `${20 + Math.random() * 60}%`;
+    img.style.top = `${30 + Math.random() * 45}%`;
+    img.style.setProperty('--g', `hsl(${hue}, 80%, 72%)`);
+    ghostLayer.appendChild(img);
+    window.setTimeout(() => img.remove(), 2700);
+  }
+  function flashPad(pad: Pad) {
+    const el = padEls.get(pad);
+    if (!el) return;
+    el.classList.add('is-hit');
+    window.setTimeout(() => el.classList.remove('is-hit'), 120);
+  }
+
+  // ── beat ring and heartbeat ─────────────────────────────────
+  let metro = true;
+  let lastStep = -1;
+  function frame() {
+    const s = stepAt(serverNow());
+    if (s !== lastStep) {
+      lastStep = s;
+      const pos = ((s % 8) + 8) % 8;
+      candles.forEach((c, i) => c.classList.toggle('is-now', i === pos));
+      if (metro && ctx && ctx.state === 'running') {
+        if (pos === 0) play('kick', 0.18);
+        else if (pos % 2 === 0) play('hat', 0.08);
+      }
+      maybePlayOwnGhost(s);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ── my phrase, kept on this device ──────────────────────────
+  type Mark = { pad: Pad; step: number };
+  let phrase: Mark[] = [];
+  let phraseStart = -1;
+  let savedGhost: Mark[] = [];
+  try { savedGhost = JSON.parse(localStorage.getItem(GHOST_KEY) || '[]'); } catch { savedGhost = []; }
+  let ghostStartStep = -1;
+  let ghostPlayed = savedGhost.length === 0;
+  function maybePlayOwnGhost(s: number) {
+    if (ghostPlayed || !ctx || ctx.state !== 'running') return;
+    if (ghostStartStep < 0) { ghostStartStep = (Math.floor(s / 8) + 2) * 8; return; } // two bars in, on a downbeat
+    const rel = s - ghostStartStep;
+    savedGhost.filter((m) => m.step === rel).forEach((m) => { play(m.pad, 0.45); showGhost(0, 30, false); });
+    if (rel > 32) { ghostPlayed = true; setNote('That was your ghost from last time.'); }
+  }
+  function remember(pad: Pad) {
+    const s = stepAt(serverNow());
+    if (phraseStart < 0 || s - phraseStart > 32) { phraseStart = Math.floor(s / 8) * 8; phrase = []; }
+    phrase.push({ pad, step: s - phraseStart });
+    try { localStorage.setItem(GHOST_KEY, JSON.stringify(phrase.slice(-24))); } catch { /* private mode */ }
+  }
+
+  // ── pocket: hits close to the shared beat ───────────────────
+  let pocket = 0;
+  function judge() {
+    const t = serverNow();
+    const err = Math.min(t % STEP_MS, STEP_MS - (t % STEP_MS));
+    if (err <= POCKET_MS) {
+      pocket += 1;
+      $<HTMLElement>('[data-pocket]').textContent = String(pocket);
+      const pos = ((Math.round(t / STEP_MS) % 8) + 8) % 8;
+      const c = candles[pos];
+      c.classList.add('is-flare');
+      window.setTimeout(() => c.classList.remove('is-flare'), 220);
+    }
+  }
+
+  // ── the house ───────────────────────────────────────────────
+  let totalHits = 0;
+  function renderMeter() {
+    const into = totalHits % ANSWER_EVERY;
+    $<HTMLElement>('[data-meter-fill]').style.width = `${(into / ANSWER_EVERY) * 100}%`;
+    $<HTMLElement>('[data-meter-text]').textContent = `${ANSWER_EVERY - into} beats until the house answers · ${totalHits.toLocaleString()} played in this room`;
+  }
+  function houseAnswers() {
+    const flash = $<HTMLElement>('[data-flash]');
+    flash.classList.remove('is-on'); void flash.offsetWidth; flash.classList.add('is-on');
+    if (ctx) {
+      for (let i = 0; i < 12; i += 1) play('tom', 0.5 + i * 0.04, i * 0.07);
+      play('kick', 1, 0.86); play('bell', 1, 0.86); play('bell', 0.7, 2.2);
+    }
+    announce('The house answered.');
+    setNote('The house answered. Next answer in 300.');
+  }
+  function bumpTotal() {
+    const before = totalHits;
+    totalHits += 1;
+    if (Math.floor(before / ANSWER_EVERY) !== Math.floor(totalHits / ANSWER_EVERY)) houseAnswers();
+    renderMeter();
+  }
+
+  function announce(text: string) { $<HTMLElement>('[data-live]').textContent = text; }
+  function setNote(text: string) { $<HTMLElement>('[data-note]').textContent = text; }
+
+  // ── the room socket ─────────────────────────────────────────
+  let sid = '';
+  try {
+    sid = localStorage.getItem('pc-haunted-drum-sid') || '';
+    if (!sid) { sid = crypto.randomUUID?.() ?? String(Math.random()).slice(2); localStorage.setItem('pc-haunted-drum-sid', sid); }
+  } catch { sid = String(Math.random()).slice(2); }
+
+  let ws: WebSocket | null = null;
+  let meId = '';
+  let seq = Math.floor(Math.random() * 1_000_000);
+  const mine = new Set<number>();
+  let retry = 0;
+  let recent: any[] = [];
+  let pingSentAt = 0;
+  const statusEl = $<HTMLElement>('[data-status]');
+  function setStatus(state: string, text: string) { statusEl.dataset.state = state; statusEl.textContent = text; }
+
+  function replayRecent() {
+    const hits = recent.filter((h) => PADS.includes(h?.pad)).slice(-24);
+    if (!hits.length) { setNote('No ghosts yet. Yours will be the first.'); return; }
+    ensureAudio();
+    const t0 = Number(hits[0].serverAt) || 0;
+    let wait = 600;
+    let prev = t0;
+    hits.forEach((h) => {
+      const gap = Math.max(120, Math.min(1200, (Number(h.serverAt) || prev) - prev));
+      prev = Number(h.serverAt) || prev;
+      wait += gap;
+      window.setTimeout(() => { play(h.pad, 0.5); flashPad(h.pad); showGhost(Number(h.avatar) || 0, Number(h.hue) || 260, false); }, wait);
+    });
+    setNote(`${hits.length} ghosts from the last visitors are playing.`);
+  }
+
+  function renderFaces(people: { id: string; avatar: number; hue: number }[]) {
+    const faces = $<HTMLElement>('[data-faces]');
+    faces.innerHTML = '';
+    people.slice(0, 40).forEach((p) => {
+      const img = document.createElement('img');
+      img.src = `https://noun.pics/${p.avatar % 1200}.svg`;
+      img.alt = p.id === meId ? 'You' : 'Someone else in the room';
+      if (p.id === meId) img.className = 'is-you';
+      faces.appendChild(img);
+    });
+    $<HTMLElement>('[data-here]').textContent = String(people.length || 1);
+  }
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    setStatus('wait', 'CONNECTING');
+    try {
+      ws = new WebSocket(`${proto}//${location.host}/api/drum/room?room=${encodeURIComponent(room)}&sid=${encodeURIComponent(sid)}`);
+    } catch { offline(); return; }
+    ws.addEventListener('open', () => { retry = 0; setStatus('on', 'LIVE'); });
+    ws.addEventListener('message', (event) => {
+      let msg: any;
+      try { msg = JSON.parse(String(event.data)); } catch { return; }
+      if (msg.type === 'welcome') {
+        meId = msg.you?.clientId ?? msg.you?.id ?? '';
+        if (Number.isFinite(msg.serverAt)) offset = Number(msg.serverAt) - Date.now();
+        totalHits = Number(msg.totalHits) || 0;
+        renderMeter();
+        $<HTMLElement>('[data-here]').textContent = String(msg.connected ?? 1);
+        recent = Array.isArray(msg.recentHits) ? msg.recentHits : [];
+        pingSentAt = Date.now();
+        ws?.send(JSON.stringify({ v: 1, type: 'ping' }));
+        if (ctx && ctx.state === 'running') replayRecent();
+        else setNote(`${recent.filter((h) => PADS.includes(h?.pad)).length} ghosts are waiting. Tap any drum to hear them.`);
+        return;
+      }
+      if (msg.type === 'pong' && pingSentAt && Number.isFinite(msg.serverAt)) {
+        const rtt = Date.now() - pingSentAt;
+        offset = Number(msg.serverAt) + rtt / 2 - Date.now();
+        pingSentAt = 0;
+        return;
+      }
+      if (msg.type === 'presence' && Array.isArray(msg.people)) { renderFaces(msg.people); return; }
+      if (msg.type === 'hit') {
+        if (!PADS.includes(msg.pad)) return;
+        bumpTotal();
+        if ((meId && msg.clientId === meId) || mine.delete(Number(msg.seq))) return;
+        play(msg.pad, Math.max(0.3, Math.min(1, Number(msg.velocity) || 0.7)) * 0.75);
+        flashPad(msg.pad);
+        showGhost(Number(msg.avatar) || 0, Number(msg.hue) || 260, true);
+      }
+    });
+    ws.addEventListener('close', () => {
+      ws = null;
+      if (retry > 5) { offline(); return; }
+      setStatus('wait', 'RECONNECTING');
+      window.setTimeout(connect, Math.min(15000, 1000 * 2 ** retry++));
+    });
+    ws.addEventListener('error', () => { /* close follows */ });
+  }
+  function offline() {
+    setStatus('off', 'ALONE');
+    setNote('The room is out of reach right now, so you are playing alone. Your own ghost still plays back on this device.');
+  }
+
+  // ── playing ─────────────────────────────────────────────────
+  let sentThisSecond = 0;
+  let secondStart = 0;
+  let pendingDelta = 0;
+  let firstTap = true;
+  function hit(pad: Pad) {
+    ensureAudio();
+    if (firstTap) { firstTap = false; if (recent.length) replayRecent(); }
+    play(pad, 0.9);
+    flashPad(pad);
+    judge();
+    remember(pad);
+    pendingDelta += 1;
+    const now = Date.now();
+    if (now - secondStart > 1000) { secondStart = now; sentThisSecond = 0; }
+    if (ws && ws.readyState === 1 && sentThisSecond < 7) {
+      sentThisSecond += 1;
+      seq = (seq + 1) % 1_000_000_000;
+      mine.add(seq);
+      if (mine.size > 64) mine.delete(mine.values().next().value as number);
+      ws.send(JSON.stringify({ v: 1, type: 'hit', pad, velocity: 0.9, seq, clientAt: Math.trunc(serverNow()) }));
+    } else if (!ws) {
+      bumpTotal();
+    }
+  }
+  padEls.forEach((el, pad) => el.addEventListener('pointerdown', (e) => { e.preventDefault(); hit(pad); }));
+  const keyMap: Record<string, Pad> = { a: 'kick', s: 'snare', d: 'hat', f: 'tom', g: 'clap', h: 'bell' };
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    const pad = keyMap[e.key.toLowerCase()];
+    if (pad) hit(pad);
+  });
+
+  // Feed the town drum counter so the rest of PointCast sees the room is busy.
+  window.setInterval(() => {
+    if (pendingDelta < 1) return;
+    const delta = pendingDelta;
+    pendingDelta = 0;
+    fetch('/api/drum', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delta, sessionId: sid, source: { kind: 'pointcast', app: '/haunted-drum' } }),
+      keepalive: true,
+    }).catch(() => { /* quiet */ });
+  }, 5000);
+
+  const metroBtn = $<HTMLButtonElement>('[data-metro]');
+  metroBtn.addEventListener('click', () => {
+    metro = !metro;
+    metroBtn.setAttribute('aria-pressed', String(metro));
+    metroBtn.textContent = metro ? 'Heartbeat on' : 'Heartbeat off';
+    ensureAudio();
+  });
+  $<HTMLButtonElement>('[data-replay]').addEventListener('click', () => { ensureAudio(); replayRecent(); });
+
+  renderMeter();
+  connect();
+  requestAnimationFrame(frame);
+</script>

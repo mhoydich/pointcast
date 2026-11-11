@@ -517,4 +517,235 @@ export const TEAM_GUIDES: Guide[] = [
     ],
     tags: ['beach', 'volleyball', 'run-club', 'surf', 'safety', 'inclusive'],
   },
+  {
+    slug: 'run-a-pickleball-tournament-day',
+    published: '2026-10-22',
+    category: 'pickleball',
+    title: 'How to run a small pickleball tournament day',
+    dek: 'Formats, court math, check-in, and a friendly tone for a one-day club or community event that finishes on time.',
+    audience: 'Club organizers and volunteers running a first or second small tournament, without a big staff or a sanctioning body behind them.',
+    seat: 'open',
+    minutes: 8,
+    sections: [
+      {
+        heading: 'Pick a format you can finish',
+        body: [
+          'The most common small-event format is round robin pools that feed into a bracket. Players or teams are split into pools, everyone in a pool plays everyone else, and the top finishers advance to a single-elimination or short playoff round. Pools guarantee each entry several matches, which matters when people have given up a morning to be there.',
+          'Choose the format from your constraints, not your ambitions. Count the courts you can reliably use, the hours you have them, and the entries you expect, then pick the simplest structure that fits. Games to a lower score, or a fixed time window, shorten the day. Write the scoring rules, tiebreakers, and any time caps in one short sheet before registration opens so nobody argues about them at the courts.',
+          'Decide early whether you are running doubles with set partners, a rotating-partner social format, or both. Rotating formats are forgiving for mixed groups and make it easy to absorb a late dropout. Set partners feel more like a competition. Either is fine if the registration page says plainly which one it is.',
+        ],
+      },
+      {
+        heading: 'Divisions by skill and age',
+        body: [
+          'Divisions keep matches fun. Common splits are by skill level, by age band, or by both, and sometimes by format such as men’s, women’s, or mixed doubles. Keep the number of divisions small enough that each one has enough entries for a real pool. A division with only two or three entries is usually better merged with a neighbor than run on its own.',
+          'Skill levels are self-reported in most community events, and self-ratings tend to run high. Describe each division in plain words on the registration page, and tell players the organizer may move an entry to a better-fitting division. Do that quietly and early, ideally before the day, rather than announcing it at the courts.',
+          'If you use an outside rating system to place players, follow that system’s own published rules and be clear about whether it is required or just a guide. For age divisions, state the cutoff date you use so the answer is not a debate.',
+        ],
+      },
+      {
+        heading: 'Court and time math',
+        body: [
+          'Do the math on paper before you take a single registration. Estimate the length of one match, including warm-up, score calls, and the walk on and off, then add a buffer. Multiply matches per pool by the number of pools, divide by the number of courts, and see whether the total fits inside your court window with room to spare. Matches almost always run longer than the plan, so build in slack and a hard stop for the final round.',
+          'Reserve your courts in writing with the facility or managing agency, and confirm what is allowed: setting up tables, posting a bracket, selling food, or charging an entry fee may each need permission. Rules vary by place, so ask directly. Know your backup if the courts are unavailable or unplayable.',
+          'Assign courts and start times in a published schedule, and name a single person to run the clock. Stagger starts if check-in is slow. Plan lunch and rest windows for the people playing back-to-back matches, and keep the final matches on the best-lit, most spectator-friendly court if you have a choice.',
+        ],
+      },
+      {
+        heading: 'Check-in, referees, and line calls',
+        body: [
+          'Run check-in from one table with a printed roster, a pen, and a clear sign. Confirm names, divisions, and partners, hand out the schedule and court assignments, and collect any waiver or consent form the venue or your group requires. Have a short answer ready for the question everyone asks: where do I go and when.',
+          'Most community events run on player-called lines, with players calling the ball on their own side of the net and giving the benefit of the doubt to the opponent when unsure. Say so at the start of the day, and name a floating volunteer who can step in when a call is disputed. Check the published rules your group is following for details on service, faults, and score calling, and print the few that matter most on the schedule sheet.',
+          'Assign referees only if you have people who know the rules and are willing to stay neutral. A calm volunteer for the medal matches is a nice touch, but a poorly informed referee is worse than none. Remind everyone that the goal is a good match, and that a disputed point is not worth a lost afternoon.',
+        ],
+      },
+      {
+        heading: 'Heat, water, results, and keeping it friendly',
+        body: [
+          'Plan for weather before the day. Provide shade where you can, water that is easy to reach, and a place to sit. Tell players to bring their own water and sun protection, and build rest into the schedule. If the heat, air quality, or lightning makes play unsafe, have a stated rule for delaying, shortening, or stopping the event, and give one person the authority to call it.',
+          'Post results where everyone can see them, on a bracket board, a shared page, or both. Update after each round, and keep the final standings clear and accurate. Share only what players agreed to share, such as names as they want them shown, and keep any information about minors minimal, with first names only unless a guardian says otherwise.',
+          'The tone you set is what people remember. Welcome new players by name, thank volunteers out loud, and keep prizes modest. A short wrap-up with thanks, the results, and a note about the next event brings people back far more reliably than a perfect bracket.',
+        ],
+      },
+    ],
+    checklist: [
+      { label: 'Choose a format', detail: 'Pools into a bracket, a rotating-partner social format, or a mix, with scoring and tiebreakers in writing.' },
+      { label: 'Set divisions in plain words', detail: 'Skill and age bands described simply, with the age cutoff date stated.' },
+      { label: 'Do the court and time math', detail: 'Matches times pools divided by courts, plus a buffer and a hard stop.' },
+      { label: 'Get courts confirmed in writing', detail: 'Ask the facility what is allowed for tables, fees, food, and signage.' },
+      { label: 'Set up one check-in table', detail: 'Printed roster, schedule, court assignments, and any required forms.' },
+      { label: 'Explain line calls and rules', detail: 'State how calls work and name a volunteer for disputes.' },
+      { label: 'Plan for heat and weather', detail: 'Shade, water, rest windows, and a named person who can pause play.' },
+      { label: 'Post results and thank people', detail: 'Update the bracket each round and keep names and minors’ details private by default.' },
+    ],
+    wanted: [
+      'Links to official parks department or facility pages on court reservations and event permits, with the date you checked them.',
+      'Published heat-illness guidance for outdoor sports from public health or sports-medicine sources.',
+      'The publicly posted rulebook of the organization whose rules your event follows, with its version or date.',
+      'Your sample schedule or bracket sheet that kept a small event on time.',
+      'A check-in script or sign-up form that worked for your tournament.',
+      'Your tips that worked for handling a disputed line call without hard feelings.',
+    ],
+    related: [
+      { label: 'Pickleball hub', href: '/pickleball' },
+      { label: 'Local', href: '/local' },
+      ALL,
+      { label: 'Send material', href: '/guides/intake' },
+    ],
+    tags: ['pickleball', 'tournament', 'round-robin', 'brackets', 'organizer', 'heat-safety'],
+  },
+  {
+    slug: 'coach-your-first-youth-team',
+    published: '2026-10-22',
+    category: 'sports',
+    title: 'How to coach your first youth team',
+    dek: 'A first practice plan, fair playing time, honest talks with parents, and the safety basics, for a volunteer who said yes.',
+    audience: 'First-time volunteer coaches of young players, including parents who were handed a clipboard and a roster.',
+    seat: 'open',
+    minutes: 8,
+    sections: [
+      {
+        heading: 'Before the first practice',
+        body: [
+          'Start by learning what your league requires. Most leagues have required training, background screening, and rules about practices and communication. Complete whatever safety and background training your league requires before you work with players, and ask the league contact if anything is unclear. Do not skip a step because you know the families.',
+          'Get the practical details in order: the field or gym location, the roster, the schedule, the league rules for your age group, and the emergency contact and health information for each child. Bring a first aid kit, water, and a phone, and know the address of the practice site in case you need to call for help.',
+          'Pick one or two goals for the season that are about the kids, not the standings. Learning the basics, enjoying the game, and wanting to come back next year are goals that every child can reach.',
+        ],
+      },
+      {
+        heading: 'A first practice plan',
+        body: [
+          'Keep the first practice short, active, and welcoming. A simple shape works well: arrive and learn names, a light warm-up game, two or three short skill stations, a small-sided game, and a team cheer or a short talk to finish. Plan for about an hour for younger players or whatever your league recommends, and expect to cut things if the group is restless.',
+          'Use age-appropriate drills described in general terms. For younger children that means games that build movement, balance, throwing, kicking, or catching in a playful way, with lots of touches and very little standing in line. For older children you can add simple positions and short rules, but keep explanations to a sentence or two before they play. Ask your league or an experienced coach for the skill progressions that fit your sport.',
+          'Learn every name quickly and use them. Ask a returning player to help demonstrate. End by telling each child something specific they did well, and tell families the plan for the next session.',
+        ],
+      },
+      {
+        heading: 'Playing time and fairness',
+        body: [
+          'Decide your playing time approach before the first game and tell parents what it is. Many recreational leagues have minimum playing time rules, so check yours first. If there is no rule, a simple plan that rotates positions and sitting-out turns keeps things fair and removes the temptation to play the strongest kids the most.',
+          'Write the rotation down in advance rather than deciding in the moment. A visible lineup card, even a handwritten one, helps you stay consistent when the game gets tight. Give every child a chance at different positions, and avoid labeling kids by what they can or cannot do.',
+          'Fair does not always mean identical. A child who is injured, tired, or struggling with the heat may need a different amount of time, and that is fine as long as the reason is the child’s well-being and not the scoreboard.',
+        ],
+      },
+      {
+        heading: 'Talking with parents',
+        body: [
+          'Hold a short meeting or send a welcome message before the first practice. Cover the schedule, the way you will communicate, your approach to playing time, what you expect of players, and how you would like parents to behave on the sideline. Ask them to cheer for all the kids and leave coaching and officiating to the people assigned to those jobs.',
+          'Keep communication in one predictable place, and include a parent or guardian in any message with a child. Many youth organizations recommend avoiding private one-on-one messages between adults and minors, so follow your league policy. Share problems privately, not in the group chat.',
+          'When a parent has a concern, listen first and set a time to talk away from the game and away from the kids. A 24-hour pause before discussing playing time or a bad day on the field helps both sides cool down. Involve the league if a conversation does not resolve or if you feel uncomfortable.',
+        ],
+      },
+      {
+        heading: 'Safety basics and keeping it fun',
+        body: [
+          'Check the field or gym before every session for hazards, hot surfaces, holes, and equipment that is not secure. Build water breaks into practice, and adjust the plan for heat, cold, poor air quality, or lightning. Learn your league policy on injuries and concussions, and follow it if a child is hurt, even when they say they are fine. Never leave a child alone at the end of practice, and know who is approved to pick up each player.',
+          'Keep the focus on fun. Short explanations, lots of movement, and small games keep young players engaged better than long drills. Celebrate effort, kindness, and improvement. Let the kids laugh, and let mistakes be part of learning.',
+          'Protect children’s privacy in anything you post. Use first names only, and do not publish photos or other details without guardian consent. When in doubt, ask the parents first and leave it out if you are still unsure.',
+        ],
+      },
+    ],
+    checklist: [
+      { label: 'Complete the league’s required training', detail: 'Finish whatever safety and background steps your league requires before working with players.' },
+      { label: 'Collect emergency information privately', detail: 'Contacts, health notes, and approved pickup people for each child, kept secure.' },
+      { label: 'Pack the basics', detail: 'First aid kit, water, phone, roster, and the address of the practice site.' },
+      { label: 'Plan a short first practice', detail: 'Names, warm-up game, a few skill stations, a small-sided game, and a close.' },
+      { label: 'Set a playing time approach', detail: 'Check league rules, write the rotation down, and tell parents.' },
+      { label: 'Send a welcome message to families', detail: 'Schedule, communication channel, expectations, and sideline behavior.' },
+      { label: 'Follow adult-to-minor contact rules', detail: 'Include a parent or guardian in messages with children.' },
+      { label: 'Get consent before posting anything', detail: 'First names only, and no photos without guardian consent.' },
+    ],
+    wanted: [
+      'Links to official youth sports league coach training and safety requirement pages, with the date you checked them.',
+      'Published heat-illness and concussion guidance for youth sports from public health or sports-medicine sources.',
+      'Publicly posted league rules on minimum playing time for a specific age group, with the source and date.',
+      'Your first practice plan that worked, with timings and the games you used.',
+      'Your welcome message to parents that set the right tone.',
+      'Your tips that worked for a hard conversation about playing time.',
+    ],
+    related: [
+      { label: 'Baseball', href: '/baseball' },
+      { label: 'Local', href: '/local' },
+      ALL,
+      { label: 'Send material', href: '/guides/intake' },
+    ],
+    tags: ['youth-sports', 'coaching', 'volunteer', 'practice-plan', 'safety', 'parents'],
+  },
+  {
+    slug: 'organize-a-pickup-game',
+    published: '2026-10-22',
+    category: 'sports',
+    title: 'How to organize a recurring pickup game',
+    dek: 'Pick a time and place, set group chat norms, make fair teams, welcome newcomers, and keep a regular game alive.',
+    audience: 'Players who want a steady pickup basketball, soccer, or volleyball game and are willing to be the person who sends the message.',
+    seat: 'open',
+    minutes: 6,
+    sections: [
+      {
+        heading: 'Pick a time and a place',
+        body: [
+          'A pickup game survives on a predictable time. Choose a day and hour that most of your core group can make, and keep it the same each week. A fixed slot beats a perfect slot, because people build it into their routines. Start with a core group of enough players to run a game and a few more who can fill in.',
+          'Public courts and fields are usually the easiest place to start, but rules vary. Some are first come, first served, some require a reservation or permit for organized groups, and some have posted hours or limits on group use. Check with the managing agency, such as the parks and recreation department or the school, and read the posted rules before you plan around a spot. If you need a permit or reservation, ask what is required and how far ahead.',
+          'Have a backup location or an alternate day. When your usual court is full or closed, a plan B keeps the habit alive instead of letting one bad week end the game.',
+        ],
+      },
+      {
+        heading: 'Group chat norms',
+        body: [
+          'Use one group chat and set a few simple norms at the start. Post the day, time, and place, ask for a quick reply by a set time, and say what happens if too few people say yes. Keep messages short, and keep off-topic chatter out of the main thread if you can.',
+          'Make the rules of the chat clear: respond honestly, cancel as early as you can, and do not add people without asking. Be careful with personal information. Share phone numbers only with consent and avoid posting anyone’s schedule or location outside the group.',
+          'Decide who is the organizer, and make it easy to hand off. One person who sends the weekly message and handles the plan is enough, as long as someone else can step in when they are away.',
+        ],
+      },
+      {
+        heading: 'Make teams fairly',
+        body: [
+          'Fair teams make a game more fun for everyone. Simple methods work: captains alternate picks, players are split into balanced groups by whoever knows the group best, or teams are reshuffled each game so the same people do not always play together. Winners-stay formats work for busy courts, but cap the number of games in a row so no team is stuck on court all night.',
+          'Keep the sorting friendly. Avoid public rankings or picking the same kids last. If skill levels are uneven, balance the teams by mixing stronger and newer players, and adjust rules lightly, such as limiting certain shots or rotating positions. Ask the group how competitive it wants to be, then follow what most people choose.',
+          'Agree on how to settle disputes. A simple rule such as calling your own fouls honestly and replaying a contested point keeps small arguments from becoming big ones.',
+        ],
+      },
+      {
+        heading: 'Welcome newcomers',
+        body: [
+          'A game stays alive when new people feel welcome. Greet newcomers by name, ask about their experience, and put them with players who will include them. Tell them the house rules before the first whistle, such as how teams are picked and how fouls are called.',
+          'Let people grow into the group. Invite a newcomer to the chat only after they have played once or twice and have said they would like to join, and ask before adding anyone. Keep an eye out for players who are quiet and make sure they get touches.',
+          'Be clear about what level the game is. Describe it honestly, whether relaxed, competitive, or somewhere in the middle, so people can decide whether it fits them. A good fit is better than a larger roster.',
+        ],
+      },
+      {
+        heading: 'Injuries, weather, and keeping a regular going',
+        body: [
+          'Decide the weather rules in advance and write them in the chat. Name who makes the call and by what time, and consider heat, cold, lightning, wet surfaces, and air quality. When in doubt, cancel or move indoors and say so early. Take heat seriously by bringing water and taking breaks, and encourage anyone feeling unwell to stop.',
+          'Injuries happen in pickup games. Agree on a pause when someone is hurt, keep a basic first aid kit in the bag, and know the address of the location in case you need to call for help. Players take part at their own risk, so encourage people to warm up and to sit out when something does not feel right. Ask a qualified source about waivers or insurance if your group is large or on a managed facility.',
+          'To keep a regular going, rotate the organizer role, thank people for showing up, and review the plan every season. Check in on whether the time, place, and level still fit. A game that gets small adjustments tends to outlast one that never changes.',
+        ],
+      },
+    ],
+    checklist: [
+      { label: 'Fix a day and time', detail: 'Choose a recurring slot most of the core group can make.' },
+      { label: 'Check the location rules', detail: 'Ask the managing agency about reservations, permits, and group use.' },
+      { label: 'Line up a backup spot', detail: 'Name an alternate court, field, or day.' },
+      { label: 'Start one group chat', detail: 'Post the plan, ask for replies by a set time, and keep it short.' },
+      { label: 'Choose a team-picking method', detail: 'Alternating captains, balanced groups, or reshuffles, with a cap on winners-stay.' },
+      { label: 'Write a welcome script', detail: 'House rules and the level of the game, told to newcomers up front.' },
+      { label: 'Set weather and injury rules', detail: 'Who calls it, by when, and what happens when someone is hurt.' },
+      { label: 'Share the organizer role', detail: 'Name someone who can send the message when you are away.' },
+    ],
+    wanted: [
+      'Links to official parks department or school district pages on court and field reservations and group use, with the date you checked them.',
+      'Published heat-illness and air-quality guidance for outdoor exercise from public health sources.',
+      'Public rules or guidance on pickup etiquette and self-officiating from a recreation department or sports association.',
+      'Your team-picking method that worked for uneven skill levels.',
+      'Your group chat norms that kept a pickup game going for a season.',
+      'Your welcome script that worked for newcomers.',
+    ],
+    related: [
+      { label: 'Local', href: '/local' },
+      { label: 'Pickleball hub', href: '/pickleball' },
+      ALL,
+      { label: 'Send material', href: '/guides/intake' },
+    ],
+    tags: ['pickup', 'basketball', 'soccer', 'volleyball', 'community', 'weather'],
+  },
 ];

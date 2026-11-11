@@ -18,7 +18,12 @@ test('actual Pages event catch-all and feed routes allow anonymous reads and den
 // No stand-in performs I/O; fetch records its use and returns an in-memory response.
 const state={};
 const middlewareSource=readFileSync(new URL('../functions/_middleware.ts',import.meta.url),'utf8');
-const stripped=stripTypeScriptTypes(middlewareSource).replace(/^import .*;\n/gm,'');
+const stripped=stripTypeScriptTypes(middlewareSource).replace(/^import .*;\n/gm,line=>{
+ // Retain the real pure Atlas boundary; imported services below remain stand-ins.
+ return line.includes("'../src/lib/signal-atlas-boundary.mjs'")
+  ? line.replace("'../src/lib/signal-atlas-boundary.mjs'",JSON.stringify(new URL('../src/lib/signal-atlas-boundary.mjs',import.meta.url).href))
+  : '';
+});
 const standins=`
 const state=globalThis[Symbol.for('pointcast.noticeboard.middleware-test')];
 const classifyUA=ua=>{state.classify++;return ua.includes('GPTBot')?'ai:openai':'human'};
@@ -64,8 +69,8 @@ test('resident slash routes and similarly named routes retain current visit and 
   const {result}=await request('https://pointcast.xyz'+path);assert.equal(result.status,200);assert.equal(state.next,1);assert.equal(state.records,1);assert.equal(state.wait,1);assert.ok(state.transforms>0);assert.ok(state.classify>0);
  }
 });
-test('unrelated resident bare routes retain the existing generic directory fetch',async()=>{
- const {result}=await request('https://pointcast.xyz/agents/mike');assert.equal(result.status,200);assert.equal(state.fetch,1);assert.equal(state.next,0);assert.ok(state.classify>0);
+test('unrelated resident bare routes read the slash asset without a second worker hop',async()=>{
+ const {result}=await request('https://pointcast.xyz/agents/mike');assert.equal(result.status,200);assert.equal(state.assets,1);assert.equal(state.fetch,0);assert.equal(state.next,0);assert.ok(state.classify>0);
 });
 test('quiet route source guard stays exact and follows existing canonical routing',()=>{
  const position=middlewareSource.indexOf("if (['/agents/', '/agents/spec/'].includes(url.pathname)) return next();");assert.ok(position>middlewareSource.indexOf("url.hostname === 'catan.pointcast.xyz'"));assert.ok(position<middlewareSource.indexOf('const looksLikeDirectoryPath'));assert.ok(!middlewareSource.includes("url.pathname.startsWith('/agents')"));

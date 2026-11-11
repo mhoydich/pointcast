@@ -17,11 +17,19 @@ TAKES is a writing desk for alternate takes (word, sentence, paragraph), with sy
 5. Reload. The draft, theme and sound settings should persist.
 6. iPhone: select words by long-press; the Take/Sentence/Dim/Stash bar should appear. Confirm no sideways scroll.
 
+7. **v2 (after PR merge):** share, compare, record, print.
+   - LAB → File → **Copy a share link**. Paste it into a private window and on the iPhone. The same draft should open, and the address bar should drop the `#d=…` part.
+   - Open the link in the window that has your own draft. File → **Restore my draft** should bring yours back.
+   - Hover the paragraph with the wavy margin line and click **⇆** (or press `C`). Three takes should sit side by side with new words highlighted. Try **Use this**, **Make original** and **×**, then `⌘Z`.
+   - File → **Record the take score (.wav)**. Play the file: one tone per take, low tones where the original is showing. Note the length and loudness.
+   - File → **Print / PDF** and **Print with take marks**. Save both as PDF from Chrome and Safari. The first should be plain black on white; the second should show wavy underlines and small take counts.
+
 ## Capture
 
 - Screen recording with audio of steps 1–2 (desktop Chrome).
 - Screenshots of any layout problem, with device + browser.
 - A short list: instrument/ambience → "good / too loud / harsh / broken".
+- The two PDFs and the .wav from step 7, attached to the log.
 
 ## Write results to
 

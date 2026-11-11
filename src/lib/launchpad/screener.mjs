@@ -69,24 +69,39 @@ export function holdersAgo(index, world, coin, n) {
   return counts[Math.min(at, counts.length - 1)];
 }
 
+/** Index of the first trade at or after `tick` (trades are appended in tick order). */
+function firstAt(trades, tick) {
+  let lo = 0, hi = trades.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (trades[mid].tick < tick) lo = mid + 1; else hi = mid; }
+  return lo;
+}
+
 /** Trades in the last `n` ticks: the same span priceAgo(n) measures. */
 export function tradesIn(index, world, coin, n) {
-  const from = world.tick - n;
-  return index.trades.get(coin.id).filter((t) => t.tick >= from);
+  const trades = index.trades.get(coin.id);
+  return trades.slice(firstAt(trades, world.tick - n));
 }
 
 /**
  * OHLC candles of `size` ticks from the trades themselves: each candle opens
- * at the previous close and takes its high, low and close from the prices
- * after each trade inside it. Quote volume is summed in whole credits.
+ * at the previous close (the first at the launch price, before any trade) and
+ * takes its high, low and close from the prices after each trade inside it.
+ * Quote volume is summed in whole credits.
  */
-export function candles(index, world, coin, size = 60) {
+export function candles(index, world, coin, size = 60, limit = Infinity) {
   const trades = index.trades.get(coin.id);
-  const span = Math.max(1, world.tick - coin.createdTick);
-  let close = index.prices.get(coin.id)[0];
-  let i = 0;
+  const prices = index.prices.get(coin.id);
+  // Finished ticks, plus the current one once it has trades: an opening auction clears as the tick advances, so its fills carry the new tick.
+  const span = Math.max(1, world.tick - coin.createdTick + (trades.at(-1)?.tick >= world.tick ? 1 : 0));
+  const count = Math.ceil(span / size);
+  // With a limit, start at the first kept candle: it opens on the close of the tick before it.
+  const skip = Math.max(0, count - limit);
+  const start = coin.createdTick + skip * size;
+  const p = presetOf(world, coin);
+  let close = skip ? prices[Math.min(start - coin.createdTick - 1, prices.length - 1)] : Number(p.Q0) / Number(p.B0);
+  let i = skip ? firstAt(trades, start) : 0;
   const out = [];
-  for (let from = coin.createdTick; from < coin.createdTick + span; from += size) {
+  for (let from = start; from < coin.createdTick + span; from += size) {
     const to = from + size;
     const open = close;
     let h = open, l = open, v = 0;
@@ -117,9 +132,24 @@ function nearWithin(sorted, tick, span) {
 /**
  * Concentration and rug heuristics (plan §4.8). Denominators are total
  * supply unless named. The creator's set is the creator wallet plus every
- * wallet it funded; clusters group wallets by who funded them.
+ * wallet it funded; clusters group wallets by who funded them. One paint
+ * asks for the same coin's risk from the screener, the coin drawer and the
+ * creator view, so the result is kept until the tick, the coin's trades or
+ * the wallets change.
  */
+const riskMemo = new WeakMap();
 export function risk(index, world, coin) {
+  let byCoin = riskMemo.get(index);
+  if (!byCoin) riskMemo.set(index, (byCoin = new Map()));
+  const key = `${world.tick}|${index.trades.get(coin.id)?.length}|${world.wallets.size}`;
+  const hit = byCoin.get(coin.id);
+  if (hit && hit.key === key) return hit.value;
+  const value = computeRisk(index, world, coin);
+  byCoin.set(coin.id, { key, value });
+  return value;
+}
+
+function computeRisk(index, world, coin) {
   const cfg = world.config.risk;
   const supply = Number(presetOf(world, coin).supply);
   const trades = index.trades.get(coin.id);
@@ -212,6 +242,54 @@ export function metrics(index, world, coin, windowTicks = WINDOWS['5m']) {
     progress: coin.status === 'migrated' ? { tokensBps: 10_000, creditsBps: 10_000 } : prog,
     risk: risk(index, world, coin),
   };
+}
+
+/* ---------- screener tabs, holders ---------- */
+
+export const TABS = Object.freeze(['trending', 'new', 'graduating', 'graduated', 'movers', 'holders', 'bots', 'watchlist']);
+const BOT_ROLES = new Set(['bot', 'sniper']);
+
+/**
+ * Screener rows for one tab (plan §3): Trending (live coins by score), New,
+ * About to graduate (credits progress at least 70%), Graduated, Movers
+ * (largest price change in the window), Most holders, Bot favorites (bots
+ * over half the window's volume) and the viewer's watchlist (`ids`).
+ */
+export function screen(index, world, { tab = 'trending', windowTicks = WINDOWS['5m'], ids = [] } = {}) {
+  if (!TABS.includes(tab)) throw new Error(`unknown screener tab: ${tab}`);
+  const rows = [...world.coins.values()].map((coin) => {
+    const m = metrics(index, world, coin, windowTicks);
+    const recent = tradesIn(index, world, coin, windowTicks);
+    const vol = recent.reduce((s, t) => s + t.quote, 0n);
+    const botVol = recent.filter((t) => BOT_ROLES.has(world.wallets.get(t.wallet)?.role)).reduce((s, t) => s + t.quote, 0n);
+    return { ...m, createdTick: coin.createdTick, openTick: coin.openTick, completeTick: coin.completeTick, viewerMade: Boolean(coin.viewerMade), creator: coin.creator, botShare: vol ? Number((botVol * 10_000n) / vol) / 10_000 : 0 };
+  });
+  const byId = (a, b) => a.id.localeCompare(b.id);
+  if (tab === 'trending') {
+    const ranked = trending(index, world, windowTicks);
+    const row = new Map(rows.map((r) => [r.id, r]));
+    return ranked.map((t) => ({ ...row.get(t.id), trend: t }));
+  }
+  if (tab === 'new') return rows.sort((a, b) => b.createdTick - a.createdTick || byId(a, b));
+  if (tab === 'graduating') return rows.filter((r) => r.status === 'curve' && r.progress.creditsBps >= 7000).sort((a, b) => b.progress.creditsBps - a.progress.creditsBps || byId(a, b));
+  if (tab === 'graduated') return rows.filter((r) => r.status === 'migrated').sort((a, b) => b.completeTick - a.completeTick || byId(a, b));
+  if (tab === 'movers') return rows.filter((r) => r.status !== 'auction').sort((a, b) => Math.abs(b.change) - Math.abs(a.change) || byId(a, b));
+  if (tab === 'holders') return rows.sort((a, b) => b.holders - a.holders || byId(a, b));
+  if (tab === 'bots') return rows.filter((r) => r.botShare > 0.5).sort((a, b) => b.botShare - a.botShare || byId(a, b));
+  const keep = new Set(ids);
+  return rows.filter((r) => keep.has(r.id)).sort((a, b) => b.createdTick - a.createdTick || byId(a, b));
+}
+
+/** The largest holders of a coin with their cluster (who funded them), share of supply and role. */
+export function holdersTable(world, coin, limit = 20) {
+  const supply = Number(presetOf(world, coin).supply);
+  return [...coin.holders.entries()]
+    .map(([id, base]) => {
+      const w = world.wallets.get(id);
+      return { wallet: id, role: w?.role ?? 'human', cluster: clusterOf(world, id), creator: id === coin.creator, base, share: Number(base) / supply };
+    })
+    .sort((a, b) => (b.base > a.base ? 1 : b.base < a.base ? -1 : a.wallet.localeCompare(b.wallet)))
+    .slice(0, limit);
 }
 
 /* ---------- trending ---------- */

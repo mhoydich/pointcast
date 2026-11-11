@@ -280,3 +280,36 @@ test('log helpers: stamping trims to the cap, lists upsert by key', () => {
   assert.deepEqual(upsertFront([{ k: 1 }, { k: 2 }], { k: 2, n: 'new' }, { keyField: 'k' }), [{ k: 2, n: 'new' }, { k: 1 }]);
   assert.deepEqual(upsertFront([1, 2, 3], 0, { cap: 3 }), [0, 1, 2]);
 });
+
+test('RSS export escapes content and links each message', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#t', from: { name: 'A <b>', kind: 'human' }, body: 'fish & chips <script>' });
+  const res = await handleLoom(new Request(`${base}?to=%23t&format=rss`), { kv });
+  assert.match(res.headers.get('content-type'), /rss\+xml/);
+  const text = await res.text();
+  assert.match(text, /fish &amp; chips &lt;script&gt;/);
+  assert.ok(!text.includes('<script>'));
+  assert.match(text, /<guid isPermaLink="false">loom:[0-9a-f]{24}#m_/);
+});
+
+test('whole-thread reads may be cached briefly; live polls never are', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#t', from: { name: 'A', kind: 'human' }, body: 'x' });
+  const full = await handleLoom(new Request(`${base}?to=%23t`), { kv });
+  const poll = await handleLoom(new Request(`${base}?to=%23t&since=1`), { kv });
+  assert.equal(full.headers.get('cache-control'), 'public, max-age=10');
+  assert.equal(poll.headers.get('cache-control'), 'no-store');
+});
+
+test('the node card keeps the v1.1 relay manifest fields and RSS never shows a seal', async () => {
+  const card = nodeCard();
+  for (const field of ['site', 'role', 'endpoint', 'card', 'room', 'formats', 'thread', 'relayFor', 'acceptsAnyAddress', 'node', 'api', 'handshake', 'peers']) assert.ok(field in card, field);
+  assert.ok(card.relayFor.includes('pointcast.xyz'));
+  const kv = memoryKv();
+  const bob = await generateKeyPair();
+  await post(kv, { action: 'key', address: '@bob', publicKey: bob.publicKey });
+  await post(kv, { to: '@bob', from: { name: 'Ana', kind: 'human' }, sealed: await seal('secret plan', [{ kid: bob.kid, publicKey: bob.publicKey }]) });
+  const rss = await (await handleLoom(new Request(`${base}?to=%40bob&format=rss`), { kv })).text();
+  assert.match(rss, /sealed message/);
+  assert.ok(!rss.includes('"ct"') && !rss.includes('secret plan'));
+});

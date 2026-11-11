@@ -17,7 +17,7 @@
 import { prng } from './prng.mjs';
 import { units, min } from './units.mjs';
 import { CONFIG, LIMITS, configHash } from './config.mjs';
-import { createWorld, addWallet, launch, buy, sell, tick as advance, sweep, emit, quoteBuy, quoteSell, estimateOut, orderRoom, cancelOrder, sniperFeeBps, eventsHash, quoteInSystem, unrealized, coinPrice, coinMarketCap, presetOf } from './engine.mjs';
+import { createWorld, addWallet, launch, buy, sell, tick as advance, sweep, setFeeSplit, emit, quoteBuy, quoteSell, estimateOut, orderRoom, cancelOrder, sniperFeeBps, eventsHash, quoteInSystem, unrealized, coinPrice, coinMarketCap, presetOf } from './engine.mjs';
 import { loadPolicy, patchPolicy, newGateState, check, record, auctionFilled, auctionCancelled } from './gate.mjs';
 import { STRATEGIES, copyIntents } from './strategies.mjs';
 import { createIndex, ingest, risk, priceAgo, highOver, emaOver, holdersAgo, tradesIn } from './screener.mjs';
@@ -28,12 +28,19 @@ const SWEEP_EVERY = 600;
 const QUEUE_TICKS = 30;
 
 /** Human action log records (plan §8.4). */
-export const RECORD_TYPES = Object.freeze(['launch', 'trade', 'approve', 'decline', 'kill', 'unkill', 'policy']);
-const CONTROL = new Set(['approve', 'decline', 'kill', 'unkill', 'policy']);
+export const RECORD_TYPES = Object.freeze(['launch', 'trade', 'approve', 'decline', 'kill', 'unkill', 'policy', 'split']);
 
 const isText = (x) => typeof x === 'string' && x.length > 0;
 const isAmount = (x) => { try { return isText(x) && units(x) >= 0n; } catch { return false; } };
 const isSlippage = (x) => x === undefined || (Number.isInteger(x) && x >= 0 && x <= LIMITS.maxSlippageBps);
+const isPriorityFee = (x) => x === undefined || (Number.isInteger(x) && x >= 0 && x <= LIMITS.maxPriorityFeeBps);
+/** A launch may name a preset or rule set only by its own key in the configuration (never an Object.prototype member). */
+const isConfigKey = (table, x) => x === undefined || (typeof x === 'string' && Object.hasOwn(table, x));
+/** The policy fields the console's editor writes. A patch holds only these, with plain values, so it can never carry text or nesting. */
+const EDITABLE = new Set(['maxPerTrade', 'approvalAbove', 'maxPositionBps', 'cooldownTicks', 'maxSlippageBps', 'windowCap']);
+const isPlain = (x) => x === null || ['string', 'number', 'boolean'].includes(typeof x);
+const isWindowCap = (x) => x && typeof x === 'object' && !Array.isArray(x) && Object.entries(x).every(([k, v]) => (k === 'amount' || k === 'ticks') && isPlain(v));
+const isPatch = (x) => x && typeof x === 'object' && !Array.isArray(x) && Object.entries(x).every(([k, v]) => EDITABLE.has(k) && (k === 'windowCap' ? isWindowCap(v) : isPlain(v)));
 
 /** Check a record's shape; throws on a malformed one. Returns a frozen copy. */
 export function checkRecord(rec) {
@@ -41,13 +48,14 @@ export function checkRecord(rec) {
   if (!Number.isInteger(rec.tick) || rec.tick < 0) throw new Error('a log record needs a whole tick');
   if (!RECORD_TYPES.includes(rec.type)) throw new Error(`unknown log record type: ${rec.type}`);
   const need = {
-    launch: () => isText(rec.wallet) && isText(rec.symbol) && typeof rec.name === 'string' && Number.isInteger(rec.nounId) && (rec.devBuy === undefined || isAmount(rec.devBuy)),
-    trade: () => isText(rec.wallet) && isText(rec.coin) && isSlippage(rec.slippageBps) && (rec.side === 'buy' ? isAmount(rec.quote) : rec.side === 'sell' && isAmount(rec.base)),
+    launch: () => isText(rec.wallet) && isText(rec.symbol) && typeof rec.name === 'string' && Number.isInteger(rec.nounId) && (rec.devBuy === undefined || isAmount(rec.devBuy)) && isConfigKey(CONFIG.presets, rec.preset) && isConfigKey(CONFIG.rules, rec.rules),
+    trade: () => isText(rec.wallet) && isText(rec.coin) && isSlippage(rec.slippageBps) && isPriorityFee(rec.priorityFeeBps) && (rec.side === 'buy' ? isAmount(rec.quote) : rec.side === 'sell' && isAmount(rec.base)),
     approve: () => isText(rec.intent) && isText(rec.runKey),
     decline: () => isText(rec.intent) && isText(rec.runKey),
     kill: () => isText(rec.bot),
     unkill: () => isText(rec.bot),
-    policy: () => isText(rec.bot) && rec.patch && typeof rec.patch === 'object' && !Array.isArray(rec.patch),
+    policy: () => isText(rec.bot) && isPatch(rec.patch),
+    split: () => isText(rec.wallet) && isText(rec.coin) && Array.isArray(rec.shares) && rec.shares.every((x) => x && isText(x.wallet) && Number.isInteger(x.bps)),
   }[rec.type];
   if (!need()) throw new Error(`malformed ${rec.type} record`);
   return Object.freeze({ ...rec });
@@ -103,7 +111,7 @@ export function createSim({ scenario, seed = scenario.seed ?? scenario.id, rules
   }
 
   const humanRejects = [];
-  const reject = (rec, reason) => humanRejects.push({ tick: world.tick, type: rec.type, reason });
+  const reject = (rec, reason) => humanRejects.push({ tick: world.tick, type: rec.type, reason, record: rec });
   const queue = new Map();
   let killedAll = false;
   const riskCache = new Map();
@@ -246,6 +254,7 @@ export function createSim({ scenario, seed = scenario.seed ?? scenario.id, rules
       const intent = rec.side === 'buy'
         ? { side: 'buy', coin: rec.coin, quoteIn: units(rec.quote), maxSlippageBps: rec.slippageBps ?? 500, reason: 'viewer' }
         : { side: 'sell', coin: rec.coin, baseIn: units(rec.base), maxSlippageBps: rec.slippageBps ?? 500, reason: 'viewer' };
+      if (rec.priorityFeeBps) intent.priorityFeeBps = rec.priorityFeeBps;
       proposals.push(propose('human', wallet.id, intent));
       return;
     }
@@ -261,6 +270,14 @@ export function createSim({ scenario, seed = scenario.seed ?? scenario.id, rules
     if (rec.type === 'kill' || rec.type === 'unkill') {
       if (rec.bot !== '*' && !botById.has(rec.bot)) return reject(rec, 'NO_BOT');
       setKill(rec.bot, rec.type === 'kill');
+      return;
+    }
+    if (rec.type === 'split') {
+      // A viewer's creator payout split for a coin it launched: set once, then locked (engine setFeeSplit).
+      const wallet = humanWallet(rec.wallet);
+      if (!wallet) return reject(rec, 'NOT_HUMAN');
+      const res = setFeeSplit(world, rec.coin, wallet.id, rec.shares.map((x) => ({ wallet: x.wallet, bps: x.bps })));
+      if (!res.ok) reject(rec, res.reason);
       return;
     }
     // policy

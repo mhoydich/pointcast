@@ -137,6 +137,28 @@ const frame = {
   aspectRatio: '1.91:1' as const,
   buttons: frameButtons,
 };
+
+type Plate = { src: string; alt: string; caption: string; width?: number; height?: number };
+
+/** A block page has one media image. meta.figures is an optional second
+ *  plate list. Blocks that omit it render exactly as before. */
+const figures: Plate[] = (() => {
+  const raw = block.data.meta?.figures;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const fig = item as { src?: unknown; alt?: unknown; caption?: unknown; width?: unknown; height?: unknown };
+    if (typeof fig.src !== 'string' || typeof fig.alt !== 'string') return [];
+    if (!fig.src.startsWith('/') || fig.src.includes('..')) return [];
+    return [{
+      src: fig.src,
+      alt: fig.alt,
+      caption: typeof fig.caption === 'string' ? fig.caption : '',
+      width: typeof fig.width === 'number' ? fig.width : undefined,
+      height: typeof fig.height === 'number' ? fig.height : undefined,
+    }];
+  });
+})();
 ---
 
 <BlockLayout title={title} description={description} image={ogImage} imageAlt={typeof block.data.meta?.imageAlt === 'string' ? block.data.meta.imageAlt : undefined} imageWidth={typeof block.data.meta?.ogImageWidth === 'number' ? block.data.meta.ogImageWidth : undefined} imageHeight={typeof block.data.meta?.ogImageHeight === 'number' ? block.data.meta.ogImageHeight : undefined} jsonLd={jsonLd} alternates={alternates} frame={frame}>
@@ -165,6 +187,17 @@ const frame = {
     <div class="detail-frame">
       <BlockCard block={block} detail />
     </div>
+
+    {figures.length > 0 && (
+      <section class="plates" aria-label="Figures">
+        {figures.map((fig) => (
+          <figure class="plates__fig" id={`fig-${fig.src.replace(/[^\w]+/g, '-').replace(/^-|-$/g, '')}`}>
+            <img src={fig.src} alt={fig.alt} width={fig.width} height={fig.height} loading="lazy" />
+            {fig.caption && <figcaption>{fig.caption}</figcaption>}
+          </figure>
+        ))}
+      </section>
+    )}
 
     {/* External CTA — any block with external.url that isn't MINT/FAUCET
         (those get their own mint-strip below). Internal URLs like /drum,
@@ -863,4 +896,29 @@ const frame = {
   .agent-id-pill__verify:hover { text-decoration: underline; }
   .agent-id-pill--unsigned { border-color: #D4CBB6; background: white; opacity: 0.7; }
   .agent-id-pill--unsigned .agent-id-pill__val { color: #6b6358; }
+
+  .plates {
+    margin-top: 18px;
+    display: grid;
+    gap: 14px;
+  }
+  .plates__fig {
+    margin: 0;
+    border: 1.5px solid var(--pc-rule, #2c261f);
+    background: #f6f4ef;
+  }
+  .plates__fig img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .plates__fig figcaption {
+    margin: 0;
+    padding: 8px 10px;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--pc-ink-muted, #5c564e);
+    border-top: 1px solid #d6d3cc;
+  }
 </style>

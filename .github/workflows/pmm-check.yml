@@ -1,0 +1,56 @@
+name: PMM and Nouns Messenger checks
+# The two phone messengers are plain files under public/, so no other workflow sees them.
+# Runs their unit and static tests and syntax-checks the app scripts and workers. No site build.
+
+on:
+  pull_request:
+    paths:
+      - 'public/pmm/**'
+      - 'public/nouns-messenger/**'
+      - 'functions/api/pmm/**'
+      - 'functions/_rate-limit.ts'
+      - 'tests/pmm-*.test.mjs'
+      - 'tests/nouns-messenger*.test.mjs'
+      - 'tests/fixtures/pmm-offline/**'
+      - 'docs/prd/pointcast-mobile-messaging.md'
+      - '.github/workflows/pmm-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'public/pmm/**'
+      - 'public/nouns-messenger/**'
+      - 'functions/api/pmm/**'
+      - 'functions/_rate-limit.ts'
+      - 'tests/pmm-*.test.mjs'
+      - 'tests/nouns-messenger*.test.mjs'
+      - 'tests/fixtures/pmm-offline/**'
+      - 'docs/prd/pointcast-mobile-messaging.md'
+      - '.github/workflows/pmm-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pmm-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: PMM unit and static tests
+        run: npm run test:pmm
+      - name: Syntax-check app and service worker scripts
+        run: |
+          node --check public/pmm/app.js
+          node --check public/pmm/sw.js
+          node --check public/nouns-messenger/app.js
+          node --check public/nouns-messenger/sw.js

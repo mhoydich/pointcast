@@ -59,6 +59,32 @@ export const AUDIO_DEFAULTS = {
   actions: true,
 };
 
+export const SCORE_MAX_EVENTS = 600;
+
+// 16-bit PCM WAV from anything shaped like an AudioBuffer.
+export function encodeWav(buffer) {
+  const channels = Math.min(2, buffer.numberOfChannels);
+  const { sampleRate, length } = buffer;
+  const data = Array.from({ length: channels }, (_, c) => buffer.getChannelData(c));
+  const bytes = 44 + length * channels * 2;
+  const view = new DataView(new ArrayBuffer(bytes));
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) view.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); view.setUint32(4, bytes - 8, true); str(8, 'WAVE');
+  str(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * channels * 2, true);
+  view.setUint16(32, channels * 2, true); view.setUint16(34, 16, true);
+  str(36, 'data'); view.setUint32(40, length * channels * 2, true);
+  let o = 44;
+  for (let i = 0; i < length; i++) {
+    for (let c = 0; c < channels; c++) {
+      const v = Math.max(-1, Math.min(1, data[c][i] || 0));
+      view.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+      o += 2;
+    }
+  }
+  return view.buffer;
+}
+
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 
 export class TakesAudio {
@@ -79,8 +105,15 @@ export class TakesAudio {
     }
     const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!AC) return false;
-    const ctx = new AC();
+    this.attach(new AC());
+    return true;
+  }
+
+  // Build the signal chain on any BaseAudioContext. Offline contexts (used to
+  // render a take score to a file) skip ambience and never resume.
+  attach(ctx, { offline = false } = {}) {
     this.ctx = ctx;
+    this.offline = offline;
     this.master = ctx.createGain();
     this.comp = ctx.createDynamicsCompressor();
     this.comp.threshold.value = -14;
@@ -115,7 +148,7 @@ export class TakesAudio {
     this.noise = this.makeNoise('white');
     this.brownNoise = this.makeNoise('brown');
     this.apply(this.s, true);
-    return true;
+    return this;
   }
 
   apply(settings, force = false) {
@@ -131,7 +164,7 @@ export class TakesAudio {
     this.delayFb.gain.setTargetAtTime(Math.min(0.75, s.echo * 2.2), t, 0.05);
     this.delay.delayTime.setTargetAtTime(0.18 + s.space * 0.06, t, 0.05);
     if (force || prev.space !== s.space || !this.reverb.buffer) this.reverb.buffer = this.makeImpulse(s.space);
-    if (force || prev.ambience !== s.ambience || (s.ambience === 'drone' && (prev.root !== s.root || prev.octave !== s.octave))) this.setAmbience(s.ambience);
+    if (!this.offline && (force || prev.ambience !== s.ambience || (s.ambience === 'drone' && (prev.root !== s.root || prev.octave !== s.octave)))) this.setAmbience(s.ambience);
     this.ambientBus.gain.setTargetAtTime(s.enabled ? s.ambienceVolume * 0.6 : 0, t, 0.2);
   }
 
@@ -340,24 +373,42 @@ export class TakesAudio {
   }
 
   // ---- events ----
-  take(index, { pan = 0, total = 2 } = {}) {
+  take(index, { pan = 0, total = 2, at = 0 } = {}) {
     if (!this.ensureSilently()) return;
     const original = index === 0;
     const voice = original && this.s.originalVoice !== 'same' ? this.s.originalVoice : this.s.voice;
-    this.play(voice, this.takeFreq(index), { vel: original ? 0.95 : 0.7, pan });
-    if (original && total > 1) this.play(voice, this.takeFreq(0) * 1.5, { vel: 0.25, pan, at: 0.03 });
+    this.play(voice, this.takeFreq(index), { vel: original ? 0.95 : 0.7, pan, at });
+    if (original && total > 1) this.play(voice, this.takeFreq(0) * 1.5, { vel: 0.25, pan, at: at + 0.03 });
   }
 
-  paragraph(index, { pan = 0 } = {}) {
+  paragraph(index, { pan = 0, at = 0 } = {}) {
     if (!this.ensureSilently()) return;
     if (index === 0) {
-      this.play(this.s.voice, this.takeFreq(0), { vel: 0.9, pan });
-      this.play(this.s.voice, this.takeFreq(0) / 2, { vel: 0.5, pan, at: 0.01 });
+      this.play(this.s.voice, this.takeFreq(0), { vel: 0.9, pan, at });
+      this.play(this.s.voice, this.takeFreq(0) / 2, { vel: 0.5, pan, at: at + 0.01 });
       return;
     }
     const f = this.takeFreq(index);
-    this.play(this.s.voice, f, { vel: 0.6, pan });
-    this.play(this.s.voice, f * 1.25, { vel: 0.4, pan, at: 0.05 });
+    this.play(this.s.voice, f, { vel: 0.6, pan, at });
+    this.play(this.s.voice, f * 1.25, { vel: 0.4, pan, at: at + 0.05 });
+  }
+
+  // Render a take score (see scoreEvents in takes-core) to an AudioBuffer
+  // with the current instrument, scale and room. No ambience, no typing.
+  async renderScore(events, { gap = 0.34, sampleRate = 44100 } = {}) {
+    const OAC = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
+    if (!OAC) throw new Error('This browser cannot render audio offline');
+    const list = events.slice(0, SCORE_MAX_EVENTS);
+    const seconds = 0.3 + list.length * gap + 1.5 + this.s.space + this.s.length * 2;
+    const ctx = new OAC(2, Math.ceil(seconds * sampleRate), sampleRate);
+    const r = new TakesAudio({ ...this.s, enabled: true, ambience: 'off', keys: 'off' });
+    r.attach(ctx, { offline: true });
+    list.forEach((ev, i) => {
+      const at = 0.3 + i * gap;
+      if (ev.kind === 'paragraph') r.paragraph(ev.index, { pan: ev.pan, at });
+      else r.take(ev.index, { pan: ev.pan, total: ev.total, at });
+    });
+    return ctx.startRendering();
   }
 
   action(name, { pan = 0 } = {}) {
@@ -409,7 +460,7 @@ export class TakesAudio {
 
   ensureSilently() {
     if (!this.ctx) return false;
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (!this.offline && this.ctx.state === 'suspended') this.ctx.resume();
     return this.s.enabled;
   }
 

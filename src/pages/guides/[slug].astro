@@ -59,6 +59,13 @@ const url = `https://pointcast.xyz/guides/${guide.slug}`;
           <ul class="gd-check">
             {guide.checklist.map((c) => <li><strong>{c.label}.</strong> {c.detail}</li>)}
           </ul>
+
+          <section id="from-contributors" data-guide={guide.slug}>
+            <h2>From contributors</h2>
+            <p class="gd-meta" data-gi-status>Loading reviewed material.</p>
+            <div class="gi-list" data-gi-list></div>
+            <p><a href={`/guides/intake?guide=${guide.slug}`}>Send material for this guide</a>. Every item is read by a human, who writes back.</p>
+          </section>
         </div>
 
         <aside class="gd-side">
@@ -99,3 +106,66 @@ const url = `https://pointcast.xyz/guides/${guide.slug}`;
     </div>
   </div>
 </BlockLayout>
+
+<style is:global>
+  .gi-list { display: grid; gap: 12px; margin: 12px 0; }
+  .gi-item { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 8px; padding: 12px 14px; }
+  .gi-item h3 { margin: 0 0 4px; }
+  .gi-item .gi-body { white-space: pre-line; margin: 6px 0; max-width: 68ch; }
+  .gi-item .gi-note { font-size: .88rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; margin: 8px 0 0; }
+  .gi-item ul { margin: 4px 0; padding-left: 1.2em; font-size: .88rem; overflow-wrap: anywhere; }
+</style>
+
+<script>
+  // Accepted intake material for this guide (pending and declined items are never public).
+  function el(tag: string, cls?: string | null, text?: string) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text) n.textContent = text;
+    return n;
+  }
+  function render() {
+    const root = document.getElementById('from-contributors');
+    if (!root) return;
+    const slug = root.dataset.guide ?? '';
+    const status = root.querySelector('[data-gi-status]') as HTMLElement;
+    const list = root.querySelector('[data-gi-list]') as HTMLElement;
+    fetch(`/api/guides/intake?guide=${encodeURIComponent(slug)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data?.ok) throw new Error('unavailable');
+        const counts = data.counts?.byGuide?.[slug] ?? { accepted: 0, pending: 0 };
+        const items = data.accepted ?? [];
+        status.textContent = items.length
+          ? `${items.length} accepted${counts.pending ? ` · ${counts.pending} waiting for review` : ''}.`
+          : counts.pending
+            ? `Nothing accepted yet · ${counts.pending} waiting for review.`
+            : 'Nothing accepted yet. Be the first to send something useful.';
+        list.textContent = '';
+        for (const it of items) {
+          const card = el('article', 'gi-item');
+          card.append(el('h3', null, it.title));
+          const who = it.contributor ? `${it.contributor.name} (${it.contributor.kind})` : 'contributor';
+          const reviewed = it.updatedAt ? ` · reviewed ${String(it.updatedAt).slice(0, 10)}` : '';
+          card.append(el('p', 'gd-meta', `${it.kind}${it.assignment ? ` · ${it.assignment}` : ''} · from ${who}${reviewed}`));
+          card.append(el('p', 'gi-body', it.body));
+          const urls = (it.sourceUrls ?? []).filter((u: string) => /^https:\/\//.test(u));
+          if (urls.length) {
+            const ul = el('ul');
+            for (const u of urls) {
+              const li = el('li');
+              const a = el('a', null, u) as HTMLAnchorElement;
+              a.href = u; a.rel = 'nofollow noopener'; a.target = '_blank';
+              li.append(a); ul.append(li);
+            }
+            card.append(ul);
+          }
+          const note = it.feedback?.[it.feedback.length - 1]?.note;
+          if (note) card.append(el('p', 'gi-note', `Reviewer: ${note}`));
+          list.append(card);
+        }
+      })
+      .catch(() => { status.textContent = 'Contributor material is unavailable right now.'; });
+  }
+  render();
+</script>

@@ -5,14 +5,18 @@
  *    (uses wrangler's OAuth token, or CLOUDFLARE_API_TOKEN). Paths starting with /_ are ignored (smoke tests).
  * 2) merges the public room counters (drum hits, prayers, votives, …)
  * Usage: node scripts/score-live.mjs   (needs a wrangler login on this machine)
+ *        node scripts/score-live.mjs --counters-only   (public counters only: reads no token, pulls no pageviews)
+ * Pageviews are keyed by path with no trailing slash: /chain/observatory, /chain/yard. The /chain pages
+ * are rows of their own (scripts/score-projects.mjs), and `chainPageviews` below sums them for /register.
  */
 import { writeFileSync, readFileSync } from 'node:fs';
+const COUNTERS_ONLY = process.argv.includes('--counters-only');
 const NS = (readFileSync('wrangler.toml', 'utf8').match(/binding = "PC_ANALYTICS_KV"\s*\nid = "([0-9a-f]+)"/) || [])[1];
 const ACCOUNT = '699061394cac705067bad6a7a4bd2db5';
 // `wrangler kv key list` silently returns [] for this namespace (verified 2026-08-17),
-// so read keys through the REST API with wrangler's own OAuth token.
-const tokenFile = [`${process.env.HOME}/.wrangler/config/default.toml`, `${process.env.HOME}/Library/Preferences/.wrangler/config/default.toml`].find((f) => { try { readFileSync(f); return true; } catch { return false; } });
-const TOKEN = process.env.CLOUDFLARE_API_TOKEN || (tokenFile && (readFileSync(tokenFile, 'utf8').match(/oauth_token = "([^"]+)"/) || [])[1]);
+// so read keys through the REST API with wrangler's own OAuth token. --counters-only never looks for one.
+const tokenFile = COUNTERS_ONLY ? null : [`${process.env.HOME}/.wrangler/config/default.toml`, `${process.env.HOME}/Library/Preferences/.wrangler/config/default.toml`].find((f) => { try { readFileSync(f); return true; } catch { return false; } });
+const TOKEN = COUNTERS_ONLY ? null : process.env.CLOUDFLARE_API_TOKEN || (tokenFile && (readFileSync(tokenFile, 'utf8').match(/oauth_token = "([^"]+)"/) || [])[1]);
 const live = { pageviews: {}, counters: {}, frontDoor: { shown: 0, completed: 0, nextDoorTaken: 0, eligibleForSevenDayReturn: 0, returnedAfterSevenDays: 0 } };
 const frontDoorVisits = new Map();
 if (NS && TOKEN) {
@@ -58,8 +62,11 @@ if (NS && TOKEN) {
     pages += 1;
   } while (cursor && pages < 200);
 } else {
-  console.error('no namespace id or token; skipping pageviews');
+  console.error(COUNTERS_ONLY ? '--counters-only: pageviews not pulled' : 'no namespace id or token; skipping pageviews');
 }
+// Every /chain page together, beside its own rows (the chain is one experiment with many doors).
+live.chainPageviews = Object.entries(live.pageviews).filter(([p]) => p === '/chain' || p.startsWith('/chain/')).reduce((n, [, v]) => n + v, 0);
+live.pageviewsPulled = Boolean(NS && TOKEN);
 for (const visits of frontDoorVisits.values()) {
   const ordered = visits.sort((a, b) => a - b);
   const first = ordered[0];

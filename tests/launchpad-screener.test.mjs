@@ -5,7 +5,7 @@ import { TRENDING } from '../src/lib/launchpad/config.mjs';
 import { prng } from '../src/lib/launchpad/prng.mjs';
 import { runScenario, createSim } from '../src/lib/launchpad/sim.mjs';
 import { candles, metrics, trending, scoreTrending, kingOfTheHill, risk, isLive, ingest } from '../src/lib/launchpad/screener.mjs';
-import { buy, sell } from '../src/lib/launchpad/engine.mjs';
+import { buy, sell, presetOf } from '../src/lib/launchpad/engine.mjs';
 import { units } from '../src/lib/launchpad/units.mjs';
 
 const load = (id) => JSON.parse(readFileSync(new URL(`../src/data/launchpad/scenarios/${id}.json`, import.meta.url), 'utf8'));
@@ -24,7 +24,10 @@ test('candles: OHLC comes from the trades, opens on the previous close and close
   const cs = candles(sim.index, sim.world, coin, 60);
   const prices = sim.index.prices.get('c1');
   const trades = sim.index.trades.get('c1').filter((t) => t.price != null);
-  assert.equal(cs[0].o, prices[0]);
+  // The first candle opens at the launch price, so the dev buy and same-tick bundles show as its body, not a wick.
+  const preset = presetOf(sim.world, coin);
+  assert.equal(cs[0].o, Number(preset.Q0) / Number(preset.B0));
+  assert.ok(cs[0].o < prices[0], 'MOON’s creation-tick trades lift the price above that open, inside the first candle');
   assert.equal(cs.at(-1).c, prices.at(-1));
   for (let i = 0; i < cs.length; i++) {
     const c = cs[i];

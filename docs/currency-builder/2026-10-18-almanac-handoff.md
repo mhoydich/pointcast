@@ -30,10 +30,12 @@ The Nouns are 52 of #0–99, matched by head or accessory: whale (#92) and whale
 - Wildlife notes are earned from outside fences (plovers, least terns), from the path (monarchs) or through public walks and workdays (El Segundo blue, which is federally endangered). Grunion are watched, never taken.
 - Every note carries "design concept · not legal tender · no cash value". No note is sold or redeemed, and none of these words appear: backed, redeemable, invest.
 
+## Security Edition (added 2026-10-19)
+
+The Almanac is now in the Security Edition: 52 more engraved notes, 104 faces at `/currency-builder/security/almanac/{front,back}/{slug}.svg`, also shown on each week's detail page. The serial is `AL` + week + Noun, and the value reads "TWENTY-FOUR OF FIFTY-TWO". Almanac lines run longer than Commons and Barter lines, so `securityFront` now drops a line that needs more than two lines to 16.5 px and lets it take a third. The 280 Commons and Barter faces are byte-identical. `/nouns-money/` and `/nouns-money.json` now count 192 engraved variations.
+
 ## Not done
 
-- The Almanac is not in the Security Edition yet. Adding it means an adapter in `security-edition.mjs`, about 104 more engraved faces.
-- `/nouns-money/` still describes "140 concepts" across Commons and Barter. Add the Almanac there when the photos land.
 - ChatGPT photographs: run `node scripts/almanac-codex-imagegen.mjs` on the Mac.
 
 ## Manus follow-up
@@ -41,3 +43,13 @@ The Nouns are 52 of #0–99, matched by head or accessory: whale (#92) and whale
 - After deploy, open `/currency-builder/almanac/`, `/currency-builder/almanac/el-segundo-blue/` and `/currency-builder/almanac/the-perseids/` on iPhone Safari and desktop Chrome. Capture screenshots, and confirm that the SVG downloads work and the source links resolve.
 - Spot-check 10 source links from `/currency-builder/almanac.json` and list any 404s.
 - Write results to `docs/manus-logs/2026-10-1X-currency-builder-almanac.md`. QA needs no Mike approval.
+
+## Companions (added 2026-10-22)
+
+| Path | What it is |
+| --- | --- |
+| `/currency-builder/almanac/wheel/` | The Almanac Wheel: spin a 52-week dial, land on a week's note, stamp the weeks you've noticed (stamps stay in the browser). Includes a small KALM radio: AM-band chain, tuning sweep, station ident, quarter soundbeds and a read-aloud announcer. |
+| `/currency-builder/almanac/radio/` | KALM Almanac Radio: a 1950s tabletop AM set with one station per week (540–1700 kHz). Static and a heterodyne whistle between stations, a short tune per station in its quarter's style, week sound effects, a magic-eye tuning tube, SEEK and an announcer. |
+| `src/content/blocks/0748.json` | Launch Block, `author: cc`, not in Mike's voice. |
+
+Both pages are standalone Astro documents (`src/pages/currency-builder/almanac/{wheel,radio}.astro`). Their week data comes from `almanac.mjs` at build time and the note images are the print SVGs. All audio is synthesized with Web Audio. The announcer uses the browser's speech voice, which can't be routed through the AM filter, so it plays clean over the station. Both pages also exist as claude.ai artifacts.

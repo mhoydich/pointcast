@@ -362,4 +362,227 @@ export const LOCAL_GUIDES: Guide[] = [
     ],
     tags: ['newcomers', 'template', 'schools', 'transit', 'libraries', 'civic'],
   },
+  {
+    slug: 'organize-a-beach-or-park-cleanup',
+    published: '2026-10-22',
+    category: 'local',
+    title: `Organize a Beach or Park Cleanup`,
+    dek: `A practical plan for a volunteer cleanup that is safe, permitted, and easy to repeat.`,
+    audience: `Neighbors, school and scout leaders, and community group organizers planning a volunteer cleanup of a beach, park, trail, or other shared outdoor space.`,
+    seat: 'open',
+    minutes: 7,
+    sections: [
+      {
+        heading: `Start with the site and who manages it`,
+        body: [
+          `Every beach, park, trail, and vacant lot belongs to someone, and often to a public agency, a utility, a school, or a private owner. Before you pick a date, find out who manages the exact spot you have in mind. The agency's website or front office can usually tell you, and a short phone call or email settles it quickly.`,
+          `Ask the managing agency whether a cleanup needs permission, a permit, notice, or proof of insurance, and whether they run a volunteer program you can join. Rules differ by place and change over time, so do not rely on what a friend remembers. Get the answer in writing if you can, and keep it with your event notes. Also ask where collected trash should go and whether the agency can pick it up.`,
+          `Choose a clear boundary for the day, such as one stretch of shoreline or one section of park, and agree on it with the manager. A small, well-defined area finishes on time and feels like a win. You can always add a second area next month.`,
+        ],
+      },
+      {
+        heading: `Supplies and setting up the morning`,
+        body: [
+          `Plan for the basics: sturdy trash bags, a separate bag or bucket for recyclables, work gloves in a range of sizes, grabber tools if you can borrow them, a first aid kit, drinking water, sunscreen, and hand wipes or a handwashing option. Ask local hardware stores, libraries, or the managing agency whether they lend supplies, and ask people to bring their own gloves and a reusable water bottle.`,
+          `Set up a check-in table with a sign-in sheet, a short safety talk, and a map of the cleanup area. Name a few team leaders who each look after a small group. Choose a start time, a hard end time, and a meeting spot where everyone returns so you can count heads. Post the plan ahead of time so people know what to wear, such as closed-toe shoes, long pants, a hat, and clothes that can get dirty.`,
+        ],
+      },
+      {
+        heading: `Safety first, especially sharps, heat, water, and kids`,
+        body: [
+          `Brief every volunteer before they start. Tell people not to pick up needles, broken glass, chemicals, batteries, or anything that looks hazardous or unknown, and not to touch it with their hands. Instead they should mark the spot, tell a team leader, and let the managing agency or a qualified professional deal with it. Ask the agency what it wants volunteers to do when they find sharps or hazardous items, and follow that guidance.`,
+          `Plan for weather and water. Schedule the cleanup for a cooler part of the day, offer shade and plenty of water, and tell people to take breaks and stop if they feel unwell. Near water, check conditions first, keep volunteers away from steep banks, slippery rocks, and surf, and do not send anyone into water to retrieve items. Check the local forecast and any posted advisories on the morning of the event, and be ready to postpone.`,
+          `If children will take part, set a clear rule that they stay with a responsible adult, wear gloves, and only pick up safe, lightweight items. Many organizers give younger helpers a specific job, such as sorting recyclables at the table. Ask your group or the managing agency whether waivers or other paperwork are needed for your event, and have a first aid kit and a way to call for help at the meeting spot.`,
+        ],
+      },
+      {
+        heading: `Sorting, disposal, and counting what you collect`,
+        body: [
+          `Decide before the day how you will sort. A simple split is trash, recyclables, and items to set aside for the managing agency. Check your local recycling rules so you do not contaminate a clean load, and ask the agency where to leave full bags. Do not leave bags sitting on a beach or in a parking lot, and do not assume a public trash can will take a large load. Confirm the plan ahead of time.`,
+          `Counting what you collect turns a nice morning into useful information. Use a simple tally sheet with categories such as bottles, cans, food wrappers, cigarette butts, plastic bags, and large items. If you can weigh bags with a hanging scale, record the total. Many regional and national cleanup groups publish standard data cards, so check whether one fits your site and whether the managing agency would like your results.`,
+          `Write down the date, location, number of volunteers, hours worked, and totals. Take a few photos of the site before and after, with permission from anyone who appears in them. Share the numbers with the managing agency and your neighbors. Data like this helps people see patterns, such as which items show up most, and can support requests for more bins or signs.`,
+        ],
+      },
+      {
+        heading: `Thank people and make it monthly`,
+        body: [
+          `Thank volunteers at the end of the event, by name where they are happy to be named, and follow up within a few days with the results and photos. A short message with the totals and the date of the next cleanup does more for retention than almost anything else. Thank any business, agency, or neighbor who lent supplies or helped with disposal, and ask first before you name anyone publicly.`,
+          `Pick a recurring date, such as the same weekend each month, so people can plan ahead. Keep a running list of volunteers who opted in to hear from you, and never share their contact details without consent. Rotate team leaders so no one burns out, and keep a one-page checklist with your supply list, the managing agency's contact, and your safety talk so anyone can run the next one.`,
+        ],
+      },
+    ],
+    checklist: [
+      { label: `Identify the site manager`, detail: `Find out who manages the exact location and contact them first.` },
+      { label: `Ask about permission`, detail: `Check with the managing agency whether a permit, notice, or insurance is needed.` },
+      { label: `Define the area and time`, detail: `Pick one boundary, a start time, a hard end time, and a meeting spot.` },
+      { label: `Gather supplies`, detail: `Bags, gloves, grabbers, first aid, water, sunscreen, and a sign-in sheet.` },
+      { label: `Plan the safety talk`, detail: `Never touch sharps or hazardous items; report them to a team leader.` },
+      { label: `Arrange sorting and disposal`, detail: `Confirm where trash and recycling go before the day.` },
+      { label: `Count and record`, detail: `Use a tally sheet, record totals and volunteer hours, and take photos.` },
+      { label: `Thank and schedule the next one`, detail: `Send results within a few days and announce the next date.` },
+    ],
+    wanted: [
+      `Links to the managing agency's official volunteer or cleanup pages for your local beach or park, with the date you checked them.`,
+      `Published guidance from public agencies or established cleanup organizations on volunteer safety and handling sharps and hazardous items.`,
+      `Links to published data cards or tally sheets used for litter counts, with the date you checked them.`,
+      `Your supply list and morning schedule from a cleanup that worked.`,
+      `Your tips for keeping kids engaged and safe at a cleanup, from events you have run.`,
+      `Your ways of keeping volunteers coming back month after month, that worked for your group.`,
+    ],
+    related: [
+      { label: `Local`, href: '/local' },
+      { label: `Town`, href: '/town' },
+      { label: `All guides`, href: '/guides' },
+      { label: `Send material`, href: '/guides/intake' },
+    ],
+    tags: ['cleanup', 'volunteering', 'beach', 'parks', 'safety', 'community'],
+  },
+  {
+    slug: 'start-a-community-garden-group',
+    published: '2026-10-22',
+    category: 'local',
+    title: `Start a Community Garden Group`,
+    dek: `How to organize neighbors around a shared garden, from land and rules to watering, tools, and harvest.`,
+    audience: `Neighbors, tenants, school and congregation members, and community organizers who want to form a group around a shared garden or set of plots.`,
+    seat: 'open',
+    minutes: 7,
+    sections: [
+      {
+        heading: `Find your people and your land`,
+        body: [
+          `A garden is a group project first and a planting project second. Start by talking to neighbors to learn who is interested, what they hope to grow, and how much time they can give. A short interest list with names, preferred contact method, and a few questions is enough to begin. Hold an informal meeting, listen more than you pitch, and write down what you hear.`,
+          `Land comes next. Possible sites include vacant lots, school grounds, congregation property, apartment common areas, parks, and spaces owned by a utility or a business. Every site has an owner or manager, and permission matters. Contact the owner or managing agency, ask what is allowed, and ask about any lease, written agreement, insurance, or water access requirements. Rules for public land and private land differ and vary by place, so check with the owner or the local government rather than assuming.`,
+          `Ask whether your city, county, or a local nonprofit runs a community garden program or keeps a list of available sites. If a program exists, it may offer guidance on agreements and soil questions. Before you build anything, ask about soil testing and about the history of the site, because some urban land has contamination concerns. A qualified local source, such as a cooperative extension office, can explain how to test and what to do with the results.`,
+        ],
+      },
+      {
+        heading: `Write simple garden rules together`,
+        body: [
+          `Most garden conflicts come from unwritten expectations. Draft a short set of rules with the whole group, and keep it to one page. Cover the basics: who can have a plot, how large plots are, what happens if a plot is abandoned, whether chemicals are allowed, what to do with weeds and diseased plants, how compost works, gate and hours policy, pets, children, and trash.`,
+          `Decide how the group makes decisions. A small leadership team, such as a coordinator, a treasurer, and a tool and supply lead, works well for many gardens, with major questions put to a vote at a regular meeting. Write down how membership works, whether there are dues, and how money is tracked. Have every gardener read and sign the rules or confirm them by message so nobody can say they never saw them.`,
+          `Revisit the rules once a season. Gardens change, and a rule that made sense in the first spring may need a tweak after a summer of use. Keep the process open and kind, and record changes with the date.`,
+        ],
+      },
+      {
+        heading: `Water, tools, and shared work`,
+        body: [
+          `Water is the most practical issue in many gardens. Find out early where water comes from, who pays for it, and whether the site owner has limits on use. Map the hoses, spigots, and any rain barrels, and put a clear sign by each. Ask your local water provider or the site owner about rules on watering times and about any rebates or programs for rain capture, rather than relying on hearsay.`,
+          `Set up a watering rotation so the work does not fall to the same two people. A shared calendar or sign-up sheet with named days works well, with backups for vacations and heat waves. Teach new gardeners the basics, such as watering at the base of plants and doing it early or late in the day, and agree on what to do when someone cannot make their shift.`,
+          `Shared tools need a home, a sign-out system, and a cleaning habit. Mark tools with paint, hang them on labeled hooks, and assign a tool lead to check in on them monthly. Decide whether the garden buys tools, accepts donations, or borrows from a local tool library. Plan regular work days for shared areas such as paths, compost, and borders, and keep a list of jobs so newcomers can jump in.`,
+        ],
+      },
+      {
+        heading: `Conflicts and plot waitlists`,
+        body: [
+          `Conflicts will happen: a neglected plot, plants spilling across a boundary, a missed watering shift, or a disagreement about a rule. Build a gentle process into your rules. Start with a friendly note, move to a conversation with the coordinator, and only then to a formal warning, with a set timeline at each step. Treat people with respect, and focus on the plot and the rule rather than the person.`,
+          `If demand outpaces plots, a waitlist keeps things fair. Record names with the date they joined, offer plots in order, and write down how long someone has to accept an offer. Decide whether plots are assigned for a season or a year, how renewals work, and whether new members start with a smaller plot or a shared bed. Publish the waitlist rules so people know what to expect, and never share a person's contact details without consent.`,
+        ],
+      },
+      {
+        heading: `Sharing the harvest`,
+        body: [
+          `Decide as a group how much of the harvest stays with the gardener who grew it and how much is shared. Many gardens set aside a communal bed or a donation row and invite members to share extra produce with neighbors or a local food pantry. Ask the pantry what they can accept and how they want produce delivered, and do not assume any organization will take a donation without checking.`,
+          `Add a few food-handling basics to your rules, such as washing produce, keeping harvest containers clean, and labeling what was grown where. For anything beyond sharing among members, such as selling produce or hosting a public event, ask your local health department or the site owner what is allowed. Celebrate the harvest with a potluck or a seed swap, which also builds the community that keeps the garden going.`,
+        ],
+      },
+    ],
+    checklist: [
+      { label: `Gather an interest list`, detail: `Collect names, contact preferences, and what each person hopes to grow.` },
+      { label: `Confirm permission for the site`, detail: `Ask the owner or managing agency what is allowed, including agreements and water.` },
+      { label: `Ask about soil`, detail: `Check with a qualified local source about testing before planting in the ground.` },
+      { label: `Write one-page rules`, detail: `Cover plots, chemicals, compost, hours, and what happens to abandoned plots.` },
+      { label: `Choose a small leadership team`, detail: `Coordinator, treasurer, and tool and supply lead, with a clear way to decide.` },
+      { label: `Set a watering rotation`, detail: `Use a shared calendar with named days and backups.` },
+      { label: `Organize tools and work days`, detail: `Label tools, set up sign-out, and schedule regular shared work.` },
+      { label: `Plan the waitlist and harvest sharing`, detail: `Publish waitlist rules and agree on donation and sharing norms.` },
+    ],
+    wanted: [
+      `Links to official city, county, or utility pages about community garden programs, site agreements, or water use, with the date you checked them.`,
+      `Published guidance from cooperative extension offices or public health agencies on soil testing and garden food safety.`,
+      `Links to published sample garden rules or plot agreements from public or nonprofit garden programs, with the date you checked them.`,
+      `Your one-page garden rules that worked for your group.`,
+      `Your watering rotation or tool sign-out system that worked.`,
+      `Your tips for handling a neglected plot or a waitlist fairly, from your own garden.`,
+    ],
+    related: [
+      { label: `Local`, href: '/local' },
+      { label: `Town`, href: '/town' },
+      { label: `All guides`, href: '/guides' },
+      { label: `Send material`, href: '/guides/intake' },
+    ],
+    tags: ['community-garden', 'gardening', 'neighbors', 'volunteering', 'rules', 'food'],
+  },
+  {
+    slug: 'run-a-parent-booster-club',
+    published: '2026-10-22',
+    category: 'local',
+    title: `Run a Parent Booster Club`,
+    dek: `The basics of a school or team booster club: clear purpose, open books, fair fundraisers, and a clean handoff.`,
+    audience: `Parents and guardians, coaches, and school staff who start, join, or inherit a booster club for a team, band, or school program.`,
+    seat: 'open',
+    minutes: 7,
+    sections: [
+      {
+        heading: `Purpose and the rules you operate under`,
+        body: [
+          `A booster club exists to support a program, not to run it. Write a one-sentence purpose, such as supporting a team, band, or arts program with volunteers and funds, and keep a short list of what the club will and will not do. Decisions about the program itself, such as rosters, playing time, or curriculum, belong to the coach, director, and school, and a healthy club says so out loud.`,
+          `Before you raise or spend any money, learn the rules that apply to you. Schools and districts often have policies on outside groups, fundraising, use of the school name and facilities, and approvals. Ask the school office or athletic or program director for the written policy, and ask what approvals are needed. Also ask a qualified source, such as an accountant, an attorney, or an established nonprofit support organization, how your club should be organized and what its tax status means. This guide is not legal or tax advice, and rules vary by place.`,
+        ],
+      },
+      {
+        heading: `Officers and how decisions get made`,
+        body: [
+          `Most clubs have at least a president, a treasurer, and a secretary, often with a vice president and committee chairs for fundraising, hospitality, and communications. Write down what each role does in a half-page description so a new volunteer can see the job before they accept it. Keep the roles separate where possible, so one person does not control every part of the club.`,
+          `Put your rules in simple bylaws or a written set of operating rules, including how officers are chosen, term lengths, how often the club meets, and what vote is needed to spend money. Share an agenda before meetings, take short minutes, and post them where members can read them. Open, boring, predictable meetings protect the club and build trust with parents, coaches, and administrators.`,
+        ],
+      },
+      {
+        heading: `Handle money in the open`,
+        body: [
+          `Transparent money handling is the most important habit a booster club can have. Use a two-person rule for anything involving cash: two people count it together, both sign the count sheet, and one deposits it promptly. Give a receipt for every payment received and keep a receipt or invoice for every payment made. Keep club funds in an account in the club's name, never in a personal account.`,
+          `Keep a simple ledger that lists the date, what came in or went out, who handled it, and what it was for. Have the treasurer report at every meeting, with the bank balance and any recent activity, and have someone other than the treasurer review the bank statements. Set a spending threshold above which the membership must approve a purchase, and require that checks or payments have two approvers for larger amounts.`,
+          `Check school and district rules on how booster funds must be handled, and ask a qualified accountant or a trusted nonprofit resource about tax filings, insurance, and recordkeeping for your kind of club. Do not guess about these. A short annual review of the books by someone independent of the treasurer is a cheap way to catch mistakes and protect everyone involved.`,
+        ],
+      },
+      {
+        heading: `Fundraisers that people can live with`,
+        body: [
+          `Choose fundraisers that match your goal, your community, and your volunteer capacity. Start with a budget that lists what the program actually needs, so families see where the money goes. A few well-run events usually beat a constant stream of asks. Be mindful of families who cannot afford to participate, and offer ways to contribute time instead of money.`,
+          `Before you plan any event, check the school's rules on fundraising, food sales, raffles, and use of school space. Some activities need approvals, permits, or insurance, and requirements vary by place. Ask the school and the relevant local office, and do not assume that a fundraiser you saw elsewhere is allowed in your area. Track each fundraiser's income and expenses in the ledger so you can tell which ones were worth the effort.`,
+        ],
+      },
+      {
+        heading: `Prevent burnout and plan the handoff`,
+        body: [
+          `Most booster clubs run on a handful of exhausted volunteers. Share the work by breaking big jobs into small, well-defined tasks with a start and end, and ask people for one specific thing instead of a vague commitment. Thank volunteers by name, rotate the hardest jobs, and make it fine to say no. A club that welcomes first-time helpers will always have more hands than one that depends on the same few.`,
+          `Plan for turnover from the first year. Keep a binder or shared folder with the bylaws, the ledger, bank and account information handled securely, event checklists, vendor and school contacts, and a calendar of recurring tasks. Hold officer elections on a regular schedule, and have outgoing officers spend an hour with their successors before they leave. When the children graduate, the club should survive with its records intact.`,
+        ],
+      },
+    ],
+    checklist: [
+      { label: `Write the purpose`, detail: `One sentence on what the club supports and what it leaves to the school.` },
+      { label: `Get the school's written policy`, detail: `Ask the school or district about rules for outside groups and fundraising.` },
+      { label: `Ask a qualified source`, detail: `Check legal and tax status and filings with an accountant or attorney.` },
+      { label: `Define officer roles`, detail: `Write a half-page job description for each role and keep duties separate.` },
+      { label: `Adopt operating rules`, detail: `Cover elections, terms, meetings, and spending approvals.` },
+      { label: `Use two-person counts and receipts`, detail: `Two people count cash, both sign, and every payment has a receipt.` },
+      { label: `Keep a simple ledger`, detail: `Report at every meeting and have someone independent review the books.` },
+      { label: `Build the handoff binder`, detail: `Keep records, contacts, and checklists ready for the next officers.` },
+    ],
+    wanted: [
+      `Links to official school district policies on booster clubs and outside fundraising, with the date you checked them.`,
+      `Published guidance from state education agencies or established nonprofit support organizations on booster club finances and recordkeeping.`,
+      `Links to sample booster club bylaws or treasurer guides published by public or nonprofit sources, with the date you checked them.`,
+      `Your treasurer's report format or simple ledger template that worked for your club.`,
+      `Your fundraiser that worked, with what it took in volunteer time and what you would change.`,
+      `Your officer handoff checklist that worked.`,
+    ],
+    related: [
+      { label: `Local`, href: '/local' },
+      { label: `Beacon`, href: '/beacon' },
+      { label: `All guides`, href: '/guides' },
+      { label: `Send material`, href: '/guides/intake' },
+    ],
+    tags: ['booster-club', 'school', 'fundraising', 'volunteers', 'finances', 'parents'],
+  },
 ];

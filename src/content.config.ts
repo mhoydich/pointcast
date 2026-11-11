@@ -414,6 +414,8 @@ const posts = defineCollection({
     image: z.string().optional(),
     tags: z.array(z.string()).default([]),
     draft: z.boolean().default(false),
+    /** Who wrote it, when that isn't the house "MH × Claude Cowork" (e.g. "Claude Code"). */
+    byline: z.string().optional(),
   }),
 });
 

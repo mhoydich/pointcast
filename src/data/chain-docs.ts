@@ -45,7 +45,7 @@ export const CHAIN_DOCS: ChainDoc[] = [
     sha256: '8406ac19d5e697fa5fbe68404078450ad0a84c9d313c138f117f2b28e2c2d23e',
     kicker: 'SCOPE · WALLETS · PASSKEYS · ONE PROFILE · FIRST MINTS',
     title: 'Wallets, one profile, passkeys and First Mints.',
-    summary: 'A research and design document, not built code: passkeys as a pass, device passes, one profile, the webauthn signing mode, First Mints recipes, phases and the open questions for Mike.',
+    summary: 'A research and design document, not built code when copied: passkeys as a pass, device passes, one profile, the webauthn signing mode, First Mints recipes, phases and the open questions for Mike. Passkeys, device passes and editions have since been built; /chain/plan has the status and the peer-to-peer verdict.',
   },
   {
     slug: 'art-minting', file: 'art-minting.md', source: 'docs/ART_MINTING.md',

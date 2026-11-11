@@ -322,8 +322,28 @@ export function mount(root, env = {}) {
     }
   }
 
+  /** Who signed today's txs: house, keyless and outside side by side, then the share that came from outside. */
+  function paintClasses(n) {
+    const cl = n && n.classes;
+    const hooks = { house: ['[data-ob-v="class-house"]', '[data-ob-s="class-house"]'], keyless: ['[data-ob-v="class-keyless"]', '[data-ob-s="class-keyless"]'], outside: ['[data-ob-v="class-outside"]', '[data-ob-s="class-outside"]'] };
+    for (const k of O.CLASSES) {
+      const [v, s] = hooks[k];
+      if (!cl) { set(v, n ? 'not split yet' : 'not readable now'); set(s, ''); continue; }
+      const day = cl.day[k];
+      const who = day.who.map((w) => (k === 'outside' ? shortAddr(w.label) : w.label) + ' (' + groups(w.txs) + ')').join(', ');
+      set(v, plural(day.txs, 'tx', 'txs'));
+      set(s, 'today, from ' + plural(day.keys, 'key') + (who ? ': ' + who : '') + ' · ' + plural(cl.chain[k].txs, 'tx', 'txs') + ' since block 1');
+    }
+    const all = (o) => O.CLASSES.reduce((t, k) => t + o[k].txs, 0);
+    const pct = (x, o) => O.sharePct(x, o.outside.txs, all(o));
+    set('[data-ob-s="classes"]', cl
+      ? O.CLASS_LINE + ' Outside keys signed ' + (cl.share.day === null ? 'none' : pct(cl.share.day, cl.day)) + ' of today’s txs' + (cl.share.chain === null ? '' : ' and ' + pct(cl.share.chain, cl.chain) + ' since block 1') + '.'
+      : n ? 'This devnet does not count house, keyless and outside txs separately yet.' : '');
+  }
+
   function paintToday(d) {
     const n = d.net;
+    paintClasses(n);
     set('[data-ob-v="net"]', n ? plural(n.checkins, 'check-in') + ' · ' + plural(n.witnesses, 'witness', 'witnesses') : 'not readable now');
     set('[data-ob-s="net"]', n ? 'UTC day ' + n.day + ' · resets 00:00 UTC · ' + plural(n.participants, 'participant') + ', ' + plural(n.strikes, 'strike') + (n.latestCheckpoint ? ' · newest checkpoint #' + n.latestCheckpoint : '') : '');
     const lot = d.daily && d.daily.lot;

@@ -1,0 +1,1363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pointcast:bot-league-public-feed:v1",
+  "title": "Privacy-bounded Atlas feed; no personal/log identifiers",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "data_mode",
+    "generated_at",
+    "sites",
+    "encounters",
+    "league"
+  ],
+  "properties": {
+    "schema": {
+      "const": "pointcast.bot-league-public/v1"
+    },
+    "data_mode": {
+      "enum": [
+        "unconnected",
+        "fixture",
+        "live"
+      ]
+    },
+    "generated_at": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+        }
+      ]
+    },
+    "sites": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "site_id",
+          "measurement_origin",
+          "coverage_state",
+          "window",
+          "last_ingest_at",
+          "source",
+          "metrics"
+        ],
+        "properties": {
+          "site_id": {
+            "enum": [
+              "pointcast",
+              "el-segundo",
+              "industry-next",
+              "ues"
+            ]
+          },
+          "measurement_origin": {
+            "enum": [
+              "pointcast",
+              "el-segundo",
+              "industry-next"
+            ]
+          },
+          "coverage_state": {
+            "enum": [
+              "not_connected",
+              "partial",
+              "connected",
+              "stale",
+              "paused"
+            ]
+          },
+          "window": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "end",
+                  "complete"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+                  },
+                  "complete": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            ]
+          },
+          "last_ingest_at": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+              }
+            ]
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "verification_version",
+                  "sample_rate"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "edge_aggregate",
+                      "manual_aggregate",
+                      "fixture"
+                    ]
+                  },
+                  "verification_version": {
+                    "enum": [
+                      "v1"
+                    ]
+                  },
+                  "sample_rate": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "exclusiveMinimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            ]
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "claimed_requests",
+              "origin_confirmed_requests",
+              "signed_participant_submissions",
+              "verified_unique_tasks"
+            ],
+            "properties": {
+              "claimed_requests": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "origin_confirmed_requests": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "signed_participant_submissions": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "verified_unique_tasks": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "coverage_state": {
+                  "enum": [
+                    "not_connected",
+                    "stale",
+                    "paused"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "metrics": {
+                  "properties": {
+                    "claimed_requests": {
+                      "type": "null"
+                    },
+                    "origin_confirmed_requests": {
+                      "type": "null"
+                    },
+                    "signed_participant_submissions": {
+                      "type": "null"
+                    },
+                    "verified_unique_tasks": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "site_id": {
+                  "const": "ues"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "measurement_origin": {
+                  "const": "pointcast"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "coverage_state": {
+                  "const": "not_connected"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "window": {
+                  "type": "null"
+                },
+                "last_ingest_at": {
+                  "type": "null"
+                },
+                "source": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "site_id": {
+                  "const": "pointcast"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "measurement_origin": {
+                  "const": "pointcast"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "site_id": {
+                  "const": "el-segundo"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "measurement_origin": {
+                  "const": "el-segundo"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "site_id": {
+                  "const": "industry-next"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "measurement_origin": {
+                  "const": "industry-next"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "site_id": {
+                  "const": "ues"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "measurement_origin": {
+                  "const": "pointcast"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "coverage_state": {
+                  "enum": [
+                    "connected",
+                    "partial"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "source": {
+                  "type": "object"
+                },
+                "window": {
+                  "type": "object"
+                },
+                "last_ingest_at": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "coverage_state": {
+                  "const": "partial"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "metrics": {
+                  "properties": {
+                    "claimed_requests": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      ]
+                    },
+                    "origin_confirmed_requests": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      ]
+                    },
+                    "signed_participant_submissions": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      ]
+                    },
+                    "verified_unique_tasks": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "window": {
+                  "type": "object",
+                  "properties": {
+                    "complete": {
+                      "const": false
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "metrics": {
+                  "properties": {
+                    "claimed_requests": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      ]
+                    },
+                    "origin_confirmed_requests": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      ]
+                    },
+                    "signed_participant_submissions": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      ]
+                    },
+                    "verified_unique_tasks": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "site_id": {
+                "const": "pointcast"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "site_id": {
+                "const": "el-segundo"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "site_id": {
+                "const": "industry-next"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "site_id": {
+                "const": "ues"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    },
+    "encounters": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "catalog_id",
+          "site_id",
+          "observation",
+          "participation",
+          "verification_method",
+          "observed_day",
+          "data_mode"
+        ],
+        "properties": {
+          "catalog_id": {
+            "enum": [
+              "gptbot",
+              "oai-searchbot",
+              "chatgpt-user",
+              "oai-adsbot",
+              "googlebot",
+              "bingbot",
+              "unknown-automation",
+              "fixture-kite",
+              "fixture-mica",
+              "fixture-loop",
+              "fixture-notch"
+            ]
+          },
+          "site_id": {
+            "enum": [
+              "pointcast",
+              "el-segundo",
+              "industry-next",
+              "ues"
+            ]
+          },
+          "observation": {
+            "enum": [
+              "observed_unattributed",
+              "observed_claimed",
+              "origin_confirmed"
+            ]
+          },
+          "participation": {
+            "enum": [
+              "not_enrolled",
+              "claimed_profile",
+              "signed_opt_in",
+              "suspended",
+              "revoked"
+            ]
+          },
+          "verification_method": {
+            "enum": [
+              "none",
+              "ua_claim",
+              "provider_cidr",
+              "forward_confirmed_rdns",
+              "provider_message_signature",
+              "participant_key_signature"
+            ]
+          },
+          "observed_day": {
+            "type": "string",
+            "format": "date"
+          },
+          "data_mode": {
+            "enum": [
+              "fixture",
+              "live"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "observation": {
+                  "const": "origin_confirmed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "verification_method": {
+                  "enum": [
+                    "provider_cidr",
+                    "forward_confirmed_rdns",
+                    "provider_message_signature"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "verification_method": {
+                  "const": "participant_key_signature"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "participation": {
+                  "const": "signed_opt_in"
+                },
+                "observation": {
+                  "enum": [
+                    "observed_unattributed",
+                    "observed_claimed"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "observation": {
+                  "const": "observed_claimed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "verification_method": {
+                  "enum": [
+                    "ua_claim",
+                    "participant_key_signature"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "observation": {
+                  "const": "observed_unattributed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "verification_method": {
+                  "enum": [
+                    "none",
+                    "participant_key_signature"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "catalog_id": {
+                  "const": "unknown-automation"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "observation": {
+                  "const": "observed_unattributed"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "league": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "metric",
+        "rows",
+        "source",
+        "window",
+        "last_adjudicated_at"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "not_connected",
+            "practice_only",
+            "open",
+            "paused"
+          ]
+        },
+        "metric": {
+          "const": "verified_unique_tasks"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "site_id",
+              "value",
+              "data_mode"
+            ],
+            "properties": {
+              "site_id": {
+                "enum": [
+                  "pointcast",
+                  "el-segundo",
+                  "industry-next",
+                  "ues"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "data_mode": {
+                "enum": [
+                  "fixture",
+                  "live"
+                ]
+              }
+            }
+          }
+        },
+        "source": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "rubric_version",
+                "task_manifest_hash"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "server_adjudications",
+                    "fixture"
+                  ]
+                },
+                "rubric_version": {
+                  "enum": [
+                    "v1"
+                  ]
+                },
+                "task_manifest_hash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            }
+          ]
+        },
+        "window": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end",
+                "complete"
+              ],
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+                },
+                "end": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+                },
+                "complete": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
+        },
+        "last_adjudicated_at": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z$"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "not_connected"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rows": {
+                "maxItems": 0
+              },
+              "source": {
+                "type": "null"
+              },
+              "window": {
+                "type": "null"
+              },
+              "last_adjudicated_at": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "paused"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rows": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "practice_only"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rows": {
+                "items": {
+                  "properties": {
+                    "data_mode": {
+                      "const": "fixture"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "open"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "server_adjudications"
+                  }
+                }
+              },
+              "window": {
+                "type": "object"
+              },
+              "last_adjudicated_at": {
+                "type": "string"
+              },
+              "rows": {
+                "items": {
+                  "properties": {
+                    "data_mode": {
+                      "const": "live"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "unconnected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "generated_at": {
+            "type": "null"
+          },
+          "encounters": {
+            "maxItems": 0
+          },
+          "sites": {
+            "items": {
+              "properties": {
+                "coverage_state": {
+                  "const": "not_connected"
+                }
+              }
+            }
+          },
+          "league": {
+            "properties": {
+              "state": {
+                "const": "not_connected"
+              },
+              "rows": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "fixture"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "encounters": {
+            "items": {
+              "properties": {
+                "data_mode": {
+                  "const": "fixture"
+                }
+              }
+            }
+          },
+          "league": {
+            "properties": {
+              "state": {
+                "const": "practice_only"
+              },
+              "rows": {
+                "items": {
+                  "properties": {
+                    "data_mode": {
+                      "const": "fixture"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "live"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "encounters": {
+            "items": {
+              "properties": {
+                "data_mode": {
+                  "const": "live"
+                }
+              }
+            }
+          },
+          "league": {
+            "properties": {
+              "rows": {
+                "items": {
+                  "properties": {
+                    "data_mode": {
+                      "const": "live"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "live"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "generated_at": {
+            "type": "string"
+          },
+          "sites": {
+            "items": {
+              "properties": {
+                "source": {
+                  "not": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "fixture"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "live"
+          },
+          "encounters": {
+            "contains": {
+              "properties": {
+                "site_id": {
+                  "const": "pointcast"
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sites": {
+            "contains": {
+              "properties": {
+                "site_id": {
+                  "const": "pointcast"
+                },
+                "coverage_state": {
+                  "enum": [
+                    "partial",
+                    "connected",
+                    "stale",
+                    "paused"
+                  ]
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "live"
+          },
+          "encounters": {
+            "contains": {
+              "properties": {
+                "site_id": {
+                  "const": "el-segundo"
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sites": {
+            "contains": {
+              "properties": {
+                "site_id": {
+                  "const": "el-segundo"
+                },
+                "coverage_state": {
+                  "enum": [
+                    "partial",
+                    "connected",
+                    "stale",
+                    "paused"
+                  ]
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "live"
+          },
+          "encounters": {
+            "contains": {
+              "properties": {
+                "site_id": {
+                  "const": "industry-next"
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sites": {
+            "contains": {
+              "properties": {
+                "site_id": {
+                  "const": "industry-next"
+                },
+                "coverage_state": {
+                  "enum": [
+                    "partial",
+                    "connected",
+                    "stale",
+                    "paused"
+                  ]
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "live"
+          },
+          "encounters": {
+            "contains": {
+              "properties": {
+                "site_id": {
+                  "const": "ues"
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "sites": {
+            "contains": {
+              "properties": {
+                "site_id": {
+                  "const": "ues"
+                },
+                "coverage_state": {
+                  "enum": [
+                    "partial",
+                    "connected",
+                    "stale",
+                    "paused"
+                  ]
+                }
+              }
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "live"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "encounters": {
+            "items": {
+              "properties": {
+                "catalog_id": {
+                  "enum": [
+                    "gptbot",
+                    "oai-searchbot",
+                    "chatgpt-user",
+                    "oai-adsbot",
+                    "googlebot",
+                    "bingbot",
+                    "unknown-automation"
+                  ]
+                }
+              }
+            }
+          },
+          "league": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "not_connected",
+                  "open",
+                  "paused"
+                ]
+              },
+              "source": {
+                "not": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "fixture"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "data_mode": {
+            "const": "fixture"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "encounters": {
+            "items": {
+              "properties": {
+                "catalog_id": {
+                  "enum": [
+                    "fixture-kite",
+                    "fixture-mica",
+                    "fixture-loop",
+                    "fixture-notch"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "league": {
+            "properties": {
+              "state": {
+                "const": "open"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "data_mode": {
+            "const": "live"
+          }
+        }
+      }
+    }
+  ]
+}

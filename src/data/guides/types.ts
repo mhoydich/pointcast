@@ -40,6 +40,8 @@ export interface Guide {
   /** Related PointCast routes (paths starting with '/'), only ones that exist. */
   related: { label: string; href: string }[];
   tags: string[];
+  /** YYYY-MM-DD first published; defaults to the 2026-10-20 launch. */
+  published?: string;
 }
 
 export interface InternAssignment {

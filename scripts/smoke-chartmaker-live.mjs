@@ -6,6 +6,10 @@ const REQUIRED_BLOCK_IDS = (process.env.POINTCAST_REQUIRED_BLOCK_IDS || '0437,04
 
 async function fetchText(pathname) {
   const url = new URL(pathname, ORIGIN);
+  // Page checks should not count in Cloudflare Web Analytics. JSON stays exact.
+  if (!url.pathname.startsWith('/api/') && !/\.[a-z0-9]{1,8}$/i.test(url.pathname)) {
+    url.searchParams.set('nobeacon', '1');
+  }
   const response = await fetch(url, {
     headers: { 'user-agent': 'pointcast-chartmaker-smoke/1.0' },
   });

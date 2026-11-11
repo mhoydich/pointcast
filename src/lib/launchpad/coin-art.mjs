@@ -8,13 +8,16 @@ import { nounArt, placeNoun } from '../currency-builder/primitives.mjs';
 import { text } from '../currency-builder/type.mjs';
 import { CREDIT_WORD } from './config.mjs';
 
-export const COIN_BASE = '/case-studies/launchpad/coins';
+import { coinSlug, coinPath, previewPath, COIN_BASE, PREVIEW_BASE } from './paths.mjs';
+
+export { coinSlug, coinPath, previewPath, COIN_BASE, PREVIEW_BASE };
 
 export const COIN_COLORS = Object.freeze({
   'quiet-launch': Object.freeze({ ring: '#7a3d1d', paper: '#f6efe2', accent: '#b4532a' }),
   'snipe-war': Object.freeze({ ring: '#14213d', paper: '#eef2f6', accent: '#c1272d' }),
   'dev-dump': Object.freeze({ ring: '#4a2357', paper: '#f4eff6', accent: '#7b2d8b' }),
   'graduation-run': Object.freeze({ ring: '#1f5233', paper: '#eef5ea', accent: '#2f7d4f' }),
+  preview: Object.freeze({ ring: '#2b2b33', paper: '#f2f1ed', accent: '#5b5b63' }),
 });
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -31,15 +34,18 @@ function fitInCircle(svg, radius, max) {
   return far ? Math.min(max, Math.floor((32 * radius) / far)) : max;
 }
 
-export const coinSlug = (scenarioId, symbol) => `${scenarioId}-${symbol.toLowerCase()}`;
-export const coinPath = (scenarioId, symbol) => `${COIN_BASE}/${coinSlug(scenarioId, symbol)}.svg`;
 
 /** The portrait's accessible name: what the coin is, and that it has no value. */
 export const coinLabel = ({ symbol, name, nounId }) => `${name} (${symbol}), a simulated coin showing actual Noun #${nounId}. ${CREDIT_WORD[0].toUpperCase()}${CREDIT_WORD.slice(1)} only; no value.`;
 
+export const previewLabel = (nounId) => `Preview of a simulated coin showing actual Noun #${nounId}. ${CREDIT_WORD[0].toUpperCase()}${CREDIT_WORD.slice(1)} only; no value.`;
+
+/** The coin face for any Noun before it has a symbol: the Create preview and coins launched on the live board. */
+export const previewSVG = (nounId) => coinSVG({ scenarioId: 'preview', symbol: 'PREVIEW', name: '', nounId, label: previewLabel(nounId) });
+
 /** A 360 × 420 coin portrait. */
-export function coinSVG({ scenarioId, symbol, name, nounId }) {
-  const label = esc(coinLabel({ symbol, name, nounId }));
+export function coinSVG({ scenarioId, symbol, name, nounId, label: rawLabel = coinLabel({ symbol, name, nounId }) }) {
+  const label = esc(rawLabel);
   const c = COIN_COLORS[scenarioId] ?? COIN_COLORS['quiet-launch'];
   const art = nounArt(nounId);
   const size = fitInCircle(art.svg, 128, 250);

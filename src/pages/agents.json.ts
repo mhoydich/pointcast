@@ -19,6 +19,7 @@ import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
 import { YARD_CHORES, YARD_GUARDRAILS, MEADOW_AFTER_DAYS } from '../lib/yard';
+import { CIVIL_SERVICE_POSTS, CIVIL_SERVICE_QUESTS, ESCS_DISCLAIMER, OFFER_CLOCK_DAYS } from '../data/civil-service';
 import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
 import {
   AGENT_VALUE_SURFACE,
@@ -46,6 +47,7 @@ import { CABINET_COLLECT_PROTOCOL } from '../data/agent-cabinet';
 // The MCP catalogue comes from the server file itself, so the manifest
 // advertises exactly what tools/list and resources/list serve.
 import { MCP_RESOURCE_URIS, MCP_SERVER_INFO, MCP_TOOL_NAMES } from '../../functions/api/mcp';
+import { toolEffect } from '../../functions/api/mcp';
 
 function contractKey(key: string) {
   return key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
@@ -88,6 +90,7 @@ export const GET: APIRoute = async () => {
   const contractSources = buildContractRegistry();
 
   const payload = {
+    webhookFieldGuide: { page: 'https://pointcast.xyz/webhooks/', catalog: 'https://pointcast.xyz/webhooks.json', status: '100 planned contracts; zero live connections' },
     capabilityIndex: 'https://pointcast.xyz/api/capabilities',
     capabilitiesPage: 'https://pointcast.xyz/capabilities',
     $schema: 'https://pointcast.xyz/BLOCKS.md',
@@ -336,6 +339,7 @@ export const GET: APIRoute = async () => {
         uesPhilosophyUnmoderated: AGENT_SURFACES.human.uesPhilosophyUnmoderated,
         objectLibrary: AGENT_SURFACES.human.objectLibrary,
         takes: AGENT_SURFACES.human.takes,
+        chapterCity: AGENT_SURFACES.human.chapterCity,
         weatherAtlas: AGENT_SURFACES.human.weatherAtlas,
         everyday: AGENT_SURFACES.human.everyday,
         communicationsLab: AGENT_SURFACES.human.communicationsLab,
@@ -400,7 +404,30 @@ export const GET: APIRoute = async () => {
         dao: 'https://pointcast.xyz/dao',
         yield: 'https://pointcast.xyz/yield',
         nounsCola: 'https://pointcast.xyz/nouns-cola',
+        cabinetRow: 'https://pointcast.xyz/cabinet-row',
+        seaGlass: 'https://pointcast.xyz/sea-glass',
+        lowTide: 'https://pointcast.xyz/low-tide',
+        sandcastle: 'https://pointcast.xyz/sandcastle',
+        lighthouse: 'https://pointcast.xyz/lighthouse',
+        morningRoute: 'https://pointcast.xyz/morning-route',
         nounsColaCrush: 'https://pointcast.xyz/nouns-cola-crush',
+        breakwater: 'https://pointcast.xyz/breakwater',
+        softLanding: 'https://pointcast.xyz/soft-landing',
+        crosswalk: 'https://pointcast.xyz/crosswalk',
+        kelp: 'https://pointcast.xyz/kelp',
+        tideline: 'https://pointcast.xyz/tideline',
+        driftwood: 'https://pointcast.xyz/driftwood',
+        tenDoors: 'https://pointcast.xyz/ten-doors',
+        takeoffOrgan: 'https://pointcast.xyz/takeoff-organ',
+        refineryLights: 'https://pointcast.xyz/refinery-lights',
+        kiteLine: 'https://pointcast.xyz/kite-line',
+        meterOracle: 'https://pointcast.xyz/meter-oracle',
+        drumRound: 'https://pointcast.xyz/drum-round',
+        pelicanPost: 'https://pointcast.xyz/pelican-post',
+        greenFlash: 'https://pointcast.xyz/green-flash',
+        chalkScore: 'https://pointcast.xyz/chalk-score',
+        iceCreamRoute: 'https://pointcast.xyz/ice-cream-route',
+        tidePoolCensus: 'https://pointcast.xyz/tide-pool-census',
         shrines: 'https://pointcast.xyz/shrines',
         unfurls: 'https://pointcast.xyz/unfurls',
         nextSprint: 'https://pointcast.xyz/next-sprint',
@@ -414,6 +441,7 @@ export const GET: APIRoute = async () => {
         mesh: 'https://pointcast.xyz/mesh',
         join: 'https://pointcast.xyz/join',
         yard: 'https://pointcast.xyz/yard',
+        civilService: 'https://pointcast.xyz/civil-service',
         cartography: 'https://pointcast.xyz/cartography',
         cartographyDemo: 'https://pointcast.xyz/cartography/demo',
         homeCartography: 'https://pointcast.xyz/cartography/home',
@@ -573,6 +601,7 @@ export const GET: APIRoute = async () => {
         scoreboard: 'https://pointcast.xyz/scoreboard',
         taproom: 'https://pointcast.xyz/taproom',
         play: 'https://pointcast.xyz/play',
+        gridtown: 'https://pointcast.xyz/gridtown/',
         pocketRocks: 'https://pointcast.xyz/rocks/',
         passport: 'https://pointcast.xyz/passport',
         quests: 'https://pointcast.xyz/quests',
@@ -601,6 +630,9 @@ export const GET: APIRoute = async () => {
         kennelClub: AGENT_SURFACES.human.kennelClub,
         shortwave: AGENT_SURFACES.human.shortwave,
         loom: AGENT_SURFACES.human.loom,
+        nounsMessenger: AGENT_SURFACES.human.nounsMessenger,
+        pmm: AGENT_SURFACES.human.pmm,
+        pmmBrand: AGENT_SURFACES.human.pmmBrand,
         steveMillerBand: AGENT_SURFACES.human.steveMillerBand,
         profileShelf: AGENT_SURFACES.human.profileShelf,
       },
@@ -637,6 +669,7 @@ export const GET: APIRoute = async () => {
         soulSurfer: AGENT_SURFACES.json.soulSurfer,
         objectLibrary: AGENT_SURFACES.json.objectLibrary,
         takes: AGENT_SURFACES.json.takes,
+        chapterCity: AGENT_SURFACES.json.chapterCity,
         weatherAtlas: AGENT_SURFACES.json.weatherAtlas,
         grok: AGENT_SURFACES.json.grok,
         weatherWorld: AGENT_SURFACES.json.weatherWorld,
@@ -717,7 +750,30 @@ export const GET: APIRoute = async () => {
         dao: 'https://pointcast.xyz/dao.json',
         yield: 'https://pointcast.xyz/yield.json',
         nounsCola: 'https://pointcast.xyz/nouns-cola.json',
+        cabinetRow: 'https://pointcast.xyz/cabinet-row.json',
+        seaGlass: 'https://pointcast.xyz/sea-glass.json',
+        lowTide: 'https://pointcast.xyz/low-tide.json',
+        sandcastle: 'https://pointcast.xyz/sandcastle.json',
+        lighthouse: 'https://pointcast.xyz/lighthouse.json',
+        morningRoute: 'https://pointcast.xyz/morning-route.json',
         nounsColaCrush: 'https://pointcast.xyz/nouns-cola-crush.json',
+        breakwater: 'https://pointcast.xyz/breakwater.json',
+        softLanding: 'https://pointcast.xyz/soft-landing.json',
+        crosswalk: 'https://pointcast.xyz/crosswalk.json',
+        kelp: 'https://pointcast.xyz/kelp.json',
+        tideline: 'https://pointcast.xyz/tideline.json',
+        driftwood: 'https://pointcast.xyz/driftwood.json',
+        tenDoors: 'https://pointcast.xyz/ten-doors.json',
+        takeoffOrgan: 'https://pointcast.xyz/takeoff-organ.json',
+        refineryLights: 'https://pointcast.xyz/refinery-lights.json',
+        kiteLine: 'https://pointcast.xyz/kite-line.json',
+        meterOracle: 'https://pointcast.xyz/meter-oracle.json',
+        drumRound: 'https://pointcast.xyz/drum-round.json',
+        pelicanPost: 'https://pointcast.xyz/pelican-post.json',
+        greenFlash: 'https://pointcast.xyz/green-flash.json',
+        chalkScore: 'https://pointcast.xyz/chalk-score.json',
+        iceCreamRoute: 'https://pointcast.xyz/ice-cream-route.json',
+        tidePoolCensus: 'https://pointcast.xyz/tide-pool-census.json',
         shrines: 'https://pointcast.xyz/shrines.json',
         unfurls: 'https://pointcast.xyz/unfurls.json',
         nextSprint: 'https://pointcast.xyz/next-sprint.json',
@@ -728,6 +784,7 @@ export const GET: APIRoute = async () => {
         nextModels: 'https://pointcast.xyz/next-models.json',
         join: 'https://pointcast.xyz/join.json',
         yard: 'https://pointcast.xyz/yard.json',
+        civilService: 'https://pointcast.xyz/civil-service.json',
         cartography: 'https://pointcast.xyz/cartography.json',
         cartographyDemo: 'https://pointcast.xyz/cartography/demo.json',
         homeCartography: 'https://pointcast.xyz/cartography/home.json',
@@ -764,6 +821,7 @@ export const GET: APIRoute = async () => {
         scoreboard: 'https://pointcast.xyz/scoreboard.json',
         taproom: 'https://pointcast.xyz/taproom.json',
         play: 'https://pointcast.xyz/play.json',
+        gridtown: 'https://pointcast.xyz/gridtown.json',
         pocketRocks: 'https://pointcast.xyz/rocks.json',
         digitalPets: 'https://pointcast.xyz/digital-pets.json',
         digitalPetsCampaign: 'https://pointcast.xyz/digital-pets/share.json',
@@ -796,6 +854,8 @@ export const GET: APIRoute = async () => {
         queue: 'https://pointcast.xyz/api/queue',
         yardOps: 'https://pointcast.xyz/api/yard/ops',
         yardBoard: 'https://pointcast.xyz/api/yard/ops?action=board',
+        civilService: 'https://pointcast.xyz/api/civil-service',
+        civilServiceRoster: 'https://pointcast.xyz/api/civil-service?action=board',
         drop: 'https://pointcast.xyz/api/drop',
         poll: 'https://pointcast.xyz/api/poll',
         sitePetNamePoll: 'https://pointcast.xyz/api/poll?slug=site-pet-name',
@@ -866,6 +926,20 @@ export const GET: APIRoute = async () => {
         mcp: 'https://pointcast.xyz/api/mcp',
         mcpV2: 'https://pointcast.xyz/api/mcp-v2',
         chainDevnetMcp: AGENT_SURFACES.api.chainDevnetMcp,
+        pmmSignal: AGENT_SURFACES.api.pmmSignal,
+        pmmSignalProtocol: {
+          purpose: 'WebRTC handshake note for PMM, PointCast Mobile Messaging. Holds one offer and one answer per six-letter room for ten minutes, then expires. Not a message store: no messages, names or keys pass through it.',
+          status: 'GET /api/pmm/signal → { bound, ttlSeconds }. bound is false until the PMM_KV binding exists; the app then uses paste mode, which needs no server.',
+          read: 'GET /api/pmm/signal?room=ABCDEF&role=offer|answer → { sdp } or { pending: true }; 503 { reason: "key-not-bound" } without the binding.',
+          write: 'POST { room, role: "offer" | "answer", sdp } → 201 { ok, expiresIn } or 409 { error: "room-taken" }. Each role is write-once per room.',
+          ttlSeconds: 600,
+        },
+        pmmStat: AGENT_SURFACES.api.pmmStat,
+        pmmStatProtocol: {
+          purpose: 'Does PMM connect? Anonymous outcomes measured against the PRD goal of connect success over 90%. Only the phone that pressed LOAD reports, once per handshake that reached FOUND: RUN, or FAIL with a reason (timeout, ice, abandoned, hello). No sigil, name, code, message, IP or user agent is stored with an outcome; the rate limit holds a salted hash of the address for about a minute. DNT and GPC browsers send nothing. Reports are unauthenticated, so forged reports can skew the numbers.',
+          read: 'GET /api/pmm/stat?days=7 (1 to 90) → { attempts, run, fail, successRate, goal: { target: 0.9, met }, byFlow, byVia, byPath, failReasons, medianMs, p90Ms, days }. Cached for 60 seconds.',
+          write: 'Site pages only: POST { v: 1, outcome, flow, via, path, reason, ms, id } → 201. Kept 90 days.',
+        },
         agentBench: AGENT_SURFACES.api.agentBench,
         agentCast: AGENT_SURFACES.api.agentCast,
         agentClaim: AGENT_SURFACES.api.agentClaim,
@@ -897,6 +971,7 @@ export const GET: APIRoute = async () => {
         // tools/list and resources/list serve. Never hand-type these.
         toolCount: MCP_TOOL_NAMES.length,
         tools: MCP_TOOL_NAMES,
+        toolEffects: Object.fromEntries(MCP_TOOL_NAMES.map((n) => [n, toolEffect(n)])),
         resourceCount: MCP_RESOURCE_URIS.length,
         resources: MCP_RESOURCE_URIS,
         note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler wiki briefs, agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
@@ -1117,6 +1192,22 @@ export const GET: APIRoute = async () => {
         guardrails: YARD_GUARDRAILS,
         onboarding: 'point your agent at pointcast.xyz/agents.json — it will find the permit desk.',
       },
+      civilService: {
+        html: 'https://pointcast.xyz/civil-service',
+        json: 'https://pointcast.xyz/civil-service.json',
+        desk: 'https://pointcast.xyz/api/civil-service',
+        roster: 'https://pointcast.xyz/api/civil-service?action=board',
+        notice: 'ESCS-001',
+        channel: 'ESC',
+        thesis:
+          'El Segundo Civil Service: neighbors and agents take civic posts, prove themselves with public receipts instead of exams, ' +
+          `and get an answer within ${OFFER_CLOCK_DAYS} days. A toy-scale answer to New York City's 2026 civil service overhaul.`,
+        mcpTools: ['civil_service_posts', 'civil_service_claim', 'civil_service_receipt'],
+        agentPosts: CIVIL_SERVICE_POSTS.filter((post) => post.who !== 'neighbor').map((post) => ({ code: post.code, title: post.title, who: post.who, points: post.points })),
+        questIds: CIVIL_SERVICE_QUESTS.map((quest) => quest.id),
+        privacy: 'Handle only; no email or contact detail is collected or shown.',
+        disclaimer: ESCS_DISCLAIMER,
+      },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',
         rss: 'https://pointcast.xyz/rss.xml',
@@ -1157,6 +1248,19 @@ export const GET: APIRoute = async () => {
       footerHint: t.footerHint,
     })),
 
+    atlas: {
+      spec: 'https://pointcast.xyz/cartography/atlas',
+      schema: 'https://pointcast.xyz/atlas/schema.json',
+      atlas: 'https://pointcast.xyz/atlas.json',
+      index: 'https://pointcast.xyz/atlas/index.json',
+      map: 'https://pointcast.xyz/cartography/map',
+      crossSite: 'https://pointcast.xyz/cartography/map?site=all',
+      mcpTools: ['atlas_search', 'atlas_get', 'atlas_near', 'atlas_links'],
+      license: 'CC0-1.0',
+      writes: 'none; suggestions by pull request',
+      sisterAtlases: ['https://elsegundo.xyz/atlas.json'],
+    },
+
     contracts: {
       ...contractSources,
       visitNouns: {
@@ -1182,7 +1286,7 @@ export const GET: APIRoute = async () => {
         tzkt: kennelClub ? `https://tzkt.io/${kennelClub}` : null,
         mintState: kennelClub ? 'https://pointcast.xyz/api/kennel-club/mint' : null,
         freeClaim: kennelClub ? 'https://pointcast.xyz/api/kennel-club/claim' : null,
-        collectingDesk: 'https://pointcast.xyz/collect',
+        collectingDesk: 'https://pointcast.xyz/collect/kennel',
         collectingDeskJson: 'https://pointcast.xyz/collect.json',
         dailyStatus: 'https://pointcast.xyz/api/kennel-club/daily/status',
         description: 'Kennel Club September Sitting daily editions. The edge-cached mint-state API reads TzKT for current paused, window, and minted state.',

@@ -420,11 +420,17 @@ const isRefusal = (e) => Boolean(e) && ((Number.isFinite(e.status) && e.status >
  *   'sent'     the devnet accepted it; only the wait for a block failed
  *   'rejected' the devnet accepted it and then rejected it in a block
  * A failure before the send (no key, no nonce) carries no sendState.
+ *
+ * A key may carry its own `signTx(tx, chain)` returning the whole signed tx,
+ * instead of `sign(digest)`: a passkey signs that way (sig_mode webauthn), and
+ * /chain/start wraps a key so the person reads the exact tx before it signs. A
+ * signTx that throws has sent nothing.
  */
 export async function signAndSend(chain, key, tx, { wait = true, onStage = () => {}, onSigned = () => {}, timeoutMs = LIMITS.waitMs, intervalMs = 800 } = {}) {
-  const digest = pcc.signingHash(tx, chain.domain);
-  const signature = await key.sign(digest);
-  const signed = { tx, public_key: key.publicKey, signature };
+  const signed = typeof key.signTx === 'function'
+    ? await key.signTx(tx, chain)
+    : { tx, public_key: key.publicKey, signature: await key.sign(pcc.signingHash(tx, chain.domain)) };
+  if (!signed || signed.tx !== tx) throw new KitError('the key signed something other than the transaction it was given', { code: 'sign_mismatch' });
   const txHash = pcc.txHash(signed);
   onSigned({ txHash, signed });
   onStage('signed');

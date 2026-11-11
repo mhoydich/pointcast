@@ -1,0 +1,152 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { GRIDTOWN_TITLE, GRIDTOWN_DESCRIPTION, TOOLS, LESSONS, GRID_SIZE, STARTING_FUNDS, POWER_CAPACITY, CITY_TITLES } from '../lib/gridtown.mjs';
+import '../styles/gridtown.css';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoGame',
+  name: GRIDTOWN_TITLE,
+  url: 'https://pointcast.xyz/gridtown/',
+  description: GRIDTOWN_DESCRIPTION,
+  applicationCategory: 'GameApplication',
+  gamePlatform: 'Web browser',
+  playMode: 'SinglePlayer',
+  datePublished: '2026-10-22',
+  author: { '@type': 'Organization', name: 'PointCast · Claude Code' },
+  publisher: { '@type': 'Organization', name: 'PointCast' },
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+};
+---
+
+<BlockLayout title={GRIDTOWN_TITLE} description={GRIDTOWN_DESCRIPTION} author="PointCast · Claude Code" image="/images/gridtown/cover.png" imageAlt="A sixteen by sixteen tile town: a blue river, green parks, small houses, shops and a workshop along a grey road." themeColor="#eef1e6" immersive isolated hideAds jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/gridtown.json', title: 'Gridtown rules, tools and lessons' }]}>
+  <div class="gt" data-gridtown data-grid-size={GRID_SIZE} data-starting-funds={STARTING_FUNDS}>
+    <nav class="gt-nav" aria-label="Main navigation">
+      <a class="gt-brand" href="/">PointCast<span class="gt-nav-divider">/</span><span>Gridtown</span></a>
+      <a class="gt-nav-link" href="/play">More to play ↗</a>
+    </nav>
+
+    <header class="gt-head">
+      <div class="gt-head-title">
+        <p class="gt-kicker"><span class="gt-dot" aria-hidden="true"></span><span data-title>Open country</span><span class="gt-kicker-tag"> · a small city you can hold</span></p>
+        <h1><input class="gt-name" type="text" maxlength="40" value="Gridtown" aria-label="City name" data-name /></h1>
+      </div>
+      <dl class="gt-head-stats">
+        <div><dt>Date</dt><dd data-date>Jan Y1</dd></div>
+        <div><dt>Funds</dt><dd data-funds>{STARTING_FUNDS}</dd></div>
+        <div><dt>People</dt><dd data-pop>0</dd></div>
+        <div><dt>Jobs</dt><dd data-jobs>0</dd></div>
+        <div><dt>Happy</dt><dd data-happy>50%</dd></div>
+      </dl>
+    </header>
+
+    <div class="gt-visit" data-visit hidden role="region" aria-label="Visiting a shared city">
+      <p data-visit-text>You are visiting a shared city.</p>
+      <div class="gt-visit-actions"><button type="button" class="gt-visit-keep" data-visit-keep>Keep it as my city</button><button type="button" data-visit-leave>Back to my city</button></div>
+      <p class="gt-mono">Keeping it replaces the city saved in this browser. Export yours first if you want it back.</p>
+    </div>
+
+    <div class="gt-board">
+      <section class="gt-map-shell" aria-label="City map">
+        <canvas class="gt-map" data-map width="640" height="640" tabindex="0" role="application" aria-label="Sixteen by sixteen city map. Arrow keys move the cursor, Enter builds with the chosen tool, number keys pick a tool, I toggles inspect, Z undoes, N advances a month." aria-describedby="gt-map-help"></canvas>
+        <p id="gt-map-help" class="gt-mono gt-map-help" data-map-help aria-live="polite">Tap a tile to build. Drag to paint roads and zones; on a touch screen, hold first. Swipe to scroll.</p>
+        <p class="gt-status" role="status" aria-live="polite" data-status></p>
+      </section>
+
+      <aside class="gt-side">
+        <section class="gt-inspect" data-inspect hidden aria-labelledby="gt-inspect-title">
+          <div class="gt-inspect-top"><h2 id="gt-inspect-title" class="gt-mono">Inspector</h2><button type="button" class="gt-inspect-close" data-inspect-close aria-label="Close the inspector">✕</button></div>
+          <div data-inspect-panel aria-live="polite"></div>
+        </section>
+        <div class="gt-tools" role="toolbar" aria-label="Build tools">
+          {TOOLS.map((tool) => (
+            <button type="button" class="gt-tool" data-tool={tool.id} aria-pressed={tool.id === 'road' ? 'true' : 'false'} title={tool.hint}>
+              <span class="gt-tool-swatch" data-swatch={tool.id} aria-hidden="true"></span>
+              <span class="gt-tool-label">{tool.label}</span>
+              <span class="gt-mono gt-tool-cost">{tool.cost}<kbd>{tool.key}</kbd></span>
+            </button>
+          ))}
+          <button type="button" class="gt-tool gt-tool-inspect" data-inspect-toggle aria-pressed="false" title="Inspect a tile: what it needs and what stands in its way.">
+            <span class="gt-tool-swatch" data-swatch="inspect" aria-hidden="true">?</span>
+            <span class="gt-tool-label">Inspect</span>
+            <span class="gt-mono gt-tool-cost">free<kbd>I</kbd></span>
+          </button>
+        </div>
+        <p class="gt-hint" data-hint>{TOOLS[0].hint}</p>
+
+        <div class="gt-time">
+          <button type="button" class="gt-next" data-next>Next month <span aria-hidden="true">→</span></button>
+          <button type="button" class="gt-auto" data-auto aria-pressed="false">Auto</button>
+          <button type="button" class="gt-undo" data-undo disabled title="Undo the last build (Z)">Undo</button>
+          <label class="gt-tax"><span class="gt-mono">Tax <output data-tax-out>7</output>%</span><input type="range" min="0" max="20" value="7" data-tax aria-label="Tax rate percent" /></label>
+        </div>
+
+        <div class="gt-rci" role="group" aria-label="Demand: what the town is asking for">
+          <div class="gt-rci-row"><span class="gt-mono" id="gt-demand-res">Homes</span><div class="gt-bar" role="meter" aria-labelledby="gt-demand-res" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0"><i data-demand="res"></i></div></div>
+          <div class="gt-rci-row"><span class="gt-mono" id="gt-demand-com">Shops</span><div class="gt-bar" role="meter" aria-labelledby="gt-demand-com" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0"><i data-demand="com"></i></div></div>
+          <div class="gt-rci-row"><span class="gt-mono" id="gt-demand-ind">Work</span><div class="gt-bar" role="meter" aria-labelledby="gt-demand-ind" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0"><i data-demand="ind"></i></div></div>
+          <p class="gt-mono gt-power-line">Power <span data-power>0 / 0</span> zones · <span data-ledger>no months yet</span></p>
+        </div>
+
+        <label class="gt-overlay"><input type="checkbox" data-smoke /> Show smoke and shade</label>
+      </aside>
+    </div>
+
+    <div class="gt-lower">
+      <section class="gt-lessons" aria-labelledby="gt-lessons-title">
+        <div class="gt-section-head"><p class="gt-kicker">LEARN</p><h2 id="gt-lessons-title">Twelve lessons <span class="gt-mono" data-lesson-count>0 / {LESSONS.length}</span></h2></div>
+        <ol class="gt-lesson-list" data-lessons>
+          {LESSONS.map((lesson) => (
+            <li data-lesson={lesson.id}><span class="gt-check" aria-hidden="true"></span><div><strong>{lesson.title}</strong><p>{lesson.text}</p></div></li>
+          ))}
+        </ol>
+      </section>
+
+      <section class="gt-log" aria-labelledby="gt-log-title">
+        <div class="gt-section-head"><p class="gt-kicker">LEDGER</p><h2 id="gt-log-title">Month by month</h2></div>
+        <ol class="gt-log-list" data-log><li class="gt-log-empty">Nothing has happened yet. Lay a road.</li></ol>
+      </section>
+
+      <section class="gt-ship" aria-labelledby="gt-ship-title">
+        <div class="gt-section-head"><p class="gt-kicker">SHIP</p><h2 id="gt-ship-title">Keep it, share it</h2></div>
+        <p class="gt-ship-note" data-storage-note>Your city saves in this browser after every change. Export it to take it anywhere.</p>
+        <p class="gt-ship-note">A city link carries the whole town in the address: whoever opens it can walk around, inspect it and keep a copy. A map link shares only the empty terrain.</p>
+        <div class="gt-ship-actions">
+          <button type="button" class="gt-share-city" data-share-city>Share this city</button>
+          <button type="button" data-share>Share the empty map</button>
+          <button type="button" data-export>Export city ↓</button>
+          <label class="gt-import">Import city ↑<input type="file" accept="application/json,.json" data-import /></label>
+          <button type="button" data-copy-text>Copy map as text</button>
+          <button type="button" class="gt-danger" data-new>New city</button>
+        </div>
+        <form class="gt-new" data-new-form hidden>
+          <label>Seed <input type="number" min="0" max="4294967295" step="1" data-seed aria-label="Map seed" /></label>
+          <button type="submit">Start this map</button>
+          <button type="button" data-cancel-new>Keep my city</button>
+          <p class="gt-mono">Starting a new city replaces the saved one. Export first if you want it back.</p>
+        </form>
+        <div class="gt-share-fallback" data-share-fallback hidden><label class="gt-mono" for="gt-share-url">Copy this link</label><input id="gt-share-url" type="text" readonly data-share-url /></div>
+      </section>
+
+      <section class="gt-rules" aria-labelledby="gt-rules-title">
+        <div class="gt-section-head"><p class="gt-kicker">HOW IT WORKS</p><h2 id="gt-rules-title">The whole rulebook</h2></div>
+        <ul>
+          <li>The map is {GRID_SIZE} by {GRID_SIZE} tiles. Water cannot be built on. Trees and grass can.</li>
+          <li>A zone grows one level a month, up to three, when it touches a road on one of its four sides, has power, and the town wants more of it. Zones are visited in reading order from the top left, and demand is re-read after each one, so growth stops as soon as the town has what it asked for. A zone loses a level when it is dark or cut off, or when demand is deeply negative.</li>
+          <li>Each home level holds 8 people. Each shop level is 6 jobs; each workshop level is 10.</li>
+          <li>One power plant serves {POWER_CAPACITY} zone tiles anywhere in town, in reading order from the top left. The rest stay dark.</li>
+          <li>A workshop puts 2 units of smoke and a plant 3 on every tile within two steps, so a home needs to be three steps away to stay clear; a park clears 2, so one park cancels one workshop. A home in the smoke stops at level one, and a built-out home that smoke reaches loses a level a month until it gets there. A park within two steps clears two units of smoke and raises land value; water and trees next door raise value too, but only a park counts for the park lesson.</li>
+          <li>Each month, income is (people + half the jobs) times the tax rate over ten. Upkeep is 2 per road, 2 per park and 25 per plant.</li>
+          <li>Happiness starts at 50 and moves with employment, parks per 40 residents, smoke over homes and land value. Every tax point over 7 costs 3; every point under 7 adds 1, up to 3.</li>
+          <li>Bulldozing is always allowed, even with no money, so a broke town can always shed upkeep. Undo takes back the last build.</li>
+          <li>Inspect any tile to see what it needs: road, power, demand, air and land value, and the one thing standing in its way.</li>
+          <li>Towns are named by their people: {CITY_TITLES.slice(1).map((step) => `${step.title} at ${step.min}`).join(', ')}.</li>
+          <li>Nothing is random after the map is drawn. The same moves on the same seed always give the same town.</li>
+        </ul>
+      </section>
+    </div>
+
+    <footer class="gt-footer"><span>Gridtown · PointCast</span><p>Built in the browser, saved on your device. No account, no wallet, no server.</p><div><a href="/gridtown.json">Rules as JSON ↗</a><a href="/play">More to play ↗</a><a href="/apps">The app shelf ↗</a></div></footer>
+    <noscript><p class="gt-noscript">The rulebook and lessons are here to read. Enable JavaScript to build a town.</p></noscript>
+  </div>
+  <script>import '../scripts/gridtown';</script>
+</BlockLayout>

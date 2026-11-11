@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baby Bonfire — Creatures</title>
+<meta name="description" content="One house, one yard, one day. Set out seed, water, a blanket, a bell, a ball and a stone, move the time from dawn to night, and see which animals come to which place. A concept sketch from Baby Bonfire, an open exploration on PointCast. Nothing is for sale.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://pointcast.xyz/baby-bonfire/creatures/">
+<link rel="alternate" type="application/json" href="/baby-bonfire.json" title="Baby Bonfire, machine-readable">
+<meta property="og:title" content="Creatures · Baby Bonfire">
+<meta property="og:description" content="One house, one yard, one day. Set out seed, water, a blanket, a bell, a ball and a stone, then move the time and see which animals come where.">
+<meta property="og:url" content="https://pointcast.xyz/baby-bonfire/creatures/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://pointcast.xyz/baby-bonfire/creatures/card.png?v=d2739093e7">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Creatures, a Baby Bonfire concept sketch. A drawing of a small house on a dusk street with its window lit.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Creatures · Baby Bonfire">
+<meta name="twitter:description" content="One house, one yard, one day. Set out seed, water, a blanket, a bell, a ball and a stone, then move the time and see which animals come where.">
+<meta name="twitter:image" content="https://pointcast.xyz/baby-bonfire/creatures/card.png?v=d2739093e7">
+<meta name="twitter:image:alt" content="Creatures, a Baby Bonfire concept sketch. A drawing of a small house on a dusk street with its window lit.">
+<style>
+:root{
+  /* layout: one column, phone-first: header / picture of one day (SVG) / time slider / what is happening now /
+     pieces tray / the house's tally. Picture-book field colour, single theme by choice. */
+  --field:#ffd35a;
+  --field-dim:#4d4416;
+  --card:#fffdf4;
+  --ink:#1b2748;
+  --ink-dim:#56607f;
+  --tomato:#d2382c;
+  --leaf:#157a5a;
+  --font-display:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
+  --font-body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-note:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--field);color:var(--ink);font:14px/1.4 var(--font-body);-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+h1,h2,p,ol,ul{margin:0;padding:0}
+button:focus-visible,summary:focus-visible{outline:3px solid var(--tomato);outline-offset:2px}
+
+#app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:8px;padding-bottom:16px}
+header{display:grid;grid-template-columns:1fr auto;grid-template-areas:"ttl mute" "sub sub";gap:4px 10px;align-items:center;padding:8px 16px 0}
+.ttl{grid-area:ttl;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.eyebrow{font:700 11px/1 var(--font-body);letter-spacing:.09em;text-transform:uppercase;color:var(--field-dim)}
+h1{font:800 26px/1 var(--font-display);letter-spacing:-.01em}
+.sub{grid-area:sub;font-size:12.5px;line-height:1.35;color:var(--field-dim);max-width:60ch}
+.ib{grid-area:mute;width:44px;height:44px;border-radius:50%;background:var(--card);border:2px solid var(--ink);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 0 var(--ink)}
+.ib svg{width:20px;height:18px}
+.ib[aria-pressed="true"]{background:var(--ink);color:var(--field)}
+
+#stage{background:var(--ink);border-top:2.5px solid var(--ink);border-bottom:2.5px solid var(--ink);line-height:0}
+#scene{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.an{transition:transform .9s cubic-bezier(.3,.8,.3,1),opacity .45s ease}
+.pc{transition:transform .65s cubic-bezier(.45,0,.55,1.25),opacity .3s ease}
+#sun,#moon,#shade,#tint,#beam,#glow,#hole,#spread,#dishWater,#stars{transition:opacity .5s ease}
+.boot .an,.boot .pc{transition:none}
+.lab{font:700 9px var(--font-display);fill:#1b2748;stroke:#fffdf4;stroke-opacity:.9;stroke-width:3px;stroke-linejoin:round;paint-order:stroke;pointer-events:none}
+.place{outline:none;touch-action:none}
+.place .hit{pointer-events:all;cursor:pointer}
+.place .ring0,.place .ring,.place .pg{fill:none;pointer-events:none;transform-box:fill-box;transform-origin:center;opacity:0}
+.place .ring0{stroke:#fffdf4;stroke-width:4.5}
+.place .ring{stroke:var(--tomato);stroke-width:2.2;stroke-dasharray:5 4}
+.place .pg{stroke:#fffdf4;stroke-width:2.5}
+.arming .place:not(.nodrop) .ring0,.arming .place:not(.nodrop) .ring{opacity:1;animation:pulse 1.3s ease-in-out infinite}
+.place:focus-visible .ring0,.place:focus-visible .ring{opacity:1;stroke-dasharray:none}
+.place.ping .pg{animation:ping .9s ease-out}
+.held use{filter:drop-shadow(0 0 2px #fffdf4) drop-shadow(0 0 2px #fffdf4)}
+#flameArt{transform-box:fill-box;transform-origin:50% 100%;animation:flick .7s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+@keyframes ping{0%{transform:scale(.6);opacity:.95}100%{transform:scale(3.2);opacity:0}}
+@keyframes flick{0%,100%{transform:scale(1,1) skewX(0)}35%{transform:scale(.92,1.1) skewX(-4deg)}70%{transform:scale(1.06,.94) skewX(3deg)}}
+
+#time{padding:0 16px;display:flex;flex-direction:column;gap:2px}
+.clock{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+#clock{font:800 22px/1 var(--font-display);font-variant-numeric:tabular-nums;min-width:5.2ch}
+#phase{font:700 13px/1 var(--font-display);color:var(--field-dim)}
+.grow{flex:1}
+#dayN{font:700 11px/1 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--field-dim)}
+.btn{background:var(--card);border:2px solid var(--ink);border-radius:999px;padding:0 12px;min-height:34px;font:700 12.5px var(--font-display);box-shadow:0 2px 0 var(--ink)}
+.btn:active,.ib:active,.chip:active{transform:translateY(1px);box-shadow:0 1px 0 var(--ink)}
+#t{-webkit-appearance:none;appearance:none;width:100%;height:40px;background:transparent;margin:0;cursor:pointer}
+#t::-webkit-slider-runnable-track{height:14px;border-radius:999px;border:2px solid var(--ink);background:linear-gradient(90deg,#343a78 0%,#ee93a4 6%,#ffd08a 12%,#8fd0ff 24%,#57b0f5 46%,#ffe2a0 66%,#ff9a66 77%,#5a4f9c 86%,#141a44 100%)}
+#t::-moz-range-track{height:10px;border-radius:999px;border:2px solid var(--ink);background:linear-gradient(90deg,#343a78 0%,#ee93a4 6%,#ffd08a 12%,#8fd0ff 24%,#57b0f5 46%,#ffe2a0 66%,#ff9a66 77%,#5a4f9c 86%,#141a44 100%)}
+#t::-webkit-slider-thumb{-webkit-appearance:none;width:32px;height:32px;border-radius:50%;background:var(--card);border:3px solid var(--ink);margin-top:-11px;box-shadow:0 2px 0 var(--ink)}
+#t::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:var(--card);border:3px solid var(--ink);box-shadow:0 2px 0 var(--ink)}
+#t:focus-visible{outline:none}
+#t:focus-visible::-webkit-slider-thumb{outline:3px solid var(--tomato);outline-offset:2px}
+#t:focus-visible::-moz-range-thumb{outline:3px solid var(--tomato);outline-offset:2px}
+.ticks{position:relative;height:14px;font:600 10.5px/1 var(--font-body);color:var(--field-dim);letter-spacing:.04em}
+.ticks span{position:absolute;top:0;transform:translateX(-50%)}
+
+#side{padding:0 16px;display:flex;flex-direction:column;gap:10px}
+.card{background:var(--card);border:2px solid var(--ink);border-radius:14px}
+#status{padding:7px 12px;display:flex;flex-direction:column;gap:5px}
+#now{font-size:13.5px;line-height:1.38;min-height:3.9em}
+#noted{font-size:12px;color:var(--ink-dim);border-top:1.5px dashed #1b274840;padding-top:5px}
+#noted b{font:700 10.5px var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);margin-right:4px}
+#notedTxt{font:italic 14px/1.3 var(--font-note);color:var(--ink)}
+h2{font:800 15px/1.2 var(--font-display);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+h2 small{font:500 11.5px/1.2 var(--font-body);color:var(--field-dim)}
+#tray{display:flex;flex-direction:column;gap:6px}
+.chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.chip{display:grid;grid-template-columns:28px minmax(0,1fr);column-gap:6px;align-items:center;text-align:left;background:var(--card);border:2px solid var(--ink);border-radius:12px;padding:4px 7px 4px 6px;min-height:44px;touch-action:none;user-select:none;-webkit-user-select:none;box-shadow:0 2px 0 var(--ink)}
+.chip svg{grid-row:1/3;width:28px;height:25px}
+.chip .nm{font:800 13px/1.1 var(--font-display);align-self:end}
+.chip .wh{font:500 10.5px/1.15 var(--font-body);color:var(--ink-dim);align-self:start}
+.chip.outp .wh{color:var(--leaf);font-weight:700}
+.chip[aria-pressed="true"]{background:#ffe1dc;border-color:var(--tomato);box-shadow:0 2px 0 var(--tomato)}
+.chip[aria-pressed="true"] .wh{color:var(--tomato);font-weight:700}
+#ghost{position:fixed;z-index:20;left:0;top:0;width:44px;height:40px;margin:-20px 0 0 -22px;pointer-events:none;display:none;filter:drop-shadow(0 3px 0 #1b274866)}
+#ghost svg{width:100%;height:100%}
+#notes{padding:10px 12px 8px;display:flex;flex-direction:column;gap:6px}
+#notes h2{justify-content:space-between}
+#notes h2 small{color:var(--ink-dim)}
+#tally{list-style:none;max-height:156px;overflow:auto;display:flex;flex-direction:column}
+#tally li{display:grid;grid-template-columns:12px 1fr;gap:8px;align-items:baseline;font:italic 15px/1.3 var(--font-note);padding:4px 0;border-top:1px solid #1b27481f}
+#tally li:first-child{border-top:0}
+#tally .dot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink);align-self:center}
+#rules{padding:0 12px}
+#rules summary{font:800 14px/1.2 var(--font-display);padding:11px 0;cursor:pointer}
+#rules ul{list-style:none;padding:0 0 10px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.38}
+#rules li b{font-family:var(--font-display)}
+#foot{padding:2px 16px 0;display:flex;flex-direction:column;gap:6px}
+#care{font-size:12.5px;line-height:1.38;color:var(--field-dim)}
+footer{font-size:11.5px;color:var(--field-dim);letter-spacing:.02em}
+
+@media (min-width:600px){#stage{margin:0 16px;border:2.5px solid var(--ink);border-radius:16px;overflow:hidden}}
+@media (min-width:900px){
+  #app{max-width:1060px;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-areas:"head head" "stage side" "time side" "foot foot";column-gap:8px;row-gap:12px;align-content:start;padding:8px 8px 20px}
+  header{grid-area:head}#stage{grid-area:stage}#time{grid-area:time}#side{grid-area:side}#foot{grid-area:foot}
+}
+@media (prefers-reduced-motion:reduce){
+  .an,.pc,#sun,#moon,#shade,#tint,#beam,#glow,#hole,#spread,#dishWater,#stars{transition:none!important}
+  #flameArt,.arming .place .ring0,.arming .place .ring,.place.ping .pg{animation:none!important}
+  .place.ping .pg{opacity:.9}
+}
+</style>
+<style>
+/* PointCast: the way back to the Baby Bonfire street. Added on import; the scene below is unchanged apart from the edits noted in TASKS.md. */
+.bb-back{display:block;box-sizing:border-box;height:32px;padding:9px 16px 0;font:600 12px/14px system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.02em;color:inherit;text-decoration:none;opacity:.82}
+.bb-back:hover,.bb-back:focus-visible{opacity:1;text-decoration:underline}
+</style>
+</head>
+<body>
+<a class="bb-back" href="/baby-bonfire/">&larr; Back to the street</a>
+<div id="app">
+<header>
+  <div class="ttl"><p class="eyebrow">Baby Bonfire</p><h1>Creatures</h1></div>
+  <p class="sub">One house, one yard, one day. The places feel weight, warmth, light and air. No cameras, no microphones.</p>
+  <button id="mute" class="ib" type="button" aria-pressed="false" aria-label="Sound on. Tap to mute."><svg viewBox="0 0 18 16" aria-hidden="true"><path d="M2 6h3l4-3.5v11L5 10H2z" fill="currentColor"/><path id="muteWaves" d="M11.5 5.5a3.5 3.5 0 010 5M13 3.5a6 6 0 010 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+</header>
+
+<div id="stage">
+<svg id="scene" class="boot" viewBox="0 14 390 298" role="group" aria-label="A small house and yard, seen across one day">
+<defs>
+  <linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1"><stop id="sky0" offset="0" stop-color="#5d7fc4"/><stop id="sky1" offset="1" stop-color="#ffb08a"/></linearGradient>
+  <radialGradient id="holeG"><stop offset="0" stop-color="#000"/><stop offset=".5" stop-color="#000" stop-opacity=".8"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+  <radialGradient id="glowG"><stop offset="0" stop-color="#ffb04a" stop-opacity=".6"/><stop offset="1" stop-color="#ffb04a" stop-opacity="0"/></radialGradient>
+  <mask id="shadeM" maskUnits="userSpaceOnUse" x="0" y="0" width="390" height="312"><rect width="390" height="312" fill="#fff"/><circle id="hole" cx="112" cy="256" r="104" fill="url(#holeG)" opacity="0"/></mask>
+
+  <!-- pieces: origin at the base centre -->
+  <g id="art-seed"><path d="M-8.5 0Q-7-4.5-2.5-5.5Q2-7.5 5.5-4.5Q8.5-3 8.5 0Z" fill="#c98f3a"/><circle cx="-3" cy="-2.6" r="1.1" fill="#6f4319"/><circle cx="1.2" cy="-4" r="1.1" fill="#fff0b8"/><circle cx="4" cy="-1.8" r="1.1" fill="#6f4319"/><circle cx="-.6" cy="-1.3" r="1" fill="#fff0b8"/></g>
+  <g id="art-water"><path d="M-7-8H7L5 0H-5Z" fill="#fffdf4" stroke="#1b2748" stroke-width="1"/><path d="M-6.3-6.6H6.3L5.8-4.2H-5.8Z" fill="#3d8fd9"/></g>
+  <g id="art-blanket"><rect x="-8.5" y="-8" width="17" height="8" rx="2" fill="#7b46b0"/><path d="M-8.5-5.4h17M-8.5-2.6h17" stroke="#ffd35a" stroke-width="1.2"/><path d="M-3-8v8M3-8v8" stroke="#1b2748" stroke-width=".8" opacity=".45"/></g>
+  <g id="art-bell"><circle cx="0" cy="-12.8" r="1.6" fill="none" stroke="#1b2748" stroke-width="1"/><path d="M-6-2Q-6-10.5 0-11.5Q6-10.5 6-2L7.5 0H-7.5Z" fill="#f0b020" stroke="#1b2748" stroke-width=".8"/><circle cx="0" cy=".6" r="1.6" fill="#1b2748"/></g>
+  <g id="art-ball"><circle cx="0" cy="-6.5" r="6.5" fill="#e2473a"/><path d="M-6.2-8Q0-3 6.2-8" stroke="#fffdf4" stroke-width="1.6" fill="none"/><circle cx="-2" cy="-9.6" r="1.2" fill="#fffdf4" opacity=".75"/></g>
+  <g id="art-stone"><path d="M-8 0Q-9.5-5.5-3.5-7.5Q4-9.5 8-4.5Q9.4 0 8 0Z" fill="#8b93b3"/><path d="M-4.6-5Q-1-6.8 3-5.6" stroke="#c9cfe6" stroke-width="1.2" fill="none" stroke-linecap="round"/></g>
+
+  <!-- animals: simple shapes, origin at the feet, facing right -->
+  <g id="art-finch"><path d="M-4-5L-11-8.5L-10-3.5Z" fill="#2b3350"/><ellipse cx="0" cy="-6" rx="6" ry="4.6" fill="currentColor"/><path d="M-4-7Q0-10.5 3.5-6.5Q0-3.5-4-7Z" fill="#2b3350"/><circle cx="4.2" cy="-9.2" r="3.4" fill="currentColor"/><path d="M7-10L10.4-9L7-7.8Z" fill="#f08a3c"/><circle cx="5" cy="-9.8" r=".8" fill="#1b2748"/><path d="M-1-1.6V0M1.6-1.6V0" stroke="#8a5a2a" stroke-width=".9" stroke-linecap="round"/></g>
+  <g id="art-wren"><path d="M-4-5L-8-13L-3.5-8Z" fill="#6b4526"/><ellipse cx="0" cy="-5" rx="5.6" ry="4.2" fill="#a06a3a"/><ellipse cx="1" cy="-3.6" rx="3.6" ry="2.4" fill="#ecd3ac"/><circle cx="4" cy="-8" r="3" fill="#a06a3a"/><path d="M6.6-8.6L10.5-8L6.6-7.2Z" fill="#3a2a1a"/><circle cx="4.8" cy="-8.6" r=".7" fill="#1b2748"/><path d="M-1-1.4V0M1.4-1.4V0" stroke="#6b4526" stroke-width=".9" stroke-linecap="round"/></g>
+  <g id="art-squirrel"><path d="M-4-2Q-17-3-14-16Q-12-25-3-22Q-9-18-7.5-11Q-6.5-6-3-5Z" fill="#e59a4a"/><ellipse cx="0" cy="-7.5" rx="5.6" ry="7.5" fill="#c9692b"/><ellipse cx="1.6" cy="-6" rx="2.8" ry="4.6" fill="#f6dcb6"/><circle cx="4.6" cy="-15.5" r="4.4" fill="#c9692b"/><path d="M2.4-19L3.4-23.4L6-19.4Z" fill="#c9692b"/><circle cx="6.2" cy="-16.2" r=".9" fill="#1b2748"/><circle cx="8.8" cy="-14.6" r=".8" fill="#1b2748"/><path d="M3-9Q7-10 7.5-7.5" stroke="#c9692b" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="2" cy="-.8" rx="4.4" ry="1.4" fill="#a8521f"/></g>
+  <g id="art-owl"><ellipse cx="0" cy="-10" rx="8.5" ry="10.5" fill="#766ca3"/><path d="M-7-17L-8-23.5L-3-19ZM7-17L8-23.5L3-19Z" fill="#766ca3"/><ellipse cx="0" cy="-7" rx="5.4" ry="6.4" fill="#c9c2e6"/><path d="M-3-6.5l1.4 1.4 1.4-1.4M.4-3.5l1.4 1.4 1.4-1.4M-2.6-.9l1.2 1.2 1.2-1.2" stroke="#766ca3" fill="none" stroke-width=".9"/><circle cx="-3.6" cy="-14.5" r="3.5" fill="#fff3c4"/><circle cx="3.6" cy="-14.5" r="3.5" fill="#fff3c4"/><circle cx="-3.6" cy="-14.5" r="1.6" fill="#1b2748"/><circle cx="3.6" cy="-14.5" r="1.6" fill="#1b2748"/><path d="M-1.2-12.4L1.2-12.4L0-10Z" fill="#f0a81c"/><path d="M-3.5 0h3M.5 0h3" stroke="#f0a81c" stroke-width="1.6" stroke-linecap="round"/></g>
+  <g id="art-raccoon"><path d="M-9-8Q-20-9-19-19" stroke="#8189a6" stroke-width="6.5" stroke-linecap="round" fill="none"/><path d="M-9-8Q-20-9-19-19" stroke="#262b47" stroke-width="6.5" stroke-dasharray="2.6 4" fill="none"/><ellipse cx="0" cy="-8.5" rx="11.5" ry="7.5" fill="#8189a6"/><path d="M-7-3v3M-3-2.4v2.4M5-2.4v2.4M8.5-3v3" stroke="#262b47" stroke-width="2.4" stroke-linecap="round"/><circle cx="11" cy="-12" r="6" fill="#a2a9c2"/><path d="M7.4-17L7-21L10.6-17.8ZM13-17.6L15.6-20.6L15.8-16.4Z" fill="#262b47"/><path d="M5.6-13.6Q11-16.4 16.6-12.8Q14-10 11-11.4Q8-10 5.6-13.6Z" fill="#262b47"/><circle cx="8.8" cy="-13" r="1" fill="#ffe27a"/><circle cx="13.4" cy="-12.6" r="1" fill="#ffe27a"/><ellipse cx="15.6" cy="-9.4" rx="2.6" ry="2" fill="#eef0f6"/><circle cx="17.4" cy="-9.8" r=".9" fill="#1b2748"/></g>
+  <g id="art-cat"><path d="M-6-2Q-13-2-12 9" stroke="#3c4168" stroke-width="3.2" stroke-linecap="round" fill="none"/><path d="M-8 0Q-10-14-2-17Q7-17 8-7L8 0Z" fill="#3c4168"/><circle cx="3" cy="-20" r="6.2" fill="#3c4168"/><path d="M-2.6-23L-1.6-29L2-25ZM4.6-25.4L8-29L8.8-23Z" fill="#3c4168"/><circle cx="1.4" cy="-20.6" r="1.1" fill="#d6f25a"/><circle cx="6" cy="-20.6" r="1.1" fill="#d6f25a"/><path d="M2.9-18.6l.9.9.9-.9" stroke="#f3a0a0" stroke-width=".8" fill="none"/><path d="M2 0v-6M5.4 0v-6" stroke="#2c3052" stroke-width="1"/></g>
+  <g id="art-dog-sit"><path d="M-9-3Q-15-6-14-12" stroke="#f6eedb" stroke-width="3.2" stroke-linecap="round" fill="none"/><path d="M-10 0Q-12-13-4-18L4-18Q9-10 8 0Z" fill="#f6eedb"/><ellipse cx="-4" cy="-9" rx="4.4" ry="3.4" fill="#b0602c"/><ellipse cx="6.5" cy="-22" rx="6.6" ry="5.6" fill="#f6eedb"/><ellipse cx="12.4" cy="-20.4" rx="4.2" ry="3" fill="#f6eedb"/><circle cx="15.6" cy="-21.2" r="1.3" fill="#1b2748"/><path d="M2.6-26.4Q-1.6-25-.6-16.6Q3.4-17.6 4.6-24Z" fill="#b0602c"/><circle cx="8" cy="-23.4" r="1" fill="#1b2748"/><path d="M3.4 0v-8M6.6 0v-8" stroke="#d6cbae" stroke-width="1.2"/></g>
+  <g id="art-dog-lie"><path d="M-14-3Q-20-4-19-9" stroke="#f6eedb" stroke-width="3.2" stroke-linecap="round" fill="none"/><ellipse cx="-2" cy="-6.5" rx="14" ry="6.5" fill="#f6eedb"/><ellipse cx="-6" cy="-8.6" rx="5" ry="3.4" fill="#b0602c"/><ellipse cx="12" cy="-6.4" rx="6.4" ry="5.2" fill="#f6eedb"/><ellipse cx="17.4" cy="-4.4" rx="4" ry="2.8" fill="#f6eedb"/><circle cx="20.4" cy="-5" r="1.3" fill="#1b2748"/><path d="M8.4-10.6Q4.6-9 6-2Q9.6-3 10.4-8.4Z" fill="#b0602c"/><path d="M12.6-7.4h2.6" stroke="#1b2748" stroke-width="1" stroke-linecap="round"/><path d="M8-1.2h9" stroke="#d6cbae" stroke-width="2.4" stroke-linecap="round"/></g>
+</defs>
+
+<!-- sky -->
+<rect width="390" height="312" fill="url(#skyG)"/>
+<g id="sun"><circle r="20" fill="#ffe9a0" opacity=".45"/><circle r="12.5" fill="#ffd35a"/></g>
+
+<!-- yard backdrop -->
+<path d="M236 290V252Q268 232 306 244Q346 226 390 240V290Z" fill="#8bd48a"/>
+<path d="M0 290V264Q8 250 19 259Q29 247 39 262L46 290Z" fill="#4fa36a"/>
+<g fill="#fff4dc" stroke="#1b2748" stroke-width="1"><rect x="286" y="246" width="7" height="42"/><rect x="309" y="246" width="7" height="42"/><rect x="332" y="246" width="7" height="42"/><rect x="377" y="246" width="7" height="42"/><rect x="282" y="254" width="108" height="5"/><rect x="282" y="270" width="108" height="5"/><rect x="350.5" y="214" width="7" height="74"/><rect x="336" y="212" width="36" height="4.5" rx="2"/></g>
+<rect y="286" width="390" height="26" fill="#57b45a"/>
+<rect x="44" y="293" width="200" height="19" fill="#8f89ad"/>
+<path d="M256 291l2-4 2 4M330 294l2-4 2 4M372 291l2-4 2 4M4 293l2-4 2 4" stroke="#2f8a45" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+
+<!-- house, cut away -->
+<path d="M52 122L144 56L236 122Z" fill="#2c8f86"/>
+<rect x="52" y="120" width="184" height="168" fill="#66c6b4"/>
+<path id="beam" d="M233 150V206L128 198V148Z" fill="#fff6c8" opacity="0"/>
+<rect x="52" y="286" width="184" height="8" fill="#a8642f"/>
+<path d="M54.5 120V224M233.5 120V150M233.5 206V288" stroke="#1b2748" stroke-width="5"/>
+<rect x="50.5" y="224" width="7" height="62" rx="2" fill="#ffd35a" stroke="#1b2748" stroke-width="1"/>
+<circle cx="61" cy="258" r="1.6" fill="#1b2748"/>
+<rect id="glass" x="231.6" y="150" width="3.8" height="56" fill="#c8ecff"/>
+<path d="M34 124L144 48L254 124" fill="none" stroke="#d2382c" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+<!-- inside -->
+<rect x="208" y="206" width="24" height="4" rx="1.5" fill="#fff4dc"/>
+<rect x="150" y="164" width="58" height="4" rx="1.5" fill="#fff4dc"/><path d="M158 168v7M200 168v7" stroke="#1b2748" stroke-width="2"/><circle cx="179" cy="171.5" r="2.4" fill="#d2382c"/>
+<rect x="94" y="282" width="32" height="4" rx="1.5" fill="#fff4dc"/>
+<path d="M99 282L101.5 274H118.5L121 282Z" fill="#1b2748"/><ellipse cx="110" cy="274" rx="9" ry="2.2" fill="#3a4670"/>
+<rect x="130" y="282" width="46" height="4" rx="1.5" fill="#fff4dc"/><circle cx="153" cy="288.6" r="2.4" fill="#d2382c"/>
+<g id="spread" opacity="0"><path d="M131 282Q153 276.5 175 282L176.5 286H129.5Z" fill="#7b46b0"/><path d="M134 281.6Q153 277.6 172 281.6" stroke="#ffd35a" stroke-width="1.2" fill="none"/><path d="M131 284.4H175" stroke="#ffd35a" stroke-width="1"/></g>
+<!-- outside -->
+<path d="M236 224L262 211" stroke="#1b2748" stroke-width="2"/><rect x="238" y="206" width="45" height="4.5" rx="1.5" fill="#fff4dc" stroke="#1b2748" stroke-width="1"/><circle cx="244" cy="214" r="2.4" fill="#d2382c"/>
+<path d="M284 280H316L311 287.5H289Z" fill="#fff4dc" stroke="#1b2748" stroke-width="1"/><path id="dishWater" d="M286 281H314L312.6 283.6H287.4Z" fill="#3d8fd9" opacity="0"/><circle cx="300" cy="290.6" r="2.4" fill="#d2382c"/>
+<rect x="10" y="279" width="42" height="7.5" rx="1.5" fill="#cfc8dc" stroke="#1b2748" stroke-width="1"/><circle cx="31" cy="290.6" r="2.4" fill="#d2382c"/>
+<circle cx="354" cy="221" r="2.4" fill="#d2382c"/>
+
+<g id="pieces"></g>
+<g id="dayAnimals"></g>
+<rect id="shade" width="390" height="312" fill="#0c1136" opacity="0" mask="url(#shadeM)" pointer-events="none"/>
+<rect id="tint" width="390" height="312" fill="#ff8a4a" opacity="0" pointer-events="none"/>
+<circle id="glow" cx="110" cy="262" r="62" fill="url(#glowG)" opacity="0" pointer-events="none"/>
+<g id="stars" fill="#fff8d6" opacity="0" pointer-events="none"><circle cx="18" cy="31" r="1.2"/><circle cx="52" cy="40" r=".9"/><circle cx="84" cy="27" r="1.3"/><circle cx="120" cy="28" r=".9"/><circle cx="176" cy="30" r="1.1"/><circle cx="214" cy="44" r=".9"/><circle cx="250" cy="33" r="1.3"/><circle cx="282" cy="62" r=".9"/><circle cx="306" cy="28" r="1.1"/><circle cx="336" cy="40" r=".9"/><circle cx="368" cy="34" r="1.3"/><circle cx="380" cy="92" r=".9"/><circle cx="300" cy="112" r="1"/><circle cx="268" cy="96" r=".8"/><circle cx="22" cy="74" r="1"/></g>
+<g id="moon" opacity="0" pointer-events="none"><circle r="11" fill="#fff3c4"/><circle cx="-3" cy="-2.5" r="2.2" fill="#e9d99a"/><circle cx="3.5" cy="3" r="1.5" fill="#e9d99a"/></g>
+<g id="hearthArt" pointer-events="none">
+  <g id="flame" opacity="0"><g id="flameArt"><path d="M110 273Q102.5 266.5 108 258Q109 262.5 111 260.5Q111 254.5 113 252Q118.5 262 114.5 270Q112.5 273.5 110 273Z" fill="#ff8a2a"/><path d="M110 272Q106.5 267.5 109.5 262.5Q112 266.5 112.5 262.5Q114.5 267.5 112 271Z" fill="#ffd35a"/></g></g>
+  <g id="cover" opacity="0"><path d="M99 276V262Q99 247.5 110 247.5Q121 247.5 121 262V276" fill="#d4efff" fill-opacity=".3" stroke="#e8f7ff" stroke-width="1.6"/><circle cx="110" cy="246.4" r="1.9" fill="#e8f7ff"/></g>
+</g>
+<g id="nightAnimals"></g>
+<g id="labs"></g>
+<g id="ui"></g>
+</svg>
+</div>
+
+<section id="time" aria-label="Time of day">
+  <div class="clock">
+    <output id="clock" for="t">6:15 am</output><span id="phase">first light</span><span class="grow"></span><span id="dayN">day 1</span>
+    <button id="next" class="btn" type="button">Next morning</button>
+  </div>
+  <input id="t" type="range" min="300" max="1380" step="15" value="375" aria-label="Time of day, from dawn to night">
+  <div class="ticks" aria-hidden="true"><span style="left:7%">dawn</span><span style="left:39.5%">noon</span><span style="left:76%">dusk</span><span style="left:95%">night</span></div>
+</section>
+
+<div id="side">
+  <div id="status" class="card">
+    <p id="now" role="status" aria-live="polite"></p>
+    <p id="noted"><b>Latest note</b><span id="notedTxt"></span></p>
+  </div>
+  <section id="tray" aria-labelledby="trayH">
+    <h2 id="trayH">Pieces <small>Tap one, then tap a place. Or drag it there.</small></h2>
+    <div class="chips" id="chips"></div>
+  </section>
+  <section id="notes" class="card" aria-labelledby="notesH">
+    <h2 id="notesH">The house noted <small>newest first</small></h2>
+    <ol id="tally"></ol>
+  </section>
+  <details id="rules" class="card">
+    <summary>How the creatures decide</summary>
+    <ul>
+      <li><b>Finches</b> come to the window feeder at first light, if there is seed in it.</li>
+      <li><b>The squirrel</b> comes late in the morning when the feeder is full and nobody is near. With the dog in the yard it waits on the fence.</li>
+      <li><b>A wren</b> takes the water dish around midday, if there is water and the yard is quiet.</li>
+      <li><b>The dog</b> follows the ball outdoors by day. Indoors, it settles at its spot once the hearth is lit and covered.</li>
+      <li><b>The cat</b> takes the high shelf in the morning sun, and again in the evening when the hearth is lit. Whatever sits on that shelf goes to the floor.</li>
+      <li><b>An owl</b> lands on the fence perch after dark. <b>A raccoon</b> tries the porch step late, if seed or water was left outside.</li>
+      <li><b>The bell</b> rings when its place feels a landing.</li>
+    </ul>
+  </details>
+</div>
+
+<div id="foot">
+  <p id="care">Common sense, not advice: a covered flame, a stable base, never left alone with animals around.</p>
+  <footer>Baby Bonfire · concept sketch · Nov 2026</footer>
+</div>
+</div>
+<div id="ghost" aria-hidden="true"><svg viewBox="-11 -17 22 20"><use id="ghostUse" href="#art-seed"/></svg></div>
+
+<script>
+(function(){
+'use strict';
+const NS='http://www.w3.org/2000/svg';
+const $=id=>document.getElementById(id);
+const el=(n,a,p)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const RM=window.matchMedia('(prefers-reduced-motion: reduce)');
+const svg=$('scene');
+
+/* ---------- the home: places and pieces ---------- */
+const PLACES={
+  step:{name:'porch step',the:'the porch step',prep:'on the porch step',short:'porch step',x:31,y:271,r:24,out:true,slots:[[20,279],[42,279]],lab:[31,304],idle:'After dark it feels a slow weight.'},
+  flame:{name:'hearth',short:'hearth',x:110,y:263,r:19,noDrop:true,lab:[110,304]},
+  hearth:{name:"dog's spot by the hearth",the:"the dog's spot",prep:'by the hearth',short:"dog's spot",x:153,y:268,r:22,slots:[[172,282],[134,282]],lab:[155,304],idle:'It feels warmth from the hearth, and weight.'},
+  shelf:{name:"cat's high shelf",the:'the high shelf',prep:'on the high shelf',short:'high shelf',x:184,y:156,r:25,slots:[[186,164],[199,164]],lab:[180,186],idle:'It feels warm air rising, and whoever is up there.'},
+  floor:{name:'floor',the:'the floor',short:'floor',x:205,y:274,r:20,noDrop:true,slots:[[190,286],[203,286],[216,286],[196,279],[209,279],[222,279]]},
+  feeder:{name:'window feeder',the:'the window feeder',prep:'at the feeder',short:'feeder',x:259,y:198,r:24,out:true,slots:[[247,206],[275,206]],lab:[262,227],idle:'It feels a landing: a little weight, a flicker of light.'},
+  dish:{name:'water dish',the:'the water dish',prep:'at the water dish',short:'water dish',x:300,y:279,r:22,out:true,slots:[[300,280],[322,286]],lab:[300,304],idle:'It feels a ripple and a small weight.'},
+  perch:{name:'fence perch',the:'the fence perch',prep:'on the fence',short:'fence perch',x:354,y:205,r:24,out:true,slots:[[341,212],[367,212]],lab:[354,236],idle:'It feels a grip and a passing shadow.'}
+};
+const PIECES={
+  seed:{name:'seed',home:'feeder'},water:{name:'water',home:'dish'},blanket:{name:'blanket',home:'hearth'},
+  bell:{name:'bell',home:'step'},ball:{name:'ball',home:'perch'},stone:{name:'stone',home:'shelf'}
+};
+const ANIMALS=['finch','squirrel','wren','owl','raccoon','cat','dog'];
+const SPOT={
+  finch1:{feeder:[254,206,-1],away:[306,66,-1]},
+  finch2:{feeder:[268,206,1],away:[360,40,1]},
+  squirrel:{perch:[354,212,-1],feeder:[266,206,-1],away:[414,236,-1]},
+  wren:{dish:[291,280,1],away:[406,150,1]},
+  owl:{perch:[354,212,1],away:[414,96,1]},
+  raccoon:{step:[29,279,1],away:[-46,286,1]},
+  cat:{shelf:[166,164,1],sill:[219,206,1]},
+  dog:{door:[78,286,1],hearth:[153,282,-1],yard:[332,286,-1]}
+};
+const BODY={finch:['finch1','finch2'],squirrel:['squirrel'],wren:['wren'],owl:['owl'],raccoon:['raccoon'],cat:['cat'],dog:['dog']};
+const FEEL={finch:'feather-light landings and a flicker of light',squirrel:'a quick, bouncing weight',wren:'a splash, light as a leaf',owl:'one soft grip and a wide shadow',raccoon:'a slow, heavy step',dog:'warmth, and a settled weight',cat:'a loaf of warm weight'};
+
+const S={t:375,day:1,hearth:0,hand:null,tick:0,
+  where:{seed:'feeder',water:null,blanket:null,bell:null,ball:null,stone:'shelf'},
+  order:{seed:1,stone:2},drop:{},seen:new Set(),tally:[],present:{},fx:[]};
+let seq=10;
+const has=(pc,pl)=>S.where[pc]===pl;
+const outdoors=pc=>{const w=S.where[pc];return !!(w&&PLACES[w]&&PLACES[w].out)};
+const piecesAt=w=>Object.keys(PIECES).filter(p=>S.where[p]===w).sort((a,b)=>(S.order[a]||0)-(S.order[b]||0));
+const special=(pc,w)=>(pc==='blanket'&&w==='hearth')||(pc==='water'&&w==='dish');
+const dogOut=t=>outdoors('ball')&&t>=480&&t<1080;
+
+/* ---------- the rules: who is where at minute t ---------- */
+const FINCH=[[360,390],[420,435],[450,480]];
+function who(t){
+  const o={},quiet=!dogOut(t),fw=FINCH.find(w=>t>=w[0]&&t<w[1]);
+  o.finch=has('seed','feeder')&&fw?{at:'feeder',win:fw[0]}:null;
+  o.squirrel=has('seed','feeder')&&t>=600&&t<870?(t>=630&&quiet?{at:'feeder',win:630}:{at:'perch',win:600}):null;
+  o.wren=has('water','dish')&&t>=660&&t<780&&quiet?{at:'dish',win:660}:null;
+  o.owl=t>=1230?{at:'perch',win:1230}:null;
+  o.raccoon=t>=1290&&(outdoors('seed')||outdoors('water'))?{at:'step',win:1290}:null;
+  o.cat=(t>=480&&t<720)?{at:'shelf',win:480}:(t>=1140&&S.hearth>0)?{at:'shelf',win:1140}:{at:'sill'};
+  o.dog=dogOut(t)?{at:'yard',win:480}:S.hearth===2?{at:'hearth'}:{at:'door'};
+  return o;
+}
+const ARRIVE={
+  finch:()=>'finches',
+  squirrel:n=>n.at==='feeder'?'the squirrel at the feeder':'the squirrel on the fence',
+  wren:()=>'a wren at the water',
+  owl:()=>'an owl on the fence',
+  raccoon:()=>'a raccoon on the porch step',
+  cat:n=>n.at==='shelf'?'the cat on the high shelf':null,
+  dog:n=>n.at==='hearth'?(has('blanket','hearth')?'the dog settled on the blanket by the hearth':'the dog by the hearth'):n.at==='yard'?'the dog out with the ball':null
+};
+function hourWords(t){const h=Math.floor(t/60),h12=h%12||12;
+  if(h===12)return 'at noon';if(h<12)return 'at '+h12;if(h<17)return 'at '+h12+' in the afternoon';if(h<20)return 'at '+h12+' in the evening';return 'at '+h12+' at night'}
+const times=n=>['','','twice','three times','four times','five times','six times'][n]||n+' times';
+const lineOf=L=>L.text+(L.n>1?', '+times(L.n):'');
+function note(text,t){
+  const s=skyAt(t/60),col=mix(s.top,s.bot,.55);
+  const i=S.tally.findIndex(L=>L.text===text);
+  if(i>=0){const L=S.tally.splice(i,1)[0];L.n++;L.col=col;S.tally.unshift(L)}else S.tally.unshift({text,n:1,col});
+}
+function step(o){
+  o=o||{};S.tick++;S.fx.length=0;
+  const t=S.t,now=who(t),arr=[];
+  for(const a of ANIMALS){
+    const n=now[a],p=S.present[a];
+    const changed=(n&&n.at)!==(p&&p.at);
+    S.present[a]=n;
+    if(!changed||!n)continue;
+    const txt=ARRIVE[a](n);if(!txt)continue;
+    arr.push(a);
+    const key=S.day+'|'+a+'|'+n.at+'|'+(n.win!=null?n.win:Math.floor(t/60));
+    const fresh=!o.back&&!S.seen.has(key);
+    if(fresh){S.seen.add(key);note(txt+' '+hourWords(t),t)}
+    if(S.where.bell===n.at&&a!=='cat'){S.fx.push({k:'ring'});if(fresh)note('the bell rang '+PLACES[n.at].prep+' '+hourWords(t),t)}
+  }
+  /* the dog fetches a ball that reached the floor on an earlier beat */
+  if(S.where.ball==='floor'&&S.present.dog.at!=='yard'&&(S.drop.ball||0)<S.tick&&piecesAt('hearth').length<2){
+    S.where.ball='hearth';S.order.ball=++seq;note('the dog carried the ball to the hearth',t);S.fx.push({k:'fetch'})}
+  /* the cat clears her shelf */
+  let guard=0;
+  while(S.present.cat.at==='shelf'&&guard++<3){
+    const top=piecesAt('shelf').pop();if(!top)break;
+    S.where[top]='floor';S.order[top]=++seq;S.drop[top]=S.tick;if(S.hand===top)S.hand=null;
+    note('the cat moved the '+PIECES[top].name+' to the floor',t);S.fx.push({k:'knock',pc:top});
+  }
+  return arr;
+}
+
+/* ---------- sky ---------- */
+const KEY=[[5,'#232a5c','#c96f8f',.46,.06],[6,'#5d7fc4','#ffb08a',.2,.14],[7,'#74aee6','#ffd9a8',.05,.1],[8.5,'#62b4f2','#d6efff',0,.02],
+  [13,'#3fa2f0','#c4e8ff',0,0],[16.5,'#5a9de0','#ffe7b0',0,.06],[18.5,'#6d62b0','#ff9f6e',.16,.2],[20,'#2c2b66','#8a4f8c',.44,.08],
+  [21.5,'#151a40','#2b3168',.58,0],[23,'#0e1230','#1f2552',.62,0]];
+function mix(a,b,k){const pa=parseInt(a.slice(1),16),pb=parseInt(b.slice(1),16);
+  const r=Math.round(((pa>>16)&255)*(1-k)+((pb>>16)&255)*k),g=Math.round(((pa>>8)&255)*(1-k)+((pb>>8)&255)*k),bl=Math.round((pa&255)*(1-k)+(pb&255)*k);
+  return '#'+((1<<24)|(r<<16)|(g<<8)|bl).toString(16).slice(1)}
+function skyAt(h){let i=0;while(i<KEY.length-2&&h>=KEY[i+1][0])i++;const a=KEY[i],b=KEY[i+1],k=clamp((h-a[0])/(b[0]-a[0]),0,1);
+  return{top:mix(a[1],b[1],k),bot:mix(a[2],b[2],k),shade:a[3]+(b[3]-a[3])*k,tint:a[4]+(b[4]-a[4])*k}}
+function renderSky(){
+  const h=S.t/60,s=skyAt(h),lit=S.hearth>0;
+  $('sky0').setAttribute('stop-color',s.top);$('sky1').setAttribute('stop-color',s.bot);
+  $('shade').style.opacity=s.shade;$('tint').style.opacity=s.tint;
+  const th=clamp((h-5.4)/14.2,0,1)*Math.PI;
+  $('sun').setAttribute('transform','translate('+(195+190*Math.cos(th)).toFixed(1)+','+(266-234*Math.sin(th)).toFixed(1)+')');
+  $('sun').style.opacity=clamp(Math.min(h-5.4,19.6-h)*3,0,1);
+  const k=clamp((h-19.75)/3.25,0,1);
+  $('moon').setAttribute('transform','translate('+(374-80*k).toFixed(1)+','+(150-100*k).toFixed(1)+')');
+  $('moon').style.opacity=clamp((h-19.4)/.8,0,1);
+  $('stars').style.opacity=Math.max(clamp((h-19.4)/1.4,0,1),clamp((6-h)/1,0,1)*.8);
+  $('beam').style.opacity=clamp(Math.min(h-7.6,12.4-h),0,1)*.5;
+  $('hole').setAttribute('opacity',lit?1:0);
+  $('glow').style.opacity=lit?(.45+s.shade*.7):0;
+  $('glass').setAttribute('fill',lit&&s.shade>.3?'#ffcf7a':'#c8ecff');
+  $('flame').setAttribute('opacity',lit?1:0);$('cover').setAttribute('opacity',S.hearth===2?1:0);
+}
+
+/* ---------- build the picture ---------- */
+const anEl={},pcEl={},plEl={};
+(function build(){
+  const day=$('dayAnimals'),night=$('nightAnimals');
+  const mk=(id,art,parent,color)=>{const g=el('g',{class:'an',id:'an-'+id},parent);if(color)g.style.color=color;el('use',{href:'#'+art},g);g.style.opacity=0;anEl[id]=g};
+  mk('cat','art-cat',day);mk('dog','art-dog-sit',day);mk('wren','art-wren',day);mk('squirrel','art-squirrel',day);
+  mk('finch1','art-finch',day,'#f2c230');mk('finch2','art-finch',day,'#ef7d8f');
+  mk('owl','art-owl',night);mk('raccoon','art-raccoon',night);
+  for(const pc in PIECES){const g=el('g',{class:'pc',id:'pc-'+pc},$('pieces'));el('use',{href:'#art-'+pc},g);g.style.opacity=0;pcEl[pc]=g}
+  for(const id in PLACES){const P=PLACES[id];
+    const g=el('g',{class:'place'+(P.noDrop?' nodrop':''),id:'pl-'+id,tabindex:0,role:'button','data-pl':id},$('ui'));
+    el('circle',{class:'pg',cx:P.x,cy:P.y,r:10},g);el('circle',{class:'ring0',cx:P.x,cy:P.y,r:P.r-4},g);el('circle',{class:'ring',cx:P.x,cy:P.y,r:P.r-4},g);
+    el('circle',{class:'hit',cx:P.x,cy:P.y,r:P.r,fill:'#fff','fill-opacity':0},g);plEl[id]=g;
+    if(P.lab){const tx=el('text',{class:'lab',x:P.lab[0],y:P.lab[1],'text-anchor':'middle'},$('labs'));tx.textContent=P.short}
+  }
+  el('text',{class:'lab',id:'cue',x:110,y:240,'text-anchor':'middle'},$('labs'));
+  const chips=$('chips');
+  for(const pc in PIECES){const b=document.createElement('button');b.type='button';b.className='chip';b.id='chip-'+pc;b.setAttribute('aria-pressed','false');
+    b.innerHTML='<svg viewBox="-11 -17 22 20" aria-hidden="true"><use href="#art-'+pc+'"/></svg><span class="nm">'+cap(PIECES[pc].name)+'</span><span class="wh" id="wh-'+pc+'"></span>';
+    b.addEventListener('click',e=>tapChip(pc,e));
+    b.addEventListener('pointerdown',e=>{unlock();dragStart(pc,e)});
+    chips.appendChild(b)}
+})();
+
+/* ---------- render ---------- */
+function slotXY(pc,w){const P=PLACES[w],list=piecesAt(w).filter(q=>!special(q,w)),i=list.indexOf(pc);return i<0?null:P.slots[i%P.slots.length]}
+function renderAnimals(){
+  for(const a of ANIMALS){const n=S.present[a];
+    for(const id of BODY[a]){const g=anEl[id],sp=SPOT[id],xy=(n&&sp[n.at])||sp.away;
+      g.style.transform='translate('+xy[0]+'px,'+xy[1]+'px) scale('+xy[2]+',1)';
+      g.style.opacity=n?1:0}}
+  const lie=S.present.dog&&S.present.dog.at==='hearth'&&has('blanket','hearth');
+  anEl.dog.firstChild.setAttribute('href',lie?'#art-dog-lie':'#art-dog-sit');
+}
+function renderPieces(){
+  for(const pc in PIECES){const g=pcEl[pc],w=S.where[pc],xy=w&&!special(pc,w)?slotXY(pc,w):null;
+    if(xy){g.style.transform='translate('+xy[0]+'px,'+(xy[1]-(S.hand===pc?7:0))+'px)';g.style.opacity=1}else g.style.opacity=0;
+    g.classList.toggle('held',S.hand===pc)}
+  $('spread').style.opacity=has('blanket','hearth')?1:0;
+  $('dishWater').style.opacity=has('water','dish')?1:0;
+}
+function whereWords(pc){const w=S.where[pc];return S.hand===pc?'in hand':!w?'in the tray':w==='floor'?'on the floor':PLACES[w].short}
+function renderUI(){
+  svg.classList.toggle('arming',!!S.hand);
+  for(const pc in PIECES){const b=$('chip-'+pc),w=S.where[pc];
+    b.setAttribute('aria-pressed',S.hand===pc?'true':'false');b.classList.toggle('outp',!!w&&S.hand!==pc);
+    $('wh-'+pc).textContent=whereWords(pc);
+    b.setAttribute('aria-label',cap(PIECES[pc].name)+', '+whereWords(pc)+'. '+(S.hand===pc?(w?'Press again to put it away.':'Press again to put it down.'):'Press to pick it up.'))}
+  for(const id in PLACES){const P=PLACES[id],g=plEl[id];
+    if(id==='flame'){g.setAttribute('aria-label',['Hearth, out. Press to light it.','Hearth, lit and open. Press to put the cover on.','Hearth, lit and covered. Press to put it out.'][S.hearth]);continue}
+    const held=piecesAt(id).map(p=>PIECES[p].name),here=ANIMALS.filter(a=>S.present[a]&&S.present[a].at===id);
+    g.setAttribute('aria-label',cap(P.name)+'. '+(held.length?'Holds the '+held.join(' and the ')+'. ':'Empty. ')+(here.length?'Someone is here. ':'')+(S.hand?(P.noDrop?'':'Press to set the '+PIECES[S.hand].name+' here.'):(held.length?'Press to pick up.':'Press to hear what it feels.')));
+    if(id==='floor'){const on=held.length>0;g.setAttribute('tabindex',on?0:-1);g.style.display=on?'':'none'}}
+  $('cue').textContent=['tap to light','tap to cover',''][S.hearth];
+  const h=Math.floor(S.t/60),m=S.t%60,hh=S.t/60;
+  $('clock').textContent=(h%12||12)+':'+(m<10?'0':'')+m+(h<12?' am':' pm');
+  const ph=hh<6?'before dawn':hh<8?'first light':hh<11.5?'morning':hh<13.5?'midday':hh<17?'afternoon':hh<19?'evening':hh<20.5?'dusk':'night';
+  $('phase').textContent=ph;$('dayN').textContent='day '+S.day;
+  const sl=$('t');if(+sl.value!==S.t)sl.value=S.t;sl.setAttribute('aria-valuetext',$('clock').textContent+', '+ph);
+}
+function renderTally(){
+  const ol=$('tally');ol.textContent='';
+  for(const L of S.tally){const li=document.createElement('li'),d=document.createElement('span');d.className='dot';d.style.background=L.col;
+    li.appendChild(d);li.appendChild(document.createTextNode(lineOf(L)));ol.appendChild(li)}
+  $('notedTxt').textContent=S.tally.length?lineOf(S.tally[0]):'nothing yet';
+}
+function nowLine(){
+  const p=S.present,out=[];
+  if(p.finch)out.push('Finches are on the window feeder.');
+  if(p.squirrel)out.push(p.squirrel.at==='feeder'?'The squirrel is in the seed.':dogOut(S.t)?'The squirrel waits on the fence while the dog is out.':'The squirrel is on the fence, looking.');
+  if(p.wren)out.push('A wren is in the water dish.');
+  if(p.owl)out.push('An owl sits on the fence perch.');
+  if(p.raccoon)out.push('A raccoon is on the porch step.');
+  out.push(p.cat.at==='shelf'?'The cat has the high shelf.':'The cat watches from the sill.');
+  out.push(p.dog.at==='yard'?'The dog is out with the ball.':p.dog.at==='hearth'?(has('blanket','hearth')?'The dog is curled on the blanket by the hearth.':'The dog sits by the covered hearth.'):S.hearth===1?'The dog keeps back from the open flame.':'The dog waits by the door.');
+  return out.join(' ');
+}
+const say=s=>{$('now').textContent=s};
+function render(o){o=o||{};renderSky();renderAnimals();renderPieces();renderUI();renderTally();if(!o.keepSay)say(nowLine())}
+function describe(id){const P=PLACES[id],here=ANIMALS.filter(a=>S.present[a]&&S.present[a].at===id);
+  return cap(P.name)+'. '+(here.length?'Right now it feels '+FEEL[here[0]]+'.':P.idle)}
+function ping(id){const g=plEl[id];if(!g)return;g.classList.remove('ping');void g.getBoundingClientRect();g.classList.add('ping');setTimeout(()=>g.classList.remove('ping'),RM.matches?500:950)}
+
+/* ---------- sound: small synth voices, only after a tap ---------- */
+let ac=null,master=null,muted=false,played=0,noiseBuf=null;
+function unlock(){if(muted)return;try{if(!ac){const C=window.AudioContext||window.webkitAudioContext;if(!C)return;ac=new C();master=ac.createGain();master.gain.value=.55;master.connect(ac.destination)}if(ac.state==='suspended'){const pr=ac.resume();if(pr&&pr.catch)pr.catch(()=>{})}}catch(e){ac=null}}
+function tone(f0,f1,at,dur,type,g){const o=ac.createOscillator(),v=ac.createGain(),t=ac.currentTime+at;o.type=type||'sine';
+  o.frequency.setValueAtTime(f0,t);if(f1!==f0)o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  v.gain.setValueAtTime(.0001,t);v.gain.exponentialRampToValueAtTime(g,t+Math.min(.02,dur/3));v.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(v);v.connect(master);o.start(t);o.stop(t+dur+.03)}
+function hiss(at,dur,g,freq,q){if(!noiseBuf){noiseBuf=ac.createBuffer(1,ac.sampleRate*.4,ac.sampleRate);const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}
+  const s=ac.createBufferSource(),f=ac.createBiquadFilter(),v=ac.createGain(),t=ac.currentTime+at;s.buffer=noiseBuf;f.type='bandpass';f.frequency.value=freq;f.Q.value=q;
+  v.gain.setValueAtTime(.0001,t);v.gain.exponentialRampToValueAtTime(g,t+.01);v.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  s.connect(f);f.connect(v);v.connect(master);s.start(t);s.stop(t+dur+.03)}
+const SND={
+  finch(){tone(3200,4300,0,.07,'sine',.11);tone(3600,4700,.1,.06,'sine',.11);tone(3000,4100,.22,.08,'sine',.09)},
+  wren(){for(let i=0;i<5;i++)tone(2500+i*130,2900+i*130,i*.055,.04,'triangle',.08)},
+  squirrel(){for(let i=0;i<4;i++)tone(940,700,i*.075,.035,'square',.045)},
+  owl(){tone(340,300,0,.3,'sine',.2);tone(330,288,.42,.42,'sine',.2)},
+  raccoon(){tone(95,60,0,.11,'sine',.3);tone(88,55,.24,.11,'sine',.26)},
+  dog(){hiss(0,.13,.14,480,.8);tone(175,118,0,.13,'triangle',.13)},
+  cat(){tone(520,790,0,.14,'sine',.11);tone(790,690,.14,.1,'sine',.08)},
+  bell(){tone(1568,1568,0,.95,'sine',.15);tone(2349,2349,0,.6,'sine',.06);tone(3136,3136,0,.35,'sine',.035)},
+  thud(){tone(140,55,0,.15,'sine',.3)},
+  set(){tone(520,410,0,.06,'triangle',.12)},
+  plip(){tone(700,1500,0,.08,'sine',.13)},
+  light(){for(let i=0;i<5;i++)hiss(i*.06+Math.random()*.03,.03,.1,2400,2)},
+  cover(){tone(2600,2500,0,.13,'sine',.07);tone(3900,3800,0,.08,'sine',.035)},
+  out(){hiss(0,.28,.07,900,.5)},
+  no(){tone(220,170,0,.1,'triangle',.1)},
+  tick(){tone(880,880,0,.045,'sine',.06)}
+};
+function snd(k,delay){if(muted||!ac)return;try{if(delay)setTimeout(()=>{if(!muted)try{SND[k]();played++}catch(e){}},delay*1000);else{SND[k]();played++}}catch(e){}}
+function fxPlay(arr){
+  let d=0,n=0;
+  for(const a of arr){const p=S.present[a];if(!p)continue;if(n<2){snd(a,d);d+=.3;n++}if(PLACES[p.at])ping(p.at)}
+  for(const f of S.fx){if(f.k==='knock'){snd('thud',d+.3);if(f.pc==='bell')snd('bell',d+.42);ping('shelf')}else if(f.k==='ring')snd('bell',d+.15);else if(f.k==='fetch')snd('dog',.15)}
+  S.fx.length=0;
+}
+
+/* ---------- actions ---------- */
+let fetchT=0,lastChip=null,suppress=false;
+function scheduleFetch(){clearTimeout(fetchT);
+  if(S.where.ball==='floor'&&S.present.dog.at!=='yard'&&piecesAt('hearth').length<2)fetchT=setTimeout(()=>settle({}),RM.matches?300:1300)}
+function settle(o){const arr=step(o);render(o);fxPlay(arr);scheduleFetch()}
+function setTime(t1){
+  t1=clamp(Math.round(t1/15)*15,300,1380);if(t1===S.t)return;let arr=[];
+  if(t1>S.t){while(S.t<t1){S.t+=15;arr=step({})}}else{S.t=t1;arr=step({back:true})}
+  render({});fxPlay(arr);scheduleFetch();
+}
+const HINT={
+  seed:w=>w==='feeder'?' Finches come at first light; the squirrel later, if nobody is near.':PLACES[w].out?' Seed left outside may bring a night visitor to the porch step.':'',
+  water:w=>w==='dish'?' A wren comes around midday if the yard is quiet.':PLACES[w].out?' Water left outside may bring a night visitor to the porch step.':'',
+  blanket:w=>w==='hearth'?' The dog settles here once the hearth is lit and covered.':'',
+  bell:()=>' It rings when this place feels a landing.',
+  ball:w=>PLACES[w].out?' By day the dog follows it out, and the yard is less quiet.':' The dog stays in.',
+  stone:()=>''
+};
+function setDown(pc,id){
+  const P=PLACES[id];
+  if(P.noDrop){say(id==='flame'?"The hearth holds the flame, not pieces. Try the dog's spot beside it.":'Pieces only reach the floor on their own. Choose a place with a tag.');snd('no');return false}
+  if(S.where[pc]!==id&&piecesAt(id).length>=2){say(cap(P.the)+' already holds two pieces. Move one first.');snd('no');return false}
+  S.where[pc]=id;S.order[pc]=++seq;S.hand=null;
+  snd(pc==='bell'?'bell':pc==='water'?'plip':'set');
+  say(cap(PIECES[pc].name)+' set '+P.prep+'.'+(id==='shelf'?' The cat will have opinions.':HINT[pc](id)));
+  settle({keepSay:true});
+  if(lastChip){const b=$('chip-'+lastChip);lastChip=null;if(b)b.focus()}
+  return true;
+}
+function tapChip(pc,e){
+  if(suppress){suppress=false;return}
+  unlock();const nm=cap(PIECES[pc].name);
+  if(S.hand===pc){S.hand=null;
+    if(S.where[pc]){S.where[pc]=null;snd('set');say(nm+' is back in the tray.');settle({keepSay:true})}else render({});
+    return}
+  S.hand=pc;snd('tick');
+  say(nm+' in hand. Tap a place in the picture to set it down.'+(S.where[pc]?' Tap its button again to put it away.':''));
+  render({keepSay:true});
+  if(e&&e.detail===0){lastChip=pc;plEl[PIECES[pc].home].focus()}
+}
+function cycleHearth(){
+  S.hearth=(S.hearth+1)%3;snd(['out','light','cover'][S.hearth]);
+  say(['The hearth is out.','The hearth is lit and open. The dog keeps back. Tap again to put the cover on.','The hearth is lit and covered. The dog comes to its spot.'][S.hearth]);
+  settle({keepSay:true});
+}
+function tapPlace(id){
+  if(suppress){suppress=false;return}
+  unlock();
+  if(S.hand){setDown(S.hand,id);return}
+  if(id==='flame'){cycleHearth();return}
+  const P=PLACES[id],top=piecesAt(id).pop();
+  if(top){S.hand=top;snd('tick');say(cap(PIECES[top].name)+' picked up from '+P.the+'. Tap a place to set it down, or its button below to put it away.');render({keepSay:true});return}
+  snd('tick');ping(id);say(describe(id));
+}
+$('ui').addEventListener('click',e=>{const g=e.target.closest('.place');if(g)tapPlace(g.dataset.pl)});
+$('ui').addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const g=e.target.closest('.place');if(g){e.preventDefault();tapPlace(g.dataset.pl)}});
+$('ui').addEventListener('pointerdown',e=>{unlock();const g=e.target.closest('.place');if(!g||S.hand)return;const top=piecesAt(g.dataset.pl).pop();if(top)dragStart(top,e)});
+document.addEventListener('keydown',e=>{unlock();if(e.key==='Escape'&&S.hand){S.hand=null;lastChip=null;render({})}});
+
+/* drag a piece from the tray or from the picture */
+let drag=null;const ghost=$('ghost');
+function dragStart(pc,e){drag={pc,x:e.clientX,y:e.clientY,on:false,off:e.pointerType==='touch'?34:0}}
+function placeAt(cx,cy){const m=svg.getScreenCTM();let best=null,bd=1e9;
+  for(const id in PLACES){const P=PLACES[id];if(P.noDrop)continue;const d=Math.hypot(cx-(m.a*P.x+m.e),cy-(m.d*P.y+m.f));if(d<bd){bd=d;best=id}}
+  return bd<=44*m.a+8?best:null}
+window.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  if(!drag.on&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>8){drag.on=true;S.hand=drag.pc;$('ghostUse').setAttribute('href','#art-'+drag.pc);ghost.style.display='block';
+    say(cap(PIECES[drag.pc].name)+' in hand. Let go over a place.');render({keepSay:true})}
+  if(drag.on)ghost.style.transform='translate('+e.clientX+'px,'+(e.clientY-drag.off)+'px)';
+});
+window.addEventListener('pointerup',e=>{
+  unlock();if(!drag)return;const d=drag;drag=null;if(!d.on)return;
+  ghost.style.display='none';suppress=true;setTimeout(()=>{suppress=false},50);
+  const id=placeAt(e.clientX,e.clientY-d.off);
+  if(id&&id!==S.where[d.pc])setDown(d.pc,id);
+  else if(id){S.hand=null;render({})}
+  else say(cap(PIECES[d.pc].name)+' is still in hand. Tap a place to set it down.');
+});
+window.addEventListener('pointercancel',()=>{if(drag){drag=null;ghost.style.display='none'}});
+
+$('t').addEventListener('input',e=>{setTime(+e.target.value)});
+$('t').addEventListener('pointerdown',unlock);
+$('next').addEventListener('click',()=>{unlock();S.day++;S.seen.clear();S.hearth=0;S.hand=null;S.t=330;step({back:true});S.fx.length=0;render({keepSay:true});
+  say('A new morning, with the hearth put out overnight. The pieces are where they ended up.');snd('tick')});
+$('mute').addEventListener('click',()=>{muted=!muted;const b=$('mute');b.setAttribute('aria-pressed',muted?'true':'false');
+  b.setAttribute('aria-label',muted?'Sound off. Tap to unmute.':'Sound on. Tap to mute.');
+  $('muteWaves').setAttribute('d',muted?'M11 6l4 4M15 6l-4 4':'M11.5 5.5a3.5 3.5 0 010 5M13 3.5a6 6 0 010 9');
+  if(!muted){unlock();snd('tick')}});
+
+/* ---------- start mid-moment: first light, seed already out ---------- */
+step({});S.fx.length=0;render({});
+requestAnimationFrame(()=>requestAnimationFrame(()=>svg.classList.remove('boot')));
+
+window.__cr={S,PLACES,who,setTime,settle,
+  xy(id){const m=svg.getScreenCTM(),P=PLACES[id];return[m.a*P.x+m.e,m.d*P.y+m.f]},
+  audio(){return{state:ac?ac.state:'none',played,muted}}};
+})();
+</script>
+<script>
+/* PointCast: remember that this window was opened, so it is lit back on the street. Stays in this browser. */
+try{var k='bb-street-v1',a=JSON.parse(localStorage.getItem(k)||'[]');if(!Array.isArray(a))a=[];if(a.indexOf('creatures')<0){a.push('creatures');localStorage.setItem(k,JSON.stringify(a))}}catch(e){}
+</script>
+</body>
+</html>

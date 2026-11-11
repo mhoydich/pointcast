@@ -63,7 +63,7 @@ test('the post-claim card makes one deterministic next-door choice and records f
     assert.match(analytics, /const isPageview = event === 'pageview'/);
     assert.match(live, new RegExp(event.replace('.', '\\.'), 'g'));
   }
-  for (const href of ['/bench', '/collect', '/drum', '/me']) assert.match(chooser, new RegExp(`href: '${href}'`));
+  for (const href of ['/bench', '/collect/kennel', '/drum', '/me']) assert.match(chooser, new RegExp(`href: '${href}'`));
   assert.match(scorer, /Front door/);
   assert.match(scorer, /sevenDayReturn/);
 });

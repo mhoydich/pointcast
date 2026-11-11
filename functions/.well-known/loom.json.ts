@@ -1,5 +1,8 @@
 /**
- * /.well-known/loom.json — this site's Loom node card, for peer handshakes.
+ * /.well-known/loom.json — this site's Loom node card: the v1.1 relay manifest
+ * (which sites this Loom relays for, where to read and append) plus the v2
+ * peer roll. It is a Function rather than a static page because the peer roll
+ * changes as sites shake hands.
  *
  * Another site that runs a Loom (or anything speaking pointcast.loom/vN)
  * serves the same file on its own origin, then POSTs

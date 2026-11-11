@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baby Bonfire — Paired Hearths</title>
+<meta name="description" content="Two rooms in two homes. Light one hearth and the other one glows. A concept sketch from Baby Bonfire, an open exploration on PointCast. Nothing is for sale.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://pointcast.xyz/baby-bonfire/paired-hearths/">
+<link rel="alternate" type="application/json" href="/baby-bonfire.json" title="Baby Bonfire, machine-readable">
+<meta property="og:title" content="Paired Hearths · Baby Bonfire">
+<meta property="og:description" content="Two rooms in two homes. Light one hearth and the other one glows.">
+<meta property="og:url" content="https://pointcast.xyz/baby-bonfire/paired-hearths/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://pointcast.xyz/baby-bonfire/paired-hearths/card.png?v=28c3e19b7a">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Paired Hearths, a Baby Bonfire concept sketch. A drawing of a small house on a dusk street with its window lit.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Paired Hearths · Baby Bonfire">
+<meta name="twitter:description" content="Two rooms in two homes. Light one hearth and the other one glows.">
+<meta name="twitter:image" content="https://pointcast.xyz/baby-bonfire/paired-hearths/card.png?v=28c3e19b7a">
+<meta name="twitter:image:alt" content="Paired Hearths, a Baby Bonfire concept sketch. A drawing of a small house on a dusk street with its window lit.">
+<style>
+:root {
+  /* Layout: two room cards in one stage (stacked on phone, side by side on desktop), a spark canvas laid over both. Single dusk world, one theme by choice. */
+  color-scheme: dark;
+  --dusk: #121726;
+  --wall: #3b4359;
+  --stone: #8e9096;
+  --clay: #ddd2c2;
+  --ember: #ff8a3c;
+  --flame: #ffd08a;
+  --ink: #ece6da;
+  --ink-dim: #98a0b4;
+  --line: rgba(236, 230, 218, .14);
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: radial-gradient(120% 80% at 50% 0%, #1b2238 0%, var(--dusk) 60%) var(--dusk);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100%;
+}
+.wrap { max-width: 1000px; margin: 0 auto; padding: 14px 16px 28px; display: flex; flex-direction: column; gap: 12px; }
+header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.eyebrow { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-dim); margin: 0 0 2px; }
+h1 { font-family: var(--font-display); font-weight: 400; font-style: italic; font-size: 24px; line-height: 1.1; margin: 0; text-wrap: balance; }
+.controls { display: flex; align-items: center; gap: 8px; }
+button { font: inherit; color: inherit; }
+.pill {
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 10px;
+  background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 20px; cursor: pointer;
+  font-size: 13px; letter-spacing: .04em;
+}
+.pill .track { width: 26px; height: 14px; border-radius: 7px; background: rgba(255,255,255,.14); position: relative; transition: background .3s; }
+.pill .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink-dim); transition: transform .3s, background .3s; }
+.pill[aria-checked="true"] .track { background: rgba(255,138,60,.35); }
+.pill[aria-checked="true"] .track::after { transform: translateX(12px); background: var(--ember); }
+.icon { width: 40px; height: 40px; display: grid; place-items: center; background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; padding: 0; }
+.icon svg { width: 18px; height: 18px; }
+.icon .slash { display: none; }
+.icon[aria-pressed="true"] .slash { display: block; }
+.icon[aria-pressed="true"] .waves { display: none; }
+:focus-visible { outline: 2px solid var(--flame); outline-offset: 3px; }
+
+#hint {
+  margin: 0; min-height: 2.8em; font-family: var(--font-display); font-style: italic; font-size: 16px;
+  color: var(--flame); transition: opacity .5s; text-wrap: balance;
+}
+#hint.out { opacity: 0; }
+
+.stage { position: relative; display: grid; grid-template-columns: 1fr; gap: 18px; }
+#sparks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+.home { --L: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.home-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.name {
+  flex: 1 1 auto; min-width: 0; width: 100%; height: 40px; padding: 0 2px;
+  background: transparent; border: 0; border-bottom: 1px solid transparent; border-radius: 0;
+  color: var(--ink); font-family: var(--font-display); font-size: 22px;
+}
+.name:hover, .name:focus { border-bottom-color: var(--line); outline: none; }
+.name:focus-visible { border-bottom-color: var(--flame); }
+.when { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.when-label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); min-width: 68px; text-align: right; }
+.dial { width: 44px; height: 44px; border-radius: 50%; cursor: grab; touch-action: none; flex: 0 0 auto; }
+.dial svg { display: block; width: 44px; height: 44px; }
+.room {
+  display: block; width: 100%; height: auto; border-radius: 14px; background: var(--wall);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.06),
+              0 0 calc(var(--L) * 70px) calc(var(--L) * 5px) rgba(255, 140, 60, calc(var(--L) * .32));
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.room .hit, .room .lid, .room .door { cursor: pointer; }
+.room .hit, .room .lid { touch-action: none; }
+.room .lid.on { pointer-events: none; }
+.room .hit:focus-visible, .room .lid:focus-visible, .room .door:focus-visible { outline: 2px solid var(--flame); outline-offset: 2px; }
+.ledger { margin: 0; padding: 0 2px; font-size: 13px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+footer { margin-top: 6px; font-size: 12px; color: var(--ink-dim); letter-spacing: .03em; }
+
+@media (min-width: 760px) {
+  .wrap { padding: 28px 24px 40px; gap: 18px; }
+  h1 { font-size: 30px; }
+  .stage { grid-template-columns: 1fr 1fr; gap: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #hint, .pill .track, .pill .track::after { transition: none; }
+}
+</style>
+<style>
+/* PointCast: the way back to the Baby Bonfire street. Added on import; the scene below is unchanged. */
+.bb-back{display:block;box-sizing:border-box;height:32px;padding:9px 16px 0;font:600 12px/14px system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.02em;color:inherit;text-decoration:none;opacity:.82}
+.bb-back:hover,.bb-back:focus-visible{opacity:1;text-decoration:underline}
+</style>
+</head>
+<body>
+<a class="bb-back" href="/baby-bonfire/">&larr; Back to the street</a>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">Baby Bonfire</p>
+      <h1>Paired Hearths</h1>
+    </div>
+    <div class="controls">
+      <button class="pill" id="away" type="button" role="switch" aria-checked="false"><span class="track"></span>Away</button>
+      <button class="icon" id="mute" type="button" aria-pressed="false" aria-label="Mute sound">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 8v4h3l4 3.5v-11L6 8H3z"></path>
+          <g class="waves"><path d="M13 7.5c1 .7 1.5 1.5 1.5 2.5s-.5 1.8-1.5 2.5"></path><path d="M15 5c1.8 1.3 2.6 3 2.6 5s-.8 3.7-2.6 5"></path></g>
+          <path class="slash" d="M13 7.5l5 5M18 7.5l-5 5"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <p id="hint" aria-live="polite">Tap a hearth to light it.</p>
+
+  <main class="stage" id="stage">
+    <canvas id="sparks" aria-hidden="true"></canvas>
+  </main>
+
+  <footer>Concept sketch — Hoydich Enterprises, Nov 2026</footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var RM = false;
+  try { RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+  /* ---------- storage (localStorage with in-memory fallback) ---------- */
+  var store = (function () {
+    var K = 'paired-hearths-v1', mem = {};
+    try { var raw = window.localStorage.getItem(K); if (raw) mem = JSON.parse(raw) || {}; } catch (e) { mem = {}; }
+    return {
+      get: function (k, d) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : d; },
+      set: function (k, v) { mem[k] = v; try { window.localStorage.setItem(K, JSON.stringify(mem)); } catch (e) {} }
+    };
+  })();
+
+  /* ---------- small helpers ---------- */
+  function $(s) { return document.querySelector(s); }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function hex(c) { return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]; }
+  function mix(a, b, t) { return 'rgb(' + Math.round(lerp(a[0], b[0], t)) + ',' + Math.round(lerp(a[1], b[1], t)) + ',' + Math.round(lerp(a[2], b[2], t)) + ')'; }
+  function ease(cur, tgt, dt, tau) { return cur + (tgt - cur) * (1 - Math.exp(-dt / tau)); }
+  function keyNum(keys, t) {
+    for (var i = 1; i < keys.length; i++) if (t <= keys[i][0]) {
+      var u = (t - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]);
+      return [i - 1, i, u];
+    }
+    return [keys.length - 2, keys.length - 1, 1];
+  }
+
+  var SKY = [
+    [0, '#080c1f', '#141c3a'], [4.5, '#0b1026', '#1c2548'], [6, '#33407a', '#f0a678'], [8, '#6fa5d6', '#e4dcc8'],
+    [12.5, '#4f93d2', '#bcd9ee'], [16.5, '#5d8fc6', '#e9d2a6'], [18.5, '#4a5c9c', '#f29c62'], [20, '#1f2752', '#a8566a'],
+    [21.5, '#0b1026', '#1c2548'], [24, '#080c1f', '#141c3a']
+  ].map(function (k) { return [k[0], hex(k[1]), hex(k[2])]; });
+  var DAY = [[0, 0], [5, 0], [6.5, .45], [8.5, 1], [16.5, 1], [18.5, .6], [20, .2], [21.5, 0], [24, 0]];
+  var RING_COLD = hex('#5f6168'), RING_WARM = hex('#ffab5e');
+  var SIL_NIGHT = hex('#0a0e1c'), SIL_DAY = hex('#48604f');
+
+  function timeWord(t) {
+    if (t >= 5 && t < 11) return 'morning';
+    if (t >= 11 && t < 14) return 'midday';
+    if (t >= 14 && t < 17.5) return 'afternoon';
+    if (t >= 17.5 && t < 21) return 'evening';
+    return 'night';
+  }
+
+  /* ---------- room markup ---------- */
+  var FLAME_X = [147, 172, 197], FLAME_S = [0.72, 1.14, 0.72];
+  var LID_ON = { x: 172, y: 125 }, LID_REST = { x: 270, y: 220 };
+  var BODY = 'M130 205 C124 168 142 130 160 126 L184 126 C202 130 220 168 214 205 Q172 216 130 205 Z';
+  var ARCHES = 'M162 198 V170 A10 10 0 0 1 182 170 V198 Z M140 197 V175 A7 7 0 0 1 154 175 V197 Z M190 197 V175 A7 7 0 0 1 204 175 V197 Z';
+
+  function roomMarkup(id, i) {
+    var sil = i === 0
+      ? 'M20 132 V118 Q36 104 52 112 Q66 100 82 110 Q94 104 104 112 V132 Z'
+      : 'M20 132 V116 H34 V108 L42 100 L50 108 V118 H62 V104 H78 V114 H88 V108 H104 V132 Z';
+    var stars = [[30, 40], [47, 58], [62, 36], [78, 50], [92, 38], [88, 72], [38, 80]].map(function (p) {
+      return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r=".8" fill="#fff"/>';
+    }).join('');
+    var flames = FLAME_X.map(function (x, k) {
+      return '<g id="f' + k + '-' + id + '"><path d="M0 0 C-9 -6 -7 -18 0 -31 C7 -18 9 -6 0 0 Z" fill="url(#flg-' + id + ')"/>' +
+        '<path d="M0 -1 C-4 -4 -3.5 -10 0 -16 C3.5 -10 4 -4 0 -1 Z" fill="#fff4cf" opacity=".9"/></g>';
+    }).join('');
+    return '' +
+    '<svg class="room" id="room-' + id + '" viewBox="0 0 360 244" role="group" aria-label="Room corner with a window, a shelf, a stone tile and a small hearth">' +
+    '<defs>' +
+      '<linearGradient id="sky-' + id + '" x1="0" y1="0" x2="0" y2="1"><stop id="skyT-' + id + '" offset="0" stop-color="#0b1026"/><stop id="skyB-' + id + '" offset="1" stop-color="#1c2548"/></linearGradient>' +
+      '<linearGradient id="clay-' + id + '" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b3a796"/><stop offset=".32" stop-color="#e9dfd0"/><stop offset=".7" stop-color="#cfc3b2"/><stop offset="1" stop-color="#93877a"/></linearGradient>' +
+      '<radialGradient id="wg-' + id + '" cx="172" cy="176" r="175" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffb062" stop-opacity=".62"/><stop offset=".42" stop-color="#ff8136" stop-opacity=".22"/><stop offset="1" stop-color="#ff6a20" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="ag-' + id + '" cx="172" cy="202" r="52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffe2a6"/><stop offset=".5" stop-color="#ff9a44"/><stop offset="1" stop-color="#8a3212"/></radialGradient>' +
+      '<linearGradient id="flg-' + id + '" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffe9a8"/><stop offset=".45" stop-color="#ffb648"/><stop offset="1" stop-color="#e2531c"/></linearGradient>' +
+      '<radialGradient id="pool-' + id + '" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffb468" stop-opacity=".7"/><stop offset="1" stop-color="#ff8a3c" stop-opacity="0"/></radialGradient>' +
+      '<radialGradient id="em-' + id + '" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd9a0"/><stop offset=".3" stop-color="#ff8a3c" stop-opacity=".8"/><stop offset="1" stop-color="#ff6a20" stop-opacity="0"/></radialGradient>' +
+      '<clipPath id="win-' + id + '"><rect x="20" y="26" width="84" height="106"/></clipPath>' +
+      '<clipPath id="arch-' + id + '"><path d="' + ARCHES + '"/></clipPath>' +
+    '</defs>' +
+    /* wall and corner */
+    '<rect width="360" height="244" fill="#3b4359"/>' +
+    '<rect x="292" width="68" height="244" fill="#313950"/>' +
+    '<path d="M292 0V244" stroke="#262d40" stroke-width="1.5"/>' +
+    /* door */
+    '<rect x="302" y="58" width="50" height="190" fill="#252c3f"/>' +
+    '<rect x="305" y="61" width="44" height="186" fill="#0d111d"/>' +
+    '<g class="door" id="door-' + id + '"' + (i === 1 ? ' role="button" tabindex="0" aria-label="Door. Step out or come home."' : ' aria-hidden="true"') + '>' +
+      '<g id="doorp-' + id + '"><rect x="305" y="61" width="44" height="186" fill="#4b526a"/>' +
+      '<rect x="311" y="69" width="32" height="70" fill="none" stroke="#3b4258" stroke-width="1.5"/>' +
+      '<rect x="311" y="149" width="32" height="92" fill="none" stroke="#3b4258" stroke-width="1.5"/>' +
+      '<circle cx="311" cy="145" r="2.4" fill="#c9a56a"/></g>' +
+      '<rect x="300" y="56" width="54" height="190" fill="transparent"/>' +
+    '</g>' +
+    /* shelf */
+    '<rect x="56" y="233" width="5" height="11" fill="#3f342c"/><rect x="254" y="233" width="5" height="11" fill="#3f342c"/>' +
+    '<rect x="28" y="224" width="262" height="9" rx="1" fill="#5c4b3e"/>' +
+    '<rect x="28" y="224" width="262" height="1.4" fill="#7d6855"/>' +
+    /* stone tile, the "place" */
+    '<path d="M106 198 H238 L252 216 H92 Z" fill="#8e9096"/>' +
+    '<rect x="92" y="216" width="160" height="8" fill="#696b72"/>' +
+    '<path d="M92 216 H252" stroke="#a7a9ae" stroke-width=".8"/>' +
+    '<g fill="#7b7d84"><circle cx="112" cy="204" r=".9"/><circle cx="230" cy="202" r=".8"/><circle cx="240" cy="212" r="1"/><circle cx="102" cy="212" r=".8"/><circle cx="121" cy="213" r=".7"/></g>' +
+    '<ellipse id="ringg-' + id + '" cx="172" cy="207" rx="60" ry="7.6" fill="none" stroke="#ff9a4a" stroke-width="6" opacity="0"/>' +
+    '<ellipse id="ring-' + id + '" cx="172" cy="207" rx="60" ry="7.6" fill="none" stroke="#5f6168" stroke-width="1.6"/>' +
+    /* hearth body */
+    '<path d="' + BODY + '" fill="url(#clay-' + id + ')"/>' +
+    '<path d="M139 196 C136 172 148 142 161 134" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="3" stroke-linecap="round"/>' +
+    '<path d="' + ARCHES + '" fill="#1b1310" stroke="#857a6b" stroke-width="1.6"/>' +
+    '<ellipse cx="172" cy="126" rx="12.5" ry="3.2" fill="#231a15" stroke="#a79b8a" stroke-width="1.2"/>' +
+    /* lid */
+    '<g class="lid on" id="lid-' + id + '" role="button" aria-label="Lid. Put it back to snuff the flame." transform="translate(172 125)">' +
+      '<ellipse cx="0" cy="1.6" rx="16" ry="4.2" fill="#9d9181"/>' +
+      '<ellipse cx="0" cy="0" rx="16" ry="4.2" fill="#e2d8c9"/>' +
+      '<ellipse cx="-3" cy="-.8" rx="8" ry="1.6" fill="#fff" opacity=".35"/>' +
+      '<rect x="-2" y="-5" width="4" height="4" fill="#c6baa9"/>' +
+      '<circle cx="0" cy="-6.4" r="3.4" fill="#d9cebe"/>' +
+      '<rect x="-25" y="-24" width="50" height="38" fill="transparent"/>' +
+    '</g>' +
+    /* night and absence */
+    '<rect id="shade-' + id + '" width="360" height="244" fill="#0b1020" opacity=".4" pointer-events="none"/>' +
+    /* window */
+    '<g pointer-events="none">' +
+      '<g clip-path="url(#win-' + id + ')">' +
+        '<rect x="20" y="26" width="84" height="106" fill="url(#sky-' + id + ')"/>' +
+        '<g id="stars-' + id + '">' + stars + '</g>' +
+        '<circle id="halo-' + id + '" r="17" fill="#fff" opacity=".18"/>' +
+        '<circle id="orb-' + id + '" r="8" fill="#ffe2a8"/>' +
+        '<path id="sil-' + id + '" d="' + sil + '" fill="#0a0e1c"/>' +
+      '</g>' +
+      '<rect x="20" y="26" width="84" height="106" fill="none" stroke="#1e2438" stroke-width="3.5"/>' +
+      '<path d="M62 26V132M20 76H104" stroke="#1e2438" stroke-width="2"/>' +
+      '<rect x="14" y="132" width="96" height="5" rx="1" fill="#262d42"/>' +
+    '</g>' +
+    /* light */
+    '<g pointer-events="none">' +
+      '<rect id="hall-' + id + '" x="305" y="61" width="0" height="186" fill="#f3cc92" opacity="0"/>' +
+      '<rect id="wgl-' + id + '" width="360" height="244" fill="url(#wg-' + id + ')" opacity="0"/>' +
+      '<ellipse id="pl-' + id + '" cx="172" cy="214" rx="118" ry="15" fill="url(#pool-' + id + ')" opacity="0"/>' +
+      '<path id="warm-' + id + '" d="' + BODY + '" fill="#ff9440" opacity="0"/>' +
+      '<g clip-path="url(#arch-' + id + ')">' +
+        '<rect x="126" y="150" width="92" height="58" fill="#1b1310"/>' +
+        '<rect id="agl-' + id + '" x="126" y="150" width="92" height="58" fill="url(#ag-' + id + ')" opacity="0"/>' +
+        '<g id="fl-' + id + '" opacity="0">' + flames + '</g>' +
+      '</g>' +
+      '<path id="rim-' + id + '" d="' + ARCHES + '" fill="none" stroke="#ffc27a" stroke-width="1.2" opacity="0"/>' +
+      '<ellipse id="emh-' + id + '" cx="172" cy="214.4" rx="13" ry="6" fill="url(#em-' + id + ')" opacity="0"/>' +
+      '<circle id="ch-' + id + '" cx="172" cy="118" r="1" fill="none"/>' +
+    '</g>' +
+    /* touch target for the hearth */
+    '<rect class="hit" id="hit-' + id + '" x="116" y="104" width="112" height="118" fill="transparent" role="button" tabindex="0" aria-label="Hearth. Tap to light. Press and hold to breathe on the flame."/>' +
+    '</svg>';
+  }
+
+  function homeMarkup(id, i) {
+    return '<section class="home" id="home-' + id + '">' +
+      '<div class="home-head">' +
+        '<input class="name" id="name-' + id + '" type="text" maxlength="18" autocomplete="off" spellcheck="false" aria-label="Name of this home">' +
+        '<div class="when"><span class="when-label" id="when-' + id + '"></span>' +
+        '<div class="dial" id="dial-' + id + '" role="slider" tabindex="0" aria-label="Time of day" aria-valuemin="0" aria-valuemax="23.5">' +
+          '<svg viewBox="0 0 44 44" aria-hidden="true"><circle id="dface-' + id + '" cx="22" cy="22" r="20" fill="#223"/>' +
+          '<path d="M2 22 A20 20 0 0 0 42 22 Z" fill="#070a14" opacity=".5"/>' +
+          '<circle cx="22" cy="22" r="20" fill="none" stroke="rgba(236,230,218,.25)" stroke-width="1"/>' +
+          '<circle id="ddot-' + id + '" cx="22" cy="8" r="4" fill="#ffe2a8"/></svg>' +
+        '</div></div>' +
+      '</div>' +
+      roomMarkup(id, i) +
+      '<p class="ledger" id="ledger-' + id + '"></p>' +
+    '</section>';
+  }
+
+  /* ---------- state ---------- */
+  var DEFAULT_NAMES = ['Here', 'There'];
+  var stage = $('#stage');
+  var homes = ['a', 'b'].map(function (id, i) {
+    stage.insertAdjacentHTML('beforeend', homeMarkup(id, i));
+    var h = {
+      id: id, i: i,
+      name: String(store.get('name_' + id, DEFAULT_NAMES[i])),
+      time: Number(store.get('time_' + id, i ? 7.5 : 19.5)) || 0,
+      count: Number(store.get('count_' + id, 0)) || 0,
+      last: Number(store.get('last_' + id, 0)) || 0,
+      lit: false, flame: 0, linkOn: false, glow: 0, arriveAt: 0, bloomUntil: 0,
+      ember: false, emberAmt: 0, holding: false, breath: 0, breathT: 0,
+      lidP: 0, drag: null, dragOff: { x: 0, y: 0 }, door: 0, doorTarget: 0,
+      day: 0, awayAmt: 0, ph: i * 1.7, holdTimer: 0, L: 0
+    };
+    var q = function (p) { return document.getElementById(p + '-' + id); };
+    h.el = {
+      home: q('home'), room: q('room'), name: q('name'), when: q('when'), dial: q('dial'), dface: q('dface'), ddot: q('ddot'),
+      skyT: q('skyT'), skyB: q('skyB'), stars: q('stars'), orb: q('orb'), halo: q('halo'), sil: q('sil'),
+      shade: q('shade'), wgl: q('wgl'), pool: q('pl'), warm: q('warm'), agl: q('agl'), fl: q('fl'), rim: q('rim'),
+      f: [q('f0'), q('f1'), q('f2')], ring: q('ring'), ringg: q('ringg'), emh: q('emh'), ch: q('ch'),
+      lid: q('lid'), hit: q('hit'), door: q('door'), doorp: q('doorp'), hall: q('hall'), ledger: q('ledger')
+    };
+    return h;
+  });
+  var A = homes[0], B = homes[1];
+  var away = false, both = 0;
+  function other(h) { return homes[1 - h.i]; }
+  function nm(h) { var n = (h.name || '').trim(); return n || DEFAULT_NAMES[h.i]; }
+
+  /* ---------- hint (one at a time) ---------- */
+  var hintEl = $('#hint'), hintTimer = 0;
+  function hint(text) {
+    if (hintEl.textContent === text) return;
+    clearTimeout(hintTimer);
+    if (RM) { hintEl.textContent = text; return; }
+    hintEl.classList.add('out');
+    hintTimer = setTimeout(function () { hintEl.textContent = text; hintEl.classList.remove('out'); }, 320);
+  }
+
+  /* ---------- ledger ---------- */
+  function relTime(ts) {
+    var now = new Date(), d = new Date(ts), mins = (now - d) / 60000;
+    if (mins < 2) return 'just now';
+    var day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    var days = Math.floor((day0 - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+    if (days <= 0) {
+      var hr = d.getHours();
+      return hr < 5 ? 'in the small hours' : hr < 12 ? 'this morning' : hr < 17 ? 'this afternoon' : hr < 21 ? 'this evening' : 'tonight';
+    }
+    if (days === 1) return 'yesterday';
+    return days + ' days ago';
+  }
+  function ledger(h) {
+    var n = h.count;
+    h.el.ledger.textContent = !n ? 'not yet lit'
+      : 'lit ' + (n === 1 ? 'once' : n === 2 ? 'twice' : n + ' times') + ', last ' + relTime(h.last);
+  }
+
+  /* ---------- sound ---------- */
+  var ac = null, master = null, noiseBuf = null, bedGain = null, breathGain = null;
+  var muted = !!store.get('muted', false);
+  function audio() {
+    if (muted) return null;
+    if (!ac) {
+      try {
+        var C = window.AudioContext || window.webkitAudioContext;
+        if (!C) return null;
+        ac = new C();
+        master = ac.createGain(); master.gain.value = 0.9; master.connect(ac.destination);
+        var len = ac.sampleRate * 2; noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
+        var d = noiseBuf.getChannelData(0), last = 0;
+        for (var i = 0; i < len; i++) { var w = Math.random() * 2 - 1; last = (last + 0.04 * w) / 1.04; d[i] = w * 0.5 + last * 6; }
+        var bed = ac.createBufferSource(); bed.buffer = noiseBuf; bed.loop = true;
+        var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+        bedGain = ac.createGain(); bedGain.gain.value = 0;
+        bed.connect(lp); lp.connect(bedGain); bedGain.connect(master); bed.start();
+        var br = ac.createBufferSource(); br.buffer = noiseBuf; br.loop = true;
+        var bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 760; bp.Q.value = 0.6;
+        breathGain = ac.createGain(); breathGain.gain.value = 0;
+        br.connect(bp); bp.connect(breathGain); breathGain.connect(master); br.start();
+      } catch (e) { ac = null; return null; }
+    }
+    if (ac.state === 'suspended') { try { var p = ac.resume(); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+    return ac;
+  }
+  function out(h) {
+    if (ac.createStereoPanner) { var p = ac.createStereoPanner(); p.pan.value = h.i ? 0.35 : -0.35; p.connect(master); return p; }
+    return master;
+  }
+  function noise(dest, type, f0, f1, q, peak, attack, decay, when) {
+    var t = ac.currentTime + (when || 0), s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+    var f = ac.createBiquadFilter(); f.type = type; f.Q.value = q;
+    f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + attack + decay);
+    var g = ac.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+    s.connect(f); f.connect(g); g.connect(dest);
+    s.start(t, Math.random()); s.stop(t + attack + decay + 0.05);
+  }
+  function tone(dest, freq, peak, decay, when, type) {
+    var t = ac.currentTime + (when || 0), o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + decay + 0.05);
+  }
+  function sStrike(h) { if (!audio()) return; var d = out(h);
+    noise(d, 'bandpass', 3400, 1100, 0.9, 0.32, 0.008, 0.3);
+    noise(d, 'lowpass', 300, 900, 0.5, 0.12, 0.25, 0.9, 0.12); }
+  function sBell(h) { if (!audio()) return; var d = out(h), f = h.i ? 164.81 : 196;
+    [[1, .34, 4.4], [2, .16, 3.1], [2.76, .1, 2.3], [5.4, .04, 1.1], [0.5, .14, 4.8]].forEach(function (p) { tone(d, f * p[0], p[1], p[2]); }); }
+  function sSnuff(h) { if (!audio()) return; var d = out(h);
+    noise(d, 'highpass', 1400, 600, 0.5, 0.14, 0.01, 0.55, 0.1);
+    tone(d, 1320, 0.07, 0.14, 0.1); tone(d, 1975, 0.04, 0.09, 0.1); }
+  function sDoor(h) { if (!audio()) return; var d = out(h);
+    tone(d, 82, 0.3, 0.22); noise(d, 'lowpass', 900, 300, 0.5, 0.1, 0.004, 0.09); }
+  function sPop(h) { if (!ac || muted) return; noise(out(h), 'highpass', 1800 + Math.random() * 2500, 1500, 0.6, 0.02 + Math.random() * 0.05, 0.002, 0.03); }
+  function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+  /* ---------- actions ---------- */
+  function light(h) {
+    if (h.lit) return;
+    if (away && h.i === 1) { hint('Nobody is home. Tap the door to come back.'); return; }
+    var o = other(h);
+    h.lit = true; h.count += 1; h.last = Date.now();
+    store.set('count_' + h.id, h.count); store.set('last_' + h.id, h.last); ledger(h);
+    sStrike(h); buzz(14);
+    o.arriveAt = performance.now() + 1500;
+    h.el.lid.classList.remove('on'); h.el.lid.setAttribute('tabindex', '0');
+    hint(o.lit ? 'Both lit. Sparks drift between the rooms.' : 'Lit. ' + nm(o) + ' will feel it.');
+  }
+  function snuff(h, quiet) {
+    if (!h.lit) return;
+    var o = other(h), wasLinked = o.linkOn;
+    h.lit = false; stopHold(h);
+    o.linkOn = false; o.arriveAt = 0;
+    h.el.lid.classList.add('on'); h.el.lid.removeAttribute('tabindex');
+    if (!quiet) {
+      sSnuff(h); buzz(8);
+      hint(away && h.i === 0 && B.ember ? 'The ember stays on the tile. Tap the door to come home.'
+        : wasLinked && !o.lit ? 'Lid on. The glow in ' + nm(o) + ' fades slowly.' : 'Lid on.');
+    }
+  }
+  function startHold(h) {
+    if (!h.lit || h.holding) return;
+    h.holding = true; h.breathT = 0;
+    hint(other(h).linkOn && !(away && h.i === 0) ? nm(other(h)) + ' pulses with your breath.' : 'Breathing on the flame.');
+  }
+  function stopHold(h) { clearTimeout(h.holdTimer); h.holding = false; }
+
+  var awayBtn = $('#away');
+  function goAway() {
+    if (away) return;
+    away = true; awayBtn.setAttribute('aria-checked', 'true');
+    if (B.lit) snuff(B, true);
+    if (B.linkOn) B.ember = true;
+    sDoor(B);
+    hint(B.ember ? nm(B) + ' is empty. An ember waits on the tile.' : nm(B) + ' is empty. Light ' + nm(A) + '.');
+  }
+  function comeHome() {
+    if (!away) return;
+    away = false; awayBtn.setAttribute('aria-checked', 'false');
+    B.doorTarget = 1; setTimeout(function () { B.doorTarget = 0; }, 1700);
+    sDoor(B);
+    if (B.ember) {
+      B.ember = false; B.bloomUntil = performance.now() + 6500;
+      setTimeout(function () { sBell(B); buzz(10); }, 550);
+      hint('A fire was lit for you while you were out.');
+    } else if (B.linkOn) {
+      setTimeout(function () { sBell(B); }, 550);
+      hint(nm(A) + ' is lit. ' + nm(B) + ' glows.');
+    } else {
+      hint('Home again. The tile is cool.');
+    }
+  }
+  awayBtn.addEventListener('click', function () { audio(); if (away) comeHome(); else goAway(); });
+
+  var muteBtn = $('#mute');
+  function showMute() { muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false'); muteBtn.setAttribute('aria-label', muted ? 'Turn sound on' : 'Mute sound'); }
+  showMute();
+  muteBtn.addEventListener('click', function () {
+    muted = !muted; store.set('muted', muted); showMute();
+    if (ac && master) master.gain.setTargetAtTime(muted ? 0 : 0.9, ac.currentTime, 0.05);
+    if (!muted) audio();
+  });
+
+  /* ---------- time of day ---------- */
+  function applyTime(h) {
+    var t = ((h.time % 24) + 24) % 24, e = h.el;
+    var k = keyNum(SKY, t), top = mix(SKY[k[0]][1], SKY[k[1]][1], k[2]), bot = mix(SKY[k[0]][2], SKY[k[1]][2], k[2]);
+    e.skyT.setAttribute('stop-color', top); e.skyB.setAttribute('stop-color', bot);
+    var kd = keyNum(DAY, t); h.day = lerp(DAY[kd[0]][1], DAY[kd[1]][1], kd[2]);
+    e.stars.setAttribute('opacity', clamp(1 - h.day * 2.2, 0, 1).toFixed(2));
+    e.sil.setAttribute('fill', mix(SIL_NIGHT, SIL_DAY, h.day));
+    var sun = t >= 5.5 && t <= 19.5, u = sun ? (t - 5.5) / 14 : (((t - 19.5) + 24) % 24) / 10;
+    var x = 24 + u * 76, y = 122 - Math.sin(Math.PI * u) * 80;
+    e.orb.setAttribute('cx', x.toFixed(1)); e.orb.setAttribute('cy', y.toFixed(1));
+    e.halo.setAttribute('cx', x.toFixed(1)); e.halo.setAttribute('cy', y.toFixed(1));
+    e.orb.setAttribute('r', sun ? 8 : 6); e.orb.setAttribute('fill', sun ? '#ffe6b0' : '#e6ebf5');
+    e.halo.setAttribute('opacity', sun ? .22 : .1);
+    var th = t / 24 * Math.PI * 2;
+    e.ddot.setAttribute('cx', (22 - 14 * Math.sin(th)).toFixed(1)); e.ddot.setAttribute('cy', (22 + 14 * Math.cos(th)).toFixed(1));
+    e.ddot.setAttribute('fill', sun ? '#ffe6b0' : '#e6ebf5');
+    e.dface.setAttribute('fill', top);
+    var word = timeWord(t); e.when.textContent = word;
+    e.dial.setAttribute('aria-valuenow', t); e.dial.setAttribute('aria-valuetext', word);
+  }
+  function setTime(h, t) { h.time = ((Math.round(t * 4) / 4) % 24 + 24) % 24; store.set('time_' + h.id, h.time); applyTime(h); }
+
+  /* ---------- wiring per home ---------- */
+  function svgPoint(svg, ev) {
+    var m = svg.getScreenCTM(); if (!m) return { x: 0, y: 0 };
+    var p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY; p = p.matrixTransform(m.inverse());
+    return { x: p.x, y: p.y };
+  }
+  function capture(el, ev) { try { el.setPointerCapture(ev.pointerId); } catch (e) {} }
+
+  homes.forEach(function (h) {
+    var e = h.el;
+    e.name.value = h.name;
+    e.name.addEventListener('input', function () { h.name = e.name.value; store.set('name_' + h.id, h.name); });
+    e.name.addEventListener('blur', function () { if (!e.name.value.trim()) { h.name = DEFAULT_NAMES[h.i]; e.name.value = h.name; store.set('name_' + h.id, h.name); } });
+    e.name.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') e.name.blur(); });
+
+    /* dial */
+    var dialDrag = false;
+    function dialAt(ev) {
+      var r = e.dial.getBoundingClientRect(), dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
+      var th = Math.atan2(-dx, dy); if (th < 0) th += Math.PI * 2;
+      setTime(h, th / (Math.PI * 2) * 24);
+    }
+    e.dial.addEventListener('pointerdown', function (ev) { ev.preventDefault(); dialDrag = true; capture(e.dial, ev); e.dial.focus(); dialAt(ev); });
+    e.dial.addEventListener('pointermove', function (ev) { if (dialDrag) dialAt(ev); });
+    e.dial.addEventListener('pointerup', function () { dialDrag = false; });
+    e.dial.addEventListener('pointercancel', function () { dialDrag = false; });
+    e.dial.addEventListener('keydown', function (ev) {
+      var d = ev.key === 'ArrowRight' || ev.key === 'ArrowUp' ? .5 : ev.key === 'ArrowLeft' || ev.key === 'ArrowDown' ? -.5 : ev.key === 'PageUp' ? 3 : ev.key === 'PageDown' ? -3 : 0;
+      if (d) { ev.preventDefault(); setTime(h, h.time + d); }
+    });
+
+    /* hearth: tap to light, hold to breathe */
+    var down = false;
+    e.hit.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault(); audio(); down = true; capture(e.hit, ev);
+      clearTimeout(h.holdTimer);
+      if (h.lit) h.holdTimer = setTimeout(function () { if (down) startHold(h); }, 180);
+    });
+    function release(ev) {
+      if (!down) return; down = false; clearTimeout(h.holdTimer);
+      if (h.holding) { stopHold(h); hint(other(h).lit ? 'Both lit. Sparks drift between the rooms.' : 'Put the lid back to snuff.'); }
+      else if (ev.type === 'pointerup') { if (!h.lit) light(h); else hint('Press and hold to breathe. Lid to snuff.'); }
+    }
+    e.hit.addEventListener('pointerup', release);
+    e.hit.addEventListener('pointercancel', release);
+    e.hit.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      ev.preventDefault(); audio();
+      if (!h.lit) { if (!ev.repeat) light(h); } else if (!ev.repeat) startHold(h);
+    });
+    e.hit.addEventListener('keyup', function (ev) { if ((ev.key === 'Enter' || ev.key === ' ') && h.holding) stopHold(h); });
+    e.room.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+
+    /* lid: tap or drag back to snuff */
+    e.lid.addEventListener('pointerdown', function (ev) {
+      if (!h.lit) return;
+      ev.preventDefault(); audio(); capture(e.lid, ev);
+      var p = svgPoint(e.room, ev);
+      h.drag = { sx: p.x, sy: p.y, x: LID_REST.x, y: LID_REST.y, moved: 0 };
+    });
+    e.lid.addEventListener('pointermove', function (ev) {
+      if (!h.drag) return;
+      var p = svgPoint(e.room, ev), d = h.drag;
+      d.x = clamp(LID_REST.x + (p.x - d.sx), 20, 340); d.y = clamp(LID_REST.y + (p.y - d.sy), 20, 222);
+      d.moved = Math.max(d.moved, Math.abs(p.x - d.sx) + Math.abs(p.y - d.sy));
+    });
+    function lidUp(ev) {
+      var d = h.drag; if (!d) return; h.drag = null;
+      h.dragOff.x = d.x - LID_REST.x; h.dragOff.y = d.y - LID_REST.y;
+      var near = Math.abs(d.x - LID_ON.x) < 48 && d.y < 190;
+      if (ev.type === 'pointerup' && (d.moved < 6 || near)) snuff(h);
+    }
+    e.lid.addEventListener('pointerup', lidUp);
+    e.lid.addEventListener('pointercancel', lidUp);
+    e.lid.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); snuff(h); } });
+
+    /* door (far home only) */
+    if (h.i === 1) {
+      var doorTap = function () { audio(); if (away) comeHome(); else goAway(); };
+      e.door.addEventListener('click', doorTap);
+      e.door.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); doorTap(); } });
+    }
+
+    applyTime(h); ledger(h);
+  });
+  setInterval(function () { homes.forEach(ledger); }, 30000);
+
+  /* ---------- sparks between the rooms ---------- */
+  var cv = $('#sparks'), cx = cv.getContext('2d'), cw = 0, chh = 0, sparks = [], spawnAcc = 0;
+  function sizeCanvas() {
+    var r = stage.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cw = r.width; chh = r.height;
+    cv.width = Math.max(1, Math.round(cw * dpr)); cv.height = Math.max(1, Math.round(chh * dpr));
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  sizeCanvas();
+  window.addEventListener('resize', sizeCanvas);
+  if (window.ResizeObserver) { try { new ResizeObserver(sizeCanvas).observe(stage); } catch (e) {} }
+  function anchor(h, sr) { var r = h.el.ch.getBoundingClientRect(); return { x: r.left + r.width / 2 - sr.left, y: r.top + r.height / 2 - sr.top }; }
+  function drawSparks(dt, t) {
+    cx.clearRect(0, 0, cw, chh);
+    if (both < 0.02 && !sparks.length) return;
+    var sr = stage.getBoundingClientRect(), p0 = anchor(A, sr), p1 = anchor(B, sr);
+    var dx = p1.x - p0.x, dy = p1.y - p0.y, dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    var nx = dy / dist, ny = -dx / dist, bow = Math.min(dist * 0.2, 70);
+    var c = { x: (p0.x + p1.x) / 2 + nx * bow, y: (p0.y + p1.y) / 2 + ny * bow };
+    function at(u) { var v = 1 - u; return { x: v * v * p0.x + 2 * v * u * c.x + u * u * p1.x, y: v * v * p0.y + 2 * v * u * c.y + u * u * p1.y }; }
+    cx.globalCompositeOperation = 'lighter';
+    if (RM) {
+      for (var i = 1; i < 24; i++) { var q = at(i / 24); cx.fillStyle = 'rgba(255,190,120,' + (0.5 * both * Math.sin(Math.PI * i / 24)).toFixed(3) + ')'; cx.beginPath(); cx.arc(q.x, q.y, 1, 0, 6.3); cx.fill(); }
+      cx.globalCompositeOperation = 'source-over'; return;
+    }
+    spawnAcc += dt * 13 * (both > 0.5 ? both : 0);
+    while (spawnAcc > 1 && sparks.length < 48) {
+      spawnAcc -= 1;
+      sparks.push({ u: 0, v: 0.13 + Math.random() * 0.12, dir: Math.random() < 0.5 ? 1 : -1, w: 1.5 + Math.random() * 5, ph: Math.random() * 6.3, s: 0.6 + Math.random() * 0.8 });
+    }
+    if (spawnAcc > 1) spawnAcc = 1;
+    for (var j = sparks.length - 1; j >= 0; j--) {
+      var s = sparks[j]; s.u += s.v * dt;
+      if (s.u >= 1) { sparks.splice(j, 1); continue; }
+      var pos = at(s.dir > 0 ? s.u : 1 - s.u), wob = Math.sin(t * 2.3 + s.ph) * s.w;
+      var a = Math.pow(Math.sin(Math.PI * s.u), 0.6) * (0.35 + 0.65 * both) * (0.7 + 0.3 * Math.sin(t * 9 + s.ph));
+      var px = pos.x + nx * wob, py = pos.y + ny * wob;
+      cx.fillStyle = 'rgba(255,150,70,' + (a * 0.16).toFixed(3) + ')'; cx.beginPath(); cx.arc(px, py, s.s * 3.4, 0, 6.3); cx.fill();
+      cx.fillStyle = 'rgba(255,214,150,' + a.toFixed(3) + ')'; cx.beginPath(); cx.arc(px, py, s.s, 0, 6.3); cx.fill();
+    }
+    cx.globalCompositeOperation = 'source-over';
+  }
+
+  /* ---------- frame ---------- */
+  var prev = performance.now(), bothHinted = false, arrivedHinted = false;
+  function frame(now) {
+    var dt = Math.min(0.05, (now - prev) / 1000); prev = now;
+    var t = now / 1000;
+    both = ease(both, A.lit && B.lit ? 1 : 0, dt, 0.8);
+    if (!(A.lit && B.lit)) bothHinted = false;
+
+    for (var i = 0; i < 2; i++) {
+      var h = homes[i], o = homes[1 - i], e = h.el, gone = away && i === 1;
+
+      /* the paired glow arrives after a soft delay */
+      if (h.arriveAt && now >= h.arriveAt) {
+        h.arriveAt = 0;
+        if (o.lit) {
+          h.linkOn = true;
+          if (gone) { h.ember = true; hint(nm(h) + ' is empty. An ember waits on the tile.'); }
+          else {
+            sBell(h); buzz(8);
+            if (h.lit) { if (!bothHinted) { bothHinted = true; hint('Both lit. Sparks drift between the rooms.'); } }
+            else hint(nm(h) + ' glows. Press and hold your flame to breathe on it.');
+          }
+        }
+      }
+
+      /* breath */
+      if (h.holding) h.breathT += dt;
+      h.breath = ease(h.breath, h.holding ? 1 : 0, dt, 0.25);
+      var hPhase = 0.5 - 0.5 * Math.cos(Math.PI * 2 * h.breathT / 2.2);
+      var oPhase = 0.5 - 0.5 * Math.cos(Math.PI * 2 * o.breathT / 2.2);
+
+      /* flame */
+      h.flame = ease(h.flame, h.lit ? 1 : 0, dt, h.lit ? 0.45 : 0.3);
+
+      /* received glow: rises gently, fades slowly, follows the far breath live */
+      var tgt = 0;
+      if (!gone) {
+        if (h.linkOn) tgt = o.holding ? 0.5 + 0.7 * oPhase : 0.8;
+        if (now < h.bloomUntil) tgt = Math.max(tgt, 1);
+      }
+      var tau = o.holding && h.linkOn ? 0.12 : tgt > h.glow ? 1.1 : (gone ? 1.2 : 5.5);
+      h.glow = ease(h.glow, tgt, dt, tau);
+
+      h.emberAmt = ease(h.emberAmt, h.ember ? 1 : 0, dt, h.ember ? 1.2 : 0.6);
+      h.awayAmt = ease(h.awayAmt, gone ? 1 : 0, dt, 0.7);
+      h.door = ease(h.door, h.doorTarget, dt, 0.22);
+
+      var flick = RM ? 0.5 : 0.5 + 0.5 * (Math.sin(t * 11 + h.ph) * 0.6 + Math.sin(t * 17.3 + h.ph * 2) * 0.4);
+      var shimmer = RM ? 1 : 1 + 0.04 * Math.sin(t * 3.6 + h.ph);
+      var own = h.flame * (0.8 + 0.2 * flick) * (1 + 0.25 * both + 0.3 * h.breath * hPhase);
+      var got = h.glow * 0.78 * shimmer * (1 + 0.12 * both);
+      var L = Math.max(own, got); h.L = L;
+
+      e.home.style.setProperty('--L', clamp(L, 0, 1.3).toFixed(3));
+      e.wgl.setAttribute('opacity', clamp(L * 0.95, 0, 1).toFixed(3));
+      e.pool.setAttribute('opacity', clamp(L * 0.8, 0, 1).toFixed(3));
+      e.warm.setAttribute('opacity', clamp(L * 0.2, 0, .3).toFixed(3));
+      e.agl.setAttribute('opacity', clamp(Math.max(h.glow * shimmer, h.flame), 0, 1).toFixed(3));
+      e.rim.setAttribute('opacity', clamp(L * 0.8, 0, 1).toFixed(3));
+      e.fl.setAttribute('opacity', clamp(h.flame * 1.2, 0, 1).toFixed(3));
+      if (h.flame > 0.01) {
+        for (var k = 0; k < 3; k++) {
+          var n = RM ? 0 : Math.sin(t * 9.1 + k * 2.1 + h.ph) * 0.5 + Math.sin(t * 15.7 + k) * 0.3 + Math.sin(t * 4.3 + k * 5) * 0.2;
+          var sy = FLAME_S[k] * h.flame * (1 + 0.14 * n + 0.16 * both + 0.3 * h.breath * hPhase);
+          var sx = FLAME_S[k] * h.flame * (1 - 0.06 * n);
+          var rot = RM ? 0 : 5 * Math.sin(t * 6.3 + k * 1.7 + h.ph);
+          e.f[k].setAttribute('transform', 'translate(' + FLAME_X[k] + ' 199) rotate(' + rot.toFixed(2) + ') scale(' + sx.toFixed(3) + ' ' + sy.toFixed(3) + ')');
+        }
+      }
+
+      /* tile ring and waiting ember */
+      var emPulse = h.emberAmt * (RM ? 0.85 : 0.7 + 0.3 * Math.sin(t * 1.3));
+      var ring = clamp(Math.max(h.glow, h.flame * 0.45, emPulse * 0.22), 0, 1);
+      e.ring.setAttribute('stroke', mix(RING_COLD, RING_WARM, ring));
+      e.ringg.setAttribute('opacity', (ring * 0.4).toFixed(3));
+      e.emh.setAttribute('opacity', emPulse.toFixed(3));
+
+      /* lid */
+      h.lidP = ease(h.lidP, h.lit ? 1 : 0, dt, RM ? 0.01 : 0.16);
+      h.dragOff.x = ease(h.dragOff.x, 0, dt, 0.1); h.dragOff.y = ease(h.dragOff.y, 0, dt, 0.1);
+      var lx, ly, lr = 0;
+      if (h.drag) { lx = h.drag.x; ly = h.drag.y; }
+      else {
+        var p = h.lidP, arc = Math.sin(Math.PI * p);
+        lx = lerp(LID_ON.x, LID_REST.x, p) + h.dragOff.x * p; ly = lerp(LID_ON.y, LID_REST.y, p) - arc * 30 + h.dragOff.y * p; lr = arc * 14;
+      }
+      e.lid.setAttribute('transform', 'translate(' + lx.toFixed(1) + ' ' + ly.toFixed(1) + ') rotate(' + lr.toFixed(1) + ')');
+
+      /* night, absence, door */
+      e.shade.setAttribute('opacity', clamp(0.52 - 0.4 * h.day + 0.3 * h.awayAmt, 0, 0.9).toFixed(3));
+      if (i === 1) {
+        var open = h.door;
+        e.doorp.setAttribute('transform', 'translate(' + (349 * 0.62 * open).toFixed(2) + ' 0) scale(' + (1 - 0.62 * open).toFixed(3) + ' 1)');
+        e.hall.setAttribute('width', (44 * 0.62 * open).toFixed(1));
+        e.hall.setAttribute('opacity', (0.75 * open).toFixed(3));
+      }
+    }
+
+    /* sound beds */
+    if (ac && !muted) {
+      var sum = A.flame + B.flame, now2 = ac.currentTime;
+      bedGain.gain.setTargetAtTime(0.03 * sum, now2, 0.2);
+      var hold = A.holding ? A : B.holding ? B : null;
+      breathGain.gain.setTargetAtTime(hold ? 0.03 + 0.09 * (0.5 - 0.5 * Math.cos(Math.PI * 2 * hold.breathT / 2.2)) : 0, now2, 0.08);
+      if (sum > 0.5 && Math.random() < dt * 3.5 * sum) sPop(A.lit && (!B.lit || Math.random() < 0.5) ? A : B);
+    }
+
+    drawSparks(dt, t);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+<script>
+/* PointCast: remember that this window was opened, so it is lit back on the street. Stays in this browser. */
+try{var k='bb-street-v1',a=JSON.parse(localStorage.getItem(k)||'[]');if(!Array.isArray(a))a=[];if(a.indexOf('paired-hearths')<0){a.push('paired-hearths');localStorage.setItem(k,JSON.stringify(a))}}catch(e){}
+</script>
+</body>
+</html>

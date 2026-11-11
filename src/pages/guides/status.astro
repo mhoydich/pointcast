@@ -1,0 +1,228 @@
+---
+/**
+ * /guides/status — public product status + roadmap for PointCast Guides.
+ * Static sections render at build; the live intake counts are filled by a
+ * small client script from the public GET /api/guides/intake.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/guides.css';
+import { CATEGORIES, GUIDES, INTERN_ASSIGNMENTS, guidesInCategory } from '../../data/guides';
+import { buildIntakeFeed } from '../../data/guides/intake';
+import { CHANGELOG, ROADMAP } from '../../data/guides/roadmap';
+import type { RoadmapStatus } from '../../data/guides/roadmap';
+
+const title = 'Guides status';
+const description =
+  'Product status and roadmap for PointCast Guides: what has shipped, what is in progress, live intake counts and a changelog.';
+
+const feed = buildIntakeFeed();
+const tasks = feed.tasks as { agentFriendly?: boolean }[];
+const openSeats = GUIDES.filter((g) => g.seat === 'open').length;
+const headline = [
+  { n: GUIDES.length, label: 'Guides' },
+  { n: CATEGORIES.length, label: 'Categories' },
+  { n: openSeats, label: 'Open Guide seats' },
+  { n: INTERN_ASSIGNMENTS.length, label: 'Intern assignments' },
+  { n: feed.taskCount, label: 'Bot tasks' },
+  { n: tasks.filter((t) => t.agentFriendly).length, label: 'Agent-friendly tasks' },
+];
+
+const columns: { status: RoadmapStatus; label: string }[] = [
+  { status: 'shipped', label: 'Shipped' },
+  { status: 'now', label: 'Now' },
+  { status: 'next', label: 'Next' },
+  { status: 'later', label: 'Later' },
+];
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  author="PointCast Guides"
+  alternates={[{ type: 'application/json', href: '/guides/status.json', title: 'PointCast Guides status' }]}
+>
+  <div class="gd">
+    <div class="gd-wrap">
+      <header class="gd-mast">
+        <a class="logo" href="/guides">PointCast <b>Guides</b></a>
+        <nav>
+          <a href="/guides">All guides</a>
+          <a href="/guides/intake">Send material</a>
+          <a href="/guides/ads">Print ads</a>
+          <a href="/guides.json">JSON</a>
+          <a href="/guides/status.json">Status JSON</a>
+        </nav>
+      </header>
+
+      <p class="gd-kicker">Product status · updated 2026-10-22</p>
+      <h1>Guides status</h1>
+      <p class="lede">What has shipped, what is being worked on, and what the intake queue looks like right now.</p>
+
+      <section>
+        <h2>By the numbers</h2>
+        <div class="gd-grid">
+          {headline.map((h) => (
+            <div class="gd-card">
+              <p class="gd-stat">{h.n}</p>
+              <p class="gd-meta">{h.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2>Guides and seats</h2>
+        {CATEGORIES.map((c) => (
+          <>
+            <h3>{c.label}</h3>
+            <div class="gd-scroll">
+              <table>
+                <thead><tr><th>Guide</th><th>Seat</th><th>Reading time</th></tr></thead>
+                <tbody>
+                  {guidesInCategory(c.id).map((g) => (
+                    <tr>
+                      <td><a href={`/guides/${g.slug}`}>{g.title}</a></td>
+                      <td>{g.seat.replace(/-/g, ' ')}</td>
+                      <td>{g.minutes} min</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ))}
+      </section>
+
+      <section id="roadmap">
+        <h2>Roadmap</h2>
+        <p class="gd-meta">
+          Now, Next and Later are proposed plans, not commitments. Scope and order can change.
+        </p>
+        <div class="gd-grid gs-cols">
+          {columns.map((col) => (
+            <div>
+              <h3>{col.label}</h3>
+              {ROADMAP.filter((r) => r.status === col.status).map((r) => (
+                <article class="gd-card gs-item">
+                  <h4>{r.title}</h4>
+                  {r.shipped && <p class="gd-meta">Shipped {r.shipped}</p>}
+                  <p>{r.summary}</p>
+                </article>
+              ))}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="changelog">
+        <h2>Changelog</h2>
+        <ul class="tight">
+          {CHANGELOG.map((e) => (
+            <li>
+              <span class="gd-meta">{e.date}</span> ·
+              {e.href ? <a href={e.href}>{e.title}</a> : <strong>{e.title}</strong>}
+              . {e.summary}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section id="live">
+        <h2>Live intake</h2>
+        <p class="gd-meta" id="gs-live-status">Loading live counts…</p>
+        <div class="gd-grid">
+          <div class="gd-card"><p class="gd-stat" data-gs-total="accepted">–</p><p class="gd-meta">Accepted</p></div>
+          <div class="gd-card"><p class="gd-stat" data-gs-total="pending">–</p><p class="gd-meta">Pending</p></div>
+          <div class="gd-card"><p class="gd-stat" data-gs-total="needsChanges">–</p><p class="gd-meta">Needs changes</p></div>
+          <div class="gd-card"><p class="gd-stat" data-gs-total="declined">–</p><p class="gd-meta">Declined</p></div>
+        </div>
+
+        <h3>By guide</h3>
+        <div class="gd-scroll">
+          <table>
+            <thead><tr><th>Guide</th><th>Accepted</th><th>Pending</th></tr></thead>
+            <tbody>
+              {GUIDES.map((g) => (
+                <tr data-guide={g.slug}>
+                  <td>{g.title}</td>
+                  <td data-field="accepted">–</td>
+                  <td data-field="pending">–</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <h3>By intern assignment</h3>
+        <div class="gd-scroll">
+          <table>
+            <thead><tr><th>Assignment</th><th>Accepted</th><th>In review</th></tr></thead>
+            <tbody>
+              {INTERN_ASSIGNMENTS.map((a) => (
+                <tr data-assignment={a.id}>
+                  <td>{a.id} · {a.title}</td>
+                  <td data-field="accepted">–</td>
+                  <td data-field="inReview">–</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="gd-meta">
+          Counts come from the public intake API (<a href="/api/guides/intake">/api/guides/intake</a>). Pending items
+          are never shown.
+        </p>
+      </section>
+
+      <footer class="gd-foot">
+        Machine-readable: <a href="/guides/status.json">/guides/status.json</a>.
+      </footer>
+    </div>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  .gd .gd-stat { font-size: 2rem; font-weight: 800; line-height: 1; margin: 0 0 .25em; }
+  .gd .gs-cols { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: start; }
+  .gd .gs-item { margin-bottom: 12px; }
+  .gd .gs-item h4 { margin: 0 0 .3em; font-size: 1rem; }
+  .gd .gs-unavailable { color: var(--orange); }
+</style>
+
+<script>
+  const statusEl = document.getElementById('gs-live-status');
+
+  function setText(root: ParentNode, sel: string, value: unknown) {
+    const el = root.querySelector<HTMLElement>(sel);
+    if (el) el.textContent = String(Number(value) || 0);
+  }
+
+  fetch('/api/guides/intake')
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data || !data.ok || !data.counts) throw new Error('bad response');
+      const c = data.counts;
+      for (const k of ['accepted', 'pending', 'needsChanges', 'declined']) {
+        setText(document, `[data-gs-total="${k}"]`, c[k]);
+      }
+      const byGuide = c.byGuide ?? {};
+      document.querySelectorAll<HTMLElement>('tr[data-guide]').forEach((row) => {
+        const v = byGuide[row.dataset.guide ?? ''] ?? {};
+        setText(row, '[data-field="accepted"]', v.accepted);
+        setText(row, '[data-field="pending"]', v.pending);
+      });
+      const byAsg = c.byAssignment ?? {};
+      document.querySelectorAll<HTMLElement>('tr[data-assignment]').forEach((row) => {
+        const v = byAsg[row.dataset.assignment ?? ''] ?? {};
+        setText(row, '[data-field="accepted"]', v.accepted);
+        setText(row, '[data-field="inReview"]', v.inReview);
+      });
+      if (statusEl) statusEl.textContent = 'Live from the intake API.';
+    })
+    .catch(() => {
+      if (statusEl) {
+        statusEl.textContent = 'Live counts unavailable right now.';
+        statusEl.classList.add('gs-unavailable');
+      }
+    });
+</script>

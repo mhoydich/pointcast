@@ -4,6 +4,7 @@ import FLOWERS from '../data/nouns-money-flowers.json';
 import COLLECTED from '../../public/nouns-money/collected/manifest.json';
 import COMMONS from '../data/currency-builder/commons-40.json';
 import BARTER from '../data/currency-builder/barter-100.json';
+import ALMANAC from '../data/currency-builder/almanac-52.json';
 import { APP_CATALOG } from '../lib/nouns-money-app-catalog';
 import { MONEY, NOTE_DESIGNS, NORDIC_STUDIES, CAMPAIGN_POSTERS } from '../lib/nouns-money';
 
@@ -31,11 +32,12 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   },
   exchangeStudies: {
     title: 'Currency Builder · exchange studies', canonical: 'https://pointcast.xyz/currency-builder/',
-    concepts: COMMONS.currencies.length + BARTER.currencies.length,
-    distinctSourceNouns: new Set([...COMMONS.currencies, ...BARTER.currencies].map(entry => entry.nounId)).size,
+    concepts: COMMONS.currencies.length + BARTER.currencies.length + ALMANAC.currencies.length,
+    distinctSourceNouns: new Set([...COMMONS.currencies, ...BARTER.currencies, ...ALMANAC.currencies].map(entry => entry.nounId)).size,
     commons: { count: COMMONS.currencies.length, systems: COMMONS.themes.length, canonical: 'https://pointcast.xyz/currency-builder/commons/', machine: 'https://pointcast.xyz/currency-builder/commons.json' },
     globalBarter: { count: BARTER.currencies.length, regions: BARTER.regions.length, canonical: 'https://pointcast.xyz/currency-builder/barter/', machine: 'https://pointcast.xyz/currency-builder/barter.json', sources: 'Each concept cites its historical or contemporary reference.' },
-    engravedVariations: { count: COMMONS.currencies.length + BARTER.currencies.length, canonical: 'https://pointcast.xyz/currency-builder/security/', meaning: 'Alternate faces of the same 140 concepts, with decorative fine lines and outlined lettering. Visual effects do not establish physical features.' },
+    almanac: { count: ALMANAC.currencies.length, quarters: ALMANAC.quarters.length, canonical: 'https://pointcast.xyz/currency-builder/almanac/', machine: 'https://pointcast.xyz/currency-builder/almanac.json', sources: 'Each week cites a source for its natural or calendar event.' },
+    engravedVariations: { count: COMMONS.currencies.length + BARTER.currencies.length + ALMANAC.currencies.length, canonical: 'https://pointcast.xyz/currency-builder/security/', meaning: 'Alternate faces of the same 192 concepts, with decorative fine lines and outlined lettering. Visual effects do not establish physical features.' },
     status: 'Concept artwork for discussion. No operating exchange system or manufactured edition is established.',
   },
   app: { canonical: 'https://pointcast.xyz/nouns-money/app/', catalog: 'https://pointcast.xyz/nouns-money/app/catalog.json', catalogCount: APP_CATALOG.length, brand: 'Michael Hoydich’s Currency Builder', motto: 'Design. Print. Produce. Profit.', status: 'iPhone-first web art catalog and local design-studio prototype', features: ['Collection browsing', 'Full-screen artwork', 'Device-local favorites', 'Browser print-sheet workshop', 'Local composition of existing artwork'], favorites: 'Design preferences only; browser storage with visit-only memory fallback. No account collection, ownership record or remote favorite writes.', designStudio: 'Arranges existing images; does not generate new artwork or manufacture an edition.', physicalProduction: 'Proposed. The Profit motto is not a return promise.', financialActivity: 'No purchases, minting, wallet connection, staking, backing or redemption enabled by this app.', offline: 'Connection required to load artwork; offline use is not promised.' },

@@ -762,6 +762,7 @@ export const REST_ROUTES = Object.freeze([
   { id: 'raw-blocks', path: '/raw/blocks', blurb: 'Sealed blocks as the verifier reads them. Try sends from=1 and limit=3.', params: [], query: ['from', 'limit'], tryQuery: { from: 1, limit: 3 } },
   { id: 'raw-block', path: '/raw/block/{height}', blurb: 'One sealed block by height.', params: [{ name: 'height', label: 'height', kind: 'integer', min: 1, placeholder: '1', example: '1' }] },
   { id: 'net', path: '/net', blurb: 'Today’s Daily Net: the roll, witness keys, strikes and the last net reports.', params: [], tryQuery: {} },
+  { id: 'stats-classes', path: '/stats/classes', blurb: 'Txs by who signed them, house, keyless or outside, one row a UTC day. House activity is the chain checking itself, not use. Try sends days=7.', params: [], query: ['days'], tryQuery: { days: 7 } },
   { id: 'witnesses', path: '/witnesses', blurb: 'Every witness key, by address. Try sends limit=10.', params: [], query: ['limit', 'after'], tryQuery: { limit: 10 } },
   { id: 'checkpoints', path: '/checkpoints', blurb: 'Checkpoints keys have signed, in spans of up to 1,000 heights.', params: [], query: ['from', 'to'], tryQuery: {} },
   { id: 'daily', path: '/daily', blurb: 'The Daily Mint’s open lot: a play auction in devnet play ATTN.', params: [], tryQuery: {} },

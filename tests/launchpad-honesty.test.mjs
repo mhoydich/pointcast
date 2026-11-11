@@ -64,6 +64,20 @@ test('the extra list is the plan’s pattern, and the rules catch what they must
   for (const bad of ['PUMP', 'official Nouns', 'cashes out', 'main net', 'NM27-1', 'nm100-004', '$NOUNS', 'Nouns treasury coin', 'tip jar', 'balance']) {
     assert.ok(copyProblems(bad, { viewer: true }).length, `refuses “${bad}”`);
   }
+  // Zero-width joiners and spaces, soft hyphens and fullwidth letters cannot split or disguise a word (launch refuses bidi overrides outright).
+  for (const bad of ['Off\u200dicial Nouns', 'PU\u200bMP', 'P\u00adUMP', '\uff2f\uff46\uff46\uff49\uff43\uff49\uff41\uff4c Nouns', 'cash\u200b out', 'in\ufeffvest']) {
+    assert.ok(copyProblems(bad, { viewer: true }).length, `refuses ${JSON.stringify(bad)}`);
+  }
+  // Nor can other default-ignorable characters (a combining grapheme joiner, a variation selector, a Hangul filler) or an underscore.
+  for (const bad of ['PU\u034fMP', 'Off\ufe0ficial Nouns', 'cash\u{e0100} out', 'PU\u3164MP', 'guaranteed_profit', 'Official_Nouns']) {
+    assert.ok(copyProblems(bad, { viewer: true }).length, `refuses ${JSON.stringify(bad)}`);
+  }
+  // Doubled or unusual blanks between the words of a phrase, and look-alike letters from other scripts, are read as they look.
+  for (const bad of ['Cash  Out', 'Nouns  Treasury', 'Cash\u2028Out', 'Cash\u2800Out', '\u0420U\u041c\u0420', '\u041efficial Nouns', '\u0412\u041e\u0422', '\u{1f4b2}500 Club', '\u1d18\u1d1c\u1d0d\u1d18']) {
+    assert.ok(copyProblems(bad, { viewer: true }).length, `refuses ${JSON.stringify(bad)}`);
+  }
+  for (const ok of ['\u041c\u043e\u0441\u043a\u0432\u0430', '\u0395\u03bb\u03bb\u03ac\u03b4\u03b1', 'Caf\u00e9 Cr\u00e8me']) assert.deepEqual(copyProblems(ok, { viewer: true }), [], `allows ${JSON.stringify(ok)}`);
+  for (const ok of ['Kite Day\nKITE', 'Family \u{1f468}\u200d\u{1f469}\u200d\u{1f467}', 'Love \u2764\ufe0f', 'snipe_1']) assert.deepEqual(copyProblems(ok, { viewer: true }), [], `allows ${JSON.stringify(ok)}`);
   assert.ok(copyProblems('USDC', { viewer: true }).length && !copyProblems('USDC', {}).length, 'viewer text may not use a unit word at all');
   assert.ok(copyProblems('100 SOL', {}).length, 'page copy may not price in a real unit');
   assert.deepEqual(copyProblems(NOUNS_LINE, { approved: [NOUNS_LINE] }), []);
@@ -88,7 +102,28 @@ test('the page copy passes, says what the credits are, and carries the Nouns lin
   assert.doesNotMatch(stageC, UNIT_WORDS, 'the stage C summary names no real unit');
   assert.match(stageC, /None of that is planned or built/);
   for (const svg of src.match(/<svg\b[\s\S]*?<\/svg>/g)) assert.match(svg, /<title\b/, 'each chart has a title');
-  assert.equal((src.match(/<details class="lp-data"/g) ?? []).length, 2, 'each chart has a data table');
+  assert.equal((src.match(/<details class="lp-data"/g) ?? []).length, 1, 'the curve chart has a data table');
+  // The live board's candle chart is drawn by the coin view: it too carries a title and a data table.
+  const coinView = read('src/scripts/launchpad/coin-view.mjs');
+  assert.match(coinView, /'title'/, 'the candle chart has a title');
+  assert.match(coinView, /lp-data/, 'the candle chart has a data table');
+});
+
+test('the live board’s client scripts pass the copy rules, keep viewer text out of HTML, and keep storage to the watchlist', () => {
+  const dir = new URL('src/scripts/launchpad/', root);
+  const files = readdirSync(dir).filter((f) => f.endsWith('.mjs'));
+  assert.ok(files.length >= 8, files.join(', '));
+  for (const file of files) {
+    const src = readFileSync(new URL(file, dir), 'utf8');
+    assertClean(extractCopy(src, file), `scripts/launchpad/${file}`);
+    assert.doesNotMatch(src, /\.innerHTML\s*=|insertAdjacentHTML|outerHTML\s*=/, `${file} builds DOM without HTML strings`);
+    assert.doesNotMatch(src, /\bfetch\s*\(|WebSocket|XMLHttpRequest|sendBeacon/, `${file} makes no network calls`);
+    if (file !== 'app.mjs') assert.doesNotMatch(src, /localStorage|sessionStorage|indexedDB/, `${file} leaves storage to the shell's watchlist`);
+    assert.doesNotMatch(src, /coin-art\.mjs|exhibits\.mjs/, `${file} does not bundle the Noun art data`);
+  }
+  const app = read('src/scripts/launchpad/app.mjs');
+  assert.match(app, /try \{ return JSON\.parse\(window\.localStorage/, 'watchlist reads are wrapped in try/catch');
+  assert.match(app, /try \{ window\.localStorage\.setItem/, 'watchlist writes are wrapped in try/catch');
 });
 
 test('the machine edition passes, with explicit flags and the same byline', () => {
@@ -97,7 +132,7 @@ test('the machine edition passes, with explicit flags and the same byline', () =
   assert.equal(edition.standing, `${CREDIT_LINE} Nothing here is an offer or a market.`);
   assert.equal(edition.nouns, NOUNS_LINE);
   assert.deepEqual([edition.simulation.realFunds, edition.simulation.paymentProcessing, edition.simulation.protocolComplianceClaim], [false, false, false]);
-  assert.match(edition.simulation.storage, /in-memory/);
+  assert.match(edition.simulation.storage, /simulation in memory; watchlist only in this browser’s local storage/);
   assertClean(strings({ ...edition, sources: null }).join('\n'), 'launchpad.json');
   assert.equal(edition.poolFeeTiers.length, 25);
 });

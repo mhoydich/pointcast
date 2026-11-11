@@ -22,7 +22,7 @@
  *     itself with {action:"peer", node}. The Loom fetches the card, checks it
  *     names the same origin, and lists the peer in its own card.
  */
-import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
+import { AddressError, NETWORK, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
 import { MAX_OPS, emptyLog, publicOp } from './log.mjs';
 import { checkEnvelope, checkPublicKey, fingerprint, keyId } from './seal.mjs';
@@ -41,6 +41,7 @@ const SENDER_KINDS = new Set(['human', 'agent']);
 export const INBOX_KINDS = new Set(['handle', 'agent', 'wallet', 'did']);
 const RIPPLE_MAX = 4;
 const ACTIONS = new Set(['append', 'edit', 'withdraw', 'plus', 'vote', 'hide', 'key', 'peer']);
+const READ_CACHE = 'public, max-age=10';
 
 const HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -150,6 +151,32 @@ function asActivityStreams(log) {
         inReplyTo: m.parent ? `loom:${log.key}#${m.parent}` : log.address, url: m.media?.url, tag: [...m.tags, ...m.mentions].map((name) => ({ type: name.startsWith('@') ? 'Mention' : 'Hashtag', name })) },
     })),
   };
+}
+
+const xml = (s) => String(s ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
+/** RSS 2.0 for any address: subscribe to a page thread, an inbox or a channel in any reader. */
+function asRss(log) {
+  const view = publicView(log);
+  const link = `${SITE}/loom?to=${encodeURIComponent(log.address)}`;
+  // A sealed message shows as one, never as its envelope.
+  const text = (m) => (m.sealed ? SEALED_LINE : m.body);
+  const items = view.messages.slice(-50).reverse().map((m) => `    <item>
+      <title>${xml(`${m.from.name}${m.from.kind === 'human' ? '' : ` (${m.from.kind})`}: ${excerpt(text(m), 80)}`)}</title>
+      <link>${xml(`${link}#${m.id}`)}</link>
+      <guid isPermaLink="false">${xml(`loom:${log.key}#${m.id}`)}</guid>
+      <pubDate>${new Date(m.at).toUTCString()}</pubDate>
+      <description>${xml(text(m) + (m.media ? `\n\n[image] ${m.media.url}${m.media.alt ? ` — ${m.media.alt}` : ''}` : '') + (m.via ? `\n\nfrom ${m.via.address}` : ''))}</description>
+    </item>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${xml(`${log.title || log.label} · the Loom`)}</title>
+    <link>${xml(link)}</link>
+    <description>${xml(`Everything appended to ${log.address} on the PointCast Loom.`)}</description>
+${items}
+  </channel>
+</rss>
+`;
 }
 
 function validateFrom(raw, verifiedAgent) {
@@ -268,18 +295,31 @@ async function checkSealedRecipients(store, envelope, inboxAddress, fromAddress)
 }
 
 // ── peers: /.well-known/loom.json ─────────────────────────────────────────
-/** This node's card, served at /.well-known/loom.json. */
+/**
+ * This node's card, served at /.well-known/loom.json. It is also the v1.1
+ * relay manifest: the site/role/endpoint/card/room/formats/thread/relayFor
+ * fields keep their v1.1 meaning, and node/api/peers add the v2 handshake.
+ */
 export function nodeCard({ peers = [], live = false } = {}) {
   return {
     spec: SPEC,
     node: SITE,
+    site: SITE,
     name: 'PointCast',
+    role: 'relay',
     api: `${SITE}/api/loom`,
+    endpoint: `${SITE}/api/loom`,
     live: live ? `wss://pointcast.xyz/api/loom/live?to=<address>` : null,
     human: `${SITE}/loom`,
+    room: `${SITE}/loom`,
     protocol: `${SITE}/loom.json`,
+    card: `${SITE}/loom.json`,
     embed: `${SITE}/loom/embed.js`,
-    features: ['append', 'reply', 'ripple', 'playback', 'activitystreams', 'sealed', ...(live ? ['live'] : [])],
+    formats: ['application/json', 'application/activity+json', 'application/rss+xml'],
+    thread: `${SITE}/api/loom?to={url-encoded address}`,
+    relayFor: NETWORK.map((n) => n.host),
+    acceptsAnyAddress: true,
+    features: ['append', 'reply', 'ripple', 'playback', 'activitystreams', 'rss', 'sealed', ...(live ? ['live'] : [])],
     handshake: { method: 'POST', url: `${SITE}/api/loom`, body: { action: 'peer', node: 'https://your.site' },
       note: 'Serve your own /.well-known/loom.json (spec pointcast.loom/vN, node = your origin, api on your origin), then POST. We fetch your card, check it, and list you here.' },
     peers: peers.map(({ node, name, spec, api, verifiedAt }) => ({ node, name, spec, api, verifiedAt })),
@@ -436,9 +476,12 @@ export async function handleLoom(request, { store = undefined, kv = null, clock 
         const target = parseAddress(to);
         const log = target.kind === 'reply' ? await loadLogByKey(store, target.logKey) : await loadLog(store, target.address);
         if (!log) return fail('log_not_found', 404);
-        if (url.searchParams.get('format') === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8' });
+        const format = url.searchParams.get('format');
+        if (format === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8', 'Cache-Control': READ_CACHE });
+        if (format === 'rss') return new Response(asRss(log), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
         const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
-        return json({ ok: true, spec: SPEC, ...status, ...publicView(log, { since, live: status.live }) });
+        // Live polls (since=) stay uncached; whole-thread reads can ride a short edge cache.
+        return json({ ok: true, spec: SPEC, ...status, ...publicView(log, { since, live: status.live }) }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
       }
       if (from) {
         const sender = parseAddress(from);

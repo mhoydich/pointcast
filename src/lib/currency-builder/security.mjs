@@ -470,7 +470,12 @@ export function securityFront(n) {
   const noun = nounFor(n.nounId);
   const seed = n.nounId + 11;
   const nameSize = fitSize('title', n.name.toUpperCase(), 54, 390, 1.5);
-  const lineLines = wrapMeasured('body', n.line, 19, 390).slice(0, 2);
+  // Two lines at 19 px; a longer line drops to 16.5 px and takes a third.
+  const wide = wrapMeasured('body', n.line, 19, 390);
+  const lineSize = wide.length > 2 ? 16.5 : 19;
+  const lineLead = wide.length > 2 ? 21 : 25;
+  const lineLines = (wide.length > 2 ? wrapMeasured('body', n.line, 16.5, 390) : wide).slice(0, 3);
+  const lineTop = wide.length > 2 ? 266 : 272;
   const valueWords = `${words(n.value)} ${n.unitWord}`.toUpperCase();
   const size = fitNoun(noun.grid, 150, 172, 288);
   const px = round(980 - size / 2), py = round(280 - size / 2);
@@ -489,7 +494,7 @@ export function securityFront(n) {
     + t.text('caps', n.kicker.toUpperCase(), { x: 545, y: 140, size: 12.5, tracking: 3.2, anchor: 'middle', fill: p.text, maxWidth: 390 })
     + rosette(doc, 'm', 545, 236, 92, seed + 5, [mix(p.paper, p.accent, 0.62), mix(p.paper, p.accent2, 0.66), mix(p.paper, p.ink, 0.42), mix(p.paper, p.accent, 0.5)], 0.5)
     + t.text('title', n.name.toUpperCase(), { x: 545, y: 232, size: nameSize, tracking: 1.5, anchor: 'middle', fill: p.ink, extra: `stroke="${p.paper}" stroke-width="${Math.round(5000 / nameSize)}" stroke-linejoin="round" paint-order="stroke"` })
-    + lineLines.map((l, i) => t.text('body', l, { x: 545, y: 272 + i * 25, size: 19, anchor: 'middle', fill: p.ink })).join('')
+    + lineLines.map((l, i) => t.text('body', l, { x: 545, y: lineTop + i * lineLead, size: lineSize, anchor: 'middle', fill: p.ink })).join('')
     + t.text('caps', n.place.toUpperCase(), { x: 545, y: 335, size: 11.5, tracking: 2.4, anchor: 'middle', fill: p.text, maxWidth: 390 })
     + `<path d="M410 356h270" stroke="${p.ink}" stroke-width="0.5"/>`
     + t.text('caps', valueWords, { x: 545, y: 384, size: 15, tracking: 4, anchor: 'middle', fill: p.ink, maxWidth: 390 })

@@ -1,0 +1,20 @@
+---
+import RankShell from '../../../../components/pickleball-rankings/RankShell.astro';
+import RankTable from '../../../../components/pickleball-rankings/RankTable.astro';
+import { TIERS, BASE, LEVEL_BANDS, byLevel, fmtDate } from '../../../../lib/pickleball-rankings/data.mjs';
+
+export function getStaticPaths() {
+  return LEVEL_BANDS.filter((b) => byLevel(TIERS.national.players, b).length).map((band) => ({ params: { band } }));
+}
+const { band } = Astro.params as { band: string };
+const players = byLevel(TIERS.national.players, band);
+const lo = (Number(band) - 0.25).toFixed(2), hi = (Number(band) + 0.25).toFixed(2);
+---
+<RankShell title={`Level ${band} pickleball rankings`} description={`PointCast level ${band} pickleball rankings: Court Rating ${lo} up to ${hi}. Preview.`} active="level" eyebrow={`PICKLEBALL · RANKINGS · LEVEL ${band}`}>
+  <h1>Level {band}</h1>
+  <p class="pr-dek">Players whose Court Rating rounds to {band} (from {lo} up to {hi}). Filtered from the US rollup, same order. The band column shows how sure the number is: a wide band near the edge could read either way.</p>
+  <nav class="pr-chips" aria-label="Level">
+    {LEVEL_BANDS.map((b) => { const n = byLevel(TIERS.national.players, b).length; return n ? <a href={`${BASE}level/${b}/`} aria-current={b === band ? 'page' : undefined}>{b}</a> : <span>{b}</span>; })}
+  </nav>
+  <RankTable players={players} caption={`Level ${band}, US rollup (Southern California only so far), as of ${fmtDate(TIERS.as_of)}.`} />
+</RankShell>

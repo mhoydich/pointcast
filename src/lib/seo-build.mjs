@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ogAssetExists, routeExists } from './seo-paths.mjs';
+import { isSignalAtlasPreview } from './signal-atlas-boundary.mjs';
 
 const ORIGIN = 'https://pointcast.xyz';
 const FALLBACK_IMAGE = `${ORIGIN}/images/og/og-home-v5.png`;
@@ -102,6 +103,9 @@ export function countSvgTitles(html) {
 }
 
 function normalizePage(html, path, roots) {
+  // Isolated, noindex preview supplies its own complete head and strict CSP.
+  // Do not add inline presentation or scripts to this authored experience.
+  if (isSignalAtlasPreview(path)) return html;
   const parts = headParts(html);
   if (!parts) return html;
   let head = parts.content;

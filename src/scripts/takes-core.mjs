@@ -359,6 +359,118 @@ export function cleanMarkdown(doc, { keepDim = true } = {}) {
   }).filter(Boolean).join('\n\n') + '\n';
 }
 
+// ---------- paragraph takes, side by side ----------
+
+export function setVersionActive(block, i) {
+  if (!block || i < 0 || i >= block.versions.length) return false;
+  block.active = i;
+  return true;
+}
+
+// Make version i the original (index 0); the old original becomes an alternate.
+export function promoteVersion(block, i) {
+  if (!block || i <= 0 || i >= block.versions.length) return false;
+  const [picked] = block.versions.splice(i, 1);
+  block.versions.unshift(picked);
+  block.active = 0;
+  return true;
+}
+
+// The original stays; a block always keeps at least one version.
+export function removeVersion(block, i) {
+  if (!block || i <= 0 || i >= block.versions.length) return false;
+  block.versions.splice(i, 1);
+  if (block.active === i) block.active = 0;
+  else if (block.active > i) block.active--;
+  return true;
+}
+
+// Word-level diff of b against a (LCS). Returns [{ text, added }] covering b,
+// whitespace kept, so a take can be shown with its new words marked.
+export function wordDiff(a, b) {
+  const split = str => String(str).match(/\s+|[^\s]+/g) || [];
+  // Compare on lowercase letters and digits, so "Hour," matches "hour."
+  const key = w => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '') || w;
+  const A = split(a).filter(w => /\S/.test(w)).map(key);
+  const B = split(b);
+  const words = B.map((w, i) => ({ w: key(w), i })).filter(x => /\S/.test(B[x.i]));
+  const n = A.length, m = words.length;
+  if (n * m > 400000) return B.map(text => ({ text, added: false }));
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let x = n - 1; x >= 0; x--) {
+    for (let y = m - 1; y >= 0; y--) {
+      dp[x][y] = A[x] === words[y].w ? dp[x + 1][y + 1] + 1 : Math.max(dp[x + 1][y], dp[x][y + 1]);
+    }
+  }
+  const kept = new Set();
+  for (let x = 0, y = 0; x < n && y < m;) {
+    if (A[x] === words[y].w) { kept.add(words[y].i); x++; y++; } else if (dp[x + 1][y] >= dp[x][y + 1]) x++; else y++;
+  }
+  return B.map((text, i) => ({ text, added: /\S/.test(text) && !kept.has(i) }));
+}
+
+// ---------- the take score (for audio export) ----------
+
+// Every take in reading order, with the take currently showing. Paragraph
+// takes come first in their paragraph, then its inline takes.
+export function scoreEvents(doc) {
+  const events = [];
+  const n = doc.blocks.length;
+  doc.blocks.forEach((block, b) => {
+    const pan = n > 1 ? (b / (n - 1)) * 2 - 1 : 0;
+    if (block.versions.length > 1) events.push({ kind: 'paragraph', index: block.active, total: block.versions.length, b, pan });
+    for (const tok of flatTakes(blockTokens(block.versions[block.active]).tokens)) {
+      events.push({ kind: 'take', index: tok.active, total: tok.options.length, b, pan });
+    }
+  });
+  return events;
+}
+
+// ---------- share links ----------
+// The whole draft travels in the URL fragment, which browsers never send to
+// the server. "z" = deflate-raw + base64url, "p" = plain base64url.
+
+export const SHARE_PARAM = 'd';
+export const SHARE_MAX = 24000;
+
+const b64url = bytes => {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+const unb64url = str => {
+  const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+};
+const pipe = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+
+export async function encodeShare(md) {
+  const bytes = new TextEncoder().encode(String(md));
+  if (typeof CompressionStream === 'function') {
+    try { return 'z' + b64url(await pipe(bytes, new CompressionStream('deflate-raw'))); } catch {}
+  }
+  return 'p' + b64url(bytes);
+}
+
+export async function decodeShare(code) {
+  const str = String(code || '');
+  if (!/^[zp][A-Za-z0-9_-]+$/.test(str) || str.length > SHARE_MAX) throw new Error('Not a TAKES share code');
+  let bytes = unb64url(str.slice(1));
+  if (str[0] === 'z') {
+    if (typeof DecompressionStream !== 'function') throw new Error('This browser cannot open compressed share links');
+    bytes = await pipe(bytes, new DecompressionStream('deflate-raw'));
+  }
+  if (bytes.length > 2_000_000) throw new Error('Shared draft is too large');
+  return new TextDecoder().decode(bytes);
+}
+
+export function shareCodeFromHash(hash) {
+  const m = /^#?(?:.*&)?d=([^&]*)/.exec(String(hash || ''));
+  return m ? m[1] : null;
+}
+
 export const SAMPLE_DOC = `# Low Tide, Third Draft
 
 The water pulls back from the jetty and leaves the sand {{shining | glassy | >wet and bright}} like a plate nobody has cleared yet. Gulls work the edge. A dog runs at them and they lift, all at once, and settle {{ten feet away | a little further down | >just out of reach}}.

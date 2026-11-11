@@ -232,14 +232,13 @@ export function mountSpellLayer($layer, scope) {
     // ─── rain (ambient) ─────────────────────────────────────────
     // 80 light blue pixel-rain streaks fall continuously. Implemented
     // as a single overlay div with N child spans on randomized
-    // animation delays, each a slim translucent line. Click to dismiss.
+    // animation delays, each a slim translucent line. Clear from the dock.
+    // Broad ambient effects are decorative: taps must reach the page below.
     function castRain() {
       if (active.byId.rain) return;
-      var rain = document.createElement('button');
+      var rain = document.createElement('div');
       rain.className = 'spell-rain';
-      rain.type = 'button';
-      rain.setAttribute('aria-label', 'Pixel rain overlay. Click to dismiss.');
-      rain.title = 'click to clear the rain';
+      rain.setAttribute('aria-hidden', 'true');
       var html = '';
       for (var i = 0; i < 80; i++) {
         var leftPct = Math.random() * 100;
@@ -256,10 +255,6 @@ export function mountSpellLayer($layer, scope) {
           '"></span>';
       }
       rain.innerHTML = html;
-      on(rain, 'click', function () {
-        if (rain.parentNode) rain.parentNode.removeChild(rain);
-        active.byId.rain = null;
-      });
       $layer.appendChild(rain);
       active.byId.rain = rain;
     }
@@ -270,11 +265,9 @@ export function mountSpellLayer($layer, scope) {
     // delay. ~60 stars across the viewport.
     function castStarfield() {
       if (active.byId.starfield) return;
-      var sky = document.createElement('button');
+      var sky = document.createElement('div');
       sky.className = 'spell-starfield';
-      sky.type = 'button';
-      sky.setAttribute('aria-label', 'Starfield overlay. Click to dismiss.');
-      sky.title = 'click to dim the stars';
+      sky.setAttribute('aria-hidden', 'true');
       var html = '';
       for (var j = 0; j < 60; j++) {
         var x = (Math.random() * 100).toFixed(1);
@@ -292,10 +285,6 @@ export function mountSpellLayer($layer, scope) {
           '></span>';
       }
       sky.innerHTML = html;
-      on(sky, 'click', function () {
-        if (sky.parentNode) sky.parentNode.removeChild(sky);
-        active.byId.starfield = null;
-      });
       $layer.appendChild(sky);
       active.byId.starfield = sky;
     }
@@ -416,11 +405,9 @@ export function mountSpellLayer($layer, scope) {
     // on cast so the screen fills immediately.
     function castSnow() {
       if (active.byId.snow) return;
-      var snow = document.createElement('button');
+      var snow = document.createElement('div');
       snow.className = 'spell-snow';
-      snow.type = 'button';
-      snow.setAttribute('aria-label', 'Snowfall overlay. Click to dismiss.');
-      snow.title = 'click to stop the snow';
+      snow.setAttribute('aria-hidden', 'true');
       var html = '';
       for (var i = 0; i < 60; i++) {
         var leftPct = (Math.random() * 100).toFixed(1);
@@ -440,10 +427,6 @@ export function mountSpellLayer($layer, scope) {
           '"></span>';
       }
       snow.innerHTML = html;
-      on(snow, 'click', function () {
-        if (snow.parentNode) snow.parentNode.removeChild(snow);
-        active.byId.snow = null;
-      });
       $layer.appendChild(snow);
       active.byId.snow = snow;
     }
@@ -612,15 +595,9 @@ export function mountSpellLayer($layer, scope) {
     // of the viewport — pure CSS pseudo-element gradients, no canvas.
     function castAurora() {
       if (active.byId.aurora) return;
-      var a = document.createElement('button');
+      var a = document.createElement('div');
       a.className = 'spell-aurora';
-      a.type = 'button';
-      a.setAttribute('aria-label', 'Aurora overlay. Click to dismiss.');
-      a.title = 'click to dim the aurora';
-      on(a, 'click', function () {
-        if (a.parentNode) a.parentNode.removeChild(a);
-        active.byId.aurora = null;
-      });
+      a.setAttribute('aria-hidden', 'true');
       $layer.appendChild(a);
       active.byId.aurora = a;
     }
@@ -771,14 +748,12 @@ export function mountSpellLayer($layer, scope) {
     // ─── fog (ambient) ────────────────────────────────────────────
     // 8 translucent wisps drift laterally across the bottom quarter of
     // the viewport at different speeds and opacity. The combined effect
-    // reads as low morning mist. Click anywhere on the overlay to lift.
+    // reads as low morning mist. Clear from the dock without blocking page taps.
     function castFog() {
       if (active.byId.fog) return;
-      var fog = document.createElement('button');
+      var fog = document.createElement('div');
       fog.className = 'spell-fog';
-      fog.type = 'button';
-      fog.setAttribute('aria-label', 'Fog overlay. Click to lift the mist.');
-      fog.title = 'click to lift the fog';
+      fog.setAttribute('aria-hidden', 'true');
       var html = '';
       var wispCount = 8;
       for (var i = 0; i < wispCount; i++) {
@@ -796,10 +771,6 @@ export function mountSpellLayer($layer, scope) {
           '"></span>';
       }
       fog.innerHTML = html;
-      on(fog, 'click', function () {
-        if (fog.parentNode) fog.parentNode.removeChild(fog);
-        active.byId.fog = null;
-      });
       $layer.appendChild(fog);
       active.byId.fog = fog;
     }
@@ -1003,11 +974,9 @@ export function mountSpellLayer($layer, scope) {
     // to fall distance. Negative delay puts leaves mid-fall on cast.
     function castLeaves() {
       if (active.byId.leaves) return;
-      var lv = document.createElement('button');
+      var lv = document.createElement('div');
       lv.className = 'spell-leaves';
-      lv.type = 'button';
-      lv.setAttribute('aria-label', 'Falling leaves overlay. Click to dismiss.');
-      lv.title = 'click to clear the leaves';
+      lv.setAttribute('aria-hidden', 'true');
       var glyphs = ['🍂', '🍁', '🍂', '🍁', '🌿', '🍂', '🍁'];
       var html = '';
       for (var i = 0; i < 25; i++) {
@@ -1028,10 +997,6 @@ export function mountSpellLayer($layer, scope) {
           '">' + glyph + '</span>';
       }
       lv.innerHTML = html;
-      on(lv, 'click', function () {
-        if (lv.parentNode) lv.parentNode.removeChild(lv);
-        active.byId.leaves = null;
-      });
       $layer.appendChild(lv);
       active.byId.leaves = lv;
     }

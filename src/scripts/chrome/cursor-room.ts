@@ -514,11 +514,24 @@ export function mountCursorRoom(ROOT, scope) {
 
     function scheduleBurstReconnect() {
       if (!state.on || state.burstReconnectTimer) return;
+      // A hidden tab does not keep opening /api/burst. One listener resumes it.
+      if (document.hidden) {
+        if (state.burstResumeWhenVisible) return;
+        state.burstResumeWhenVisible = true;
+        on(document, 'visibilitychange', function () {
+          if (document.hidden || !state.on) return;
+          state.burstResumeWhenVisible = false;
+          openBurstSocket();
+        });
+        return;
+      }
       var delay = state.burstBackoffMs;
       state.burstBackoffMs = Math.min(10_000, Math.round(state.burstBackoffMs * 1.8));
       state.burstReconnectTimer = setTimeout(function () {
         state.burstReconnectTimer = null;
-        if (state.on) openBurstSocket();
+        if (!state.on) return;
+        if (document.hidden) { scheduleBurstReconnect(); return; }
+        openBurstSocket();
       }, delay);
     }
 
@@ -551,6 +564,7 @@ export function mountCursorRoom(ROOT, scope) {
     }
 
     function closeSocket() {
+      if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
       if (state.pingTimer) { clearInterval(state.pingTimer); state.pingTimer = null; }
       if (state.ws) {
         try { state.ws.close(1000, 'room off'); } catch (e) {}
@@ -569,10 +583,26 @@ export function mountCursorRoom(ROOT, scope) {
     }
 
     function scheduleReconnect() {
-      if (!state.on) return;
+      if (!state.on || state.reconnectTimer) return;
+      // A hidden tab does not keep opening /api/room. One listener resumes it.
+      if (document.hidden) {
+        if (state.resumeWhenVisible) return;
+        state.resumeWhenVisible = true;
+        on(document, 'visibilitychange', function () {
+          if (document.hidden || !state.on) return;
+          state.resumeWhenVisible = false;
+          openSocket();
+        });
+        return;
+      }
       var delay = state.wsBackoffMs;
       state.wsBackoffMs = Math.min(10_000, Math.round(state.wsBackoffMs * 1.8));
-      setTimeout(function () { if (state.on) openSocket(); }, delay);
+      state.reconnectTimer = setTimeout(function () {
+        state.reconnectTimer = null;
+        if (!state.on) return;
+        if (document.hidden) { scheduleReconnect(); return; }
+        openSocket();
+      }, delay);
     }
 
     function applyServerPayload(payload) {

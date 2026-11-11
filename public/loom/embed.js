@@ -80,7 +80,7 @@
       let ws;
       try { ws = new WebSocket(this.live); } catch { return; }
       this.socket = ws;
-      ws.onmessage = (e) => { if (e.data === 'pong') return; try { if (JSON.parse(e.data).type === 'ops') this.load(); } catch { /* not ours */ } };
+      ws.onmessage = (e) => { if (e.data === 'pong') return; try { if (JSON.parse(e.data).type === 'ops') this.load(true); } catch { /* not ours */ } };
       ws.onopen = () => { this.fails = 0; this.pinger = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 30000); };
       ws.onclose = () => {
         clearInterval(this.pinger);
@@ -90,9 +90,9 @@
         if (!this.gone && this.fails < 4) this.retry = setTimeout(() => this.watch(), 5000 * this.fails);
       };
     }
-    async load() {
+    async load(fresh = false) {
       try {
-        const data = await (await fetch(`${API}?to=${encodeURIComponent(this.to)}`)).json();
+        const data = await (await fetch(`${API}?to=${encodeURIComponent(this.to)}`, fresh ? { cache: 'no-cache' } : undefined)).json();
         if (!data.ok) throw new Error(data.error);
         this.address = data.log.address;
         this.live = typeof data.log.live === 'string' && data.log.live.startsWith('wss://pointcast.xyz/') ? data.log.live : null;
@@ -114,7 +114,7 @@
         const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: this.address || this.to, from: { name: this.name.value.trim(), kind: 'human' }, body: this.body.value }) });
         const data = await res.json();
         this.status.textContent = data.ok ? 'Appended.' : `Declined: ${String(data.error).replace(/_/g, ' ')}.`;
-        if (data.ok) { this.body.value = ''; this.load(); }
+        if (data.ok) { this.body.value = ''; this.load(true); }
       } catch { this.status.textContent = 'Could not reach the Loom.'; }
       go.disabled = false;
     }

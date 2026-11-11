@@ -4,6 +4,356 @@
 
 ---
 
+## Baby Bonfire: Prayer Fire (2026-11-11)
+
+`/baby-bonfire/prayer/`, listed in `/baby-bonfire.json` under `screens`. Mike in chat on 2026-11-11, after seeing a generated film of the fireplace: "turn that into a prayer site with animations audio multi media". The one Baby Bonfire page that is a screen on purpose: it plays a film and recorded sound from its own folder. A concept sketch; nothing is for sale; it lights no real flame.
+
+- [x] (CC) The page: light it, eight things to bring (money, the business, a win, game day, someone, thanks, a change, just sit), optional words that fly to the flame and play one note each, a four-line sit of about a minute, a gong to close; press and hold to blow; sound and haptics only after a tap; reduced motion honoured. Static under `public/baby-bonfire/prayer/` with seven media files, 2.6 MB in all — `done`
+- [x] (CC) Hub section "One screen, for now", JSON twin (`screens`, and the privacy line), sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire-prayer.test.mjs`. The street, the scene count, Block 0782 and `agent-surfaces.ts` are unchanged — `done`
+- [x] (CC) Scripted run in headless Chrome at 390x844 and 1280x800: every state reached, the audio context running, four sound files decoded, no request off the page's own host, reduced motion holds the film still. Nobody has heard it and it has not run on a phone — `done`
+- [ ] (X) Review the words (eight sets of four lines, by Claude), the footer notices and the rules in the test — `queued`
+- [ ] (M) After deploy: real-phone QA per `docs/briefs/2026-11-11-manus-prayer-fire-qa.md`, the sound mix and iPhone first; results to `docs/manus-logs/2026-11-11-prayer-fire-qa.md` — `queued`
+- [ ] (MH) Decide: whether a page with a film belongs inside Baby Bonfire or at a path of its own; whether the words read the way you meant; whether the music bed stays; whether it gets a share card of its own (it wears the generated card for now) — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
+## Baby Bonfire: third pass (2026-11-11)
+
+`/baby-bonfire/the-helper/`, `/baby-bonfire/home-press/`, `/baby-bonfire/house-power/`, `/baby-bonfire/the-table/`, `/baby-bonfire/creatures/`, `/baby-bonfire/four-seasons/`. Mike in chat on 2026-11-11: "publish all". Six finished private scenes brought in as public scenes; the street now has twenty-one windows. Concept sketches; nothing is for sale.
+
+- [x] (CC) Six scenes imported with the same wrapper as Mesh Street (head tags, back link, street marker) — `done`
+- [x] (CC) Editorial pass, every page read end to end. Changed: Home Press clay recipe no longer says a second glaze firing makes a piece fit for food or drink (it is a potter's call, and the recipe does not settle it); Home Press sources line now reads "as read Nov 11, 2026"; House Power lede no longer calls every tap "real size" (sized from a source where one was read, illustrative where none was); Four Seasons gained a line saying a release is the sketch's word for a set of ideas, nothing is for sale or ships, and the temperatures and flame nights are illustrative. The Helper, The Table and Creatures needed no change. Source names appear only inside the two sources drawers — `done`
+- [x] (CC) Hub (21 windows), JSON twin, sitemap-discovery, `llms.txt`, `llms-full.txt`, make a piece (links the Home Press), `tests/baby-bonfire.test.mjs`. Block 0782 now says twenty-one; only the count wording changed. The atlas needed no new records; `node scripts/atlas/build.mjs --check` passes — `done`
+- [x] (CC) Re-read the twelve cited pages against the figures quoted from them (2026-11-11). Eleven match, the Cricut help article and the MDPI paper included. The Southampton ePrints PDF would not open on a second try, so House Power now says its three figures are not confirmed — `done`
+- [ ] (X) Review the fire and food wording on The Helper, The Home Press and The Table, the sums in House Power, and the new rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-pass-3.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-pass-3.md` — `queued`
+- [ ] (MH) Decide: whether "release" is the right word on Four Seasons; whether The Helper putting out a flame when everyone is out reads the way you meant it — `waiting-on-mh`
+
+## Baby Bonfire: first place kit (2026-11-11)
+
+`/baby-bonfire/first-place/`, files under `/baby-bonfire/first-place/files/`. The first step from sketches to something makeable: a printable place. A v0.1 proposal; nobody has printed it; it holds no flame; nothing is for sale; no licence chosen. The open spec's claims are not edited.
+
+- [x] (CC) Four parts as binary STL (place tile 100 x 100 x 9.2 mm, blank puck 46 x 6.3, optional sensing puck shell 46 x 24 and vented lid 46 x 4.5), written by `node scripts/baby-bonfire/first-place.mjs` from `files/params.json`; `--check` fails on stale files — `done`
+- [x] (CC) Page with a drag-to-turn drawing made from the same triangles, generated dimension tables, print starting points, tag notes, an untested sensing puck parts list and wiring sketch; 14 source pages opened 2026-11-11, unverified points marked — `done`
+- [x] (CC) Mesh checks: generator self-check plus `scripts/baby-bonfire/verify-first-place.py` (trimesh): watertight, bounding boxes, volumes against a hand calculation, sampled points, overhangs at most 45 degrees; thinnest wall 1.6 mm by design — `done`
+- [x] (CC) Linked from make a piece and the open spec; `baby-bonfire.json` (`kits`), sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire.test.mjs`. `agent-surfaces.ts`, the hub and the atlas are not touched — `done`
+- [ ] (CC) Unfurl card for `/baby-bonfire/first-place/`. The page is not on the hub street, so the house template in `scripts/unfurl-cards/` cannot draw it; it needs a motif of its own (the tile and puck) and a row in `CARDS`. Until then it keeps the request-time card — `queued`
+- [ ] (X) Review the plain box, the sensing puck doubts (coin cell on the 3V3 pin, USB with the cell on), the generator and the test — `queued`
+- [ ] (M) One real test print with photos and measured fit per `docs/briefs/2026-11-11-manus-first-place-kit.md`; results to `docs/manus-logs/2026-11-11-first-place-kit.md` — `queued`, needs MH approval before any order
+- [ ] (MH) Approve or decline a paid test print; choose the licence (CERN-OHL-P v2 and CC BY 4.0 are proposed; no LICENSE file added); decide whether the hub should link the page — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
+## Baby Bonfire: an open exploration (2026-11-11)
+
+`/baby-bonfire/`, `/baby-bonfire.json`, Block 0782 (0781 is held by #1618). Mike in chat on 2026-11-11: publish it on PointCast as an open-source exploration, with trade between makers and networked objects each owner can switch on or off. Concept sketches; nothing is for sale; no licence chosen.
+
+- [x] (CC) Hub street, thirteen scene pages, open spec v0, open mesh notes, barter board (static v0, example cards), make a piece; all static under `public/baby-bonfire/` — `done`
+- [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/baby-bonfire.test.mjs` — `done`
+- [ ] (X) Review the open spec and mesh wording, the fire safety list and the content rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
+- [ ] (MH) Choose a licence for the Baby Bonfire files and designs — `waiting-on-mh`
+- [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
+## Coast Commons studies: SB Surf House and Fresh Milk, Local (2026-11-11)
+
+`/coast-commons/sb-surf-house/`, `/coast-commons/fresh-milk/`, listed on `/coast-commons/` and in `/coast-commons.json` (`studies`), Block 0786. Mike in chat on 2026-11-11: publish all, and publish the beach-town commons work as a public good. Two private studies edited for public release. Studies, not offers; nothing bought, sold or raised; not legal, tax, health or investment advice.
+
+- [x] (CC) Both pages generated into `public/coast-commons/` by `node scripts/coast-commons-studies/build.mjs` from the `.src.html` and `.sources.mjs` files beside it; shared plain box, licence note and footer; hub section and JSON entry through `scripts/coast-commons/build.mjs` — `done`
+- [x] (CC) Editorial pass for public release: unverified points repeated beside the claim, businesses named only where their own site or an official page is linked, no listings, no health-benefit claims, byline Claude — `done`
+- [x] (CC) `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, atlas rebuild, `tests/coast-commons-studies.test.mjs` — `done`
+- [ ] (X) Review the plain box, the securities section of the surf house study, the dairy-law and food-safety sections of the milk study, and the rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-commons-studies-qa.md`; results to `docs/manus-logs/2026-11-11-commons-studies-qa.md` — `queued`
+- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [ ] (MH) Decide: whether a lawyer should read the securities and dairy-law sections before the studies are shared widely; whether the groups described without a name in the precedents (only news reports were read) should be named; whether market index figures from Zillow and Zumper stay, given the hub's own pages avoid those names — `waiting-on-mh`
+- [ ] (CC) Fill the "not verified" points (City of Santa Barbara ordinance text, County ordinance page, Carpinteria caps on the City's code, El Segundo, Manhattan Beach and Redondo Beach animal codes, 2026 status of the dairies) and re-read every source each quarter — `queued`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
+## Coast Commons: an open study for the beach towns (2026-11-11)
+
+`/coast-commons/`, `/coast-commons/el-segundo/` (flagship), `/coast-commons/pattern/`, fourteen more town pages, `/coast-commons.json`, Block 0785. Mike in chat on 2026-11-11: publish to PointCast, for El Segundo, Manhattan Beach, PV and the other beach towns within 25 miles, as a public good; make El Segundo the flagship. A study, not an offer; nothing for sale; no money raised.
+
+- [x] (CC) Hub with the drawn coast strip and filter, flagship El Segundo page with step ladder, fourteen town pages, pattern page with split calculator and ledger template; all generated into `public/coast-commons/` by `node scripts/coast-commons/build.mjs` from `scripts/coast-commons/data.mjs` — `done`
+- [x] (CC) 46 official pages opened and paraphrased on 2026-11-11; unchecked entries say "Not verified" — `done`
+- [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/coast-commons.test.mjs` — `done`
+- [ ] (X) Review the rule paraphrases against the linked pages, the plain box wording and the content rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-coast-commons-qa.md`; results to `docs/manus-logs/2026-11-11-coast-commons-qa.md` — `queued`
+- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [ ] (MH) Decide: keep the homepage "New today" entry; whether Pacific Palisades and Sunset Beach join the list; whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
+- [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
+## Baby Bonfire: second pass (2026-11-11)
+
+`/baby-bonfire/mesh-street/`, `/baby-bonfire/pieces-roam/`, a new shelf on `/baby-bonfire/precedents/`. Mike in chat on 2026-11-11 corrected the fixed shelf: "all these pieces i move around my home it's part of the ritual", and a cluttered desk "is a shrine". The street now has fifteen windows. Concept sketches; nothing is for sale.
+
+- [x] (CC) Mesh Street imported as a scene (same wrapper as the other scenes) and linked from the open mesh notes — `done`
+- [x] (CC) The Roaming Shelf: a four-room plan in SVG, eight pieces, seventeen places, six arrangement rules; drag by mouse or touch, tap-tap, keyboard; The Shelf kept, with a line pointing to it — `done`
+- [x] (CC) Precedents wall: "Earlier on PointCast" shelf, 14 entries, each line taken from its block's title or dek (or the page's own description for `/mesh`, `/tv`, `/drum-tv`); every route answered 200 on pointcast.xyz on 2026-11-11 — `done`
+- [x] (CC) Hub, JSON twin, sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire.test.mjs`. The atlas needed no new records (scenes are not atlas records); `node scripts/atlas/build.mjs --check` passes. Block 0782 is left as written on the day (it says thirteen) — `done`
+- [ ] (X) Review the Roaming Shelf wording (presence only, no cameras or microphones, no flame) and the precedents lines against their blocks — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-pass-2.md`, touch drag on iOS Safari first; results to `docs/manus-logs/2026-11-11-baby-bonfire-pass-2.md` — `queued`
+- [ ] (MH) Decide: whether Block 0782 should be edited to say fifteen; whether "a hat on its hook means out today" reads the way you meant it — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
+## Unfurl cards for Baby Bonfire, Coast Commons and House Channel (2026-11-11)
+
+Mike on 2026-11-11, as passed on in the brief for this branch: "these unfurls can be so much better". The three areas went out with the generic request-time card and no Twitter tags. Each page listed below now has its own static 1200x630 `card.png` beside it and the tags that point at it. `node scripts/unfurl-cards/build.mjs` (`npm run og:area-cards`) draws the cards and writes the tags; `--check` says when they are out of step.
+
+- [x] (CC) One card system in three palettes, 23 cards: the Baby Bonfire hub and the fifteen scenes on the street today; the Coast Commons hub, El Segundo, the pattern and the two studies; the House Channel TV page and its about page — `done`
+- [x] (CC) Tags on those 23 pages: og:image with type, width, height and alt, and the Twitter card, title, description and image. Coast Commons pages get them through their own generators. og:description was shortened to fit 160 characters on seven pages and og:title on the Coast Commons hub; `<title>` and the meta descriptions are untouched — `done`
+- [x] (CC) Block 0782 says fifteen in its dek, body and companion label, count wording only, at the brief's direction. That is the change the second-pass section above left with Mike; merging this answers it — `done`
+- [x] (CC) `tests/unfurl-cards.test.mjs`; the area tests, `npm run audit:agents` and `node scripts/atlas/build.mjs --check` pass — `done`
+- [ ] (CC) When the third pass (#1639) lands: give its six scenes a row each in `SCENES` in `scripts/unfurl-cards/cards.mjs`, run the build and look at the cards; `--check` lists the scenes still waiting. The hub card names no count and redraws for a longer street by itself. Block 0782 will conflict on its three count lines; take the larger count — `queued`
+- [ ] (M) After deploy: paste the pages into iMessage, X and Slack and screenshot the previews, per the Manus section of the pull request for `claude/unfurl-cards`; results to `docs/manus-logs/2026-11-11-unfurl-cards.md` — `queued`
+- [ ] (MH) Decide: the four Baby Bonfire workshop pages and the fourteen other Coast Commons town pages still wear the generated card. Say if they should have cards of their own — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
+## Light Companion v0 (2026-11-11)
+
+`/light/`, `/light/c/{id}`, `/api/light`, `/light.json`, Block 0783. Mike in chat on 2026-11-11: start making the digital products (light companions, mesh, drum) woven into existing PointCast systems. A circle of people with one light each; presence only; not an emergency or monitoring service.
+
+- [x] (CC) Signal format (`src/lib/light-signal.mjs`, `docs/light-signal.md`), store and endpoint on AUTH_DB with an in-memory fallback, circle page Function, landing and circle pages, read-only `light_read` MCP tool, JSON twin, registries, atlas rebuild, `tests/light-companion.test.mjs`, local two-phone script (`scripts/light-dev.mjs`, `scripts/e2e-light-companion.mjs`) — `done`
+- [ ] (X) Review the new endpoint, the capability-link handling (middleware pass-through, no-store, no-referrer, hashed storage key) and the `light_read` tool — `queued`
+- [ ] (M) After deploy: two-phone QA per `docs/briefs/2026-11-11-manus-light-companion.md`; results to `docs/manus-logs/2026-11-11-light-companion.md` — `queued`
+- [ ] (MH) Decide: polling every 4 seconds on D1 is fine for a few circles; a push channel (Durable Object) is the next step if it is used; whether to add it to the homepage "New today" strip — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh`. Nothing to provision: AUTH_DB and PC_RATES_KV are already bound and the table creates itself — `waiting-on-mh`
+
+---
+
+## Front page rethink: `/home-next/` prototype (2026-11-11)
+
+Mike: "reconsider homepage redesign ... bell labs pixel utility with style design minimal smart readable fonts". Note: `docs/briefs/2026-11-11-homepage-rethink.md`. Static prototype at `public/home-next/`, tests in `tests/home-next.test.mjs`. The current homepage is untouched.
+
+- [x] (CC) Design note, prototype, tests, screenshots at 390/768/1280 light and dark — `done`
+- [ ] (MH) Decide the three open questions in the note (the one button, the dock, how to swap) — `waiting-on-mh`
+- [ ] (M) After deploy: open https://pointcast.xyz/home-next/ on an iPhone (Safari) and an Android phone (Chrome), light and dark; confirm the four gauges fill or say "unavailable", newest posts load, every link opens; log to `docs/manus-logs/2026-11-11-home-next.md` — `queued`
+- [ ] (CC) If Mike says go: port to `src/pages/index.astro` with newest posts rendered at build time, update homepage tests — `queued`
+
+---
+
+## Cartography: the Atlas (2026-11-08)
+
+One open map of what PointCast and elsegundo.xyz can place, CC0, every record sourced. `/cartography/map`, `/atlas.json`, `/atlas/index.json`.
+
+- [x] (CC) Spec and schema: `docs/cartography/ATLAS.md`, `public/atlas/schema.json`, validator and merge in `scripts/atlas/` — `done`
+- [x] (CC) Layers built: 15 layers, 702 records, 16 with sourced coordinates (courts 11, pickleball 1, paddles 92, quiet 14, atlases 26, dispensary 1, areas-ues 49, agents 28, mcp-tools 122, surfaces 302, blocks 1 reference record for 506 blocks, outdoors 25, geology 4, taprooms 8, market-lenses 18); elsegundo.xyz snapshot 487 records, merged index 1,189 records with 15 cross-site links. Sister coordinates come only from the committed snapshot; town areas and unsourced market anchors are listed without coordinates; The Squeeze desk is held back (app-only data, named people) — `done`
+- [x] (CC) MCP: read-only `atlas_search`, `atlas_get`, `atlas_near`, `atlas_links` in `src/lib/atlas-mcp.ts`, routed in `functions/api/mcp.ts` — `done`
+- [x] (CC) Map pages: `/cartography/map` (with `?site=all`) and `/cartography/atlas` — `done`
+- [x] (CC) Discovery: `agents.json` atlas section, `/for-agents`, `llms.txt`, `llms-full.txt`, `sitemap-discovery` — `done`
+- [x] (CC) Inventory of 352 datasets across both sites (`docs/cartography/INVENTORY.md`) and the ranked `docs/cartography/NEXT-20-LAYERS.md` — `done`
+- [ ] (X) Review the MCP atlas tools and the agent-readable endpoints (input validation, cache, source and sensitive-record handling) — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-09-manus-atlas-map-qa.md` (pins, detail sources, phone layout, `?site=all`, deep link, no-JS list); results to `docs/manus-logs/2026-11-09-atlas-map.md` — `queued`
+- [ ] (MH/CC) Deploy order: merge and deploy hello-token-reserve #288 first (it publishes https://elsegundo.xyz/atlas.json), then `node scripts/atlas/build.mjs --fetch`, commit the refreshed snapshot, then merge and deploy this PR; until then the merged index carries a committed snapshot and says so (`sites[].live: false`) — `queued`
+- [ ] (MH) Deploy with `scripts/deploy.sh` — `waiting-on-mh`
+- [ ] (CC) Refresh the elsegundo snapshot with `node scripts/atlas/build.mjs --fetch` once https://elsegundo.xyz/atlas.json is live — `queued`
+
+---
+
+## House Channel — the TV as the hearth (2026-11-11)
+
+`/house/` (the TV page), `/house/r/` (the phone remote), `/house/about/`, `/house.json`, `/api/house`, Block 0784. Mike asked in chat on November 11, 2026 to scope and start web-app-first home devices around TVs and audio-visual. Research: `docs/research/2026-11-11-web-home-capabilities.md`.
+
+- [x] (CC) v0: pairing by a five-letter code that lasts ten minutes (`functions/api/house.ts`, `functions/_lib/house-pairing.mjs`), TV-authoritative state over the existing drum-room party relay (`bc-` rooms, no new Worker), four views (Hearth, Window, Lights, Drum) plus Off, sound made on the TV and off until asked, idle dim, End, rules in `public/house/core.js`, `tests/house-channel.test.mjs`, local server `scripts/house-dev.mjs`, two-screen check `scripts/e2e-house-channel.mjs` — `done`
+- [x] (CC) `/api/weather` now also returns `windMph`, `windDirDeg`, `cloudCover` (additive; null when Open-Meteo does not report them) — `done`
+- [ ] (X) Review `/api/house` (public write surface: code space, rate limits, what is stored, use of `PC_RATES_KV`), the command reducer in `public/house/core.js` (input from any paired phone) and the additive `/api/weather` fields — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-house-channel.md` (a smart TV browser, a cast tab, an iPhone, an Android phone); results to `docs/manus-logs/2026-11-11-house-channel.md` — `queued`
+- [ ] (MH) Decide: is an hour the right time for an unattended TV to let its room go, or should a Window left up all afternoon stay; and should pairing get its own `HOUSE_KV` namespace instead of sharing `PC_RATES_KV` — `waiting-on-mh`
+- [ ] (MH) Deploy with `scripts/deploy.sh` after review. Nothing new to provision for v0 — `waiting-on-mh`
+- [ ] (CC) When Light Companion (`/api/light`) is live, re-run the Lights view against a real circle and drop the demo wording from Block 0784 — `queued`
+
+---
+
+## Gridtown — a browser-first city builder (2026-10-22)
+
+`/gridtown`, `/gridtown.json`, Block 0742 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
+
+- [x] (CC) Build v1: pure engine `src/lib/gridtown.mjs` (seeded terrain, seven tools, RCI demand, power capacity, smoke and land value, monthly ledger, happiness, twelve lessons, save repair), canvas page with touch, drag and keyboard, browser-local save, JSON export/import, `?seed=` map links, JSON twin, `tests/gridtown.test.mjs` — `done`
+- [x] (CC) Wire Apps shelf, Play layer, `agents.json`, sitemap-discovery, `llms.txt`, `llms-full.txt` — `done`
+- [x] (CC) v1.1: tile inspector, town titles, `#city=` whole-city links with a read-only visit mode, phone share sheet, one-row phone tool strip, game-library entry with offline download — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-gridtown-qa.md` (swipe vs hold-to-paint, inspector, city links, keyboard-only play); results to `docs/manus-logs/2026-10-22-gridtown-qa.md` — `queued`
+- [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
+- [x] (CC) Merged to main on Mike's go, no further review: mhoydich/pointcast#1477, merge commit `df8ab42b` — `done`
+- [x] (CC) 1.1.1: the 12 findings a second adversarial review confirmed on 1.1 (inspector off-screen on desktop, "will grow" promises that were wrong most of the time, shop/home advice loops, stale inspector, hidden phone tools, header overflow, local-download links, name truncation, browser Back out of a visit) plus constant workshop smoke so no town cycles — `done`
+- [ ] (MH) Publish: merged is not live. The "Deploy PointCast to Cloudflare Pages" run skipped its deploy step on 2026-10-22 (no `CLOUDFLARE_API_TOKEN` secret). Run `scripts/deploy.sh` on the iMac, or add the repo secret, then check https://pointcast.xyz/gridtown/ and /b/0742 — `waiting-on-mh`
+- [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
+
+---
+
+## PMM (PointCast Mobile Messaging) and Nouns Messenger (2026-10-22)
+
+`/pmm/`, `/pmm/brand/`, `/nouns-messenger/`, `/api/pmm/signal`, `/api/pmm/turn`, `/api/pmm/stat`. Brief: `docs/prd/pointcast-mobile-messaging.md`. Mike 2026-10-22: "make pointcast mobile messaging, pmm ... you are now assigned as product manager, set goals", then "keep going, multitasking be the product manager publish, ship". CI: `.github/workflows/pmm-check.yml` (`npm run test:pmm`).
+
+- [x] (CC) v0 and v0.1–v0.2: P2P chat, signed hello, files, voice, mood, TAB, LINK, paste mode, key export, TURN code path, offline service workers (#1479, #1489, #1491, #1493) — `done`
+- [x] (CC) QR on every link, in-app scanner, answer hand-off between tabs (#1505); Manus brief section 2c (#1510); PMM CI (#1500); Nouns Messenger backup, share target and badge (#1512) — `done`
+- [ ] (CC) `/api/pmm/stat`: anonymous connect outcomes against the 90% goal (#1520) — `in-progress`
+- [ ] (CC) Nouns Messenger companions answer with live town data (#1513, session_01T2Z3U1P4fW82hKHD1fXWr3) — `in-progress`
+- [ ] (CC) v0.3 rooms, three to five friends (`cc/pmm-rooms-20261022`, session_01YX6g6wYdDEnjzvBfWzkpud) — `in-progress`
+- [ ] (CC) v0.4 Tezos settle for TAB: `/pmm/settle` page, TzKT check on the receiving phone (`cc/pmm-settle-20261022`, session_01R5xW9R1R3uD9Zjcq8rw7q5); wires into `app.js` after rooms — `in-progress`
+- [ ] (MH) Deploy with `scripts/deploy.sh` on the iMac; then create and bind `PMM_KV` (brief step 1) and set `CF_TURN_KEY_ID` / `CF_TURN_API_TOKEN` (step 1b) — `waiting-on-mh`
+- [ ] (MH) Optional: add a `CLOUDFLARE_API_TOKEN` repo secret so the Pages workflow deploys merges on its own — `waiting-on-mh`
+- [ ] (M) Two-phone test, offline open and QR connect per `docs/briefs/2026-10-22-manus-pmm.md`, log to `docs/manus-logs/2026-10-22-pmm.md` — `queued`
+- [ ] (CC) A week after deploy: read `GET /api/pmm/stat?days=7` and decide whether the relay or the code flow needs work to reach 90% — `queued`
+- [ ] (X) Review v0.4 settle before it moves real tez (wallet code) — `queued`
+
+---
+
+## Radio network — Radio El Segundo + six South Bay stations (2026-10-20 → 2026-10-22)
+
+`/radio-network`, `/radio-network/{station}`, `/radio-network/kit`, `/radio-network/print`, `/radio-network/status` (each with `.json`), MCP `radio_network` / `radio_station`. A plan; nothing on air. Tracking: issue #1503.
+
+- [x] (CC) Plan, block 0718 (#1466); station pages + Phase 0 kit, block 0726 (#1494); RN-01..RN-10 on the jobs board (#1514); MCP tools + status board (#1517); print campaign + block 0741 — `done`
+- [ ] (MH) Deploy: run `scripts/deploy.sh` or add the `CLOUDFLARE_API_TOKEN` repo secret (CI builds green; deploy step skipped) — `waiting-on-mh`
+- [ ] (MH) Decisions before Phase 0 week 1: network name, talk-first vs music-first, nonprofit partner/fiscal sponsor, first host of The Town Desk, synthetic voices, LPFM channel study — `waiting-on-mh`
+- [ ] (M) QA after deploy: `docs/briefs/2026-10-20-manus-radio-network-qa.md`; Phase 0 research + QA (no outreach): `docs/briefs/2026-10-22-manus-radio-phase0.md` — `queued`
+- [ ] (X) Review the MCP tools in `src/lib/radio-mcp.ts` and the radio rows in `public/opportunities/catalog.json` — `queued`
+- [ ] (MH) Counsel review of the consent form template before anyone signs it — `waiting-on-mh`
+- [ ] (CC) Keep `src/data/radio-status.ts` current with every ship — `in-progress`
+
+---
+
+## Family Room — the family's Grok bots in one chat room (2026-10-22)
+
+`/family-room/`, `/api/family-room`, MCP `family_room_read` / `family_room_post`. DadGrok, MomGrok, KanaGrok, KenzoGrok talk; the family watches. Setup: `docs/setup/family-room.md`.
+
+- [x] (CC) Build v1: AIM-style chat room and Buddy List, D1 storage on `AUTH_DB` (self-provisioned), one key per bot, away messages, enter/leave lines, per-bot rate limit, admin hide, optional family read key, noindex, `tests/family-room.test.mjs` — `done`
+- [x] (CC) v0.1 merged, PR #1499 — `done`
+- [x] (CC) v0.2: `npm run family-room:invites -- --set` (keys, wrangler secrets, one private invite per bot), today's topic, lines per bot in the last 24 h, product brief `docs/prd/family-room.md`, block 0749, New today strip — `done`
+- [ ] (MH) On the iMac: `npm run family-room:invites -- --set` (add `--family-only` for a family password), then `scripts/deploy.sh --force`, then hand each person their invite file — `waiting-on-mh`
+- [ ] (MH) Optional, unblocks every merge: add the `CLOUDFLARE_API_TOKEN` repository secret so the GitHub deploy step stops skipping — `waiting-on-mh`
+- [ ] (M) Two-phone check after keys and deploy: `docs/briefs/2026-10-22-manus-family-room.md` — `queued`
+- [ ] (X) Optional: review `/api/family-room` and the two MCP tools (public write surface, kids' bots). Mike waived review on 2026-10-22 — `queued`
+
+---
+
+## Cabinet Row — the lobby for the 8-bit arcade (2026-10-22)
+
+`/cabinet-row`, `/cabinet-row.json`, Block 0732. One cabinet per game that shares Breakwater's cabinet; a cabinet lights when its game is in `src/data/game-catalog.json`. Rules in `src/lib/breakwater/row.mjs`, tests in `tests/cabinet-row.test.mjs`. Mike 2026-10-22: "keep going".
+
+- [x] (CC) Build the lobby: lit and dark cabinets from the catalog, per-game best and last mood from each game's browser save, the row's mood from `pc:mood` or the tapes, a mood ribbon, the next cabinet for the mood, an optional hum, machine colors, JSON twin, Block, cover art, discovery — `done`
+- [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737, one cloud session each, draft PRs based on `claude/epic-albattani-j8tb06`: Lighthouse (Simon, `claude/lighthouse-20261022`, session_01PEDK4795RE7nBmVM7yeaJC), Low Tide (Kaboom!, `claude/low-tide-20261022`, session_016rpwV276Uk53dyNtHncrzz), Morning Route (Paperboy, `claude/morning-route-20261022`, session_01SDvFBq3oSr9SEfkD32XwZx), Sea Glass (Q*bert, `claude/sea-glass-20261022`, session_01QCPxosyU53LGtzQjrG99Fv), Sandcastle (Missile Command, `claude/sandcastle-20261022`, session_01FtckgMyrwsT8mZSzswKh4Q); each lights its own cabinet when published; their discovery entries sit after Cabinet Row's, wave one's after Breakwater's — `in-progress`
+- [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
+
+### Sea Glass — turn every stone (wave two, 2026-10-22)
+
+`/sea-glass`, `/sea-glass.json`, Block 0743, branch `claude/sea-glass-20261022` stacked on #1478. A cube-hopping pyramid after Gottlieb's 1982 Q*bert, on the shore: 28 cubes from sand to sea glass, bubbles, a gull, two lifebuoys. Logic in `src/lib/sea-glass/{pyramid,sprites}.mjs`, tests in `tests/sea-glass.test.mjs` (including a simulated full game). Research note: `docs/notes/2026-10-22-sea-glass-notes.md`.
+
+- [x] (CC) Build the game on the shared cabinet (font, machines, mood), JSON twin, Block, cover art, catalog entry that lights its cabinet, discovery — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-sea-glass-qa.md`, log to `docs/manus-logs/2026-10-22-sea-glass.md` — `queued`
+- [ ] (X) Review the quadrant tap mapping on small phones and the hazard pacing at pyramid 8 and beyond — `queued`
+
+### Low Tide — catch what the gull drops (wave two, Block 0750)
+
+`/low-tide`, `/low-tide.json`, Block 0750, branch `claude/low-tide-20261022` stacked on #1478. Kaboom! (Activision, 1981) made gentle. Rules in `src/lib/low-tide/tide.mjs`, tests in `tests/low-tide.test.mjs`, research note `docs/notes/2026-10-22-low-tide-notes.md`.
+
+- [x] (CC) Build the game: gull, shells and a three-bucket stack with paddle-style absolute control, fixed-count waves that speed up, a rising catch run, a tide wash for a miss, a bucket back every 1000 points, golden shells in RUSH, shared mood and machines, JSON twin, Block, cover art, discovery — `done`
+- [ ] (Manus) Real-device QA per `docs/briefs/2026-10-22-manus-low-tide-qa.md` after deploy — `queued`
+
+### Sandcastle — hold back the tide (wave two, 2026-10-22)
+
+`/sandcastle`, `/sandcastle.json`, Block 0744 (moved from 0737 when #1497 claimed 0733–0738), branch `claude/sandcastle-20261022` stacked on #1478. After Missile Command (Atari, 1980, Dave Theurer): six sandcastles, three bucket brigades, wave lines that split, sand bursts that open and close. Rules in `src/lib/sandcastle/shore.mjs`, tests in `tests/sandcastle.test.mjs`. Research note: `docs/notes/2026-10-22-sandcastle-notes.md`.
+
+- [x] (CC) Build the game on the shared font, palettes and mood model: vector beach, throws by tap or by brigade key, ten sand per brigade, bonus per castle and sand, a castle every 10,000, splits and RUSH rogue waves, CALM rebuilds every round and never ends; JSON twin, Block, cover art, discovery, lights its Cabinet Row cabinet — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-sandcastle-qa.md`, log to `docs/manus-logs/2026-10-22-sandcastle.md` — `queued`
+- [ ] (MH/X) Review and merge after #1478; expect small conflicts in the discovery files with the other wave-two PRs — `waiting-on-mh`
+
+## Lighthouse — Simon as a lighthouse lens at night (2026-10-22)
+
+`/lighthouse`, `/lighthouse.json`, Block 0745 (moved from 0733 as the ids before it were taken on main and by open PRs). Wave-two game in the Breakwater family: four compass lamps in the machine palette's band colors, tones of an A major chord after Simon's, playback faster after the 5th, 9th and 13th step, CALM replays a miss, FREE play instrument. Rules in `src/lib/lighthouse/{lens,game}.mjs`, tests in `tests/lighthouse.test.mjs`, research note `docs/notes/2026-10-22-lighthouse-notes.md`. Branch `claude/lighthouse-20261022`, PR #1508 against `main`.
+
+- [x] (CC) Build the game, JSON twin, Block, cover art, catalog entry and discovery wiring; lights its cabinet on Cabinet Row — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-lighthouse-qa.md`, log to `docs/manus-logs/2026-10-22-lighthouse.md` — `queued`
+- [ ] (MH/X) Review and merge #1508 — `waiting-on-mh`
+
+### Morning Route — deliver the Morning Edition (wave two, 2026-10-22)
+
+`/morning-route`, `/morning-route.json`, Block 0747, branch `claude/morning-route-20261022`, PR #1516 against main. After Paperboy (1985): an El Segundo street at 6:45 AM, lit porches and mailboxes, gentle obstacles, a report card per day. Rules in `src/lib/morning-route/{route,sprites}.mjs`, tests in `tests/morning-route.test.mjs`. Research note: `docs/notes/2026-10-22-morning-route-notes.md`.
+
+- [x] (CC) Build the game, JSON twin, Block, cover art and discovery; lights its Cabinet Row cabinet — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-morning-route-qa.md`, log to `docs/manus-logs/2026-10-22-morning-route.md` — `queued`
+- [ ] (MH/X) Review and merge #1516 (#1478 is on main) — `waiting-on-mh`
+
+---
+
+## Breakwater — a breakout for the 8-bit heart (2026-10-22)
+
+`/breakwater`, `/breakwater.json`, Block 0739 (moved from 0725, then 0726, when main's messenger and radio releases took those ids). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
+
+- [x] (CC) Build the game: canvas playfield from a 3x5 pixel font, Atari 800XL and Commodore 64 modes with boot screens, Web Audio chip voices and a generative arpeggiator, four-state mood model with a CALM/PLAY/RUSH dial, phone drag and desktop fullscreen, browser-local best score and mood tape, `tests/breakwater.test.mjs` — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt`, `llms-full.txt`, OG card from the game's own palette — `done`
+- [ ] (X) Review the mood response ranges and the audio scheduler on a slow phone; the page is isolated (no chrome, no beacon), so check that is the right call — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-breakwater-qa.md`, log to `docs/manus-logs/2026-10-22-breakwater.md` — `queued`
+- [ ] (MH) Decide whether Breakwater rotates into the six-card home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
+- [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0727–0731 after the renumber (main took 0725): Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
+- [x] (CC) Ship the row: Mike 2026-10-22, "be the product manager publish, ship, etc no review necessary". #1478 merged to main; the five stacked PRs merged through this branch to main, with every shared discovery file checked to differ from main by exactly the games' own rows — `done`
+- [ ] (MH) Deploy: `scripts/deploy.sh` from the iMac (the GitHub deploy workflow skips its deploy step without `CLOUDFLARE_API_TOKEN`), then `npm run audit:publishing` — `waiting-on-mh`
+
+---
+
+## Tideline — Pong stood on its end (2026-10-22)
+
+`/tideline`, `/tideline.json`, Block 0727. Thread 1 of 5 after Breakwater, from Michael Hoydich's same brief (80s innocence, the joy of the compute and flow, mood-state symbiosis, mobile and full screen, Atari and Commodore inspired, rendered modern). Portrait Pong: your paddle below, the house above, rally to 11, a house whose skill follows the shared mood. Research note: `docs/notes/2026-10-22-tideline-notes.md`.
+
+- [x] (CC) Build the game: shared 3x5 font, palettes and mood model from `src/lib/breakwater`, new pure physics and rules in `src/lib/tideline` (eight-segment return angle, per-volley speed, alternating serve, predictive house paddle), Web Audio square-wave pok, CALM/PLAY/RUSH dial, 2UP second paddle by touch, browser-local longest rally and wins, `tests/tideline.test.mjs` with a simulated rally — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (games line, no new line), `llms-full.txt`, OG card from the game's own palette — `done`
+- [ ] (X) Review the house skill curve (`houseSkill`, `houseTraits`) for fairness on PLAY, and the two-ball point rule — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-tideline-qa.md`, log to `docs/manus-logs/2026-10-22-tideline.md` — `queued`
+- [ ] (MH) Decide whether Tideline joins Breakwater in the home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/tideline`, `/tideline.json` and `tideline` in `/agents.json` — `handoff`
+
+---
+
+
+## Soft Landing — a lunar lander for the 8-bit heart (2026-10-22)
+
+`/soft-landing`, `/soft-landing.json`, Block 0729. Thread 3 of the five games Michael Hoydich asked for after Breakwater (siblings: Tideline, Kelp, Crosswalk, Driftwood). Same brief; Lunar Lander. Shares Breakwater's font, palettes and mood model; its own physics, skylines, landing judgement and sounds. Stacks on the Breakwater PR. Research note: `docs/notes/2026-10-22-soft-landing-notes.md`.
+
+- [x] (CC) Build the game: vector skyline with 1x / 2x / 4x pads (5x in RUSH), gravity, main engine, side jets, fuel, landing judgement (speed, drift, attitude, pad), scoring by multiplier and fuel, a new skyline per landing, the mood dial and tape, filtered-noise engine roar, rumble and crash slide, boot screens for both machines, touch thirds and keys, `tests/soft-landing.test.mjs` with a simulated descent — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (same line count), `llms-full.txt`, OG card from the game's own palette and skyline generator — `done`
+- [ ] (X) Review the landing limits and fuel economy (1200 on PLAY, 900 on RUSH, +100 per multiplier on a landing), the crosswind strength in RUSH, and the `?debug` QA hook that exposes read-only state and the autopilot — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-soft-landing-qa.md`, log to `docs/manus-logs/2026-10-22-soft-landing.md` — `queued`
+- [ ] (MH) Decide whether the five games share one cabinet row on `/games` and the home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/soft-landing`, `/soft-landing.json` and `softLanding` in `/agents.json` — `handoff`
+
+---
+
+## Crosswalk — five lanes to the sand (2026-10-22)
+
+`/crosswalk`, `/crosswalk.json`, Block 0730 (renumbered from 0729 when main took 0725). Thread 4 of 5 from Michael Hoydich's "set up 5 new threads to create more", stacked on Breakwater (`claude/crosswalk-20261022` on `claude/epic-albattani-j8tb06`). Frogger's shape set in El Segundo: sidewalk, five lanes of traffic, median, bike path, sand, four lifeguard towers. Research note: `docs/notes/2026-10-22-crosswalk-notes.md`.
+
+- [x] (CC) Build the game: `src/lib/crosswalk/{field,rules,sprites}.mjs` (lanes on a wrapping track, slot density, hop and collision rules, the crossing clock, scoring, 8x8 rect sprites), the page on the shared font, palettes and mood model from `src/lib/breakwater`, swipe or tap zones on touch, arrows or WASD on keys, a hop blip that rises per row, a horn on a hit, a four-note fanfare at a tower, `tests/crosswalk.test.mjs` with a simulated crossing — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause, still 334 lines), `llms-full.txt`, OG card from the game's own palette and sprites — `done`
+- [ ] (X) Review the traffic density switch (slots only change off screen), the hit box inset, and whether the splash between towers is too harsh for CALM — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-crosswalk-qa.md`, log to `docs/manus-logs/2026-10-22-crosswalk.md` — `queued`
+- [ ] (MH) Decide whether the five sibling cabinets get a shared `/arcade` row or stay as separate pages — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/crosswalk`, `/crosswalk.json` and `crosswalk` in `/agents.json` — `handoff`
+
+---
+
+## Kelp — a snake for the 8-bit heart (2026-10-22)
+
+`/kelp`, `/kelp.json`, Block 0728 (was 0727 before main took 0725 and the games shifted up one). Thread 2 of 5 on Michael Hoydich's games brief after Breakwater (siblings: Tideline, Soft Landing, Crosswalk, Driftwood). Snake the way Nibbler (1982) and the home-computer listings did it: a 24 x 32 portrait grid, the frame is the wall, rocks spelled from the 3x5 font, a stage cleared at a target length. Shares Breakwater's font, palettes and mood model; new logic in `src/lib/kelp`. Research note: `docs/notes/2026-10-22-kelp-notes.md`. Stacks on #1478.
+
+- [x] (CC) Build the game: grid, strand, growth, collision and seven stage patterns in `src/lib/kelp/{grid,strand}.mjs` with `tests/kelp.test.mjs` (including a seeded autopilot run), canvas playfield from the 3x5 font, 800XL and C64 modes with boot screens, one pentatonic note per plankton and a thud on collision, a slow swell arpeggiator, mood driving tick rate, plankton value, rock density, start length, tempo, scale, palette and a golden plankton in RUSH, CALM with no lives, swipe and arrows, fullscreen, browser-local best score and mood tape under `kelp:v1` — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause on the games line), `llms-full.txt`, OG card from the game's own palette (`scripts/generate-kelp-og.mjs`) — `done`
+- [ ] (X) Review the swipe handler (continuous drag turns) and the fixed tick clock on a slow phone; check the glyph-rock doorway rule reads as intended on the `64` nameplate — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-kelp-qa.md`, log to `docs/manus-logs/2026-10-22-kelp.md` — `queued`
+- [ ] (MH) Decide whether the games-brief cabinets (Breakwater, Kelp and the three siblings) get a row of their own on `/games` — `waiting-on-mh`
+- [ ] (MH/CC) Merge #1478, then this PR, then `scripts/deploy.sh`, then verify `/kelp`, `/kelp.json` and `kelp` in `/agents.json` — `handoff`
+
+---
+
+## Driftwood — Asteroids on the water (2026-10-22)
+
+`/driftwood`, `/driftwood.json`, Block 0731. Thread 5 of 5 after Breakwater, branch `claude/driftwood-20261022`, stacked on `claude/epic-albattani-j8tb06`. A small boat on a dark field, driftwood logs that split big to medium to small, wrap at every edge, no friction, a limited flare rate, a tide bird. Research note: `docs/notes/2026-10-22-driftwood-notes.md`.
+
+- [x] (CC) Build the game: stroked-polygon vector look in the machine's text color on a night field, the shared 3x5 font, both machines and boot screens, a two-note heartbeat that quickens with the mood plus noise shot and crunch split, the shared mood model (hit = paddle, small log = brick, collision = loss, field clear = wave) driving log speed, shield and flare rate, tempo and scale, glow and palette, sparks, log count and the bird; touch zones with an on-canvas hint, keys on desktop; `src/lib/driftwood/{field,sim}.mjs` headless, `tests/driftwood.test.mjs` with a simulated field clear — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause, line count held), `llms-full.txt`, OG card from the game's own palette and log generator — `done`
+- [ ] (X) Review the RUSH glow latch (off after three slow readings), the seam-aware torus (fixed period, nearest-image collisions, drawn on both sides), and the `?debug` hook — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-driftwood-qa.md`, log to `docs/manus-logs/2026-10-22-driftwood.md` — `queued`
+- [ ] (MH) Decide whether Driftwood joins Breakwater in the six-card home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/driftwood`, `/driftwood.json` and `driftwood` in `/agents.json` — `handoff`
+
+---
+
 ## The Loom — append to anything (2026-10-20)
 
 `/loom`, `/api/loom`, `/loom.json`, `/loom/embed.js`, MCP `loom_read` / `loom_append`. Public federated message system: one verb, append(to, message), any address.
@@ -13,7 +363,9 @@
 - [ ] (MH) Optional: grant agent keys the `loom:append` scope so signed agents get the verified mark — `waiting-on-mh`
 - [ ] (M) After deploy: open https://pointcast.xyz/loom on desktop + phone, append a note, reply, poll, image; open `/loom?to=%40mike`; drop the embed on a Tonebloom page; screenshots to `docs/manus-logs/YYYY-MM-DD-loom.md` — `queued`
 - [ ] (X) Review `/api/loom` (public write surface) and the MCP additions — `queued`
-- [x] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `done` — source + tests on branch `claude/cool-cray-3vq682`; see `docs/setup/loom-v2.md`. Inert until the Worker is deployed and `LOOM` is bound: until then `/api/loom` runs the v1 KV layout and clients poll
+- [x] (CC) v1 live: production read/write verified 2026-10-22 over MCP (`loom_append` to `#loom`, seq 4) — `done`
+- [x] (CC) v1.1: Loom margin tab on every BlockLayout page (lazy, no fetch until opened), RSS for any address (`&format=rss`), `/.well-known/loom.json`, 10s cache on whole-thread reads — `done`
+- [x] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `done` — source + tests in PR #1475; see `docs/setup/loom-v2.md`. Inert until the Worker is deployed and `LOOM` is bound: until then `/api/loom` runs the v1 KV layout and clients poll
 - [ ] (MH/X) Deploy `workers/loom` (`cd workers/loom && npm ci && npx wrangler deploy`), then uncomment the `LOOM` block in `wrangler.toml`, merge, `scripts/deploy.sh`; verify `/api/loom?to=%23loom` reports `"storage":"durable-object","live":true` — `waiting-on-mh`
 - [ ] (X) Review Loom v2: the sealed-message crypto (`src/lib/loom/seal.mjs`), the inbox key directory (trust-on-first-use), and the peer handshake's outbound fetch (`/api/loom` `{action:"peer"}`) — `queued`
 - [ ] (M) Loom v2 real-browser QA, stages A (sealed DMs, fallback polling) and B (live push after the Worker deploy) — `queued` — brief `docs/briefs/2026-10-21-manus-loom-v2-qa.md`

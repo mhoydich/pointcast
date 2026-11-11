@@ -11,6 +11,11 @@
  *   - routes:   the `.route(` declarations in crates/node/src/{api,api_raw,api_mandate,
  *               api_art,proofs,ops}.rs and crates/town/src/api.rs
  * If the chain moves on, update the numbers and the SOURCE commit together.
+ *
+ * SOURCE, TESTS and CRATES are that 2026-10-03 snapshot, and they stay so: the
+ * case study and the dev tools describe exactly it. What main looks like now
+ * is CHAIN_MAIN, TESTS_NOW and CRATES_SINCE below (read 2026-10-21), which the
+ * /chain home's status section prints with their own date.
  */
 
 import { Buffer } from 'node:buffer';
@@ -40,6 +45,40 @@ export const SOURCE = {
   lastAt: '2026-10-03 11:45 PT',
   commits: 111,
   rustLines: 50834,
+} as const;
+
+/**
+ * pointcast-chain main as the /chain home reports it, read by Claude Code on
+ * 2026-10-21 (same methods as SOURCE):
+ *   - commits:   `git log --oneline main | wc -l` (c56ff65 → 906c745)
+ *   - rustLines: every .rs file under crates/ at 906c745, tests included
+ *   - crates:    the 12 Cargo workspace members plus crates/kernel
+ * Refresh every field together, with readOn; the page prints the date.
+ */
+export const CHAIN_MAIN = {
+  commit: '906c745',
+  committedAt: '2026-10-20 07:24 PT',
+  readOn: '2026-10-21',
+  firstCommit: 'c56ff65',
+  firstAt: '2026-10-01 21:02 PT',
+  commits: 675,
+  rustLines: 157336,
+} as const;
+
+/**
+ * The tests at CHAIN_MAIN.commit, run by Claude Code on 2026-10-21 in a
+ * worktree of main (docs-only changes on top): `cargo test --workspace
+ * --offline`, the kernel's own `cargo test --offline`, the six `node --test`
+ * suites in the repo, and pcv.py's offline unit tests.
+ */
+export const TESTS_NOW = {
+  commit: '906c745',
+  ranOn: '2026-10-21',
+  workspace: { passed: 1084, failed: 0, ignored: 14 },
+  kernel: { passed: 92, failed: 0, ignored: 1 },
+  js: { passed: 647, failed: 0, skipped: 1, suites: 'SDK 330, devnet Worker 163, chain-wasm 77, presence issuer 36, devnet snapshot 26, house runner 15' },
+  python: { passed: 69, note: 'pcv.py, the independent Python checker: its unit and launch-record tests (its live test reads the network and was not run)' },
+  total: 1892,
 } as const;
 
 export const STATUS_LINE =
@@ -342,6 +381,14 @@ export const CRATES: Crate[] = [
   { name: 'kernel', role: 'The same state machine as a Tezos smart-rollup kernel, proven on the SDK MockHost. Its own Cargo workspace.' },
 ];
 
+/** Crates added to main after the 2026-10-03 snapshot (CRATES). The /chain home lists both; the case study lists CRATES only. */
+export const CRATES_SINCE: Crate[] = [
+  { name: 'replica', bin: 'pc-replica', role: 'A verifying follower: replays every block, keeps a full copy, serves the node’s reads, relays signed transactions, and can be promoted to sequencer.' },
+  { name: 'relay', bin: 'pc-relay', role: 'The dry-run-first outbound courier: prepares a post per network for each checkpoint, with its cost and the key it waits on. Sends nothing by default.' },
+  { name: 'oracle', bin: 'pc-oracle', role: 'The El Segundo oracle desk: reads four feeds (recorded fixtures by default), treats any odd answer as an outage, and signs reports.' },
+  { name: 'devnet-wasm', role: 'The devnet’s sequencer compiled to wasm for one Cloudflare Durable Object: the public devnet-2 runs on it.' },
+];
+
 export type NavItem = { href: string; label: string; key: string };
 export const CHAIN_NAV: NavItem[] = [
   { key: 'home', href: '/chain', label: 'Home' },
@@ -352,6 +399,7 @@ export const CHAIN_NAV: NavItem[] = [
   { key: 'dev', href: '/chain/dev', label: 'Dev tools' },
   { key: 'docs', href: '/chain/docs/', label: 'Docs' },
   { key: 'case-study', href: '/chain/case-study', label: 'Case study' },
+  { key: 'plan', href: '/chain/plan', label: 'Plan' },
   { key: 'interns', href: '/chain/interns', label: 'Interns' },
   { key: 'mints', href: '/chain/mints', label: 'First Mints' },
   { key: 'first-mints', href: '/chain/first-mints/', label: 'Mint preview' },

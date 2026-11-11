@@ -1,0 +1,35 @@
+---
+import RankShell from '../../../components/pickleball-rankings/RankShell.astro';
+import RankTable from '../../../components/pickleball-rankings/RankTable.astro';
+import { TIERS, SOURCES, BASE, LEVEL_BANDS, byLevel, coverage, tierStatus, fmtDate } from '../../../lib/pickleball-rankings/data.mjs';
+
+const nat = tierStatus('national');
+const glob = tierStatus('global');
+const reg = TIERS.regional;
+const withLevels = LEVEL_BANDS.filter((b) => byLevel(TIERS.national.players, b).length).length;
+---
+<RankShell title="Pickleball rankings" description="PointCast pickleball rankings at four scales (national, global, regional and by level) from one open recipe over public results. Preview." active="home" json={`${BASE}rankings.json`} csv={`${BASE}rankings.csv`}>
+  <h1>Pickleball rankings</h1>
+  <p class="pr-dek">One open recipe, four scales. Court Rating reads each public podium finish as its division's level plus a little for the place, weighted toward recent results. Everyone gets a band that narrows as results add up. Copy the recipe, rerun it, check us.</p>
+
+  <div class="pr-status"><strong>The honest part</strong>{SOURCES.verdict}</div>
+
+  <div class="pr-cards">
+    <div class="pr-card"><h3><a href={`${BASE}national/`}>National · US</a></h3><span class="n">{nat.available ? 'open' : 'unavailable'}</span><p>{nat.coverage.players} players in the rollup so far, all from {nat.coverage.cities.length} Southern California venues.</p></div>
+    <div class="pr-card"><h3><a href={`${BASE}global/`}>Global</a></h3><span class="n">{glob.available ? 'open' : 'unavailable'}</span><p>Opens when a second country has a feed.</p></div>
+    <div class="pr-card"><h3><a href={`${BASE}regional/`}>Regional</a></h3><span class="n">{reg.length}</span><p>{reg.map((t: any) => `${t.label}: ${coverage(t).players} players`).join('; ')}.</p></div>
+    <div class="pr-card"><h3><a href={`${BASE}level/`}>By level</a></h3><span class="n">{withLevels} of {LEVEL_BANDS.length}</span><p>half-step bands with players. The rest say unavailable.</p></div>
+  </div>
+
+  <h2>{nat.available ? 'Top of the US rollup' : 'Top of the Southern California rollup'}</h2>
+  <RankTable players={TIERS.national.players} limit={25} moreHref={`${BASE}national/`} caption={nat.available ? `As of ${fmtDate(TIERS.as_of)}.` : `Preview, Southern California only, not a US ranking. As of ${fmtDate(TIERS.as_of)}.`} />
+
+  <h2>How the ladders roll up</h2>
+  <ol class="pr-list">
+    <li><strong>Regional</strong> ladders publish team finishes from organizer pages. El Segundo 25-mile is the first.</li>
+    <li>Rows are deduped by event, division, place and team, so a finish two ladders both report counts once.</li>
+    <li>Every row at a US venue feeds <strong>national</strong>. Every national ladder feeds <strong>global</strong>.</li>
+    <li><strong>By level</strong> is a filter over any tier. Same rows, same recipe, so a player's Court Rating is the same number on every tier. Only the rank changes.</li>
+  </ol>
+  <p>Full method, sources and the tier plan: <a href={`${BASE}method/`}>method</a>.</p>
+</RankShell>

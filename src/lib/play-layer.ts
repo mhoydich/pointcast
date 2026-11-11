@@ -1,7 +1,9 @@
+import { CIVIL_SERVICE_QUESTS } from '../data/civil-service';
+
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Cabinet Row, Breakwater, Tideline, Kelp, Soft Landing, Crosswalk, Driftwood, a look at baseball, Gridtown, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -9,11 +11,102 @@ export const PLAY_SURFACES = [
     summary: 'Find every game, learn the controls, download a local game pack or online launch kit, and join a friend. Mossbell adds a little animal town with direct peer visits.',
   },
   {
+    id: 'cabinet-row',
+    code: 'ROW',
+    title: 'Cabinet Row',
+    route: '/cabinet-row',
+    summary: 'The lobby for the 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood.',
+  },
+  {
+    id: 'sea-glass',
+    code: 'SEA',
+    title: 'Sea Glass',
+    route: '/sea-glass',
+    summary: 'Turn every stone: a hermit crab hops a pyramid of 28 cubes from sand to sea glass, past bubbles and a gull. Tap a corner to hop.',
+  },
+  {
+    id: 'low-tide',
+    code: 'TIDE',
+    title: 'Low Tide',
+    route: '/low-tide',
+    summary: 'Catch what the gull drops: a gentle Kaboom! with a stack of buckets that follows your finger, a rising run of notes, and the tide for a miss.',
+  },
+  {
+    id: 'sandcastle',
+    code: 'SAND',
+    title: 'Sandcastle',
+    route: '/sandcastle',
+    summary: 'Hold back the tide: six sandcastles, three bucket brigades and sand bursts against wave lines from the sea, in 8-bit blue with a mood the game and you keep together.',
+  },
+  {
+    id: 'lighthouse',
+    code: 'LITE',
+    title: 'Lighthouse',
+    route: '/lighthouse',
+    summary: 'Simon as a lighthouse lens at night: watch four lamps play a growing sequence of light and tone, then play it back. A free-play mode turns the lens into an instrument.',
+  },
+  {
+    id: 'morning-route',
+    code: 'NEWS',
+    title: 'Morning Route',
+    route: '/morning-route',
+    summary: 'Deliver the Morning Edition at 6:45 AM: lit porches take the paper, the mailbox scores more, and the trouble is a sprinkler, a sitting dog and a car backing out.',
+  },
+  {
+    id: 'breakwater',
+    code: 'BRK',
+    title: 'Breakwater',
+    route: '/breakwater',
+    summary: 'A breakout for the 8-bit heart: Atari 800XL or Commodore 64 blue, synthesized chip sound, and a mood the game and you keep together. Phone or full screen.',
+  },
+  {
+    id: 'soft-landing',
+    code: 'LAND',
+    title: 'Soft Landing',
+    route: '/soft-landing',
+    summary: 'A lunar lander for the 8-bit heart: a vector skyline in Atari 800XL or Commodore 64 blue, a little fuel, pads that pay more the narrower they are, and the same mood Breakwater keeps. Phone or full screen.',
+  },
+  {
+    id: 'crosswalk',
+    code: 'XWK',
+    title: 'Crosswalk',
+    route: '/crosswalk',
+    summary: 'Five lanes to the sand: a Frogger for the El Segundo strand in Atari 800XL or Commodore 64 blue, synthesized chip sound, and the same mood Breakwater keeps. Swipe or arrows.',
+  },
+  {
+    id: 'kelp',
+    code: 'KELP',
+    title: 'Kelp',
+    route: '/kelp',
+    summary: 'A snake for the 8-bit heart: a strand grows on a 24 by 32 grid between rocks spelled from a pixel font, one note per plankton, the same two machines and the same mood. Swipe or arrows, full screen.',
+  },
+  {
+    id: 'tideline',
+    code: 'TIDE',
+    title: 'Tideline',
+    route: '/tideline',
+    summary: 'Pong stood on its end: your paddle below, the house above, rally to 11. The house gets sharper or softer with the mood you keep together. Phone or full screen.',
+  },
+  {
+    id: 'driftwood',
+    code: 'DRFT',
+    title: 'Driftwood',
+    route: '/driftwood',
+    summary: 'Asteroids on the water: a small boat, driftwood logs that split and wrap, no friction, a limited flare rate, a tide bird, and the same mood model as Breakwater. Phone touch zones or full screen.',
+  },
+  {
     id: 'baseball',
     code: 'BALL',
     title: 'A game you can sit inside',
     route: '/baseball',
     summary: 'A look at baseball: read the essay, follow an illustrated half inning, and keep a small ballpark memory in this browser.',
+  },
+  {
+    id: 'gridtown',
+    code: 'CITY',
+    title: 'Gridtown',
+    route: '/gridtown',
+    summary: 'A small city builder: roads, homes, shops, workshops, power and parks on a sixteen by sixteen map. Twelve lessons, a monthly ledger, and a town saved in your browser.',
   },
   {
     id: 'pocket-rocks',
@@ -304,6 +397,16 @@ export const PASSPORT_STAMPS = [
     points: 5,
     description: 'Be one of three phones on the air at one spot within 30 minutes.',
   },
+  // El Segundo Civil Service (/civil-service): set when this browser files its first ESCS receipt.
+  {
+    id: 'sworn-in',
+    label: 'Sworn In',
+    category: 'civic',
+    route: '/civil-service',
+    action: 'Serve',
+    points: 3,
+    description: 'File your first El Segundo Civil Service receipt.',
+  },
 ] as const;
 
 export type PassportStampId = (typeof PASSPORT_STAMPS)[number]['id'];
@@ -343,6 +446,17 @@ export const DAILY_WALK_STEPS = [
     href: '/routes',
     stampId: 'route-card',
     line: 'Turn the loop into a collectible path.',
+  },
+] as const;
+
+/** Optional stops: offered beside the walk, not counted in its five. */
+export const DAILY_WALK_OPTIONAL_STOPS = [
+  {
+    id: 'civil-service',
+    title: 'Take a civic post',
+    href: '/civil-service',
+    stampId: 'sworn-in',
+    line: 'Sign up for an El Segundo Civil Service post; your first receipt earns Sworn In.',
   },
 ] as const;
 
@@ -402,6 +516,8 @@ export const AGENT_QUESTS = [
     receiptShape: ['agent', 'seed', 'track', 'winner', 'call'],
     tags: ['derby', 'game', 'recap'],
   },
+  // Agent-eligible El Segundo Civil Service posts; claims are stored by /api/civil-service.
+  ...CIVIL_SERVICE_QUESTS,
 ] as const;
 
 export const ROOM_WEATHER = [
@@ -623,6 +739,13 @@ export const BUILDER_GHOSTS = [
 
 export const CIVIC_WISHES = [
   {
+    id: 'civil-service',
+    title: 'El Segundo Civil Service: take a post',
+    href: '/civil-service',
+    status: 'open',
+    outcome: 'Neighbors and agents take civic posts, file public receipts instead of exams, and get an answer in 15 days.',
+  },
+  {
     id: 'next-build',
     title: 'What should PointCast build next?',
     href: '/poll/pointcast-next-build',
@@ -810,6 +933,7 @@ export function buildPlayLayerManifest() {
     dailyWalk: {
       storage: 'localStorage: pc:walk:{YYYY-MM-DD}',
       steps: DAILY_WALK_STEPS,
+      optionalStops: DAILY_WALK_OPTIONAL_STOPS,
     },
     quests: AGENT_QUESTS,
     roomWeather: ROOM_WEATHER,

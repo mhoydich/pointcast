@@ -464,7 +464,7 @@ test('the Node snippet is ten lines, valid, and runs against a server', async ()
 // ---------------------------------------------------------------- REST routes and twins
 
 test('REST routes: the thirteen routes of the brief, inputs validated, paths encoded', () => {
-  assert.deepEqual(pg.REST_ROUTES.map((r) => r.path), ['/status', '/params', '/raw/blocks', '/raw/block/{height}', '/net', '/witnesses', '/checkpoints', '/daily', '/nm/state', '/editions', '/station/{code}', '/capsules', '/account/{address}']);
+  assert.deepEqual(pg.REST_ROUTES.map((r) => r.path), ['/status', '/params', '/raw/blocks', '/raw/block/{height}', '/net', '/stats/classes', '/witnesses', '/checkpoints', '/daily', '/nm/state', '/editions', '/station/{code}', '/capsules', '/account/{address}']);
   const route = (id) => pg.REST_ROUTES.find((r) => r.id === id);
   for (const r of pg.REST_ROUTES) {
     assert.ok(r.blurb.length > 10, r.id);

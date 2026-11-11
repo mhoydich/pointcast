@@ -23,6 +23,8 @@ import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
 import { HOME_SHARE_EDITIONS, HOME_SHARE_CANONICAL, HOME_SHARE_TITLE, HOME_SHARE_DESCRIPTION, HOME_SHARE_WIDTH, HOME_SHARE_HEIGHT, homeShareEditionForDate } from '../src/lib/home-share-editions.mjs';
 import { planUnfurl, unfurlWords } from '../src/lib/unfurl/plan.mjs';
 import { isQuietUesStudyPath } from '../src/lib/ues-living-study-boundaries.mjs';
+import { isStandaloneStaticRoom } from '../src/lib/standalone-static-rooms.mjs';
+import { isSignalAtlasPreview, signalAtlasDirectoryRedirect, withSignalAtlasPreviewHeaders } from '../src/lib/signal-atlas-boundary.mjs';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|wav|webm|zip)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
@@ -235,6 +237,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
+  // Isolated Signal Atlas preview: read-only public files, no session bridge,
+  // ad/unfurl transforms or legacy visit logging. The JSON adapter is separate.
+  if ((isGet || request.method === 'HEAD') && isSignalAtlasPreview(url.pathname)) {
+    const directoryRedirect = signalAtlasDirectoryRedirect(url);
+    if (directoryRedirect) return withSignalAtlasPreviewHeaders(directoryRedirect);
+    return withSignalAtlasPreviewHeaders(await next());
+  }
+
   // Museum shorthand must resolve before the generic directory rewrite.
   if ((isGet || request.method === 'HEAD') && /^\/(atari|bbs)\/?$/.test(url.pathname)) {
     const target = new URL('/atari-bbs/', url.origin);
@@ -332,6 +342,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
   if (['/agents/', '/agents/spec/'].includes(url.pathname)) return next();
+  // Light Companion circle links are capability URLs: the path is the key to
+  // the circle. Hand them straight to functions/light/c/[[path]].ts so the
+  // path is never logged as a visit or written into an unfurl-card URL.
+  if (url.pathname.startsWith('/light/c/')) return next();
 
   // Generic trailing-slash rewrite — applies to ANY path that
   //   • is a GET asking for HTML
@@ -346,11 +360,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // falls back to the homepage on a no-slash hit (the bug Mike flagged
   // around `/gandalf`, `/signal`, `/admin/deploy/coffee_mugs`).
   //
-  // We do an internal fetch to the with-slash version and stream the
-  // response back at the original (no-slash) URL so the URL bar stays
-  // clean. If the upstream 200 turns out to be the homepage anyway
-  // (i.e. the route truly doesn't exist), we still emit it — one
-  // redirect saved either way.
+  // We load the with-slash asset and keep decorating it in this same
+  // invocation, so the URL bar stays on the no-slash address. A public
+  // fetch() of our own host would re-enter this middleware and count a
+  // second Pages Function request for every pretty URL. ASSETS.fetch
+  // reads the static file without that hop. If the binding is missing
+  // (unit tests, local calls), fall back to the public fetch.
+  // If the upstream 200 turns out to be the homepage anyway (the route
+  // truly doesn't exist), we still emit it — one redirect saved either way.
   const looksLikeDirectoryPath =
     isGet
     && wantsHtml
@@ -358,29 +375,47 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     && !url.pathname.endsWith('/')
     && !STATIC_ASSET_REGEX.test(url.pathname)
     && !isApiRoute;
+  let directoryAsset: Response | null = null;
   if (looksLikeDirectoryPath) {
     const internalUrl = new URL(url);
     internalUrl.pathname = url.pathname + '/';
-    const upstream = await fetch(internalUrl.toString(), {
-      headers: request.headers,
-      redirect: 'follow',
-    });
-    // Only adopt the upstream response if it found something. A 404 here
-    // means the route doesn't exist with-slash either, so fall through
-    // to next() with the original URL — that gives Pages a chance to
-    // serve a 404 against the original pathname.
-    if (upstream.status === 200) {
-      const headers = new Headers(upstream.headers);
-      headers.delete('location');
-      const directoryResponse = new Response(upstream.body, {
-        status: upstream.status,
-        statusText: upstream.statusText,
-        headers,
+    const assets = (env as { ASSETS?: { fetch: (input: Request) => Promise<Response> } }).ASSETS;
+    if (assets?.fetch) {
+      try {
+        const upstream = await assets.fetch(new Request(internalUrl.toString(), request));
+        const contentType = upstream.headers.get('content-type') ?? '';
+        if (upstream.status === 200 && contentType.startsWith('text/html')) {
+          directoryAsset = upstream;
+          // Later gates and the unfurl card see the canonical slash path.
+          url.pathname = internalUrl.pathname;
+        } else {
+          await upstream.body?.cancel().catch(() => {});
+        }
+      } catch {
+        directoryAsset = null;
+      }
+    } else {
+      const upstream = await fetch(internalUrl.toString(), {
+        headers: request.headers,
+        redirect: 'follow',
       });
-      const upstreamType = classifyUA(request.headers.get('user-agent') ?? '');
-      return upstreamType.startsWith('ai:') || isQuietUesStudyPath(url.pathname)
-        ? directoryResponse
-        : injectTezosSessionBridge(directoryResponse);
+      // Only adopt the upstream response if it found something. A 404 here
+      // means the route doesn't exist with-slash either, so fall through
+      // to next() with the original URL — that gives Pages a chance to
+      // serve a 404 against the original pathname.
+      if (upstream.status === 200) {
+        const headers = new Headers(upstream.headers);
+        headers.delete('location');
+        const directoryResponse = new Response(upstream.body, {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers,
+        });
+        const upstreamType = classifyUA(request.headers.get('user-agent') ?? '');
+        return upstreamType.startsWith('ai:') || isQuietUesStudyPath(url.pathname) || isStandaloneStaticRoom(url.pathname)
+          ? directoryResponse
+          : injectTezosSessionBridge(directoryResponse);
+      }
     }
   }
 
@@ -475,7 +510,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     headers.delete('If-Modified-Since');
     assetRequest = new Request(request, { headers });
   }
-  const staticResponse = withHomeShareAssetCache(await withStaticAudioRange(request, await next(assetRequest)), url.pathname);
+  const staticResponse = withHomeShareAssetCache(
+    await withStaticAudioRange(request, directoryAsset ?? await next(assetRequest)),
+    url.pathname,
+  );
   const staticResponseContentType = staticResponse.headers.get('content-type') ?? '';
   const response = staticResponse.status === 200 && staticResponseContentType.startsWith('text/html')
     ? injectUnfurlCards(injectHomeShareMetadata(staticResponse, url.pathname), url.pathname, url.search)
@@ -488,7 +526,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // Astro layouts. Layout-backed pages contain the same script; its global
   // singleton guard makes this middleware copy a no-op there. Quiet UES
   // educational documents intentionally omit account probing and unrelated wallet state.
-  const browserResponse = isHtmlResponse && !type.startsWith('ai:') && !isQuietUesStudyPath(url.pathname)
+  const browserResponse = isHtmlResponse && !type.startsWith('ai:') && !isQuietUesStudyPath(url.pathname) && !isStandaloneStaticRoom(url.pathname)
     ? injectTezosSessionBridge(response)
     : response;
 

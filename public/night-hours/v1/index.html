@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Hours, first prototype</title><link rel="canonical" href="https://pointcast.xyz/night-hours/v1/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* layout: one brass-framed station at a time, dusk to first light, PRAY underneath */
+  color-scheme: dark;
+  --night:#090b12;
+  --plaster:#141722;
+  --brass:#b08a4a;
+  --brass-dim:#6d5630;
+  --candle:#f3b964;
+  --linen:#e8e1cf;
+  --muted:#8d8a80;
+  --blue:#4f6dff;
+  --magenta:#cf52cc;
+  --display:"Marcellus", "Iowan Old Style", Georgia, serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{
+  background:var(--night);
+  color:var(--linen);
+  font-family:var(--mono);
+  font-size:13px;
+  line-height:1.5;
+  display:flex;flex-direction:column;align-items:center;
+  padding:18px 16px 28px;
+  gap:14px;
+  background-image:radial-gradient(120% 60% at 30% 0%, #131728 0%, var(--night) 60%);
+}
+header{width:100%;max-width:440px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+header h1{font-family:var(--display);font-weight:400;font-size:20px;letter-spacing:.04em}
+header span{color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;text-align:right}
+
+.frame{
+  position:relative;width:100%;max-width:440px;aspect-ratio:3/4;
+  padding:10px;border-radius:3px;
+  background:linear-gradient(135deg,#d0aa63 0%,#7a5f31 28%,#b9944f 52%,#5c4623 78%,#a8853f 100%);
+  box-shadow:0 0 0 1px #2e2412, 0 18px 50px rgba(0,0,0,.7);
+  transition:box-shadow .9s ease;
+}
+.frame.flare{box-shadow:0 0 0 1px #2e2412, 0 0 70px 6px rgba(243,185,100,.38), 0 18px 50px rgba(0,0,0,.7)}
+.well{position:relative;width:100%;height:100%;overflow:hidden;background:#000;box-shadow:inset 0 0 0 1px #2a200f, inset 0 0 24px rgba(0,0,0,.8)}
+.well img,.well video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.6s ease}
+.well .on{opacity:1}
+.tag{position:absolute;left:10px;bottom:10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--linen);background:rgba(9,11,18,.62);padding:3px 7px;border:1px solid rgba(176,138,74,.5)}
+.blocks{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.blocks i{position:absolute;bottom:8%;width:10px;height:10px;opacity:0;animation:rise 2.6s ease-out forwards}
+@keyframes rise{0%{transform:translateY(0);opacity:.95}100%{transform:translateY(-320px);opacity:0}}
+
+.plate{width:100%;max-width:440px;display:flex;flex-direction:column;gap:6px}
+.plate .hour{color:var(--brass);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+.plate h2{font-family:var(--display);font-weight:400;font-size:28px;line-height:1.15;text-wrap:balance}
+.plate p{color:var(--muted);max-width:42ch}
+
+.row{width:100%;max-width:440px;display:flex;align-items:center;gap:10px}
+button{font:inherit;color:inherit;cursor:pointer;border-radius:2px}
+button:focus-visible{outline:2px solid var(--candle);outline-offset:3px}
+.nav{background:none;border:1px solid var(--brass-dim);width:46px;height:52px;font-size:18px;color:var(--brass)}
+.nav:hover{border-color:var(--brass)}
+#pray{
+  flex:1;height:52px;border:1px solid var(--brass);
+  background:linear-gradient(180deg,#1d1a14,#12100c);
+  font-family:var(--display);font-size:19px;letter-spacing:.32em;text-indent:.32em;color:var(--candle);
+}
+#pray:active{background:#241f15}
+.meta{width:100%;max-width:440px;display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:11px}
+.count b{color:var(--linen);font-weight:500;font-variant-numeric:tabular-nums}
+.dots{display:flex;gap:7px}
+.dots button{width:11px;height:11px;padding:0;border:1px solid var(--brass-dim);background:none}
+.dots button[aria-current="true"]{background:var(--candle);border-color:var(--candle)}
+footer{width:100%;max-width:440px;color:var(--muted);font-size:11px;border-top:1px solid #23212a;padding-top:10px}
+@media (prefers-reduced-motion:reduce){
+  .well img,.well video{transition:none}
+  .blocks i{animation:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Night Hours</h1>
+  <span>v1 · Nov 9 2026</span>
+</header>
+
+<div class="frame" id="frame">
+  <div class="well" id="well">
+    <img id="s0" src="../img/dusk1.jpg" alt="Pacific at blue hour, part of the swell breaking into blue and magenta blocks" class="on">
+    <img id="s1" src="../img/shore1.jpg" alt="Small wooden shrine with three candles on a night beach, refinery lights down the coast">
+    <video id="s2" src="../media/niche.mp4" poster="../img/niche1.jpg" muted loop playsinline preload="metadata" aria-label="Brass shrine niche with a candle and a glitching seascape painting, moving"></video>
+    <img id="s3" src="../img/bell1.jpg" alt="Bronze bell in an arched niche, a column of glowing blocks rising from a candle">
+    <img id="s4" src="../img/moon1.jpg" alt="Stone bowl of seawater with the moon reflected as pixel blocks, candle and sage beside it">
+    <img id="s5" src="../img/light1.jpg" alt="Ikebana branch and chrysanthemum in a bronze vessel, petals dissolving into copper blocks">
+    <div class="blocks" id="blocks"></div>
+    <span class="tag" id="tag">Still</span>
+  </div>
+</div>
+
+<div class="plate">
+  <div class="hour" id="hour">Station 1 of 6 · Dusk</div>
+  <h2 id="title">The swell goes blue</h2>
+  <p id="line">The day lets go of the water first.</p>
+</div>
+
+<div class="row">
+  <button class="nav" id="prev" aria-label="Previous station">‹</button>
+  <button id="pray">PRAY</button>
+  <button class="nav" id="next" aria-label="Next station">›</button>
+</div>
+
+<div class="meta">
+  <span class="count"><b id="count">0</b> at this station</span>
+  <div class="dots" id="dots" role="tablist" aria-label="Stations"></div>
+</div>
+
+<footer>Tap PRAY: the tone sounds, the frame flares, the count rises, the night moves on one station. Counts stay on this device in this first prototype. <a href="../" style="color:#f3b964">The live shrine</a> keeps a shared ledger. Imagery is AI artwork (Krea 3, Seedance 2.5).</footer>
+
+<script>
+const stations=[
+  {hour:"Dusk",        title:"The swell goes blue",     line:"The day lets go of the water first.",              hz:196.00, kind:"Still"},
+  {hour:"First dark",  title:"Shore shrine",            line:"Three candles, one flower, the refinery for a skyline.", hz:220.00, kind:"Still"},
+  {hour:"Deep night",  title:"The niche",               line:"The painting keeps its own weather.",              hz:261.63, kind:"Moving · sound on PRAY"},
+  {hour:"Small hours", title:"The bell",                line:"Smoke that forgot how to be smoke.",               hz:293.66, kind:"Still"},
+  {hour:"Moonset",     title:"The bowl",                line:"Seawater holds the moon at low resolution.",       hz:329.63, kind:"Still"},
+  {hour:"First light", title:"The offering",            line:"One branch, one flower, morning again.",           hz:392.00, kind:"Still"}
+];
+const $=id=>document.getElementById(id);
+let i=0, ctx=null;
+let counts=[0,0,0,0,0,0];
+try{const c=JSON.parse(localStorage.getItem("night-hours-counts")||"null"); if(Array.isArray(c)&&c.length===6) counts=c;}catch(e){}
+
+const dots=$("dots");
+stations.forEach((s,k)=>{
+  const b=document.createElement("button");
+  b.setAttribute("aria-label","Station "+(k+1)+", "+s.hour);
+  b.addEventListener("click",()=>show(k));
+  dots.appendChild(b);
+});
+
+function show(k){
+  const video=$("s2");
+  $("s"+i).classList.remove("on");
+  i=(k+stations.length)%stations.length;
+  $("s"+i).classList.add("on");
+  const s=stations[i];
+  $("hour").textContent="Station "+(i+1)+" of 6 · "+s.hour;
+  $("title").textContent=s.title;
+  $("line").textContent=s.line;
+  $("tag").textContent=s.kind;
+  $("count").textContent=counts[i];
+  [...dots.children].forEach((d,n)=>d.setAttribute("aria-current",n===i?"true":"false"));
+  if(i===2){video.muted=true;video.play().catch(()=>{});}
+  else{video.pause();video.muted=true;}
+}
+
+function tone(hz){
+  try{
+    ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+    if(ctx.state==="suspended") ctx.resume();
+    const t=ctx.currentTime;
+    const out=ctx.createGain(); out.gain.value=.5; out.connect(ctx.destination);
+    // bell: fundamental plus inharmonic partials, long decay
+    [[1,.5,5.5],[2.01,.22,3.6],[2.76,.14,2.6],[5.4,.06,1.4]].forEach(([m,g,d])=>{
+      const o=ctx.createOscillator(), a=ctx.createGain();
+      o.type="sine"; o.frequency.value=hz*m;
+      a.gain.setValueAtTime(0,t); a.gain.linearRampToValueAtTime(g,t+.012);
+      a.gain.exponentialRampToValueAtTime(.0001,t+d);
+      o.connect(a); a.connect(out); o.start(t); o.stop(t+d+.1);
+    });
+  }catch(e){}
+}
+
+function blocks(){
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const host=$("blocks"), cols=["#4f6dff","#cf52cc","#f3b964","#7a5cff"];
+  for(let n=0;n<14;n++){
+    const b=document.createElement("i");
+    const size=6+Math.floor(Math.random()*3)*4;
+    b.style.width=b.style.height=size+"px";
+    b.style.left=(8+Math.random()*84)+"%";
+    b.style.background=cols[n%cols.length];
+    b.style.animationDelay=(Math.random()*.7)+"s";
+    host.appendChild(b);
+    setTimeout(()=>b.remove(),3600);
+  }
+}
+
+let advance=null;
+$("pray").addEventListener("click",()=>{
+  counts[i]++; $("count").textContent=counts[i];
+  try{localStorage.setItem("night-hours-counts",JSON.stringify(counts));}catch(e){}
+  $("frame").classList.add("flare");
+  setTimeout(()=>$("frame").classList.remove("flare"),1400);
+  blocks();
+  const video=$("s2");
+  if(i===2){
+    // the moving station carries its own sound
+    video.currentTime=0; video.muted=false;
+    video.play().catch(()=>{video.muted=true;tone(stations[i].hz);});
+  }else{
+    tone(stations[i].hz);
+  }
+  clearTimeout(advance);
+  advance=setTimeout(()=>show(i+1), i===2?6000:3200);
+});
+$("prev").addEventListener("click",()=>{clearTimeout(advance);show(i-1);});
+$("next").addEventListener("click",()=>{clearTimeout(advance);show(i+1);});
+
+let x0=null;
+$("well").addEventListener("touchstart",e=>{x0=e.touches[0].clientX;},{passive:true});
+$("well").addEventListener("touchend",e=>{
+  if(x0===null) return;
+  const dx=e.changedTouches[0].clientX-x0; x0=null;
+  if(Math.abs(dx)>40){clearTimeout(advance);show(i+(dx<0?1:-1));}
+},{passive:true});
+
+show(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {JSDOM} from 'jsdom';
+const html=readFileSync(new URL('../public/pantone/index.html',import.meta.url),'utf8');
+const script=readFileSync(new URL('../public/pantone/lab.js',import.meta.url),'utf8');
+function fixture(query=''){
+ const dom=new JSDOM(html,{url:'https://pointcast.xyz/pantone/'+query,runScripts:'outside-only'}),w=dom.window;
+ const blobs=[];w.URL.createObjectURL=b=>{blobs.push(b);return 'blob:test'};w.URL.revokeObjectURL=()=>{};w.HTMLAnchorElement.prototype.click=function(){};
+ Object.defineProperty(w.navigator,'clipboard',{value:{writeText:async()=>{}}});w.eval(script);
+ const el=id=>w.document.getElementById(id),change=(id,value)=>{el(id).value=value;el(id).dispatchEvent(new w.Event('change',{bubbles:true}))};
+ return {dom,w,el,change,blobs};
+}
+test('same pixel comparison survives repeated reveal/reset',()=>{const f=fixture();for(let i=0;i<4;i++){f.el('reveal').click();assert.equal(f.el('reveal').getAttribute('aria-pressed'),'true');f.el('context-reset').click();assert.equal(f.el('reveal').getAttribute('aria-pressed'),'false');assert.equal(f.el('surround').value,'85');}f.dom.window.close();});
+test('all workflow/surface combinations explain rather than fabricate conversions',()=>{const f=fixture();for(const mode of ['screen','process','spot']){const input=f.w.document.querySelector(`[name=workflow][value=${mode}]`);input.checked=true;input.dispatchEvent(new f.w.Event('change'));assert.equal(f.el('machine').dataset.mode,mode);for(const surface of ['coated','uncoated','textile']){f.change('substrate',surface);assert.match(f.el('surface-note').textContent,surface==='textile'?/textile-specific/:/proof|preview/);}}f.dom.window.close();});
+test('timeline supports repeat navigation and real source links',()=>{const f=fixture();for(const year of ['2026','1999','2007','2022','1956','2026']){f.w.document.querySelector(`[data-year="${year}"]`).click();assert.ok(f.el('timeline-date').textContent.includes(year));assert.ok(f.el('timeline-source').querySelector('a').href.startsWith('https://'));assert.equal(f.w.document.querySelectorAll('[data-year][aria-pressed=true]').length,1);}f.dom.window.close();});
+test('invalid palette URL is bounded and no markup is injected',()=>{const f=fixture('?base=%3Cscript%3E&accent=bad&ground=chalk&project=bogus');assert.equal(f.el('base-color').value,'slate');assert.equal(f.el('accent-color').value,'orange');assert.equal(f.el('project').value,'poster');assert.equal(f.el('swatch-strip').querySelectorAll('script').length,0);f.dom.window.close();});
+test('hash-only navigation preserves edits; changed query restores shared state',()=>{const f=fixture('?base=yellow&accent=ink&ground=chalk');f.change('base-color','pink');f.w.history.pushState(null,'','#business');f.w.dispatchEvent(new f.w.PopStateEvent('popstate'));assert.equal(f.el('base-color').value,'pink');f.w.history.pushState(null,'','?base=blue&accent=orange&ground=chalk#palette');f.w.dispatchEvent(new f.w.PopStateEvent('popstate'));assert.equal(f.el('base-color').value,'blue');f.dom.window.close();});
+test('exports reflect current choices and remain available after repeat use',()=>{const f=fixture();f.change('base-color','yellow');f.change('material','textile');for(const id of ['download-svg','download-brief','download-svg'])f.el(id).click();assert.equal(f.blobs.length,3);assert.equal(f.blobs[0].type,'image/svg+xml;charset=utf-8');assert.equal(f.blobs[1].type,'text/plain;charset=utf-8');assert.match(f.el('passport-note').textContent,/Cotton textile/);f.dom.window.close();});
+test('palette shuffle keeps distinct roles and reset restores draft',()=>{const f=fixture();for(let i=0;i<20;i++){f.el('shuffle').click();assert.equal(new Set(['base-color','accent-color','ground-color'].map(id=>f.el(id).value)).size,3);}f.el('palette-form').reset();assert.equal(f.el('base-color').value,'slate');assert.equal(f.el('accent-color').value,'orange');assert.equal(f.el('ground-color').value,'chalk');f.dom.window.close();});

@@ -16,10 +16,10 @@ function assertWellFormed(xml, label) {
   assert.equal(error, null, `${label} is well-formed XML`);
 }
 
-test('every Commons and Global Barter note has a Security Edition', () => {
-  assert.equal(entries.length, 140);
+test('every Commons, Global Barter and Almanac note has a Security Edition', () => {
+  assert.equal(entries.length, 192);
   const serials = entries.map(({ collection, entry }) => securityNote(collection, entry).serial);
-  assert.equal(new Set(serials).size, 140, 'serials are unique across collections');
+  assert.equal(new Set(serials).size, 192, 'serials are unique across collections');
   for (const { collection, entry } of entries) {
     const files = securityFiles(collection, entry);
     assert.equal(files.front, `/currency-builder/security/${collection}/front/${entry.slug}.svg`);
@@ -61,5 +61,16 @@ test('see-through register halves meet exactly, with no noggle motif', () => {
   for (const [name, body] of FEATURES) {
     assert.doesNotMatch(`${name} ${body}`, /noggle/i);
     assert.doesNotMatch(`${name} ${body}`, BANNED);
+  }
+});
+
+test('every front line fits without being cut: two lines, or three at the smaller size', async () => {
+  const { wrapMeasured } = await import('../src/lib/currency-builder/type.mjs');
+  for (const { collection, entry } of entries) {
+    const line = securityNote(collection, entry).line;
+    const wide = wrapMeasured('body', line, 19, 390);
+    const lines = wide.length > 2 ? wrapMeasured('body', line, 16.5, 390) : wide;
+    assert.ok(lines.length <= 3, `${collection}/${entry.slug} front line fits in three lines`);
+    if (collection !== 'almanac') assert.ok(wide.length <= 2, `${collection}/${entry.slug} keeps its two-line front`);
   }
 });

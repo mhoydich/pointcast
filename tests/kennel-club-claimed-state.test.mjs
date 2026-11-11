@@ -158,7 +158,7 @@ test('claimed surfaces contain one holding contract and no legacy repeated owner
     read('src/components/KennelClubClaim.astro'),
     read('src/components/KennelClubMint.astro'),
     read('src/pages/kennel-club.astro'),
-    read('src/pages/collect.astro'),
+    read('src/pages/collect/kennel.astro'),
   ]);
   assert.match(renderer, /You hold/);
   assert.match(holding, /Move it to a wallet you control/);

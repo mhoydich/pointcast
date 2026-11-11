@@ -84,7 +84,7 @@ const fail = (reason, extra = {}) => ({ ok: false, reason, ...extra });
 
 export function addWallet(world, { id, label = id, role = 'human', credits = 0n, fundedBy = null, strategy = null }) {
   if (world.wallets.has(id)) throw new Error(`wallet exists: ${id}`);
-  const wallet = { id, label, role, credits, fundedBy, strategy, positions: new Map(), realized: 0n };
+  const wallet = { id, label, role, credits, fundedBy, strategy, positions: new Map(), realized: 0n, feesReceived: 0n };
   world.wallets.set(id, wallet);
   emit(world, 'WALLET', { wallet: id, role, credits, fundedBy });
   return wallet;
@@ -225,13 +225,17 @@ export function launch(world, { creator, symbol, name, nounId, preset = 'classic
   const { limits } = world.config;
   const wallet = world.wallets.get(creator);
   if (!wallet) return fail('NO_WALLET');
-  if (typeof name !== 'string' || !name.trim() || name.length > limits.nameMax) return fail('BAD_NAME');
+  // Control and text-direction characters, and blank fillers that may draw as nothing or as a gap (Hangul fillers, the
+  // braille blank), can make a name read differently from what is scanned. Other invisible characters (an emoji
+  // joiner, say) are allowed: the copy rules drop them before they scan, so they hide nothing.
+  if (typeof name !== 'string' || !name.trim() || name.length > limits.nameMax || /[\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\u115F\u1160\u3164\uFFA0\u2800\u{1D159}]/u.test(name)) return fail('BAD_NAME');
   if (typeof symbol !== 'string' || !/^[A-Z0-9]{1,13}$/.test(symbol) || symbol.length > limits.symbolMax) return fail('BAD_SYMBOL');
   if (!Number.isInteger(nounId) || nounId < 0 || nounId > 99) return fail('BAD_NOUN');
+  // Own keys only: a name like "toString" must not find an Object.prototype member.
+  if (!Object.hasOwn(world.config.presets, preset)) return fail('BAD_PRESET');
   const p = world.config.presets[preset];
-  if (!p) return fail('BAD_PRESET');
+  if (!Object.hasOwn(world.config.rules, rules)) return fail('BAD_RULES');
   const r = world.config.rules[rules];
-  if (!r) return fail('BAD_RULES');
   const id = `c${world.coins.size + 1}`;
   const coin = {
     id, symbol, name, nounId, creator, preset, rules,
@@ -247,6 +251,7 @@ export function launch(world, { creator, symbol, name, nounId, preset = 'classic
     holders: new Map(),
     orders: new Map(),
     completeTick: null,
+    viewerMade: Boolean(viewerMade),
   };
   world.coins.set(id, coin);
   emit(world, 'CREATE', { coin: id, symbol, name, nounId, creator, preset, rules, openTick: coin.openTick, viewerMade: Boolean(viewerMade) });
@@ -343,12 +348,14 @@ export function orderRoom(world, coinId, walletId) {
  * Place (or add to) an auction order. Up to the wallet's room under the cap
  * is accepted and escrowed; the rest is refused and never leaves the wallet.
  * A priority fee is inside the accepted gross and goes to the house at once.
+ * An order the priority fee would take whole adds nothing to fill: BAD_AMOUNT.
  */
 function placeOrder(world, coin, wallet, quoteIn, priorityFeeBps, reason) {
   const accepted = min(quoteIn, orderRoom(world, coin.id, wallet.id));
   if (accepted <= 0n) return fail('AUCTION_CAP');
   if (wallet.credits < accepted) return fail('INSUFFICIENT_CREDITS');
   const priorityFee = accepted - netOfRate(accepted, bpsRate(priorityFeeBps));
+  if (priorityFee === accepted) return fail('BAD_AMOUNT');
   wallet.credits -= accepted;
   world.house.priorityFees += priorityFee;
   const order = coin.orders.get(wallet.id) ?? { wallet: wallet.id, amount: 0n, priorityFee: 0n, seq: world.seq, tick: world.tick };
@@ -403,6 +410,71 @@ export function quoteSell(world, coinId, baseIn, priorityFeeBps = 0) {
   if (!validPriority(world, priorityFeeBps)) return 0n;
   const plan = planSell(world, coin, baseIn, priorityFeeBps);
   return plan.fee > plan.grossOut ? 0n : plan.grossOut - plan.fee;
+}
+
+/** Sum a plan's fee lines across its legs. */
+function lineTotals(...legs) {
+  const t = { fee: 0n, creator: 0n, house: 0n, lp: 0n, sniper: 0n, priority: 0n };
+  for (const leg of legs) if (leg) for (const k of Object.keys(t)) t[k] += leg[k];
+  return t;
+}
+
+/** Price (quote per token, as a Number) at the coin's venue before a trade. */
+const venuePrice = (coin) => (coin.pool ? Number(coin.pool.quote) / Number(coin.pool.base) : Number(coin.curve.Q) / Number(coin.curve.B));
+const minOutAt = (out, slippageBps) => (out * BigInt(10_000 - slippageBps)) / 10_000n;
+const validSlippage = (world, bps) => Number.isInteger(bps) && bps >= 0 && bps <= world.config.limits.maxSlippageBps;
+
+/**
+ * Everything a buy panel shows, without changing anything: tokens out, the
+ * minimum out at a slippage, the fee lines (they sum to the fee), and the
+ * price impact before fees, (net/out)/p − 1 (plan §4.3). During an opening
+ * auction it describes the order instead: what is accepted under the cap,
+ * its priority fee, and an upper bound on the fill. Null when the coin
+ * cannot take a buy of this size.
+ */
+export function previewBuy(world, coinId, quoteIn, { priorityFeeBps = 0, slippageBps = world.config.limits.defaultSlippageBps, walletId = null } = {}) {
+  const coin = world.coins.get(coinId);
+  if (!coin || typeof quoteIn !== 'bigint' || quoteIn <= 0n || coin.status === 'complete') return null;
+  if (!validPriority(world, priorityFeeBps) || !validSlippage(world, slippageBps)) return null;
+  if (coin.status === 'auction') {
+    const room = walletId ? orderRoom(world, coinId, walletId) : auctionCap(world, coin);
+    const accepted = min(quoteIn, room);
+    const priority = accepted - netOfRate(accepted, bpsRate(priorityFeeBps));
+    if (accepted > 0n && priority === accepted) return null;
+    return { venue: 'auction', gross: quoteIn, accepted, refused: quoteIn - accepted, priorityFee: priority, estOut: accepted > 0n ? estimateOut(world, coinId, walletId, quoteIn, priorityFeeBps) : 0n };
+  }
+  const plan = planBuy(world, coin, quoteIn, priorityFeeBps);
+  if (plan.total === 0n) return null;
+  const net = plan.leg.net + (plan.overflow ? plan.overflow.net : 0n);
+  const p = venuePrice(coin);
+  return {
+    venue: plan.venue,
+    gross: quoteIn,
+    net,
+    out: plan.total,
+    minOut: minOutAt(plan.total, slippageBps),
+    lines: lineTotals(plan.leg, plan.overflow),
+    impactBps: Math.round(((Number(net) / Number(plan.total)) / p - 1) * 10_000),
+    graduates: plan.venue === 'curve' && plan.leg.out === coin.curve.R,
+  };
+}
+
+/** Everything a sell panel shows: credits out after fees, the minimum out, fee lines and price impact before fees, 1 − (grossOut/in)/p. */
+export function previewSell(world, coinId, baseIn, { priorityFeeBps = 0, slippageBps = world.config.limits.defaultSlippageBps } = {}) {
+  const coin = world.coins.get(coinId);
+  if (!coin || typeof baseIn !== 'bigint' || baseIn <= 0n || coin.status === 'auction' || coin.status === 'complete') return null;
+  if (!validPriority(world, priorityFeeBps) || !validSlippage(world, slippageBps)) return null;
+  const plan = planSell(world, coin, baseIn, priorityFeeBps);
+  if (plan.fee > plan.grossOut) return null;
+  const out = plan.grossOut - plan.fee;
+  return {
+    venue: plan.venue,
+    grossOut: plan.grossOut,
+    out,
+    minOut: minOutAt(out, slippageBps),
+    lines: lineTotals(plan),
+    impactBps: Math.round((1 - (Number(plan.grossOut) / Number(baseIn)) / venuePrice(coin)) * 10_000),
+  };
 }
 
 /* ---------- selling ---------- */
@@ -470,7 +542,9 @@ function clearAuction(world, coin) {
     const wallet = world.wallets.get(o.wallet);
     wallet.credits += o.amount - spent[i];
     if (fills[i] > 0n) addHolding(coin, wallet, fills[i], spent[i] + o.priorityFee);
-    emit(world, 'AUCTION_FILL', { coin: coin.id, wallet: o.wallet, quote: spent[i], refund: o.amount - spent[i], base: fills[i], orderTick: o.tick, heldAfter: position(wallet, coin.id).base });
+    // A lone dust order can pay in and take no token (the curve fee rounds its net to 0): a realized loss, so the ledger still adds up.
+    else wallet.realized -= spent[i] + o.priorityFee;
+    emit(world, 'AUCTION_FILL', { coin: coin.id, wallet: o.wallet, quote: spent[i], refund: o.amount - spent[i], base: fills[i], orderTick: o.tick, heldAfter: position(wallet, coin.id).base, priceAfter: coinPrice(coin) });
   });
   coin.orders.clear();
   emit(world, 'AUCTION_CLEAR', { coin: coin.id, quote: gross, base: out, bidders: orders.length, priceAfter: coinPrice(coin) });
@@ -500,7 +574,11 @@ export function sweep(world, coinId) {
   if (!amount) return { ok: true, paid: 0n };
   const parts = coin.feeSplit.map((s) => (amount * BigInt(s.bps)) / 10_000n);
   parts[0] += amount - parts.reduce((sum, x) => sum + x, 0n);
-  coin.feeSplit.forEach((s, i) => { world.wallets.get(s.wallet).credits += parts[i]; });
+  coin.feeSplit.forEach((s, i) => {
+    const w = world.wallets.get(s.wallet);
+    w.credits += parts[i];
+    w.feesReceived += parts[i];
+  });
   coin.feesHeld = 0n;
   coin.feesSwept += amount;
   emit(world, 'SWEEP', { coin: coin.id, quote: amount, recipients: coin.feeSplit.length });
