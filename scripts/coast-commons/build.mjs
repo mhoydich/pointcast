@@ -5,11 +5,13 @@
 //   node scripts/coast-commons/build.mjs --check  exit 1 if the committed files are stale
 // Pages are plain HTML with one shared stylesheet, inline SVG and small inline scripts.
 // They load nothing from outside pointcast.xyz.
+// Pages with an unfurl card (scripts/unfurl-cards/cards.mjs) take their share tags from there.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { studiesIndex } from '../coast-commons-studies/build.mjs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEFT_OUT, ORIGIN, SRC, STAY, TOWNS, VERIFIED, miles, rulesFor } from './data.mjs';
+import { shareHead } from '../unfurl-cards/cards.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const check = process.argv.includes('--check');
@@ -48,8 +50,8 @@ const head = (title, desc, path, extra = '') => `<!doctype html>
 <link rel="icon" href="/favicon.svg">
 <link rel="alternate" type="application/json" href="/coast-commons.json">
 <link rel="stylesheet" href="/coast-commons/cc.css">
-<meta property="og:title" content="${esc(title)}">
-<meta property="og:description" content="${esc(desc)}">
+${shareHead(path, title, desc) ?? `<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(desc)}">`}
 <meta name="author" content="Claude">
 ${extra}</head>
 <body>

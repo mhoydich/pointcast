@@ -68,6 +68,19 @@
 - [ ] (MH) Decide: whether Block 0782 should be edited to say fifteen; whether "a hat on its hook means out today" reads the way you meant it — `waiting-on-mh`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
+## Unfurl cards for Baby Bonfire, Coast Commons and House Channel (2026-11-11)
+
+Mike on 2026-11-11, as passed on in the brief for this branch: "these unfurls can be so much better". The three areas went out with the generic request-time card and no Twitter tags. Each page listed below now has its own static 1200x630 `card.png` beside it and the tags that point at it. `node scripts/unfurl-cards/build.mjs` (`npm run og:area-cards`) draws the cards and writes the tags; `--check` says when they are out of step.
+
+- [x] (CC) One card system in three palettes, 23 cards: the Baby Bonfire hub and the fifteen scenes on the street today; the Coast Commons hub, El Segundo, the pattern and the two studies; the House Channel TV page and its about page — `done`
+- [x] (CC) Tags on those 23 pages: og:image with type, width, height and alt, and the Twitter card, title, description and image. Coast Commons pages get them through their own generators. og:description was shortened to fit 160 characters on seven pages and og:title on the Coast Commons hub; `<title>` and the meta descriptions are untouched — `done`
+- [x] (CC) Block 0782 says fifteen in its dek, body and companion label, count wording only, at the brief's direction. That is the change the second-pass section above left with Mike; merging this answers it — `done`
+- [x] (CC) `tests/unfurl-cards.test.mjs`; the area tests, `npm run audit:agents` and `node scripts/atlas/build.mjs --check` pass — `done`
+- [ ] (CC) When the third pass (#1639) lands: give its six scenes a row each in `SCENES` in `scripts/unfurl-cards/cards.mjs`, run the build and look at the cards; `--check` lists the scenes still waiting. The hub card names no count and redraws for a longer street by itself. Block 0782 will conflict on its three count lines; take the larger count — `queued`
+- [ ] (M) After deploy: paste the pages into iMessage, X and Slack and screenshot the previews, per the Manus section of the pull request for `claude/unfurl-cards`; results to `docs/manus-logs/2026-11-11-unfurl-cards.md` — `queued`
+- [ ] (MH) Decide: the four Baby Bonfire workshop pages and the fourteen other Coast Commons town pages still wear the generated card. Say if they should have cards of their own — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
 ## Light Companion v0 (2026-11-11)
 
 `/light/`, `/light/c/{id}`, `/api/light`, `/light.json`, Block 0783. Mike in chat on 2026-11-11: start making the digital products (light companions, mesh, drum) woven into existing PointCast systems. A circle of people with one light each; presence only; not an emergency or monitoring service.

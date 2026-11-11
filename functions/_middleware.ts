@@ -23,6 +23,7 @@ import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
 import { HOME_SHARE_EDITIONS, HOME_SHARE_CANONICAL, HOME_SHARE_TITLE, HOME_SHARE_DESCRIPTION, HOME_SHARE_WIDTH, HOME_SHARE_HEIGHT, homeShareEditionForDate } from '../src/lib/home-share-editions.mjs';
 import { planUnfurl, unfurlWords } from '../src/lib/unfurl/plan.mjs';
 import { isQuietUesStudyPath } from '../src/lib/ues-living-study-boundaries.mjs';
+import { isStandaloneStaticRoom } from '../src/lib/standalone-static-rooms.mjs';
 import { isSignalAtlasPreview, signalAtlasDirectoryRedirect, withSignalAtlasPreviewHeaders } from '../src/lib/signal-atlas-boundary.mjs';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|wav|webm|zip)(\?|$)/i;
@@ -411,7 +412,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           headers,
         });
         const upstreamType = classifyUA(request.headers.get('user-agent') ?? '');
-        return upstreamType.startsWith('ai:') || isQuietUesStudyPath(url.pathname)
+        return upstreamType.startsWith('ai:') || isQuietUesStudyPath(url.pathname) || isStandaloneStaticRoom(url.pathname)
           ? directoryResponse
           : injectTezosSessionBridge(directoryResponse);
       }
@@ -525,7 +526,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // Astro layouts. Layout-backed pages contain the same script; its global
   // singleton guard makes this middleware copy a no-op there. Quiet UES
   // educational documents intentionally omit account probing and unrelated wallet state.
-  const browserResponse = isHtmlResponse && !type.startsWith('ai:') && !isQuietUesStudyPath(url.pathname)
+  const browserResponse = isHtmlResponse && !type.startsWith('ai:') && !isQuietUesStudyPath(url.pathname) && !isStandaloneStaticRoom(url.pathname)
     ? injectTezosSessionBridge(response)
     : response;
 
