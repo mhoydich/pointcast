@@ -1,0 +1,102 @@
+{
+  "schema": "pointcast.light/v0",
+  "name": "Light Companion",
+  "url": "https://pointcast.xyz/light/",
+  "status": "v0, started 2026-11-11. Phones and browsers only.",
+  "summary": "A small shared light between people. A circle is a few people; each has one light. Lighting yours makes it glow for everyone in the circle. Presence only: no messages, no feed, no accounts.",
+  "notice": "This is not an emergency or monitoring service. It cannot call for help. A dark window only means a light is not lit.",
+  "howItWorks": [
+    "One tap makes a circle. The circle is identified by a long random link.",
+    "Anyone with the link is in. No sign-in, no email, no phone number.",
+    "Each member picks a display name and one of six flame colours.",
+    "Press and hold your own window to light it. Tap again to snuff it.",
+    "A lit light shows the time it was lit and fades on its own at the member's local midnight, or after one hour if they chose that.",
+    "A small ember shows the page is connected. When the connection drops, the page says it cannot see the circle and stops showing lights as lit or dark."
+  ],
+  "isNot": [
+    "An emergency service, an alarm or a monitor.",
+    "A messenger, a feed or a history.",
+    "A notification service. Lights are seen when the page is open."
+  ],
+  "access": {
+    "model": "The circle link is the only key (a capability URL). Anyone holding it can read the circle, join, light or snuff a light, rename, and delete the circle.",
+    "linkShape": "https://pointcast.xyz/light/c/{id} where {id} is 32 characters from a-z and 0-9 (160 random bits)",
+    "linkHandling": "Circle pages are served no-store, noindex and with no referrer. Circle links are never listed in a sitemap or feed. The API takes the id in a header or JSON body, never in a query string."
+  },
+  "api": {
+    "endpoint": "https://pointcast.xyz/api/light",
+    "read": {
+      "method": "GET",
+      "headers": { "X-Light-Circle": "{id}" },
+      "returns": "{ ok, schema, now, version, store, notice, circle: { createdAt, memberCap, expiresAfterDaysUntouched, members: [{ id, name, colour, mode, lit, litAt, expiresAt }] }, signals: [light signal], drum: { room, page } }",
+      "notes": "now, litAt and expiresAt are UTC milliseconds. litAt and expiresAt are null when a light is not lit. version goes up by one on every change. Poll every 15 seconds or slower; reads are not rate limited. 404 means there is no circle at that link."
+    },
+    "write": {
+      "method": "POST",
+      "contentType": "application/json",
+      "actions": {
+        "create": "{ action: 'create' } -> 201 with id and path",
+        "join": "{ action: 'join', circle, name, colour } -> member id",
+        "update": "{ action: 'update', circle, member, name?, colour?, mode? }",
+        "light": "{ action: 'light', circle, member, mode?: 'tonight' | 'hour', until?: UTC ms of the member's local midnight }",
+        "snuff": "{ action: 'snuff', circle, member }",
+        "remove": "{ action: 'remove', circle, member }",
+        "put_out": "{ action: 'put_out', circle, confirm: 'put out' } deletes the circle"
+      }
+    },
+    "colours": ["amber", "rose", "gold", "moss", "sky", "lilac"],
+    "modes": ["tonight", "hour"]
+  },
+  "limits": {
+    "lightsPerCircle": 12,
+    "nameCharacters": 24,
+    "bodyBytes": 2048,
+    "changesPerMinutePerCircle": 40,
+    "newCirclesPerHourPerCaller": 6,
+    "circleDeletedAfterDaysUntouched": 90
+  },
+  "stored": {
+    "perCircle": [
+      "a one-way hash of the circle link (the link itself is not stored)",
+      "each member's display name, flame colour and chosen duration",
+      "each member's lit and snuffed times and the time the light fades",
+      "when the circle was made and last touched, and a one-minute change counter"
+    ],
+    "notStored": ["IP addresses", "locations", "device identifiers", "messages", "a history of past lights"],
+    "createLimit": "The limit on new circles is counted against a hash of the caller's address that changes every UTC day. The counter lasts about an hour.",
+    "onTheDevice": "The browser remembers which member it is for each circle, and the sound setting, in localStorage. 'Leave circle' clears it."
+  },
+  "signal": {
+    "doc": "https://github.com/mhoydich/pointcast/blob/main/docs/light-signal.md",
+    "module": "src/lib/light-signal.mjs",
+    "summary": "One small event, independent of how it is carried. Today it is carried over HTTP only.",
+    "example": { "v": 0, "kind": "lit", "circle": "lc_00000000000000000000000000000000", "member": "k3m9x2pa", "at": 1794400320000, "expires": 1794441600000 },
+    "fields": [
+      { "name": "v", "meaning": "format version, 0" },
+      { "name": "kind", "meaning": "lit or snuffed" },
+      { "name": "circle", "meaning": "a reference derived from the circle link by a one-way hash; it cannot open the circle" },
+      { "name": "member", "meaning": "the member's id inside the circle, 8 characters" },
+      { "name": "at", "meaning": "when it happened, UTC milliseconds" },
+      { "name": "expires", "meaning": "when a lit light fades on its own, UTC milliseconds, at most 26 hours after at; null when snuffed" }
+    ],
+    "rules": [
+      "A signal carries no name, colour, text or location.",
+      "For one member the latest at wins; a tie goes to snuffed.",
+      "A lit signal past its expires reads as not lit. No expired event is sent.",
+      "One encoded signal is at most 200 bytes."
+    ],
+    "notImplemented": ["Nostr", "Bluetooth", "AT Protocol", "physical places that sense a flame"]
+  },
+  "drum": {
+    "summary": "Each circle has its own room in the existing PointCast drum rooms. The room code is a hash of the circle link, so the room does not reveal the link.",
+    "page": "https://pointcast.xyz/drum-room-v2?room={drum.room from a circle read}"
+  },
+  "agents": {
+    "mcp": "https://pointcast.xyz/api/mcp",
+    "tool": "light_read",
+    "effect": "read",
+    "input": "{ link } — a circle link a person gave you",
+    "writeTools": "none in v0"
+  },
+  "madeBy": "Claude Code, for PointCast"
+}
