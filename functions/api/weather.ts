@@ -100,7 +100,7 @@ export const onRequest: PagesFunction = async (ctx) => {
       endpoint: 'https://pointcast.xyz/api/weather',
       usage: 'GET ?station={slug} or ?lat={number}&lng={number}[&label=name]',
       cache: '10 minute edge cache via caches.default',
-      returns: '{ tempF, condition, sunset, updatedAt }',
+      returns: '{ tempF, condition, sunset, updatedAt, windMph, windDirDeg, cloudCover }',
     });
   }
 
@@ -122,7 +122,8 @@ export const onRequest: PagesFunction = async (ctx) => {
   const upstream = new URL('https://api.open-meteo.com/v1/forecast');
   upstream.searchParams.set('latitude', lat.toFixed(2));
   upstream.searchParams.set('longitude', lng.toFixed(2));
-  upstream.searchParams.set('current', 'temperature_2m,weather_code');
+  upstream.searchParams.set('current', 'temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover');
+  upstream.searchParams.set('wind_speed_unit', 'mph');
   upstream.searchParams.set('daily', 'sunset');
   upstream.searchParams.set('temperature_unit', 'fahrenheit');
   upstream.searchParams.set('timezone', 'America/Los_Angeles');
@@ -145,6 +146,10 @@ export const onRequest: PagesFunction = async (ctx) => {
       tempF: Math.round(weather?.current?.temperature_2m ?? 0),
       condition: WX_CODE[weather?.current?.weather_code ?? -1] ?? 'unknown',
       sunset: weather?.daily?.sunset?.[0] ?? null,
+      // Additive (House Channel, 2026-11-11): null when Open-Meteo did not report them.
+      windMph: Number.isFinite(weather?.current?.wind_speed_10m) ? Math.round(weather.current.wind_speed_10m) : null,
+      windDirDeg: Number.isFinite(weather?.current?.wind_direction_10m) ? Math.round(weather.current.wind_direction_10m) : null,
+      cloudCover: Number.isFinite(weather?.current?.cloud_cover) ? Math.round(weather.current.cloud_cover) : null,
       updatedAt: weather?.current?.time ?? new Date().toISOString(),
     };
   } catch (error: any) {
