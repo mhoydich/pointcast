@@ -1,4 +1,4 @@
-// Baby Bonfire (/baby-bonfire/): the hub, thirteen scenes and four workshop pages are static
+// Baby Bonfire (/baby-bonfire/): the hub, fifteen scenes and four workshop pages are static
 // files under public/baby-bonfire/. These checks keep the JSON twin, the hub, the manifests and
 // the area's content rules in step.
 import test from 'node:test';
@@ -13,8 +13,8 @@ const page = (slug) => read(`public/baby-bonfire/${slug}/index.html`);
 const WORKSHOP = ['open-spec', 'open-mesh', 'barter-board', 'make-a-piece'];
 const all = [...twin.scenes.map((s) => s.slug), ...WORKSHOP];
 
-test('the twin lists thirteen scenes and four workshop pages, and every one is a file', () => {
-  assert.equal(twin.scenes.length, 13);
+test('the twin lists fifteen scenes and four workshop pages, and every one is a file', () => {
+  assert.equal(twin.scenes.length, 15);
   assert.deepEqual(twin.workshop.map((w) => w.slug), WORKSHOP);
   for (const slug of all) assert.ok(existsSync(new URL(`public/baby-bonfire/${slug}/index.html`, root)), slug);
   for (const entry of [...twin.scenes, ...twin.workshop]) assert.equal(entry.url, `https://pointcast.xyz/baby-bonfire/${entry.slug}/`);
@@ -116,4 +116,68 @@ test('earlier-work links on the hub point at rooms that exist', () => {
   const links = [...strip.matchAll(/href="(\/[^"]+)"/g)].map((m) => m[1].replace(/\/$/, ''));
   assert.ok(links.length >= 6);
   for (const href of links) assert.ok(existsSync(new URL(`src/pages${href}.astro`, root)), href);
+});
+
+// Second pass, 2026-11-11: Mesh Street and The Roaming Shelf joined the street, and the
+// precedents wall gained a shelf of PointCast's own earlier pages.
+test('Mesh Street is on the street, linked from the mesh notes, and stays a report of fire', () => {
+  const slugs = twin.scenes.map((s) => s.slug);
+  assert.ok(slugs.includes('mesh-street'));
+  const mesh = page('mesh-street');
+  assert.ok(mesh.includes('<title>Baby Bonfire — Mesh Street</title>'));
+  assert.match(mesh, /This is not a safety or emergency service/);
+  assert.match(mesh, /Each owner decides whether their home is on or off/);
+  assert.doesNotMatch(mesh, /ignite|light(s)? (a|the) (real )?flame/i);
+  const notes = page('open-mesh');
+  assert.ok(notes.includes('<a href="/baby-bonfire/mesh-street/">Mesh Street</a>'));
+  assert.match(notes, /nothing in it has been picked or built/);
+  assert.match(notes, /It never lights one/);
+});
+
+test('The Roaming Shelf: pieces move between places, and places sense presence only', () => {
+  const slugs = twin.scenes.map((s) => s.slug);
+  assert.equal(slugs.indexOf('pieces-roam'), slugs.indexOf('the-shelf') + 1, 'it sits next to the shelf it supersedes');
+  const roam = page('pieces-roam');
+  assert.match(roam, /Places sense presence and arrangement only:<\/b> which piece is on which spot\. No cameras, no microphones\./);
+  assert.match(roam, /This page keeps nothing and sends nothing/);
+  assert.match(roam, /nothing here lights a flame/);
+  const places = roam.match(/var PLACES=\[([\s\S]*?)\n\];/)[1].match(/\['[a-z]\d'/g);
+  const pieces = roam.match(/var PIECES=\[([\s\S]*?)\n\];/)[1].match(/\n \['[a-z]+'/g);
+  assert.equal(places.length, 17);
+  assert.equal(pieces.length, 8);
+  assert.ok(roam.includes('seventeen places'));
+  for (const rule of ['home', 'out', 'work', 'done', 'dinner', 'shrine']) assert.ok(roam.includes(`data-rule="${rule}"`), rule);
+  // mouse and touch through pointer events, keyboard through Enter, Space, arrows and Escape
+  for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'keydown']) assert.ok(roam.includes(`'${ev}'`), ev);
+  assert.match(roam, /touch-action:none/);
+  assert.match(roam, /tabindex:'0'/);
+  assert.match(roam, /e\.key==='Escape'/);
+  assert.match(roam, /aria-live="polite"/);
+  assert.match(roam, /@media \(prefers-reduced-motion:reduce\)/);
+  assert.doesNotMatch(roam, /localStorage\.setItem\((?!k,)/, 'only the street marker is stored');
+  // Mike's words are quoted and attributed, not written for him
+  assert.match(roam, /&ldquo;all these pieces i move around my home it's part of the ritual&rdquo;<footer>Mike Hoydich, in chat\./);
+  const shelf = page('the-shelf');
+  assert.ok(shelf.includes('<a href="/baby-bonfire/pieces-roam/">The Roaming Shelf</a>'));
+});
+
+test('the Earlier on PointCast shelf links only to routes and blocks in this repo', () => {
+  const wall = page('precedents');
+  assert.ok(wall.includes('["pc","Earlier on PointCast",242]'));
+  const own = [...wall.matchAll(/\{s:"pc",n:"([^"]+)",m:"PointCast",y:"[^"]*",(?:k:\[([^\]]*)\],)?\s*b:"[^"]+",u:"(\/[^"]*)"\}/g)];
+  assert.equal(own.length, 14);
+  assert.equal((wall.match(/\{s:"pc"/g) || []).length, own.length, 'every pc entry has a line and a path, and no invented "why"');
+  for (const [, name, blocks, href] of own) {
+    const route = href.replace(/\/$/, '');
+    assert.ok(existsSync(new URL(`src/pages${route}.astro`, root)) || existsSync(new URL(`src/pages${route}/index.astro`, root)), `${name}: ${href}`);
+    for (const id of (blocks || '').match(/\d{4}/g) || []) assert.ok(existsSync(new URL(`src/content/blocks/${id}.json`, root)), `${name}: block ${id}`);
+  }
+  const cited = own.flatMap((m) => (m[2] || '').match(/\d{4}/g) || []).sort();
+  assert.deepEqual(cited, ['0421', '0423', '0426', '0429', '0471', '0473', '0508', '0525', '0584', '0628', '0652', '0719']);
+});
+
+test('the hub counts fifteen windows', () => {
+  assert.match(hub, /Fifteen windows on one street/);
+  assert.match(hub, /' of fifteen windows lit'/);
+  assert.ok(hub.includes("'Fourteen','Fifteen']"));
 });

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baby Bonfire — Mesh Street</title>
+<meta name="description" content="Light a hearth and watch the signal cross a small town by near hops, rooftop radios and internet relays. Embers wait when a path is missing. A concept sketch from Baby Bonfire, an open exploration on PointCast. Nothing is for sale.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://pointcast.xyz/baby-bonfire/mesh-street/">
+<link rel="alternate" type="application/json" href="/baby-bonfire.json" title="Baby Bonfire, machine-readable">
+<meta property="og:title" content="Mesh Street · Baby Bonfire">
+<meta property="og:description" content="Light a hearth and watch the signal cross a small town by near hops, rooftop radios and internet relays. Embers wait when a path is missing.">
+<meta property="og:url" content="https://pointcast.xyz/baby-bonfire/mesh-street/">
+<meta property="og:type" content="website">
+<style>
+:root{
+  /* layout: one-screen app. header / dusk map (canvas, fills) / control panel. Single dusk theme by choice. */
+  --night:#17132a;
+  --panel:#221b3a;
+  --panel-2:#30274f;
+  --line:#4a3f70;
+  --ink:#f7ebdc;
+  --ink-dim:#b8adcc;
+  --ember:#ffb25a;
+  --near:#7fe6d2;
+  --town:#ff8db4;
+  --world:#9fb6ff;
+  --font-display: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--night);color:var(--ink);font:14px/1.4 var(--font-body);display:flex;flex-direction:column;overflow:hidden;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,canvas:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+
+header{display:flex;align-items:center;gap:8px;padding:8px 12px 8px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex:none}
+h1{font:700 18px/1 var(--font-display);margin:0;letter-spacing:.01em;flex:1;white-space:nowrap}
+h1 small{font:500 11px var(--font-body);color:var(--ink-dim);margin-left:6px}
+.ib{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;height:34px;min-width:34px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px}
+.ib svg{width:16px;height:16px;flex:none}
+
+#stage{position:relative;flex:1 1 auto;min-height:260px;overflow:hidden;background:#2b2444}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
+#hint{flex:none;margin:0;background:var(--panel-2);border-bottom:1px solid var(--line);padding:7px 16px;min-height:33px;font:600 13px/1.3 var(--font-display);text-align:center;text-wrap:balance}
+#hint.say{color:var(--ember)}
+#tray{position:absolute;left:10px;bottom:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.chip{background:rgba(23,19,42,.86);border:1px dashed var(--line);border-radius:999px;padding:6px 12px 6px 8px;display:inline-flex;align-items:center;gap:6px;font-size:12px;touch-action:none;user-select:none;-webkit-user-select:none}
+.chip svg{width:18px;height:18px;flex:none}
+.chip[aria-pressed="true"]{border-style:solid;border-color:var(--ember);color:var(--ember)}
+#ghost{position:fixed;z-index:20;pointer-events:none;transform:translate(-50%,-140%);display:none}
+#zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+#zoom .ib{background:rgba(23,19,42,.86);font:700 18px/1 var(--font-display);padding:0}
+
+#panel{flex:none;background:var(--panel);border-top:1px solid var(--line);padding:10px 16px 8px;display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tg{flex:1 1 0;min-width:72px;height:38px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;font:600 13px var(--font-display);padding:0 6px;white-space:nowrap}
+.tg svg{width:20px;height:14px;flex:none}
+.tg[aria-pressed="false"]{background:transparent;color:var(--ink-dim)}
+.tg[aria-pressed="false"] svg{opacity:.35}
+#tgNear[aria-pressed="true"]{border-color:var(--near)}
+#tgTown[aria-pressed="true"]{border-color:var(--town)}
+#tgWorld[aria-pressed="true"]{border-color:var(--world)}
+#tgNet{flex:1.5 1 0}
+#tgNet .sw{width:26px;height:14px;border-radius:999px;background:var(--line);position:relative;flex:none}
+#tgNet .sw::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--ink-dim)}
+#tgNet[aria-pressed="true"] .sw{background:var(--world)}
+#tgNet[aria-pressed="true"] .sw::after{left:14px;background:#fff}
+#tgNet[aria-pressed="false"]{border-color:#c66;color:#f3b0a8}
+.lab{font:600 11px var(--font-body);color:var(--ink-dim);text-transform:uppercase;letter-spacing:.08em;margin-right:2px}
+.seg{display:flex;flex:1 1 auto;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1 1 0;height:34px;background:transparent;border:0;border-right:1px solid var(--line);font:600 12.5px var(--font-display);padding:0 6px;color:var(--ink-dim);white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--ember)}
+#sunset{height:34px;border-radius:10px;border:1px solid var(--ember);background:linear-gradient(180deg,#5a3550,#8a4a45);font:700 12.5px var(--font-display);padding:0 12px;white-space:nowrap}
+#readout{background:var(--night);border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:3px;min-height:74px}
+#readout p{margin:0;font-size:12.5px;line-height:1.35}
+#rHow{color:var(--ink);font-weight:600}
+#rWhat,#rIf{color:var(--ink-dim)}
+footer{font-size:10.5px;color:var(--ink-dim);text-align:center;opacity:.8}
+
+#drawer{position:fixed;left:0;right:0;bottom:0;z-index:30;max-height:82%;background:var(--panel);border-top:1px solid var(--ember);border-radius:16px 16px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column}
+#drawer[hidden]{display:none}
+#drawer .top{display:flex;align-items:center;padding:12px 12px 8px 16px;flex:none}
+#drawer h2{font:700 17px var(--font-display);margin:0;flex:1}
+#drawer .body{overflow:auto;padding:0 16px 20px;max-width:68ch}
+#drawer h3{font:700 13.5px var(--font-display);margin:14px 0 2px;display:flex;align-items:center;gap:8px}
+#drawer h3 i{width:10px;height:10px;border-radius:50%;display:inline-block}
+#drawer p{margin:0 0 4px;font-size:13px;color:var(--ink-dim)}
+#drawer p b{color:var(--ink);font-weight:600}
+@media (min-width:760px){
+  #panel{padding-left:24px;padding-right:24px}
+  #panel>*{max-width:760px;width:100%;margin:0 auto}
+  #drawer{left:auto;right:16px;bottom:16px;width:420px;border-radius:16px;border:1px solid var(--ember)}
+}
+@media (max-width:520px){ .lab{display:none} }
+@media (max-height:640px){ #readout{min-height:0} footer{display:none} }
+</style>
+<style>
+/* PointCast: the way back to the Baby Bonfire street. Added on import; the scene below is unchanged. */
+.bb-back{display:block;box-sizing:border-box;height:32px;padding:9px 16px 0;font:600 12px/14px system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.02em;color:inherit;text-decoration:none;opacity:.82}
+.bb-back:hover,.bb-back:focus-visible{opacity:1;text-decoration:underline}
+.bb-back{flex:none}
+</style>
+</head>
+<body>
+<a class="bb-back" href="/baby-bonfire/">&larr; Back to the street</a>
+<header>
+  <h1>Mesh Street <small>a town at dusk</small></h1>
+  <button class="ib" id="mute" aria-pressed="false" aria-label="Sound on. Tap to mute.">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6v4h3l4 3V3L5 6z"/><path id="muteWaves" d="M11.5 5.5a3.5 3.5 0 010 5M13 3.5a6 6 0 010 9"/></svg>
+  </button>
+  <button class="ib" id="openReal" aria-expanded="false" aria-controls="drawer">What's real</button>
+</header>
+
+<p id="hint" role="status" aria-live="polite">Tap a house to light it.</p>
+<div id="stage">
+  <canvas id="map" tabindex="0" aria-label="Map of a small beach town with fourteen houses. Arrow keys choose a house, Enter lights or snuffs it, O takes it on or off the mesh."></canvas>
+  <div id="tray">
+    <button class="chip" id="chipRadio" aria-pressed="false" data-kind="radio">
+      <svg viewBox="0 0 18 18" fill="none" stroke="#ff8db4" stroke-width="1.6" stroke-linecap="round"><path d="M9 8v8M5 5a5.5 5.5 0 018 0M2.6 2.8a9 9 0 0112.8 0"/><circle cx="9" cy="8" r="1.4" fill="#ff8db4"/></svg>
+      Rooftop radio
+    </button>
+    <button class="chip" id="chipRelay" aria-pressed="false" data-kind="relay">
+      <svg viewBox="0 0 18 18" fill="none" stroke="#9fb6ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3l-4 13M9 3l4 13M6.4 11h5.2M7.4 7.5h3.2"/><circle cx="9" cy="2.6" r="1.3" fill="#9fb6ff"/></svg>
+      Home relay
+    </button>
+  </div>
+  <div id="zoom">
+    <button class="ib" id="zin" aria-label="Zoom in">+</button>
+    <button class="ib" id="zout" aria-label="Zoom out">&minus;</button>
+  </div>
+</div>
+<div id="ghost" class="chip"></div>
+
+<section id="panel" aria-label="Controls">
+  <div class="row" role="group" aria-label="Layers">
+    <button class="tg" id="tgNear" aria-pressed="true"><svg viewBox="0 0 20 14"><path d="M3 7h14" stroke="#7fe6d2" stroke-width="2" stroke-linecap="round"/><circle cx="3" cy="7" r="2.4" fill="#7fe6d2"/><circle cx="17" cy="7" r="2.4" fill="#7fe6d2"/></svg>Near</button>
+    <button class="tg" id="tgTown" aria-pressed="true"><svg viewBox="0 0 20 14"><path d="M2 12Q10 -4 18 12" fill="none" stroke="#ff8db4" stroke-width="2" stroke-dasharray="4 2.5" stroke-linecap="round"/></svg>Town</button>
+    <button class="tg" id="tgWorld" aria-pressed="true"><svg viewBox="0 0 20 14"><path d="M10 13V3" stroke="#9fb6ff" stroke-width="2" stroke-dasharray="1.5 3" stroke-linecap="round"/><circle cx="10" cy="2.6" r="2.4" fill="#9fb6ff"/></svg>World</button>
+    <button class="tg" id="tgNet" aria-pressed="true"><span class="sw"></span><span id="netTxt">Internet on</span></button>
+  </div>
+  <div class="row">
+    <span class="lab" id="circLab">Circle</span>
+    <div class="seg" role="group" aria-labelledby="circLab">
+      <button data-c="family" aria-pressed="true">Family</button>
+      <button data-c="street" aria-pressed="false">Shell Lane</button>
+      <button data-c="town" aria-pressed="false">Whole town</button>
+    </div>
+    <button id="sunset" aria-label="Sunset wave: light the whole town from the pier">Sunset</button>
+  </div>
+  <div id="readout" aria-live="polite">
+    <p id="rHow">No signal yet. Four family homes are ringed on the map.</p>
+    <p id="rWhat">A signal carries three things: who, lit or snuffed, and when.</p>
+    <p id="rIf">It can ride any layer that is switched on.</p>
+  </div>
+  <footer>Concept sketch, Nov 2026</footer>
+</section>
+
+<aside id="drawer" hidden aria-label="What's real">
+  <div class="top"><h2>What's real</h2><button class="ib" id="closeReal" aria-label="Close">Close</button></div>
+  <div class="body">
+    <h3><i style="background:var(--near)"></i>Near: Bluetooth low energy</h3>
+    <p>Phones and small objects pass a note to whatever is close by. <b>Roughly 10 to 50 m per hop</b>, less through walls and people. No internet needed. A passing phone can carry a note across a gap.</p>
+    <h3><i style="background:var(--town)"></i>Town: long-range low-power radio</h3>
+    <p>Small rooftop radios hand tiny messages from roof to roof. <b>Roughly a few hundred metres per hop in built-up streets, up to a few kilometres with a clear line of sight.</b> Hills and buildings block it, so a relay on high ground helps. No internet needed. It moves very little data, slowly, and it needs small dedicated hardware.</p>
+    <h3><i style="background:var(--world)"></i>World: internet relays</h3>
+    <p>Servers that anyone can run pass small signed notes along. The sender's key signs each note, so there are no accounts, and a home can use several relays at once. <b>Any distance, as long as both ends are online.</b></p>
+    <h3><i style="background:var(--ember)"></i>The signal</h3>
+    <p>Who, lit or snuffed, and when. Nothing else. That is a few dozen bytes, small enough to ride any of the three layers. Any node can hold a signal and pass it on later, when a path appears.</p>
+    <h3><i style="background:var(--ink)"></i>What a web page can do today</h3>
+    <p>It can talk to internet relays. It generally cannot form a Bluetooth mesh by itself; that takes an app or the object itself. The radio layer needs its own small hardware on a roof or a windowsill.</p>
+    <h3><i style="background:var(--ink-dim)"></i>About this sketch</h3>
+    <p>Every range here is approximate and depends on walls, height and line of sight. In this town the Near reach is drawn at about 30 m and the rooftop reach at about 230 m, so the hill matters. Hop times are slowed down so you can watch them. The town is invented.</p>
+    <p><b>This is not a safety or emergency service.</b> Signals can arrive late or not at all. Each owner decides whether their home is on or off.</p>
+  </div>
+</aside>
+
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+const RM=window.matchMedia('(prefers-reduced-motion: reduce)');
+let reduce=RM.matches; if(RM.addEventListener) RM.addEventListener('change',e=>{reduce=e.matches});
+
+/* ---------- town ---------- */
+const NEAR_R=32, TOWN_R=230, HILL={x:200,y:80,r:42,block:36};
+const HOP={world:0.3,near:0.42,town:1.1};
+const WB={x0:0,y0:-34,x1:300,y1:345};
+const COL={near:'#7fe6d2',town:'#ff8db4',world:'#9fb6ff',ember:'#ffb25a',ink:'#f7ebdc',dim:'#b8adcc'};
+const BODY=['#6d5a8c','#7a5c80','#5d6396','#84607a','#64709a'], ROOF=['#40335a','#4c3452','#353b66','#57384e','#3b4568'];
+const FONT='system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+
+const nodes=[], byId={};
+function add(n){nodes.push(n);byId[n.id]=n;return n}
+const HS=[
+ ['Gran’s',92,264,{lab:1}],
+ ['Pier house',122,264,{lab:-1,radio:true}],
+ ['Surf shack',152,264,{lab:1,online:false}],
+ ['Corner house',60,210,{lab:1}],
+ ['Blue door',90,210,{lab:-1}],
+ ['Our place',120,210,{lab:1}],
+ ['Lemon tree',150,210,{lab:-1,radio:true}],
+ ['Night owl',180,210,{lab:1}],
+ ['Park lodge',52,158,{lab:-1,online:false}],
+ ['Old school',48,60,{lab:1,radio:true}],
+ ['Uncle’s',220,168,{lab:1}],
+ ['Tall house',246,152,{lab:-1}],
+ ['Hill cabin',234,40,{lab:-1,online:false}],
+ ['The cousins',262,48,{lab:1,radio:true}]
+];
+HS.forEach((h,i)=>add(Object.assign({id:'h'+i,type:'house',name:h[0],x:h[1],y:h[2],on:true,online:true,radio:false,lit:false,seen:{},targets:null,ci:i%5,ping:-9,flash:-9},h[3])));
+const houses=nodes.filter(n=>n.type==='house');
+const hill=add({id:'hill',type:'hill',name:'the hilltop',x:HILL.x,y:HILL.y,on:true,radio:false,ping:-9});
+const relays=[[50,-17],[150,-17],[250,-17]].map((p,i)=>add({id:'r'+i,type:'relay',name:'a relay',x:p[0],y:p[1],on:true,ping:-9}));
+const ROUTES=[
+ [[160,282],[106,282],[106,186],[150,186]],
+ [[200,282],[200,186],[282,186]],
+ [[100,186],[30,186],[30,22],[120,22]]
+];
+function routeLen(r){let L=0;for(let i=1;i<r.length;i++)L+=Math.hypot(r[i][0]-r[i-1][0],r[i][1]-r[i-1][1]);return L}
+function routePos(r,d){for(let i=1;i<r.length;i++){const l=Math.hypot(r[i][0]-r[i-1][0],r[i][1]-r[i-1][1]);if(d<=l||i===r.length-1){const t=Math.max(0,Math.min(1,d/l));return [r[i-1][0]+(r[i][0]-r[i-1][0])*t,r[i-1][1]+(r[i][1]-r[i-1][1])*t]}d-=l}return r[0]}
+function routeNearest(r,x,y){let best=1e9,bd=0,acc=0;for(let i=1;i<r.length;i++){const ax=r[i-1][0],ay=r[i-1][1],bx=r[i][0],by=r[i][1],l=Math.hypot(bx-ax,by-ay);const t=Math.max(0,Math.min(1,((x-ax)*(bx-ax)+(y-ay)*(by-ay))/(l*l)));const d=Math.hypot(ax+(bx-ax)*t-x,ay+(by-ay)*t-y);if(d<best){best=d;bd=acc+l*t}acc+=l}return bd}
+const walkers=ROUTES.map((r,i)=>{const L=routeLen(r),d=[40,120,95][i],p=routePos(r,d);return add({id:'w'+i,type:'walker',name:'a passing phone',x:p[0],y:p[1],on:true,route:r,L,d,dir:i===1?-1:1,drag:false,linger:0,ret:false,ping:-9,hue:['#ffd9a8','#bfe3ff','#e8c6ff'][i]})});
+
+const CIRCLES={
+ family:{name:'Family',ids:['h0','h5','h10','h13'],blurb:'Four family homes are ringed on the map.'},
+ street:{name:'Shell Lane',ids:['h3','h4','h5','h6','h7'],blurb:'The five homes on Shell Lane are ringed.'},
+ town:{name:'Whole town',ids:houses.map(h=>h.id),blurb:'All fourteen homes are in.'}
+};
+const S={near:true,town:true,world:true,net:true,circle:'family',focus:null,kfocus:0,armed:null,step:0};
+let now=0, sigs=[], lastSig=null, sigSeq=0, labels=[], fizz=[], LINKS=[], BLOCKED=[], linkSet=new Set(), dirty=true;
+
+/* ---------- links: recomputed every frame from what is switched on ---------- */
+function segHitsHill(ax,ay,bx,by){const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;let t=((HILL.x-ax)*dx+(HILL.y-ay)*dy)/l2;t=Math.max(0,Math.min(1,t));return Math.hypot(ax+dx*t-HILL.x,ay+dy*t-HILL.y)<HILL.block}
+function relayFor(h){let b=relays[0];for(const r of relays)if(Math.abs(r.x-h.x)<Math.abs(b.x-h.x))b=r;return b}
+function computeLinks(f,blockedOut){
+  const L=[];
+  const act=nodes.filter(n=>n.type!=='relay'&&n.on);
+  if(f.near){const a=act.filter(n=>n.type==='house'||n.type==='walker');
+    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){if(Math.hypot(a[i].x-a[j].x,a[i].y-a[j].y)<=NEAR_R)L.push({a:a[i],b:a[j],kind:'near',phone:a[i].type==='walker'||a[j].type==='walker'})}}
+  if(f.town){const a=act.filter(n=>n.radio);
+    for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){if(Math.hypot(a[i].x-a[j].x,a[i].y-a[j].y)>TOWN_R)continue;
+      const blocked=a[i].type!=='hill'&&a[j].type!=='hill'&&segHitsHill(a[i].x,a[i].y,a[j].x,a[j].y);
+      if(blocked){if(blockedOut)blockedOut.push({a:a[i],b:a[j]})}else L.push({a:a[i],b:a[j],kind:'town'})}}
+  if(f.world&&f.net){for(const h of houses)if(h.on&&h.online)L.push({a:h,b:relayFor(h),kind:'world'});
+    for(let i=0;i<relays.length;i++)for(let j=i+1;j<relays.length;j++)L.push({a:relays[i],b:relays[j],kind:'world'})}
+  L.sort((p,q)=>HOP[p.kind]-HOP[q.kind]);
+  for(const l of L)l.key=l.a.id+'|'+l.b.id+'|'+l.kind;
+  return L;
+}
+function refreshLinks(){BLOCKED=[];LINKS=computeLinks(S,BLOCKED);linkSet=new Set(LINKS.map(l=>l.key))}
+
+/* what-if: shortest travel time from a house over a given set of switches */
+function whatIf(fromId,targets,f){
+  const L=computeLinks(f),dist={};dist[fromId]=0;const done=new Set();
+  for(;;){let u=null;for(const k in dist)if(!done.has(k)&&(u===null||dist[k]<dist[u]))u=k;if(u===null)break;done.add(u);
+    for(const l of L){const v=l.a.id===u?l.b.id:l.b.id===u?l.a.id:null;if(v===null)continue;const d=dist[u]+HOP[l.kind];if(!(v in dist)||d<dist[v])dist[v]=d}}
+  const got=targets.filter(t=>t in dist),miss=targets.filter(t=>!(t in dist));
+  return {got,miss,slow:got.reduce((m,t)=>Math.max(m,dist[t]),0)};
+}
+
+/* ---------- signals: real store-and-forward flood ---------- */
+function send(h,kind){
+  sigs=sigs.filter(s=>s.from!==h.id);
+  const active=sigs.filter(s=>!s.done);if(active.length>3)sigs.splice(sigs.indexOf(active[0]),1);
+  const sig={id:++sigSeq,from:h.id,kind,t0:now,when:new Date(),targets:h.targets.slice(),pending:new Set(h.targets),hold:new Map(),tx:[],results:new Map(),done:false,stalled:false,stallT:0,path:[]};
+  sig.hold.set(h.id,{t:now,parent:null,waited:0});
+  const alt=(S.world&&S.net)?Object.assign({},S,{net:false}):Object.assign({},S,{world:true,net:true});
+  sig.cfLabel=(S.world&&S.net)?'With the internet off':(S.net?'With the World layer on':'With the internet on');
+  sig.cf=whatIf(h.id,sig.targets,alt);
+  sigs.push(sig);lastSig=sig;dirty=true;
+  if(S.step===0)S.step=1; else if(S.step===1&&!(S.world&&S.net))S.step=2;
+  if(!h.on)say(h.name+' is off the mesh. The signal waits at home.');
+  showHint();
+}
+function chainTo(sig,id){const c=[];let r=sig.hold.get(id);while(r&&r.parent){c.unshift(r);r=sig.hold.get(r.parent)}return c}
+function deliver(sig,B,rec){
+  sig.pending.delete(B.id);
+  if(sig.kind==='lit')B.seen[sig.from]=true;else delete B.seen[sig.from];
+  B.flash=now;
+  const chain=chainTo(sig,B.id);
+  sig.results.set(B.id,{t:now-sig.t0,waited:rec.waited,hops:chain});
+  for(const r of chain)if(!sig.path.includes(r))sig.path.push(r);
+  if(rec.waited>=1)labels.push({id:B.id,text:(rec.waited<10?rec.waited.toFixed(1):Math.round(rec.waited))+' s late',t:now});
+  bell();try{if(navigator.vibrate)navigator.vibrate(18)}catch(e){}
+  dirty=true;
+}
+function stepSig(sig){
+  if(sig.done)return;
+  for(let i=sig.tx.length-1;i>=0;i--){const tx=sig.tx[i];
+    if(!linkSet.has(tx.key)){sig.tx.splice(i,1);const p=txPos(tx);fizz.push({x:p[0],y:p[1],t:now});continue}
+    if(now>=tx.t1){sig.tx.splice(i,1);if(sig.hold.has(tx.b.id))continue;
+      const rec={t:now,parent:tx.a.id,to:tx.b.id,kind:tx.kind,phone:!!tx.phone,waited:tx.waited,ax:tx.a.x,ay:tx.a.y,bx:tx.b.x,by:tx.b.y};
+      sig.hold.set(tx.b.id,rec);tx.b.ping=now;tick(tx.kind);
+      if(sig.pending.has(tx.b.id))deliver(sig,tx.b,rec)}}
+  if(!sig.pending.size){sig.done=true;sig.doneT=now;sig.tx=[];dirty=true;return}
+  const fly=new Set(sig.tx.map(t=>t.b.id));
+  const go=(a,b,l)=>{if(sig.hold.has(a.id)&&!sig.hold.has(b.id)&&!fly.has(b.id)){const h=sig.hold.get(a.id);let w=now-h.t;if(w<0.3)w=0;
+    sig.tx.push({a,b,kind:l.kind,phone:l.phone,key:l.key,t0:now,t1:now+HOP[l.kind],waited:h.waited+w});fly.add(b.id)}};
+  for(const l of LINKS){go(l.a,l.b,l);go(l.b,l.a,l)}
+  const st=sig.tx.length===0;
+  if(st&&!sig.stalled)sig.stallT=now;
+  if(st!==sig.stalled){sig.stalled=st;dirty=true}
+}
+function emberNodes(sig,nowait){ // where the signal is waiting: the holder nearest each home still to reach, and any phone carrying it
+  const out=new Set();if(sig.done)return out;
+  if(sig.stalled&&(nowait||now-sig.stallT>0.25)){for(const t of sig.pending){const T=byId[t];let best=null,bd=1e9;
+    for(const id of sig.hold.keys()){const n=byId[id];if(n.type==='relay')continue;const d=Math.hypot(n.x-T.x,n.y-T.y);if(d<bd){bd=d;best=n}}
+    if(best)out.add(best)}}
+  for(const id of sig.hold.keys())if(byId[id].type==='walker')out.add(byId[id]);
+  return out;
+}
+
+/* ---------- actions ---------- */
+function tapHouse(h){
+  if(S.armed){place(S.armed,h);return}
+  S.focus=h.id;
+  const m=CIRCLES[S.circle].ids;
+  if(!h.lit){h.lit=true;h.flash=now;
+    if(m.includes(h.id)){h.targets=m.filter(i=>i!==h.id);send(h,'lit')}
+    else{h.targets=null;say(h.name+' is outside this circle. Its light stays home.')}}
+  else{h.lit=false;if(h.targets)send(h,'snuffed')}
+  dirty=true;
+}
+function holdHouse(h){
+  h.on=!h.on;S.focus=h.id;try{if(navigator.vibrate)navigator.vibrate(10)}catch(e){}
+  if(S.step===2)S.step=3;
+  say(h.on?h.name+' is back on the mesh.':h.name+' is off the mesh. It stops relaying.');dirty=true;
+}
+function place(kind,n){
+  arm(null);
+  if(!n){say('Drop it on a house'+(kind==='radio'?' or the hilltop.':'.'));return}
+  if(kind==='radio'){n.radio=!n.radio;say(n.radio?(n.type==='hill'?'Relay radio on the hilltop. It sees both sides.':'Rooftop radio on '+n.name+'.'):'Radio taken off '+n.name+'.')}
+  else{if(n.type==='hill'){say('A home relay needs a house.');return}n.online=!n.online;say(n.online?n.name+' is online and runs its own relay.':n.name+' is offline now.')}
+  if(S.step===3)S.step=4;dirty=true;
+}
+function arm(k){S.armed=k;$('chipRadio').setAttribute('aria-pressed',k==='radio');$('chipRelay').setAttribute('aria-pressed',k==='relay');
+  if(k)say('Now tap a house'+(k==='radio'?' or the hilltop.':'.'))}
+function setLayer(k,v){S[k]=v;const b={near:'tgNear',town:'tgTown',world:'tgWorld',net:'tgNet'}[k];$(b).setAttribute('aria-pressed',v);
+  if(k==='net'){$('netTxt').textContent=v?'Internet on':'Internet off';say(v?'Internet is back.':'Internet is out. Near and Town still work.')}
+  dirty=true}
+function setCircle(c){S.circle=c;document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.c===c));
+  if(S.step===4)S.step=5;dirty=true;showHint()}
+function sunset(){setCircle('town');sigs=[];labels=[];houses.forEach(h=>{h.lit=false;h.seen={};h.targets=null});
+  say('Sunset. The pier house lights first.');tapHouse(byId.h1)}
+
+/* ---------- words ---------- */
+const HINTS=['Tap a house to light it.','Switch Internet off, then light another.','Tap and hold a house to take it off the mesh.','Drag a walker, or drop a rooftop radio on the hill.','Try another circle, or tap Sunset.','Poke anything. Hold a house to switch it off.'];
+let sayT=0;
+function showHint(){if(sayT)return;const el=$('hint');el.className='';el.textContent=HINTS[S.step]}
+function say(m){const el=$('hint');el.className='say';el.textContent=m;clearTimeout(sayT);sayT=setTimeout(()=>{sayT=0;showHint()},3600)}
+function secs(t){return t<10?(Math.round(t*10)/10).toFixed(1)+' seconds':Math.round(t)+' seconds'}
+function list(a){return a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1]}
+function hopWords(hops){const c={world:0,town:0,phone:0,near:0};for(const h of hops){if(h.kind==='near')c[h.phone?'phone':'near']++;else c[h.kind]++}
+  const w=[],p=(n)=>n+(n===1?' hop ':' hops ');
+  if(c.town)w.push(p(c.town)+'by rooftop radio');if(c.near)w.push(p(c.near)+'house to house');if(c.phone)w.push(p(c.phone)+'by a passing phone');if(c.world)w.push(p(c.world)+'over internet relays');return w.join(', ')}
+function renderReadout(){
+  dirty=false;const s=lastSig,how=$('rHow'),what=$('rWhat'),iff=$('rIf');
+  if(!s){how.textContent='No signal yet. '+CIRCLES[S.circle].blurb;what.textContent='A signal carries three things: who, lit or snuffed, and when.';iff.textContent='It can ride any layer that is switched on.';return}
+  const from=byId[s.from],n=s.targets.length,got=s.results.size;let t='';
+  if(got){let slow=null,sid=null;for(const [id,r] of s.results)if(!slow||r.t>slow.t){slow=r;sid=id}
+    t=(got===n?'Reached all '+n+' homes. ':'Reached '+got+' of '+n+' homes. ')+(got>1?'Longest trip, to '+byId[sid].name+': ':'To '+byId[sid].name+': ')+hopWords(slow.hops)+', '+secs(slow.t)+(slow.waited>=1?' ('+secs(slow.waited)+' of it waiting for a path)':'')+'.'}
+  else t=from.name+(s.kind==='lit'?' lit.':' snuffed.')+(s.stalled?'':' On its way to '+n+' homes.');
+  if(!s.done&&s.stalled){const em=[...emberNodes(s,true)].filter(e=>e.type!=='walker').map(e=>e.name);const mis=[...s.pending].map(i=>byId[i].name);
+    t+=' No path to '+list(mis)+' yet. The signal waits'+(em.length?' at '+list([...new Set(em)]):'')+'.'}
+  how.textContent=t;
+  what.textContent='It carried: '+from.name+', '+s.kind+', '+s.when.toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'})+'. Nothing else.';
+  const c=s.cf;iff.textContent=s.cfLabel+': '+(c.miss.length===0?'all '+n+' would arrive, the slowest in about '+secs(c.slow)+'.':c.got.length+' of '+n+' would arrive. '+list(c.miss.map(i=>byId[i].name))+' would wait for a path.');
+}
+
+/* ---------- sound ---------- */
+let ac=null,master=null,muted=false,lastTick=0;
+function unlock(){if(muted)return;try{if(!ac){const C=window.AudioContext||window.webkitAudioContext;if(!C)return;ac=new C();master=ac.createGain();master.gain.value=0.5;master.connect(ac.destination)}if(ac.state==='suspended')ac.resume()}catch(e){ac=null}}
+function tone(f,t0,dur,g,type){const o=ac.createOscillator(),v=ac.createGain();o.type=type;o.frequency.value=f;v.gain.setValueAtTime(0.0001,t0);v.gain.exponentialRampToValueAtTime(g,t0+0.008);v.gain.exponentialRampToValueAtTime(0.0001,t0+dur);o.connect(v);v.connect(master);o.start(t0);o.stop(t0+dur+0.02)}
+function tick(kind){if(!ac||muted)return;try{const t=ac.currentTime;if(t-lastTick<0.035)return;lastTick=t;tone({near:920,town:540,world:1380}[kind],t,0.07,0.07,'triangle')}catch(e){}}
+function bell(){if(!ac||muted)return;try{const t=ac.currentTime;tone(1046.5,t,1.3,0.13,'sine');tone(1568,t,0.9,0.06,'sine');tone(2637,t,0.35,0.025,'sine')}catch(e){}}
+
+/* ---------- view ---------- */
+const cv=$('map'),ctx=cv.getContext('2d'),stage=$('stage');
+const V={z:1,cx:150,cy:(WB.y0+WB.y1)/2,s:1,w:300,h:300,base:1,dpr:1};
+function clampView(){V.z=Math.max(1,Math.min(3.4,V.z));V.s=V.base*V.z;const hw=V.w/2/V.s,hh=V.h/2/V.s,H=(WB.y1-WB.y0)/2;
+  V.cx=hw>=150?150:Math.max(hw,Math.min(300-hw,V.cx));V.cy=hh>=H?(WB.y0+WB.y1)/2:Math.max(WB.y0+hh,Math.min(WB.y1-hh,V.cy))}
+function resize(){const r=stage.getBoundingClientRect();V.w=Math.max(50,r.width);V.h=Math.max(50,r.height);V.dpr=Math.min(2.5,window.devicePixelRatio||1);
+  cv.width=Math.round(V.w*V.dpr);cv.height=Math.round(V.h*V.dpr);V.base=Math.min(V.w/300,V.h/(WB.y1-WB.y0));clampView()}
+const toScreen=(x,y)=>[(x-V.cx)*V.s+V.w/2,(y-V.cy)*V.s+V.h/2];
+const toWorld=(sx,sy)=>[(sx-V.w/2)/V.s+V.cx,(sy-V.h/2)/V.s+V.cy];
+function zoomAt(f,sx,sy){const w=toWorld(sx,sy);V.z*=f;V.z=Math.max(1,Math.min(3.4,V.z));V.s=V.base*V.z;V.cx=w[0]-(sx-V.w/2)/V.s;V.cy=w[1]-(sy-V.h/2)/V.s;clampView()}
+function pick(sx,sy,opt){const w=toWorld(sx,sy);let best=null,bd=1e9;
+  for(const n of nodes){if(n.type==='relay')continue;if(n.type==='walker'&&!(opt&&opt.walkers))continue;
+    const d=Math.hypot(n.x-w[0],n.y-1-w[1])*V.s;const lim=n.type==='walker'?22:n.type==='hill'?28:26;if(d<lim&&d<bd){bd=d;best=n}}
+  return best}
+
+/* ---------- drawing ---------- */
+const px=n=>n/V.s;
+function ctrl(ax,ay,bx,by){if(bx<ax||(bx===ax&&by<ay)){const t=ax;ax=bx;bx=t;const u=ay;ay=by;by=u}const dx=bx-ax,dy=by-ay;return [(ax+bx)/2+dy*0.16,(ay+by)/2-dx*0.16]}
+function linkPoint(kind,ax,ay,bx,by,t){if(kind==='town'){const c=ctrl(ax,ay,bx,by),u=1-t;return [u*u*ax+2*u*t*c[0]+t*t*bx,u*u*ay+2*u*t*c[1]+t*t*by]}return [ax+(bx-ax)*t,ay+(by-ay)*t]}
+function linkPath(kind,ax,ay,bx,by){ctx.beginPath();ctx.moveTo(ax,ay);if(kind==='town'){const c=ctrl(ax,ay,bx,by);ctx.quadraticCurveTo(c[0],c[1],bx,by)}else ctx.lineTo(bx,by)}
+function txPos(tx){const t=Math.max(0,Math.min(1,(now-tx.t0)/(tx.t1-tx.t0)));return linkPoint(tx.kind,tx.a.x,tx.a.y,tx.b.x,tx.b.y,t)}
+function glow(x,y,r,c,a){const g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,c);g.addColorStop(1,'rgba(0,0,0,0)');ctx.globalAlpha=a;ctx.globalCompositeOperation='lighter';ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1}
+function text(s,x,y,size,col,align,weight){ctx.font=(weight||600)+' '+px(size)+'px '+FONT;ctx.textAlign=align||'center';ctx.textBaseline='middle';ctx.lineJoin='round';ctx.lineWidth=px(3);ctx.strokeStyle='rgba(23,19,42,.85)';ctx.strokeText(s,x,y);ctx.fillStyle=col;ctx.fillText(s,x,y)}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+const TREES=[[54,104],[66,118],[82,106],[96,124],[110,108],[58,132],[104,134],[76,128],[14,70],[16,120],[130,60],[140,100],[128,140],[262,110],[270,128],[254,210],[268,250],[232,250],[20,250],[74,40],[100,52],[150,40],[290,60],[240,96]];
+function drawGround(wave){
+  const x0=toWorld(0,0)[0]-2,x1=toWorld(V.w,0)[0]+2,y0=toWorld(0,0)[1]-2,y1=toWorld(0,V.h)[1]+2;
+  ctx.fillStyle='#2b2444';ctx.fillRect(x0,y0,x1-x0,y1-y0);
+  // the far-away band where internet relays live
+  ctx.fillStyle='#17132a';ctx.fillRect(x0,y0,x1-x0,-7-y0);
+  // sea, beach
+  const g=ctx.createLinearGradient(0,292,0,345);g.addColorStop(0,'#3a4a84');g.addColorStop(1,'#232a5c');ctx.fillStyle=g;ctx.fillRect(x0,298,x1-x0,y1-298);
+  ctx.fillStyle='#7a6478';ctx.beginPath();ctx.moveTo(x0,289);ctx.lineTo(x1,289);ctx.lineTo(x1,300);
+  for(let x=x1;x>=x0;x-=6)ctx.lineTo(x,300+Math.sin(x*0.09+wave)*1.6);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(255,190,150,.5)';ctx.lineWidth=px(1.2);
+  for(let i=0;i<9;i++){const y=306+i*4.6,w=10+i*5+Math.sin(wave*1.3+i)*3;ctx.globalAlpha=0.5-i*0.04;ctx.beginPath();ctx.moveTo(150-w,y);ctx.lineTo(150+w,y);ctx.stroke()}
+  ctx.globalAlpha=1;
+  // park and hill
+  ctx.fillStyle='#234940';rr(44,96,78,46,7);ctx.fill();
+  ctx.fillStyle='#31557a';ctx.beginPath();ctx.ellipse(90,118,9,5.5,0.3,0,7);ctx.fill();
+  const hc=['#3a2f5c','#4a3766','#5d3f6e','#744a72'];[42,31,20,9].forEach((r,i)=>{ctx.fillStyle=hc[i];ctx.beginPath();ctx.ellipse(HILL.x-i*1.2,HILL.y+i*1.5,r,r*0.94,0,0,7);ctx.fill()});
+  ctx.strokeStyle='rgba(255,170,150,.22)';ctx.lineWidth=px(1);[42,31,20].forEach((r,i)=>{ctx.beginPath();ctx.ellipse(HILL.x-i*1.2,HILL.y+i*1.5,r,r*0.94,0,2.2,5.2);ctx.stroke()});
+  // streets
+  ctx.strokeStyle='#473c6a';ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();
+  [[x0,282,x1,282],[x0,227,x1,227],[x0,186,x1,186],[30,22,282,22],[30,22,30,282],[106,186,106,282],[200,138,200,282],[282,22,282,282]].forEach(r=>{ctx.moveTo(r[0],r[1]);ctx.lineTo(r[2],r[3])});ctx.stroke();
+  // pier
+  ctx.fillStyle='#6a566a';ctx.fillRect(146.5,287,7,52);ctx.strokeStyle='rgba(30,24,50,.5)';ctx.lineWidth=px(1);ctx.beginPath();for(let y=292;y<338;y+=5){ctx.moveTo(146.5,y);ctx.lineTo(153.5,y)}ctx.stroke();
+  glow(150,338,9,'#ffc27a',0.5);
+  // trees
+  for(const t of TREES){ctx.fillStyle='#2c5b4f';ctx.beginPath();ctx.arc(t[0],t[1],4.2,0,7);ctx.fill();ctx.fillStyle='#3d7461';ctx.beginPath();ctx.arc(t[0]-1,t[1]-1.2,2.2,0,7);ctx.fill()}
+  // low sun over the water
+  glow(150,372,230,'rgba(255,128,84,1)',0.34);
+  text('the hill',HILL.x,HILL.y+28,9.5,'rgba(247,235,220,.55)','center',500);
+  text('park',70,101.5,9,'rgba(247,235,220,.45)','center',500);
+  text('pier',163,326,9,'rgba(247,235,220,.6)','center',500);
+  text('Shell Lane',256,227,8.5,'rgba(247,235,220,.4)','center',500);
+  // scale
+  ctx.strokeStyle='rgba(247,235,220,.6)';ctx.lineWidth=px(1.5);ctx.beginPath();ctx.moveTo(186,336);ctx.lineTo(186,339);ctx.lineTo(236,339);ctx.lineTo(236,336);ctx.stroke();
+  text('50 m',211,333,9,'rgba(247,235,220,.7)','center',500);
+}
+function drawHouse(h,member,t){
+  const x=h.x,y=h.y,warm=h.lit||Object.keys(h.seen).length>0;
+  ctx.globalAlpha=h.on?1:0.36;
+  if(member){ctx.strokeStyle=COL.ember;ctx.lineWidth=px(1.6);ctx.globalAlpha*=0.9;ctx.beginPath();ctx.ellipse(x,y+8.5,13.5,4.2,0,0,7);ctx.stroke();ctx.globalAlpha=h.on?1:0.36}
+  ctx.fillStyle='rgba(15,10,30,.35)';ctx.beginPath();ctx.ellipse(x+2,y+9,10.5,2.6,0,0,7);ctx.fill();
+  ctx.fillStyle=BODY[h.ci];rr(x-8,y-3,16,11.5,1.2);ctx.fill();
+  ctx.fillStyle=ROOF[h.ci];ctx.beginPath();ctx.moveTo(x-10.8,y-2.6);ctx.lineTo(x,y-11.5);ctx.lineTo(x+10.8,y-2.6);ctx.closePath();ctx.fill();
+  ctx.fillStyle='rgba(20,14,36,.55)';ctx.fillRect(x-1.5,y+2.6,3,5.9);
+  ctx.fillStyle=warm?(h.lit?'#fff0c0':'#ffd27a'):'#2a2242';ctx.fillRect(x-6,y-0.6,3.6,4.2);ctx.fillRect(x+2.4,y-0.6,3.6,4.2);
+  ctx.globalAlpha=1;
+  if(warm&&h.on||h.lit){const f=Math.max(0,1-(now-h.flash)/0.9),br=reduce?0:Math.sin(t*2.3+h.x)*0.04;
+    glow(x,y+1.5,h.lit?26:19,h.lit?'#ffb866':'#ffc978',(h.lit?0.62:0.42)+br+f*0.3);
+    if(f>0&&!reduce){ctx.strokeStyle='rgba(255,220,160,'+f*0.8+')';ctx.lineWidth=px(2);ctx.beginPath();ctx.arc(x,y,12+(1-f)*16,0,7);ctx.stroke()}}
+  if(h.lit){ctx.fillStyle='#fff6dc';ctx.beginPath();ctx.moveTo(x,y+1.6);ctx.quadraticCurveTo(x+2.6,y+5,x,y+7.2);ctx.quadraticCurveTo(x-2.6,y+5,x,y+1.6);ctx.fill();glow(x,y+5,6,'#fff3d0',0.9)}
+  if(h.radio&&S.town){ctx.globalAlpha=h.on?1:0.4;drawMast(x+6.5,y-7,COL.town,9);ctx.globalAlpha=1}
+  if(h.online&&S.world){ctx.globalAlpha=h.on?(S.net?1:0.45):0.3;ctx.fillStyle=S.net?COL.world:'#6d6a86';ctx.beginPath();ctx.arc(x-9.5,y-9,1.9,0,7);ctx.fill();ctx.globalAlpha=1}
+  if(!h.on){ctx.strokeStyle='rgba(247,235,220,.55)';ctx.lineWidth=px(1.2);ctx.setLineDash([px(3),px(3)]);ctx.beginPath();ctx.arc(x,y-1,14.5,0,7);ctx.stroke();ctx.setLineDash([])}
+  const ly=h.lab>0?y+8.5+px(9):y-12-px(7);
+  text(h.on?h.name:h.name+' (off)',x,ly,10,member?COL.ink:'rgba(214,204,232,.82)','center',member?700:500);
+}
+function drawMast(x,y,c,h){ctx.strokeStyle=c;ctx.fillStyle=c;ctx.lineWidth=px(1.5);ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y-h);ctx.stroke();ctx.beginPath();ctx.arc(x,y-h,1.5,0,7);ctx.fill();
+  ctx.lineWidth=px(1);ctx.beginPath();ctx.arc(x,y-h,3.6,-2.2,-0.9);ctx.stroke();ctx.beginPath();ctx.arc(x,y-h,5.6,-2.2,-0.9);ctx.stroke()}
+function drawTower(r,t){const x=r.x,y=r.y,c=S.net&&S.world?COL.world:'#5d5a78';ctx.strokeStyle=c;ctx.lineWidth=px(1.4);ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x-4.5,y+9);ctx.lineTo(x,y-5);ctx.lineTo(x+4.5,y+9);ctx.moveTo(x-2.8,y+4);ctx.lineTo(x+2.8,y+4);ctx.moveTo(x-1.5,y);ctx.lineTo(x+1.5,y);ctx.stroke();
+  ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y-5.5,1.7,0,7);ctx.fill();
+  if(S.net&&S.world){const p=Math.max(0,1-(now-r.ping)/0.6);glow(x,y-5.5,6+p*8,'#b9c8ff',0.5+p*0.5)}
+  else{ctx.strokeStyle='#e08a8a';ctx.lineWidth=px(1.4);ctx.beginPath();ctx.moveTo(x+4,y-9);ctx.lineTo(x+8,y-5);ctx.moveTo(x+8,y-9);ctx.lineTo(x+4,y-5);ctx.stroke()}}
+function draw(){
+  const t=now,wave=reduce?0:t*0.8;
+  ctx.setTransform(V.dpr,0,0,V.dpr,0,0);ctx.clearRect(0,0,V.w,V.h);
+  ctx.setTransform(V.dpr*V.s,0,0,V.dpr*V.s,V.dpr*(V.w/2-V.cx*V.s),V.dpr*(V.h/2-V.cy*V.s));
+  drawGround(wave);
+  // world layer
+  if(S.world){
+    text(S.net?'internet relays, anywhere in the world':'internet is out',150,-30.5,8.5,S.net?'rgba(159,182,255,.8)':'#e6a0a0','center',500);
+    ctx.strokeStyle=COL.world;ctx.lineWidth=px(1);ctx.setLineDash([px(1.5),px(5)]);ctx.globalAlpha=0.3;
+    for(const l of LINKS)if(l.kind==='world'){linkPath('world',l.a.x,l.a.y-(l.a.type==='house'?9:0),l.b.x,l.b.y+(l.b.type==='relay'&&l.a.type==='house'?9:-3));ctx.stroke()}
+    ctx.setLineDash([]);ctx.globalAlpha=1;
+    relays.forEach(r=>drawTower(r,t));
+  }
+  // town layer
+  if(S.town){
+    ctx.lineWidth=px(1.3);ctx.strokeStyle=COL.town;ctx.setLineDash([px(5),px(4)]);ctx.globalAlpha=0.5;
+    for(const l of LINKS)if(l.kind==='town'){linkPath('town',l.a.x,l.a.y,l.b.x,l.b.y);ctx.stroke()}
+    ctx.setLineDash([px(1.5),px(5)]);ctx.globalAlpha=0.38;
+    for(const b of BLOCKED){for(const pr of [[b.a,b.b],[b.b,b.a]]){const A=pr[0],B=pr[1];let e=null;for(let i=1;i<60;i++){const u=i/60,qx=A.x+(B.x-A.x)*u,qy=A.y+(B.y-A.y)*u;if(Math.hypot(qx-HILL.x,qy-HILL.y)<HILL.r){e=[qx,qy];break}}
+      if(!e)continue;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(e[0],e[1]);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=0.8;const k=px(3.5);ctx.beginPath();ctx.moveTo(e[0]-k,e[1]-k);ctx.lineTo(e[0]+k,e[1]+k);ctx.moveTo(e[0]+k,e[1]-k);ctx.lineTo(e[0]-k,e[1]+k);ctx.stroke();ctx.setLineDash([px(1.5),px(5)]);ctx.globalAlpha=0.38}}
+    ctx.setLineDash([]);ctx.globalAlpha=1;
+    if(hill.radio){drawMast(HILL.x,HILL.y+3,COL.town,13);glow(HILL.x,HILL.y-10,10,COL.town,0.5);text('relay',HILL.x,HILL.y+11,9.5,COL.town)}
+    else{ctx.strokeStyle='rgba(255,141,180,.6)';ctx.lineWidth=px(1.2);ctx.setLineDash([px(3),px(3)]);ctx.beginPath();ctx.arc(HILL.x,HILL.y,7,0,7);ctx.stroke();ctx.setLineDash([]);text('+',HILL.x,HILL.y+0.3,12,'rgba(255,141,180,.85)')}
+  }
+  // near layer
+  if(S.near){
+    ctx.strokeStyle=COL.near;ctx.lineWidth=px(1.6);ctx.globalAlpha=0.55;
+    for(const l of LINKS)if(l.kind==='near'){ctx.beginPath();ctx.moveTo(l.a.x,l.a.y+(l.a.type==='house'?5:0));ctx.lineTo(l.b.x,l.b.y+(l.b.type==='house'?5:0));ctx.stroke()}
+    ctx.lineWidth=px(1);ctx.setLineDash([px(3),px(4)]);
+    for(const w of walkers){ctx.globalAlpha=w.drag?0.7:0.3;ctx.beginPath();ctx.arc(w.x,w.y,NEAR_R,0,7);ctx.stroke();ctx.globalAlpha=w.drag?0.1:0.045;ctx.fillStyle=COL.near;ctx.fill()}
+    const f=S.focus&&byId[S.focus];if(f&&f.on){ctx.globalAlpha=0.3;ctx.beginPath();ctx.arc(f.x,f.y,NEAR_R,0,7);ctx.stroke();text('about 30 m',f.x,f.y-NEAR_R-px(6),8.5,'rgba(127,230,210,.8)','center',500)}
+    ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+  // rooftop reach preview while dragging a radio
+  if(drag&&drag.kind==='radio'&&drag.w){ctx.strokeStyle=COL.town;ctx.lineWidth=px(1.2);ctx.setLineDash([px(6),px(5)]);ctx.globalAlpha=0.6;ctx.beginPath();ctx.arc(drag.w[0],drag.w[1],TOWN_R,0,7);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1}
+  if(drag&&drag.over){ctx.strokeStyle=COL.ember;ctx.lineWidth=px(2);ctx.beginPath();ctx.arc(drag.over.x,drag.over.y-1,15,0,7);ctx.stroke()}
+  // path the last signal took
+  const s=lastSig;
+  if(s){const age=s.done?now-s.doneT:0,a=s.done?Math.max(0.4,0.95-age*0.06):0.95;ctx.strokeStyle=COL.ember;ctx.lineWidth=px(2.6);ctx.lineCap='round';ctx.globalAlpha=a;
+    for(const r of s.path){linkPath(r.kind,r.ax,r.ay,r.bx,r.by);ctx.stroke()}ctx.globalAlpha=1}
+  // houses, walkers
+  const mem=CIRCLES[S.circle].ids;
+  for(const h of houses)drawHouse(h,mem.includes(h.id),t);
+  if(document.activeElement===cv&&kbd){const h=houses[S.kfocus];ctx.strokeStyle=COL.ember;ctx.lineWidth=px(2);ctx.beginPath();ctx.arc(h.x,h.y-1,16,0,7);ctx.stroke()}
+  for(const w of walkers){const bob=reduce?0:Math.sin(t*7+w.d)*0.5;
+    ctx.fillStyle='rgba(15,10,30,.4)';ctx.beginPath();ctx.ellipse(w.x+1,w.y+3.5,3.6,1.5,0,0,7);ctx.fill();
+    ctx.fillStyle=w.hue;ctx.beginPath();ctx.arc(w.x,w.y+bob,3.3,0,7);ctx.fill();ctx.fillStyle='#2b2444';ctx.beginPath();ctx.arc(w.x,w.y-0.6+bob,1.5,0,7);ctx.fill();
+    ctx.fillStyle=COL.near;ctx.fillRect(w.x+2.6,w.y-2+bob,1.8,3);
+    const p=Math.max(0,1-(now-w.ping)/0.5);if(p>0)glow(w.x,w.y,8+p*6,COL.near,p*0.8)}
+  // hold progress
+  if(holdS&&holdS.n&&holdS.n.type==='house'){const f=Math.min(1,(performance.now()-holdS.t)/HOLD_MS);ctx.strokeStyle=COL.ink;ctx.lineWidth=px(3);ctx.beginPath();ctx.arc(holdS.n.x,holdS.n.y-1,16,-1.57,-1.57+f*6.283);ctx.stroke()}
+  // signals in flight, embers
+  for(const sg of sigs){if(sg.done)continue;
+    for(const tx of sg.tx){const c=COL[tx.kind];
+      if(reduce){ctx.strokeStyle='#fff3d6';ctx.lineWidth=px(2.4);ctx.globalAlpha=0.9;linkPath(tx.kind,tx.a.x,tx.a.y,tx.b.x,tx.b.y);ctx.stroke();ctx.globalAlpha=1;continue}
+      const u=Math.max(0,Math.min(1,(now-tx.t0)/(tx.t1-tx.t0)));
+      for(let k=4;k>=0;k--){const p=linkPoint(tx.kind,tx.a.x,tx.a.y,tx.b.x,tx.b.y,Math.max(0,u-k*0.05));ctx.globalAlpha=1-k*0.2;ctx.fillStyle=k?c:'#fff6e0';ctx.beginPath();ctx.arc(p[0],p[1],px(k?2.4:3.2),0,7);ctx.fill()}
+      ctx.globalAlpha=1;const p=linkPoint(tx.kind,tx.a.x,tx.a.y,tx.b.x,tx.b.y,u);glow(p[0],p[1],px(11),c,0.7)}
+    for(const n of emberNodes(sg)){const ex=n.type==='walker'?n.x:n.x-13,ey=n.type==='walker'?n.y-6:n.y+3,pu=reduce?1:0.75+Math.sin(t*5+n.x)*0.25;
+      glow(ex,ey,px(11),'#ff8a3c',0.85*pu);ctx.fillStyle='#ffd08a';ctx.beginPath();ctx.arc(ex,ey,px(2.6),0,7);ctx.fill();
+      if(n.type!=='walker')text('waiting',ex-px(6),ey-px(10),8.5,'#ffc890','center',600)}}
+  for(let i=fizz.length-1;i>=0;i--){const f=fizz[i],a=1-(now-f.t)/0.5;if(a<=0){fizz.splice(i,1);continue}ctx.strokeStyle='rgba(255,200,170,'+a+')';ctx.lineWidth=px(1.4);ctx.beginPath();ctx.arc(f.x,f.y,px(3+(1-a)*8),0,7);ctx.stroke()}
+  // hop counts and late labels for the last signal
+  if(s){for(const [id,r] of s.results){const h=byId[id];ctx.fillStyle='#17132a';ctx.strokeStyle=COL.ember;ctx.lineWidth=px(1.3);ctx.beginPath();ctx.arc(h.x+13.5,h.y+2.5,px(7),0,7);ctx.fill();ctx.stroke();
+      ctx.font='700 '+px(9.5)+'px '+FONT;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=COL.ember;ctx.fillText(r.hops.length,h.x+13.5,h.y+2.5+px(0.5))}}
+  for(let i=labels.length-1;i>=0;i--){const l=labels[i],age=now-l.t;if(age>6){labels.splice(i,1);continue}const h=byId[l.id],rise=reduce?0:Math.min(6,age*4);
+    ctx.globalAlpha=Math.min(1,(6-age)/1.2);text(l.text,h.x,h.y-(h.lab<0?27:17)-rise,10,'#ffc27a','center',700);ctx.globalAlpha=1}
+  // dusk vignette
+  ctx.setTransform(V.dpr,0,0,V.dpr,0,0);const vg=ctx.createRadialGradient(V.w/2,V.h*0.55,Math.min(V.w,V.h)*0.35,V.w/2,V.h*0.55,Math.max(V.w,V.h)*0.8);vg.addColorStop(0,'rgba(10,6,26,0)');vg.addColorStop(1,'rgba(10,6,26,.5)');ctx.fillStyle=vg;ctx.fillRect(0,0,V.w,V.h);
+}
+
+/* ---------- loop ---------- */
+function update(dt){
+  now+=dt;
+  for(const w of walkers){if(w.drag)continue;if(reduce)continue;
+    if(w.linger>0){w.linger-=dt;continue}
+    if(w.ret){const p=routePos(w.route,w.d),dx=p[0]-w.x,dy=p[1]-w.y,d=Math.hypot(dx,dy),st=12*dt;if(d<=st){w.x=p[0];w.y=p[1];w.ret=false}else{w.x+=dx/d*st;w.y+=dy/d*st}continue}
+    w.d+=w.dir*6*dt;if(w.d>w.L){w.d=w.L;w.dir=-1}if(w.d<0){w.d=0;w.dir=1}const p=routePos(w.route,w.d);w.x=p[0];w.y=p[1]}
+  refreshLinks();
+  for(const s of sigs)stepSig(s);
+  if(dirty)renderReadout();
+}
+let lastTs=0;
+function frame(ts){const dt=Math.min(0.1,Math.max(0,(ts-lastTs)/1000));lastTs=ts;update(dt);draw();requestAnimationFrame(frame)}
+
+/* ---------- input ---------- */
+const HOLD_MS=520;
+let holdS=null,pts=new Map(),gest=null,drag=null,kbd=false;
+function local(e){const r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top]}
+function cancelHold(){if(holdS){clearTimeout(holdS.timer);holdS=null}}
+cv.addEventListener('pointerdown',e=>{
+  unlock();kbd=false;const p=local(e);pts.set(e.pointerId,p);try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  if(pts.size===2){cancelHold();if(gest&&gest.walker){gest.walker.drag=false}const a=[...pts.values()];gest={type:'pinch',d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])};return}
+  if(pts.size>2)return;
+  const n=pick(p[0],p[1],{walkers:true});
+  if(e.button===2){if(n&&n.type==='house')holdHouse(n);gest=null;return}
+  if(n&&n.type==='walker'&&!S.armed){n.drag=true;gest={type:'walker',walker:n};if(S.step===3){S.step=4;showHint()}return}
+  gest={type:'tap',n:(n&&n.type!=='walker')?n:null,x:p[0],y:p[1],cx:V.cx,cy:V.cy,held:false};
+  if(gest.n&&gest.n.type==='house'&&!S.armed){const g=gest;holdS={n:g.n,t:performance.now(),timer:setTimeout(()=>{g.held=true;holdS=null;holdHouse(g.n)},HOLD_MS)}}
+});
+cv.addEventListener('pointermove',e=>{
+  if(!pts.has(e.pointerId))return;const p=local(e);pts.set(e.pointerId,p);if(!gest)return;
+  if(gest.type==='pinch'&&pts.size>=2){const a=[...pts.values()],d=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);if(gest.d>0)zoomAt(d/gest.d,(a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2);gest.d=d;return}
+  if(gest.type==='walker'){const w=toWorld(p[0],p[1]);gest.walker.x=Math.max(2,Math.min(298,w[0]));gest.walker.y=Math.max(-4,Math.min(296,w[1]));return}
+  if(gest.type==='tap'&&Math.hypot(p[0]-gest.x,p[1]-gest.y)>9){cancelHold();if(!gest.held)gest.type='pan'}
+  if(gest.type==='pan'){V.cx=gest.cx-(p[0]-gest.x)/V.s;V.cy=gest.cy-(p[1]-gest.y)/V.s;clampView()}
+});
+function endPtr(e){
+  if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);cancelHold();const g=gest;
+  if(!g)return;
+  if(g.type==='walker'){const w=g.walker;w.drag=false;w.d=routeNearest(w.route,w.x,w.y);w.linger=5;w.ret=true;gest=null;return}
+  if(g.type==='pinch'){if(pts.size<2)gest=null;return}
+  gest=null;
+  if(g.type==='tap'&&!g.held&&e.type==='pointerup'){
+    if(g.n){if(g.n.type==='house')tapHouse(g.n);else if(S.armed)place(S.armed,g.n);else say(hill.radio?'Drag the radio chip here again to take it down.':'Drop a rooftop radio here to see over the hill.')}
+    else if(S.armed)place(S.armed,null)}
+}
+cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{e.preventDefault();const p=local(e);zoomAt(e.deltaY<0?1.15:1/1.15,p[0],p[1])},{passive:false});
+cv.addEventListener('keydown',e=>{unlock();const k=e.key;
+  if(k==='ArrowRight'||k==='ArrowDown'){kbd=true;S.kfocus=(S.kfocus+1)%houses.length;e.preventDefault()}
+  else if(k==='ArrowLeft'||k==='ArrowUp'){kbd=true;S.kfocus=(S.kfocus+houses.length-1)%houses.length;e.preventDefault()}
+  else if(k==='Enter'||k===' '){kbd=true;tapHouse(houses[S.kfocus]);e.preventDefault()}
+  else if(k==='o'||k==='O'){kbd=true;holdHouse(houses[S.kfocus])}
+  if(kbd)say(houses[S.kfocus].name)});
+
+// chips: drag onto the map, or tap to arm then tap a house
+const ghost=$('ghost');
+document.querySelectorAll('#tray .chip').forEach(ch=>{
+  ch.addEventListener('pointerdown',e=>{unlock();try{ch.setPointerCapture(e.pointerId)}catch(_){}
+    drag={kind:ch.dataset.kind,x:e.clientX,y:e.clientY,moved:false,w:null,over:null,el:ch};e.preventDefault()});
+  ch.addEventListener('pointermove',e=>{if(!drag||drag.el!==ch)return;if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<9)return;
+    if(!drag.moved){drag.moved=true;ghost.innerHTML=ch.innerHTML;ghost.style.display='inline-flex'}
+    ghost.style.left=e.clientX+'px';ghost.style.top=e.clientY+'px';
+    const r=cv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top-18;drag.w=toWorld(sx,sy);drag.over=pick(sx,sy)});
+  const end=e=>{if(!drag||drag.el!==ch)return;const d=drag;drag=null;ghost.style.display='none';
+    if(e.type==='pointercancel')return;
+    if(!d.moved){arm(S.armed===d.kind?null:d.kind);return}
+    place(d.kind,d.over)};
+  ch.addEventListener('pointerup',end);ch.addEventListener('pointercancel',end);
+  ch.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();arm(S.armed===ch.dataset.kind?null:ch.dataset.kind)}});
+});
+
+// panel
+[['tgNear','near'],['tgTown','town'],['tgWorld','world'],['tgNet','net']].forEach(p=>$(p[0]).addEventListener('click',()=>{unlock();setLayer(p[1],!S[p[1]])}));
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{unlock();setCircle(b.dataset.c);if(!lastSig)dirty=true}));
+$('sunset').addEventListener('click',()=>{unlock();sunset()});
+$('zin').addEventListener('click',()=>zoomAt(1.4,V.w/2,V.h/2));$('zout').addEventListener('click',()=>zoomAt(1/1.4,V.w/2,V.h/2));
+$('mute').addEventListener('click',()=>{muted=!muted;const b=$('mute');b.setAttribute('aria-pressed',muted);b.setAttribute('aria-label',muted?'Sound off. Tap to unmute.':'Sound on. Tap to mute.');$('muteWaves').setAttribute('d',muted?'M11 6l4 4M15 6l-4 4':'M11.5 5.5a3.5 3.5 0 010 5M13 3.5a6 6 0 010 9');if(!muted){unlock();tick('near')}});
+function drawer(open){$('drawer').hidden=!open;$('openReal').setAttribute('aria-expanded',open);if(open)$('closeReal').focus();else $('openReal').focus()}
+$('openReal').addEventListener('click',()=>drawer($('drawer').hidden));$('closeReal').addEventListener('click',()=>drawer(false));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('drawer').hidden)drawer(false);else if(S.armed)arm(null)}});
+
+if(window.ResizeObserver)new ResizeObserver(resize).observe(stage);else window.addEventListener('resize',resize);
+resize();refreshLinks();renderReadout();requestAnimationFrame(frame);
+
+window.__mesh={S,nodes,byId,houses,walkers,hill,V,toScreen,tapHouse,holdHouse,setLayer,setCircle,sunset,place,
+  get sigs(){return sigs},get last(){return lastSig},get links(){return LINKS},get blocked(){return BLOCKED},get now(){return now},
+  ff(sec){for(let t=0;t<sec;t+=0.05)update(0.05)},audio(){return ac?ac.state:'none'}};
+})();
+</script>
+<script>
+/* PointCast: remember that this window was opened, so it is lit back on the street. Stays in this browser. */
+try{var k='bb-street-v1',a=JSON.parse(localStorage.getItem(k)||'[]');if(!Array.isArray(a))a=[];if(a.indexOf('mesh-street')<0){a.push('mesh-street');localStorage.setItem(k,JSON.stringify(a))}}catch(e){}
+</script>
+</body>
+</html>
