@@ -319,7 +319,7 @@ function lightsRefresh(now) {
   if (!S.lightApi) { setMembers(demoCircle(now), now); setStatus('demo'); return; }
   if (!st.lights.circle) { S.members = []; setStatus('none'); return; }
   if (S.lightsFor === st.lights.circle && now < S.lightsTimer) return;
-  S.lightsFor = st.lights.circle; S.lightsTimer = now + 8000;
+  S.lightsFor = st.lights.circle; S.lightsTimer = now + 15000; // one read every 15 s keeps a TV inside the site's daily request budget
   var circle = st.lights.circle;
   getJson('/api/light', { 'X-Light-Circle': circle }).then(function (j) {
     if (!S.state || S.state.lights.circle !== circle) return;
