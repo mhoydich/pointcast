@@ -14,6 +14,18 @@
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
 - [ ] (MH) Choose a licence for the Baby Bonfire files and designs — `waiting-on-mh`
 - [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
+## Coast Commons: an open study for the beach towns (2026-11-11)
+
+`/coast-commons/`, `/coast-commons/el-segundo/` (flagship), `/coast-commons/pattern/`, fourteen more town pages, `/coast-commons.json`, Block 0785. Mike in chat on 2026-11-11: publish to PointCast, for El Segundo, Manhattan Beach, PV and the other beach towns within 25 miles, as a public good; make El Segundo the flagship. A study, not an offer; nothing for sale; no money raised.
+
+- [x] (CC) Hub with the drawn coast strip and filter, flagship El Segundo page with step ladder, fourteen town pages, pattern page with split calculator and ledger template; all generated into `public/coast-commons/` by `node scripts/coast-commons/build.mjs` from `scripts/coast-commons/data.mjs` — `done`
+- [x] (CC) 46 official pages opened and paraphrased on 2026-11-11; unchecked entries say "Not verified" — `done`
+- [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/coast-commons.test.mjs` — `done`
+- [ ] (X) Review the rule paraphrases against the linked pages, the plain box wording and the content rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-coast-commons-qa.md`; results to `docs/manus-logs/2026-11-11-coast-commons-qa.md` — `queued`
+- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [ ] (MH) Decide: keep the homepage "New today" entry; whether Pacific Palisades and Sunset Beach join the list; whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
+- [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
 ## Light Companion v0 (2026-11-11)
@@ -25,6 +37,17 @@
 - [ ] (M) After deploy: two-phone QA per `docs/briefs/2026-11-11-manus-light-companion.md`; results to `docs/manus-logs/2026-11-11-light-companion.md` — `queued`
 - [ ] (MH) Decide: polling every 4 seconds on D1 is fine for a few circles; a push channel (Durable Object) is the next step if it is used; whether to add it to the homepage "New today" strip — `waiting-on-mh`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh`. Nothing to provision: AUTH_DB and PC_RATES_KV are already bound and the table creates itself — `waiting-on-mh`
+
+---
+
+## Front page rethink: `/home-next/` prototype (2026-11-11)
+
+Mike: "reconsider homepage redesign ... bell labs pixel utility with style design minimal smart readable fonts". Note: `docs/briefs/2026-11-11-homepage-rethink.md`. Static prototype at `public/home-next/`, tests in `tests/home-next.test.mjs`. The current homepage is untouched.
+
+- [x] (CC) Design note, prototype, tests, screenshots at 390/768/1280 light and dark — `done`
+- [ ] (MH) Decide the three open questions in the note (the one button, the dock, how to swap) — `waiting-on-mh`
+- [ ] (M) After deploy: open https://pointcast.xyz/home-next/ on an iPhone (Safari) and an Android phone (Chrome), light and dark; confirm the four gauges fill or say "unavailable", newest posts load, every link opens; log to `docs/manus-logs/2026-11-11-home-next.md` — `queued`
+- [ ] (CC) If Mike says go: port to `src/pages/index.astro` with newest posts rendered at build time, update homepage tests — `queued`
 
 ---
 
@@ -43,6 +66,20 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [ ] (MH/CC) Deploy order: merge and deploy hello-token-reserve #288 first (it publishes https://elsegundo.xyz/atlas.json), then `node scripts/atlas/build.mjs --fetch`, commit the refreshed snapshot, then merge and deploy this PR; until then the merged index carries a committed snapshot and says so (`sites[].live: false`) — `queued`
 - [ ] (MH) Deploy with `scripts/deploy.sh` — `waiting-on-mh`
 - [ ] (CC) Refresh the elsegundo snapshot with `node scripts/atlas/build.mjs --fetch` once https://elsegundo.xyz/atlas.json is live — `queued`
+
+---
+
+## House Channel — the TV as the hearth (2026-11-11)
+
+`/house/` (the TV page), `/house/r/` (the phone remote), `/house/about/`, `/house.json`, `/api/house`, Block 0784. Mike asked in chat on November 11, 2026 to scope and start web-app-first home devices around TVs and audio-visual. Research: `docs/research/2026-11-11-web-home-capabilities.md`.
+
+- [x] (CC) v0: pairing by a five-letter code that lasts ten minutes (`functions/api/house.ts`, `functions/_lib/house-pairing.mjs`), TV-authoritative state over the existing drum-room party relay (`bc-` rooms, no new Worker), four views (Hearth, Window, Lights, Drum) plus Off, sound made on the TV and off until asked, idle dim, End, rules in `public/house/core.js`, `tests/house-channel.test.mjs`, local server `scripts/house-dev.mjs`, two-screen check `scripts/e2e-house-channel.mjs` — `done`
+- [x] (CC) `/api/weather` now also returns `windMph`, `windDirDeg`, `cloudCover` (additive; null when Open-Meteo does not report them) — `done`
+- [ ] (X) Review `/api/house` (public write surface: code space, rate limits, what is stored, use of `PC_RATES_KV`), the command reducer in `public/house/core.js` (input from any paired phone) and the additive `/api/weather` fields — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-house-channel.md` (a smart TV browser, a cast tab, an iPhone, an Android phone); results to `docs/manus-logs/2026-11-11-house-channel.md` — `queued`
+- [ ] (MH) Decide: is an hour the right time for an unattended TV to let its room go, or should a Window left up all afternoon stay; and should pairing get its own `HOUSE_KV` namespace instead of sharing `PC_RATES_KV` — `waiting-on-mh`
+- [ ] (MH) Deploy with `scripts/deploy.sh` after review. Nothing new to provision for v0 — `waiting-on-mh`
+- [ ] (CC) When Light Companion (`/api/light`) is live, re-run the Lights view against a real circle and drop the demo wording from Block 0784 — `queued`
 
 ---
 
