@@ -12,17 +12,21 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { CARDS, GENERATED, H, ROOT, W, pageFile, pngFile, stale, stampHead } from './cards.mjs';
+import { CARDS, GENERATED, H, ROOT, W, pageFile, pngFile, scenesWithoutCard, stale, stampHead } from './cards.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
 const svgDir = args.find((a) => a.startsWith('--svg='))?.slice(6);
 
+// Not an error: a scene that joined the street after its neighbours keeps the request-time card.
+const waiting = scenesWithoutCard();
+const note = waiting.length ? `\nnote: ${waiting.length} Baby Bonfire scene${waiting.length > 1 ? 's have' : ' has'} no card yet (${waiting.join(', ')}). Add a row to SCENES in cards.mjs and run this again.` : '';
+
 if (check) {
   const out = stale();
   for (const line of out) console.error(`stale: ${line}`);
   if (out.length) process.exit(1);
-  console.log(`unfurl cards: ${CARDS.length} cards and their pages are in step`);
+  console.log(`unfurl cards: ${CARDS.length} cards and their pages are in step${note}`);
   process.exit(0);
 }
 
@@ -80,4 +84,4 @@ for (const script of ['scripts/coast-commons-studies/build.mjs', 'scripts/coast-
 }
 const left = stale();
 if (left.length) throw new Error(`unfurl cards: still out of step after a build:\n${left.join('\n')}`);
-console.log(`unfurl cards: ${CARDS.length} cards (${drawn} redrawn), ${stamped} pages restamped, Coast Commons pages regenerated`);
+console.log(`unfurl cards: ${CARDS.length} cards (${drawn} redrawn), ${stamped} pages restamped, Coast Commons pages regenerated${note}`);

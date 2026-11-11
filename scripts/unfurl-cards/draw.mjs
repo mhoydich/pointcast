@@ -69,13 +69,13 @@ const AREAS = {
 // ---------------------------------------------------------------- Baby Bonfire
 
 let hubParts;
-/** The fifteen houses and the beacon, lifted from the hub street so the cards wear the page's own drawings. */
+/** The houses and the beacon, lifted from the hub street so the cards wear the page's own drawings. */
 function hub() {
   if (hubParts) return hubParts;
   const html = readFileSync(resolve(ROOT, 'public/baby-bonfire/index.html'), 'utf8');
   const houses = new Map([...html.matchAll(/<a class="house" href="\/baby-bonfire\/([a-z-]+)\/"[^>]*>\s*<svg viewBox="0 0 100 100"[^>]*>(.*?)<\/svg>/gs)].map((m) => [m[1], m[2]]));
   const beacon = html.match(/<svg class="beacon" viewBox="0 0 92 70"[^>]*>(.*?)<\/svg>/s);
-  if (houses.size !== 15 || !beacon) throw new Error('unfurl cards: the Baby Bonfire hub street no longer reads as fifteen houses and a beacon');
+  if (!houses.size || !beacon) throw new Error('unfurl cards: could not read the houses and the beacon out of public/baby-bonfire/index.html');
   hubParts = { houses, order: [...houses.keys()], beacon: beacon[1].replace(/class="fire" /g, '') };
   return hubParts;
 }
@@ -96,19 +96,35 @@ function house(slug, x, s, { lit = true, base = BASE, strip = false } = {}) {
   return `<g transform="translate(${n(x)} ${n(base - 92 * s)}) scale(${s})">${spill}${g}${bloom}</g>`;
 }
 
-/** The hub: all fifteen windows lit on a hillside street, so the beacon on the hill is burning. */
+/** Houses per row for a street of `count`, top row first: 4, 5, then sixes, trimmed from the top to fit. */
+export function hillRows(count) {
+  const rows = [4, 5];
+  const sum = () => rows.reduce((a, b) => a + b, 0);
+  while (sum() < count) rows.push(6);
+  for (let i = 0, over = sum() - count; over > 0; i += 1) {
+    const cut = Math.min(over, rows[i] - (i ? 1 : 0));
+    rows[i] -= cut;
+    over -= cut;
+  }
+  return rows.filter(Boolean);
+}
+
+/** The hub: every window on the street lit, on a hillside, so the beacon on the hill is burning. */
 function street() {
   const { order, beacon } = hub();
-  const s = 0.7;
-  const pitch = 74;
-  const step = 92;
-  const rows = [order.slice(0, 4), order.slice(4, 9), order.slice(9)];
-  const top = BASE - 2 * step - 92 * s - 26;
-  const out = [`<path d="M${MOTIF_X - 60} ${BASE}C${MOTIF_X + 30} ${top + 70} ${MOTIF_CX - 120} ${top} ${MOTIF_CX} ${top}S${MOTIF_X + MOTIF_W - 30} ${top + 70} ${MOTIF_X + MOTIF_W + 60} ${BASE}Z" fill="#231d3f"/>`];
-  out.push(`<g transform="translate(${MOTIF_CX - 92} ${top - 122}) scale(2)">${beacon}</g>`);
-  rows.forEach((row, r) => {
-    const x0 = MOTIF_CX - ((row.length - 1) * pitch + 100 * s) / 2;
-    row.forEach((slug, i) => out.push(house(slug, x0 + i * pitch, s, { base: BASE - (2 - r) * step, strip: r < 2 })));
+  const rows = hillRows(order.length);
+  // Four rows fit at full size; a longer street draws smaller.
+  const k = Math.min(1, 4 / rows.length);
+  const s = 0.7 * k;
+  const pitch = 74 * k;
+  const step = 92 * k;
+  const top = BASE - (rows.length - 1) * step - 92 * s - 26 * k;
+  const out = [`<path d="M${MOTIF_X - 60} ${BASE}C${MOTIF_X + 30} ${n(top + 70)} ${MOTIF_CX - 120} ${n(top)} ${MOTIF_CX} ${n(top)}S${MOTIF_X + MOTIF_W - 30} ${n(top + 70)} ${MOTIF_X + MOTIF_W + 60} ${BASE}Z" fill="#231d3f"/>`];
+  out.push(`<g transform="translate(${n(MOTIF_CX - 92 * k)} ${n(top - 122 * k)}) scale(${n(2 * k)})">${beacon}</g>`);
+  let next = 0;
+  rows.forEach((size, r) => {
+    const x0 = MOTIF_CX - ((size - 1) * pitch + 100 * s) / 2;
+    for (let i = 0; i < size; i += 1, next += 1) out.push(house(order[next], x0 + i * pitch, s, { base: BASE - (rows.length - 1 - r) * step, strip: r < rows.length - 1 }));
   });
   return out.join('');
 }

@@ -20,8 +20,9 @@ const BB = 'baby-bonfire';
 const CC = 'coast-commons';
 const HC = 'house';
 
-// The fifteen Baby Bonfire scenes, in street order. One template: the scene's own house from
-// the hub street with its window lit. Two scenes draw something of their own instead.
+// Baby Bonfire scenes with a card. One template: the scene's own house from the hub street
+// with its window lit. Two scenes draw something of their own instead. A scene that joins the
+// street later keeps the request-time card until it gets a row here and the build is run.
 const SCENES = [
   ['light-the-hearth', 'Light the Hearth', ['Light the', 'Hearth'], ['Stack three pallets, carry a flame', 'over, then put the lid on.']],
   ['the-shelf', 'The Shelf', ['The Shelf'], ['Set seven pieces on five stones', 'and see what the room does.']],
@@ -53,9 +54,10 @@ const SCENES = [
 export const CARDS = [
   {
     path: '/baby-bonfire/', area: BB, kicker: 'OPEN EXPLORATION', motif: 'street',
-    headline: ['Baby Bonfire'], line: ['Open fifteen windows on one dusk', 'street, each a sketch to play with.'],
-    description: 'Small home objects that bring fire, water, air, earth, light, weather and sound indoors without a screen. Fifteen concept sketches. Nothing is for sale.',
-    alt: 'Baby Bonfire. A drawing of fifteen small houses on a hillside street at dusk, every window lit, and a beacon burning on the hilltop.',
+    // No count in these words: the street grows, and the card draws however many houses it has.
+    headline: ['Baby Bonfire'], line: ['Open the windows on one dusk', 'street, each a sketch to play with.'],
+    description: 'Small home objects that bring fire, water, air, earth, light, weather and sound indoors without a screen. Concept sketches. Nothing is for sale.',
+    alt: 'Baby Bonfire. A drawing of small houses on a hillside street at dusk, every window lit, and a beacon burning on the hilltop.',
   },
   ...SCENES.map(([slug, name, headline, line, extra = {}]) => ({
     path: `/baby-bonfire/${slug}/`, area: BB, kicker: 'BABY BONFIRE', motif: 'house', scene: slug, headline, line,
@@ -200,6 +202,12 @@ export function stampHead(html, card, publicDir = PUBLIC) {
   lines.forEach((line, i) => { if (line.startsWith('<meta property="og:')) last = i; });
   lines.splice(last + 1, 0, cardTags(card, title, description, publicDir));
   return lines.join('\n') + html.slice(end);
+}
+
+/** Scenes on the Baby Bonfire street (public/baby-bonfire.json) that have no card yet. */
+export function scenesWithoutCard(root = ROOT) {
+  const twin = JSON.parse(readFileSync(resolve(root, 'public/baby-bonfire.json'), 'utf8'));
+  return twin.scenes.map((s) => s.slug).filter((slug) => !byPath.has(`/baby-bonfire/${slug}/`));
 }
 
 /** Pages whose HTML is written by another generator, which calls shareHead() itself. */

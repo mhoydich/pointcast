@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
-import { CARDS, DESCRIPTION_MAX, H, STATUS, TITLE_MAX, W, cardFor, cardUrl, pngFile, pngSize, shareHead, stale, stampHead } from '../scripts/unfurl-cards/cards.mjs';
-import { cardSvg } from '../scripts/unfurl-cards/draw.mjs';
+import { CARDS, DESCRIPTION_MAX, H, STATUS, TITLE_MAX, W, cardFor, cardUrl, pngFile, pngSize, scenesWithoutCard, shareHead, stale, stampHead } from '../scripts/unfurl-cards/cards.mjs';
+import { cardSvg, hillRows } from '../scripts/unfurl-cards/draw.mjs';
 import { versionedImageUrl } from '../src/lib/og-version.mjs';
 import { normalizeGeneratedSeo } from '../src/lib/seo-build.mjs';
 import { planUnfurl } from '../src/lib/unfurl/plan.mjs';
@@ -22,19 +22,36 @@ const head = (card) => { const html = read(`public${card.path}index.html`); retu
 const tags = (h, attr, name) => [...h.matchAll(new RegExp(`<meta ${attr}="${name}" content="([^"]*)">`, 'g'))].map((m) => m[1]);
 const one = (h, attr, name, where) => { const all = tags(h, attr, name); assert.equal(all.length, 1, `${where}: exactly one ${name}`); return all[0]; };
 const plain = (s) => s.replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-const scenes = JSON.parse(read('public/baby-bonfire.json')).scenes.map((s) => s.slug);
+const street = JSON.parse(read('public/baby-bonfire.json')).scenes.map((s) => s.slug);
+// The fifteen scenes on the street when the cards were made (2026-11-11).
+const SCENES = ['light-the-hearth', 'the-shelf', 'pieces-roam', 'the-rounds', 'any-object', 'paired-hearths', 'mesh-street', 'stations', 'weather-in-the-house', 'five-levels', 'seven-homes', 'cabinet-of-no-bounds', 'ritual-atlas', 'anchors-and-open-time', 'precedents'];
 
-test('every page that was asked for has a card: the hubs, all fifteen scenes, the studies', () => {
+test('every page that was asked for has a card: the hubs, fifteen scenes, the studies', () => {
   const want = [
-    '/baby-bonfire/', ...scenes.map((s) => `/baby-bonfire/${s}/`),
+    '/baby-bonfire/', ...SCENES.map((s) => `/baby-bonfire/${s}/`),
     '/coast-commons/', '/coast-commons/el-segundo/', '/coast-commons/pattern/', '/coast-commons/sb-surf-house/', '/coast-commons/fresh-milk/',
     '/house/', '/house/about/',
   ];
-  assert.equal(scenes.length, 15);
   assert.deepEqual(CARDS.map((c) => c.path), want);
   assert.equal(new Set(CARDS.map((c) => c.path)).size, CARDS.length);
+  for (const slug of SCENES) assert.ok(street.includes(slug), `${slug} is still on the street`);
   assert.equal(cardFor('/coast-commons/venice/'), null, 'pages without a card keep the request-time card');
   assert.ok(!cardFor('/house/r/'), 'the remote is noindex and has no card');
+});
+
+test('the street can grow: a new scene waits for its card, and the hub card draws any number of houses', () => {
+  // A scene added to the street is reported, not failed: it keeps the request-time card until it has a row.
+  assert.deepEqual(scenesWithoutCard(), street.filter((slug) => !SCENES.includes(slug)));
+  assert.deepEqual(hillRows(15), [4, 5, 6]);
+  assert.deepEqual(hillRows(16), [4, 6, 6]);
+  assert.deepEqual(hillRows(21), [4, 5, 6, 6]);
+  for (let count = 1; count <= 40; count += 1) {
+    const rows = hillRows(count);
+    assert.equal(rows.reduce((a, b) => a + b, 0), count, `${count} houses`);
+    assert.ok(rows.every((size) => size >= 1 && size <= 6), `${count} houses: ${rows}`);
+  }
+  const hubCard = cardFor('/baby-bonfire/');
+  assert.doesNotMatch([...hubCard.line, hubCard.description, hubCard.alt].join(' '), /thirteen|fifteen|twenty|\d/i, 'the hub card names no count');
 });
 
 test('each card is a 1200x630 PNG beside its page', () => {
