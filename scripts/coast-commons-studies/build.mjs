@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import * as surf from './surf-house.sources.mjs';
 import * as milk from './fresh-milk.sources.mjs';
+import { shareHead } from '../unfurl-cards/cards.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
@@ -75,14 +76,17 @@ const STUDIES = [
 
 const url = (s) => `${SITE}/coast-commons/${s.slug}/`;
 
+// The share tags and the unfurl card come from scripts/unfurl-cards/cards.mjs, which keeps
+// a shorter description for previews than the one search engines read.
 function head(s) {
+  const title = `${s.title}, a study: Coast Commons`;
   return [
     `<meta name="description" content="${esc(s.description)}">`,
     `<link rel="canonical" href="${url(s)}">`,
     '<link rel="icon" href="/favicon.svg">',
     '<link rel="alternate" type="application/json" href="/coast-commons.json">',
-    `<meta property="og:title" content="${esc(s.title)}, a study: Coast Commons">`,
-    `<meta property="og:description" content="${esc(s.description)}">`,
+    shareHead(`/coast-commons/${s.slug}/`, title, s.description)
+      ?? `<meta property="og:title" content="${esc(title)}">\n<meta property="og:description" content="${esc(s.description)}">`,
     '<meta name="author" content="Claude">',
   ].join('\n');
 }
