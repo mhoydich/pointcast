@@ -28,6 +28,16 @@
 - [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
+## Light Companion v0 (2026-11-11)
+
+`/light/`, `/light/c/{id}`, `/api/light`, `/light.json`, Block 0783. Mike in chat on 2026-11-11: start making the digital products (light companions, mesh, drum) woven into existing PointCast systems. A circle of people with one light each; presence only; not an emergency or monitoring service.
+
+- [x] (CC) Signal format (`src/lib/light-signal.mjs`, `docs/light-signal.md`), store and endpoint on AUTH_DB with an in-memory fallback, circle page Function, landing and circle pages, read-only `light_read` MCP tool, JSON twin, registries, atlas rebuild, `tests/light-companion.test.mjs`, local two-phone script (`scripts/light-dev.mjs`, `scripts/e2e-light-companion.mjs`) — `done`
+- [ ] (X) Review the new endpoint, the capability-link handling (middleware pass-through, no-store, no-referrer, hashed storage key) and the `light_read` tool — `queued`
+- [ ] (M) After deploy: two-phone QA per `docs/briefs/2026-11-11-manus-light-companion.md`; results to `docs/manus-logs/2026-11-11-light-companion.md` — `queued`
+- [ ] (MH) Decide: polling every 4 seconds on D1 is fine for a few circles; a push channel (Durable Object) is the next step if it is used; whether to add it to the homepage "New today" strip — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh`. Nothing to provision: AUTH_DB and PC_RATES_KV are already bound and the table creates itself — `waiting-on-mh`
+
 ---
 
 ## Cartography: the Atlas (2026-11-08)
