@@ -80,6 +80,7 @@
     document.title = t.name + ' · Local Census';
     root.appendChild(el('p', 'lc-kicker', 'Local Census · snapshot ' + t.snapshot));
     root.appendChild(el('h1', '', t.name));
+    if (t.snapshot_note) root.appendChild(el('p', 'lc-note', t.snapshot_note));
     var hh = (t.official.filter(function (o) { return o.label === 'Households'; })[0] || {}).value;
     var rate = per100(t.postings.total, hh);
     var hero = el('div', 'lc-hero');
@@ -132,13 +133,21 @@
   function drawRegion(r, root) {
     root.appendChild(el('p', 'lc-kicker', 'Local Census · snapshot ' + r.snapshot));
     root.appendChild(el('h1', '', 'Ten towns around El Segundo'));
+    if (r.snapshot_note) root.appendChild(el('p', 'lc-note', r.snapshot_note));
     var hero = el('div', 'lc-hero');
     var d = el('div'); d.appendChild(el('b', '', r.total.toLocaleString('en-US')));
     var cap = el('span', '', 'jobs posted across ten towns in ' + r.window_days + ' days '); cap.appendChild(grade('C')); d.appendChild(cap); hero.appendChild(d);
     root.appendChild(hero);
-    var s1 = section('Where the hiring is', 'Open postings by town. The two with a full page are linked.');
+    var s1 = section('Where the hiring is', 'Open postings by town. Each town links to its own page.');
     var towns = r.towns.map(function (t) { return { name: t.name, value: t.postings, page: t.page, slug: t.slug }; });
     s1.appendChild(bars(towns, towns[0].value, 'name')); root.appendChild(s1);
+    var rated = r.towns.filter(function (t) { return typeof t.per100 === 'number'; })
+      .map(function (t) { return { name: t.name, value: t.per100, page: t.page, slug: t.slug }; })
+      .sort(function (a, b) { return b.value - a.value; });
+    if (rated.length) {
+      var sr = section('Hiring for its size', 'Postings for every 100 households. A high number is a town people travel into for work; a low one is a town people leave each morning.');
+      sr.appendChild(bars(rated, rated[0].value, 'name')); root.appendChild(sr);
+    }
     var s2 = section('What the region is hiring for', 'By the words in the job title, across all ten towns. Rows overlap and do not add up to the total.');
     var fams = r.families.map(function (f) { return { name: f.name, value: f.count }; }).sort(function (a, b) { return b.value - a.value; });
     s2.appendChild(bars(fams, fams[0].value, 'name')); root.appendChild(s2);

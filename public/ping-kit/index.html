@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ping Kit</title>
+<meta name="description" content="A kit for giving any town a page like El Segundo's, and a ping: one small file that says what the town is, what it needs and what it does not know. Ten South Bay towns are on the network.">
+<link rel="canonical" href="https://pointcast.xyz/ping-kit/">
+<meta property="og:title" content="Ping Kit: give your town a ping">
+<meta property="og:description" content="One small file per town: what it is, what it needs, what it does not know. Ten South Bay towns are on the network. The kit and the AI brief are here.">
+<meta property="og:url" content="https://pointcast.xyz/ping-kit/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://pointcast.xyz/ping-kit/card.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://pointcast.xyz/ping-kit/card.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/local-census/census.css">
+<style>
+.pk-map{background:var(--card);border:1px solid var(--rule);margin-top:6px}
+.pk-map svg{display:block;width:100%;height:auto}
+.pk-map .sea{fill:color-mix(in srgb,var(--bar) 12%,transparent)}
+.pk-map .link{stroke:var(--rule);stroke-width:1}
+.pk-map .dot{fill:var(--bar);cursor:pointer}
+.pk-map .dot:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.pk-map .ring{fill:none;stroke:var(--bar);stroke-width:1.5;opacity:0}
+.pk-map .on .ring{animation:pk-ping 2.4s ease-out infinite}
+.pk-map text{font-family:var(--mono);font-size:11px;fill:var(--ink)}
+.pk-map .sel .dot{fill:var(--c)}
+@keyframes pk-ping{0%{r:4;opacity:.8}100%{r:34;opacity:0}}
+@media (prefers-reduced-motion:reduce){.pk-map .on .ring{animation:none;opacity:.5;r:16}}
+.pk-card{background:var(--card);border:1px solid var(--rule);border-left:4px solid var(--ink);padding:16px;margin-top:12px}
+.pk-card h3{font-family:var(--display);font-size:22px;margin:0 0 6px}
+.pk-card dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px;margin:8px 0}
+.pk-card dt{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+.pk-card dd{margin:0}
+.pk-links{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:14px;margin-top:8px}
+.pk-steps{counter-reset:s;list-style:none;padding:0;display:flex;flex-direction:column;gap:10px}
+.pk-steps li{counter-increment:s;display:grid;grid-template-columns:34px 1fr;gap:10px;border-top:1px solid var(--rule);padding-top:10px}
+.pk-steps li::before{content:counter(s);font-family:var(--display);font-size:24px;line-height:1}
+.pk-steps b{display:block}
+.pk-ideas{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.pk-idea{background:var(--card);border:1px solid var(--rule);padding:14px}
+.pk-idea b{display:block;font-family:var(--display);font-size:19px;line-height:1.2;margin-bottom:4px}
+.pk-idea p{font-size:14px;color:var(--muted)}
+.pk-tag{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;border:1px solid currentColor;padding:2px 6px;color:var(--c)}
+pre.pk-code{background:var(--card);border:1px solid var(--rule);padding:14px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5;tab-size:2}
+.pk-btn{font:inherit;font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;background:var(--ink);color:var(--paper);border:0;padding:10px 14px;cursor:pointer}
+.pk-btn:focus-visible{outline:2px solid var(--bar);outline-offset:3px}
+.pk-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+.pk-table{width:100%;border-collapse:collapse;font-size:14px}
+.pk-table th,.pk-table td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule);vertical-align:top}
+.pk-table th{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500}
+</style>
+</head>
+<body>
+<header class="lc-top"><a href="/local-census/">Local Census</a><span>Ping Kit</span></header>
+<main>
+  <p class="lc-kicker">Ping Kit · version 0.1</p>
+  <h1>Give your town a ping</h1>
+  <p class="lc-lede">A ping is one small file a town publishes: what it is, what it needs, and what it does not know yet. Ten towns around El Segundo have one. This page is the kit for adding yours.</p>
+
+  <section class="lc-sec" aria-labelledby="pk-net">
+    <h2 id="pk-net">The network today</h2>
+    <p class="lc-lede">Ten South Bay towns. Tap a town to read its ping. Lines join each town to its nearest neighbors.</p>
+    <div class="pk-map"><svg id="pk-svg" viewBox="0 0 360 400" role="group" aria-label="Map of the ten towns on the ping network"></svg></div>
+    <div class="pk-card" id="pk-card" aria-live="polite">Loading the network…</div>
+  </section>
+
+  <section class="lc-sec" aria-labelledby="pk-what">
+    <h2 id="pk-what">What is in a ping</h2>
+    <p class="lc-lede">Four parts. The first is numbers. The other three are what make it worth answering.</p>
+    <table class="pk-table">
+      <tr><th>Part</th><th>What it holds</th></tr>
+      <tr><td><b>Signals</b></td><td>A few graded figures: residents, jobs posted, postings per 100 households, the largest job family.</td></tr>
+      <tr><td><b>Needs</b></td><td>What the town is short of, a next step, and how sure the reading is.</td></tr>
+      <tr><td><b>Asks</b></td><td>What the town wants to know and does not. Someone else may already have it.</td></tr>
+      <tr><td><b>Neighbors</b></td><td>The towns next door, so a reader can walk from one ping to the next.</td></tr>
+    </table>
+    <div class="pk-links"><a href="/local-census/el-segundo/ping.json">El Segundo's ping</a><a href="/local-census/torrance/ping.json">Torrance's ping</a><a href="/ping-kit/network.json">The network file</a></div>
+  </section>
+
+  <section class="lc-sec" aria-labelledby="pk-build">
+    <h2 id="pk-build">Build one for your town</h2>
+    <p class="lc-lede">The work is written up as a brief an AI agent can follow start to finish. You give it the brief and the name of a town.</p>
+    <ol class="pk-steps">
+      <li><div><b>Copy the brief.</b> It covers where to find the figures, how to count jobs, how to grade every number and what the ping looks like.</div></li>
+      <li><div><b>Hand it to an agent with a town name.</b> Claude, ChatGPT or any agent that can search the web and write files.</div></li>
+      <li><div><b>Have someone local read it.</b> The agent writes two or three readings of what the town needs. A resident will know in a minute if one is wrong.</div></li>
+      <li><div><b>Publish and send the address.</b> Put the files on any host and send the address of your ping to mh@pointcast.xyz to be listed.</div></li>
+    </ol>
+    <div class="pk-row"><button class="pk-btn" id="pk-copy">Copy the brief</button><a href="/ping-kit/brief.md">Open the brief</a><span id="pk-copied" role="status"></span></div>
+  </section>
+
+  <section class="lc-sec" aria-labelledby="pk-need">
+    <h2 id="pk-need">What you need</h2>
+    <table class="pk-table">
+      <tr><th>Thing</th><th>Notes</th></tr>
+      <tr><td>An AI agent</td><td>One that can search the web and write files.</td></tr>
+      <tr><td>A place to publish</td><td>Any static host. The files are plain HTML, CSS, JavaScript and JSON.</td></tr>
+      <tr><td>A name</td><td>A domain for the town, or a folder on a site you already have.</td></tr>
+      <tr><td>A jobs feed</td><td>Optional. A paid data account gives live job counts; the South Bay towns took about 30 lookups each. Without one the page still works from official figures.</td></tr>
+      <tr><td>One resident</td><td>To read it before it goes up.</td></tr>
+    </table>
+  </section>
+
+  <section class="lc-sec" aria-labelledby="pk-where">
+    <h2 id="pk-where">Where this could go</h2>
+    <p class="lc-lede">None of these exist yet. They are what becomes possible once many towns publish the same small file.</p>
+    <div class="pk-ideas">
+      <div class="pk-idea"><span class="pk-tag">Idea</span><b>Towns answering each other</b><p>El Segundo's ping says engineers crowd out every other kind of opening. Torrance's shows three times the technician work. A reader that holds both can point one at the other without anyone running a meeting.</p></div>
+      <div class="pk-idea"><span class="pk-tag">Idea</span><b>A weather map for work</b><p>Ping every town in a county once a month and watch where hiring thickens and thins, the way you would watch a storm front.</p></div>
+      <div class="pk-idea"><span class="pk-tag">Idea</span><b>Asks that find their answer</b><p>Every ping lists what its town does not know. A school district, a transit agency or a neighbor with the right spreadsheet can answer one ask without joining anything.</p></div>
+      <div class="pk-idea"><span class="pk-tag">Idea</span><b>Residents pinging back</b><p>A check-in at a brewery, a weather reading from a porch, a pothole. Small signals from people, added to the town's file with the same grades.</p></div>
+      <div class="pk-idea"><span class="pk-tag">Idea</span><b>Agents that subscribe</b><p>An assistant helping someone choose where to live, or a business choosing where to open, reads the pings instead of scraping ten city websites.</p></div>
+      <div class="pk-idea"><span class="pk-tag">Idea</span><b>Pooling by town</b><p>Each need comes with a next step. Residents and employers could pledge toward a step and see the pledge count on the ping.</p></div>
+      <div class="pk-idea"><span class="pk-tag">Idea</span><b>Sister towns far away</b><p>Medway, Massachusetts and a Queens neighborhood on the same network as Hermosa Beach. Towns that look alike in their pings can compare notes across the country.</p></div>
+    </div>
+  </section>
+
+  <section class="lc-sec" aria-labelledby="pk-shape">
+    <h2 id="pk-shape">The file itself</h2>
+    <p class="lc-lede">Hermosa Beach's ping, shortened.</p>
+<pre class="pk-code" id="pk-sample">Loading…</pre>
+  </section>
+</main>
+<footer class="lc-foot">
+  <p><a href="/local-census/">The Local Census</a> · <a href="/ping-kit/brief.md">The brief</a> · <a href="/ping-kit/network.json">network.json</a></p>
+  <p>An independent project by PointCast, built with Claude for Mike Hoydich. Not a government census. Job figures are graded C: a count of postings in one feed, which undercounts small employers.</p>
+</footer>
+<script src="/ping-kit/ping-kit.js"></script>
+</body>
+</html>
