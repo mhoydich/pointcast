@@ -4,6 +4,19 @@
 
 ---
 
+## Baby Bonfire: first place kit (2026-11-11)
+
+`/baby-bonfire/first-place/`, files under `/baby-bonfire/first-place/files/`. The first step from sketches to something makeable: a printable place. A v0.1 proposal; nobody has printed it; it holds no flame; nothing is for sale; no licence chosen. The open spec's claims are not edited.
+
+- [x] (CC) Four parts as binary STL (place tile 100 x 100 x 9.2 mm, blank puck 46 x 6.3, optional sensing puck shell 46 x 24 and vented lid 46 x 4.5), written by `node scripts/baby-bonfire/first-place.mjs` from `files/params.json`; `--check` fails on stale files — `done`
+- [x] (CC) Page with a drag-to-turn drawing made from the same triangles, generated dimension tables, print starting points, tag notes, an untested sensing puck parts list and wiring sketch; 14 source pages opened 2026-11-11, unverified points marked — `done`
+- [x] (CC) Mesh checks: generator self-check plus `scripts/baby-bonfire/verify-first-place.py` (trimesh): watertight, bounding boxes, volumes against a hand calculation, sampled points, overhangs at most 45 degrees; thinnest wall 1.6 mm by design — `done`
+- [x] (CC) Linked from make a piece and the open spec; `baby-bonfire.json` (`kits`), sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire.test.mjs`. `agent-surfaces.ts`, the hub and the atlas are not touched — `done`
+- [ ] (X) Review the plain box, the sensing puck doubts (coin cell on the 3V3 pin, USB with the cell on), the generator and the test — `queued`
+- [ ] (M) One real test print with photos and measured fit per `docs/briefs/2026-11-11-manus-first-place-kit.md`; results to `docs/manus-logs/2026-11-11-first-place-kit.md` — `queued`, needs MH approval before any order
+- [ ] (MH) Approve or decline a paid test print; choose the licence (CERN-OHL-P v2 and CC BY 4.0 are proposed; no LICENSE file added); decide whether the hub should link the page — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
 ## Baby Bonfire: an open exploration (2026-11-11)
 
 `/baby-bonfire/`, `/baby-bonfire.json`, Block 0782 (0781 is held by #1618). Mike in chat on 2026-11-11: publish it on PointCast as an open-source exploration, with trade between makers and networked objects each owner can switch on or off. Concept sketches; nothing is for sale; no licence chosen.
