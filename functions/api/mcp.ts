@@ -4,6 +4,7 @@ import { anyMemberReady, canRead, memberForToken, parseAfter, parsePost, postToR
 import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
 import { rateLimit } from '../_rate-limit.ts';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
+import { APP_VIEW_RESOURCES, APP_VIEW_TOOL_DEFINITIONS, APP_VIEW_TOOL_NAMES, readAppView } from '../_lib/mcp-app-views.ts';
 import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, kitParams as thusCampParams, suggestConditions as suggestThusCampConditions } from '../../src/lib/thus-camp.mjs';
 /**
  * /api/mcp — Model Context Protocol server for PointCast.
@@ -134,6 +135,8 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   agents_manifest       (no input)   full /agents.json
  *   connector_links       (no input)   addable MCP links for AI clients
  *   apps_list             (no input)   PointCast app shelf for clients
+ *   open_drum / open_nouns_battler ({seed?}) / open_keyboard_bloom
+ *                                      MCP App views, global entry points (functions/_lib/mcp-app-views.ts)
  *   nouns_battler_wiki ({topic?, audience?}) field guide brief for agents
  *   nouns_battler_manifest (no input)  Nouns Nation Battler manifest
  *   nouns_battler_agent_tasks ({taskId?, role?, lane?}) visiting-agent tasks
@@ -1627,6 +1630,7 @@ const TOOLS = [
   ...RADIO_TOOL_DEFINITIONS,
   ...ATLAS_TOOL_DEFINITIONS,
   ...COMMUNICATOR_TOOL_DEFINITIONS,
+  ...APP_VIEW_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -1771,6 +1775,7 @@ const RESOURCES = [
       'Thu→Sat→Mon cadence trilogy — blocks 0411, 0422, 0434. Reading order, titles, deks, timestamps, and block URLs.',
     mimeType: 'application/json',
   },
+  ...APP_VIEW_RESOURCES,
 ] as const;
 
 // ── Catalogue, exported ──────────────────────────────────────────────
@@ -2083,6 +2088,55 @@ function homeDemoItemNames(data: any, ids: unknown): string[] {
     const item = homeDemoItems(data).find((i: any) => i.id === id);
     return item ? `${item.name} (${id})` : String(id);
   });
+}
+
+// The open_* tools behind the MCP App views (functions/_lib/mcp-app-views.ts).
+// Each returns text for text-only hosts and structuredContent for its view.
+async function openAppView(name: string, args: Record<string, unknown>, base: string) {
+  try {
+    if (name === 'open_drum') {
+      const [count, track] = await Promise.all([
+        callJson(`${base}/api/drum?sessionId=mcp-app`).catch(() => null),
+        callJson(`${base}/api/drum/track`).catch(() => null),
+      ]);
+      const globalTotal = typeof count?.globalTotal === 'number' ? count.globalTotal : null;
+      const t = track?.track && typeof track.track.id === 'string' ? { id: track.track.id } : null;
+      const url = `${base}/drum`;
+      return {
+        content: [{ type: 'text', text: `PointCast Drum: ${globalTotal === null ? 'count unavailable' : `${globalTotal.toLocaleString()} taps`} · ${t ? `room track spotify ${t.id}` : 'no room track set'} · ${url}` }],
+        structuredContent: { app: 'drum', globalTotal, track: t, url },
+      };
+    }
+    if (name === 'open_nouns_battler') {
+      const seed = Number.isInteger(args.seed) && (args.seed as number) >= 0 && (args.seed as number) <= 4294967295
+        ? (args.seed as number)
+        : Math.floor(Math.random() * 4294967296);
+      const response = await runArena(new Request(`${base}/api/nouns-battler/arena`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seed }) }));
+      const data: any = await response.json().catch(() => null);
+      const m = data?.match;
+      if (!response.ok || !m) return { ...textContent('The Nouns Nation arena did not return a match.'), isError: true };
+      const match = { input: m.input, winner: m.winner, reason: m.reason, survivors: m.survivors, units: m.units, frames: m.frames };
+      const url = `${base}/nouns-nation-battler`;
+      const outcome = m.winner ? `${m.input?.[m.winner]?.gang} win by ${m.reason}` : 'draw';
+      return {
+        content: [{ type: 'text', text: `Nouns Nation exhibition, seed ${m.input?.seed}: ${m.input?.left?.gang} vs ${m.input?.right?.gang}, ${outcome}. ${url}` }],
+        structuredContent: { app: 'nouns-battler', matchHash: data.matchHash, match, url },
+      };
+    }
+    if (name === 'open_keyboard_bloom') {
+      const state = await callJson(`${base}/api/keyboard/signal`).catch(() => null);
+      const globalTotal = typeof state?.globalTotal === 'number' ? state.globalTotal : null;
+      const key = state?.key?.today?.name || state?.key?.allTime?.name || null;
+      const url = `${base}/keyboard`;
+      return {
+        content: [{ type: 'text', text: `Keyboard Bloom: ${globalTotal === null ? 'count unavailable' : `${globalTotal.toLocaleString()} notes`} · ${key ? `today's key ${key}` : 'no key yet today'} · ${url}` }],
+        structuredContent: { app: 'keyboard-bloom', globalTotal, key, url },
+      };
+    }
+  } catch (err: any) {
+    return { ...textContent(`That app could not open: ${err?.message || String(err)}`), isError: true };
+  }
+  return { ...textContent(`unknown app tool: ${name}`), isError: true };
 }
 
 async function dispatchTool(
@@ -4427,7 +4481,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card; for a one-minute pause, small_shrine. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the PointCast Radio Network plan (Radio El Segundo and six South Bay sister stations), call radio_network, then radio_station for one station; it is a plan, nothing is on air. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, the Radio Network plan, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. To open Drum, Nouns Nation Battler or Keyboard Bloom as an app screen, call open_drum, open_nouns_battler or open_keyboard_bloom. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card; for a one-minute pause, small_shrine. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the PointCast Radio Network plan (Radio El Segundo and six South Bay sister stations), call radio_network, then radio_station for one station; it is a plan, nothing is on air. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, the Radio Network plan, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {
@@ -4496,6 +4550,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         const fetcher: WildFetcher | undefined = wild ? (url, init) => wild.fetch(new Request(url, init)) : undefined;
         return rpcResult(id, await dispatchWildTool(name, args, fetcher));
       }
+      if (APP_VIEW_TOOL_NAMES.includes(name)) return rpcResult(id, await openAppView(name, args, base));
       const result = await dispatchTool(name, args, base, sessionId);
       return rpcResult(id, result);
     }
@@ -4504,6 +4559,8 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
     }
     if (method === 'resources/read') {
       const uri = String(params.uri || '');
+      const view = readAppView(uri);
+      if (view) return rpcResult(id, view);
       const result = await dispatchResource(uri, base);
       return rpcResult(id, result);
     }

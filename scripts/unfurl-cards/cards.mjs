@@ -91,7 +91,6 @@ export const CARDS = [
     ['barter-board', 'Barter board', ['Barter', 'board'], ['Browse example trades between', 'makers, with no payments.'], 'street'],
     ['make-a-piece', 'Make a piece', ['Make a', 'piece'], ['Add a scene, an idea, a file', 'or a test result.'], 'street'],
     ['first-place', 'First place', ['First place'], ['Look at a printable tile, puck', 'and tag recess, with files.'], 'street'],
-    ['prayer', 'Prayer Fire', ['Prayer Fire'], ['Light a small fire, say what it is', 'for and sit for a minute.'], 'street'],
   ].map(([slug, name, headline, line, motif]) => ({
     path: `/baby-bonfire/${slug}/`, area: BB, kicker: 'BABY BONFIRE', motif, headline, line,
     description: seoFor(`/baby-bonfire/${slug}/`).description,
@@ -99,6 +98,14 @@ export const CARDS = [
       ? `${name}, a Baby Bonfire concept sketch. A drawing of four small houses at dusk with a signal hopping from roof to roof and up to a relay mast.`
       : `${name}, a Baby Bonfire concept sketch. A drawing of small houses on a hillside street at dusk, every window lit, and a beacon burning on the hilltop.`,
   })),
+  // Prayer Fire's card is the fire itself: the page's own poster photograph, cropped to the
+  // hearth, with the title over a dark gradient. `photo` is a file under public/.
+  {
+    path: '/baby-bonfire/prayer/', area: BB, motif: 'photo', photo: 'public/baby-bonfire/prayer/media/hearth-poster.jpg',
+    headline: ['Prayer Fire'], line: ['Say what it is for.', 'Give it to the fire.'],
+    description: seoFor('/baby-bonfire/prayer/').description,
+    alt: 'Prayer Fire. A small copper and dark stone hearth with a lit flame in its arched opening, on a linen-covered table in warm brown light.',
+  },
   {
     path: '/coast-commons/', area: CC, kicker: 'A PUBLIC GOOD · OPEN STUDY', motif: 'coast',
     headline: ['Coast', 'Commons'], line: ['Read what a shared house could', 'be in fifteen beach towns.'],

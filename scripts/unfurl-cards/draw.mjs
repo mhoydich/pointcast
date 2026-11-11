@@ -1,6 +1,6 @@
 // The drawings. One card system for three areas: words on the left, a drawn motif from the
 // page on the right, the site mark and one line of small type along the foot. Each area wears
-// the palette of its own pages. No photos, no outside fonts or images: type is the Inter and
+// the palette of its own pages. One card (Prayer Fire) embeds the page's own poster photograph; no outside fonts or images: type is the Inter and
 // JetBrains Mono subsets already in the repo, set by build.mjs.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -368,6 +368,32 @@ ${tile(3, 'DRUM', (x, y) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" 
 
 const MOTIFS = { street, house: sceneHouse, plan, mesh, coast, tenSeats, recipe, surfHouse, freshMilk, tv, fourViews };
 
+
+// ---------------------------------------------------------------- a card that is a photograph
+
+/** Prayer Fire: the page's poster, cover-cropped so the hearth is in frame, words low on the right. */
+function photoCard(card) {
+  const jpeg = readFileSync(resolve(ROOT, card.photo)).toString('base64');
+  const [pw, ph] = [720, 950]; // the poster's own size
+  const k = W / pw;
+  const top = -640; // puts the hearth, from its lid to its feet, inside the 630 rows
+  const x = 668;
+  const lines = [
+    { text: card.headline[0], x, y: 448, size: 76, fill: '#f6ead6', weight: 0.04, spacing: -1 },
+    ...card.line.map((text, i) => ({ text, x, y: 500 + i * 38, size: 29, fill: '#e6d7bf' })),
+    { text: 'pointcast.xyz', x, y: FOOT, size: 24, fill: '#d9c6a6', family: MONO, spacing: 0.6 },
+    { text: 'concept sketch', x: W - 56, y: FOOT, size: 20, fill: '#bfae90', family: MONO, spacing: 0.8, anchor: 'end' },
+  ];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+<defs><linearGradient id="phLow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d0805" stop-opacity="0"/><stop offset=".45" stop-color="#0d0805" stop-opacity=".55"/><stop offset="1" stop-color="#0d0805" stop-opacity=".92"/></linearGradient></defs>
+<rect width="${W}" height="${H}" fill="#3a2d24"/>
+<image x="0" y="${top}" width="${W}" height="${n(ph * k)}" preserveAspectRatio="xMidYMid slice" href="data:image/jpeg;base64,${jpeg}" xlink:href="data:image/jpeg;base64,${jpeg}"/>
+<rect y="300" width="${W}" height="${H - 300}" fill="url(#phLow)"/>
+${lines.map(type).join('\n')}
+</svg>`;
+  return { svg, lines, column: [x, W - 56], photo: true };
+}
+
 // ---------------------------------------------------------------- the card
 
 /**
@@ -404,6 +430,7 @@ function foot(card, a) {
 
 /** One card as an SVG string, and the lines of type on it with the column they must stay inside. */
 export function cardSvg(card, measure) {
+  if (card.motif === 'photo') return photoCard(card);
   const a = AREAS[card.area];
   const motif = MOTIFS[card.motif];
   if (!a || !motif) throw new Error(`unfurl cards: ${card.path} names an unknown area or motif`);

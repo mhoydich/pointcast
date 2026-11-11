@@ -50,7 +50,7 @@ function measure(line) {
 
 let drawn = 0;
 for (const card of CARDS) {
-  const { svg, lines, column } = cardSvg(card, measure);
+  const { svg, lines, column, photo } = cardSvg(card, measure);
   // Nothing may run past its column, and the two ends of the foot may not meet.
   for (const line of lines.filter((l) => l.anchor !== 'end')) {
     if (line.x + measure(line) > column[1] + 1) throw new Error(`unfurl cards: "${line.text}" on ${card.path} is ${Math.round(measure(line))} wide; the column is ${column[1] - column[0]}`);
@@ -60,7 +60,9 @@ for (const card of CARDS) {
   const r = new Resvg(svg, { font, fitTo: { mode: 'width', value: W } });
   const image = r.render();
   if (image.width !== W || image.height !== H) throw new Error(`unfurl cards: ${card.path} drew at ${image.width}x${image.height}`);
-  const png = Buffer.from(image.asPng());
+  let png = Buffer.from(image.asPng());
+  // A photograph does not fit a plain PNG in a link preview's size budget: reduce it to a palette (sharp, already a dependency).
+  if (photo) png = await (await import('sharp')).default(png).png({ palette: true, colours: 96, dither: 0.6, effort: 10 }).toBuffer();
   r.free();
   const file = resolve(ROOT, pngFile(card));
   if (!existsSync(file) || !readFileSync(file).equals(png)) { writeFileSync(file, png); drawn += 1; }

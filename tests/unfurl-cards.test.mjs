@@ -146,7 +146,8 @@ test('the words on a card: a short headline, one line of what to do, small type 
     assert.ok(card.headline.join(' ').length <= 26, `${card.path} headline is short`);
     assert.ok(card.line.length >= 1 && card.line.length <= 2, `${card.path} line rows`);
     for (const row of card.line) assert.ok(row.length <= 36, `${card.path}: "${row}" is ${row.length} characters`);
-    assert.match(card.line.join(' '), /^[A-Z][^.]*\.$/, `${card.path} line is one sentence`);
+    // The one photograph card (Prayer Fire) says two short sentences; every other card says one.
+    assert.match(card.line.join(' '), card.motif === 'photo' ? /^[A-Z][^.]*\. [A-Z][^.]*\.$/ : /^[A-Z][^.]*\.$/, `${card.path} line is one sentence`);
     const words = [card.kicker, ...card.headline, ...card.line, card.alt, STATUS[card.area]].join(' ');
     assert.equal(words.match(banned), null, `${card.path}: ${words.match(banned)}`);
   }
@@ -164,8 +165,10 @@ test('every card draws as a 1200x630 SVG from the pages’ own drawings', () => 
     const image = new Resvg(svg, { font: { loadSystemFonts: false } }).render();
     assert.deepEqual([image.width, image.height], [W, H], card.path);
     assert.ok(lines.some((l) => l.text === 'pointcast.xyz'), `${card.path} carries the site mark`);
-    assert.ok(lines.some((l) => l.text === STATUS[card.area]), `${card.path} carries its small type`);
-    assert.doesNotMatch(svg, /<image\b|href=|@font-face|url\(\s*['"]?https?:/i, `${card.path} loads nothing`);
+    assert.ok(lines.some((l) => l.text === (card.motif === 'photo' ? 'concept sketch' : STATUS[card.area])), `${card.path} carries its small type`);
+    // Nothing loads from outside. The photograph card embeds its page's own poster as a data URI.
+    const outside = card.motif === 'photo' ? svg.replace(/(?:xlink:)?href="data:image\/jpeg;base64,[^"]*"/g, '') : svg;
+    assert.doesNotMatch(outside, /<image\b[^>]*href=|(?<!<image)\shref=|@font-face|url\(\s*['"]?https?:/i, `${card.path} loads nothing`);
   }
 });
 
