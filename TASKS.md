@@ -14,6 +14,18 @@
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
 - [ ] (MH) Choose a licence for the Baby Bonfire files and designs — `waiting-on-mh`
 - [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
+## Coast Commons: an open study for the beach towns (2026-11-11)
+
+`/coast-commons/`, `/coast-commons/el-segundo/` (flagship), `/coast-commons/pattern/`, fourteen more town pages, `/coast-commons.json`, Block 0785. Mike in chat on 2026-11-11: publish to PointCast, for El Segundo, Manhattan Beach, PV and the other beach towns within 25 miles, as a public good; make El Segundo the flagship. A study, not an offer; nothing for sale; no money raised.
+
+- [x] (CC) Hub with the drawn coast strip and filter, flagship El Segundo page with step ladder, fourteen town pages, pattern page with split calculator and ledger template; all generated into `public/coast-commons/` by `node scripts/coast-commons/build.mjs` from `scripts/coast-commons/data.mjs` — `done`
+- [x] (CC) 46 official pages opened and paraphrased on 2026-11-11; unchecked entries say "Not verified" — `done`
+- [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/coast-commons.test.mjs` — `done`
+- [ ] (X) Review the rule paraphrases against the linked pages, the plain box wording and the content rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-coast-commons-qa.md`; results to `docs/manus-logs/2026-11-11-coast-commons-qa.md` — `queued`
+- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [ ] (MH) Decide: keep the homepage "New today" entry; whether Pacific Palisades and Sunset Beach join the list; whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
+- [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
 ## Baby Bonfire: second pass (2026-11-11)
@@ -38,6 +50,17 @@
 - [ ] (M) After deploy: two-phone QA per `docs/briefs/2026-11-11-manus-light-companion.md`; results to `docs/manus-logs/2026-11-11-light-companion.md` — `queued`
 - [ ] (MH) Decide: polling every 4 seconds on D1 is fine for a few circles; a push channel (Durable Object) is the next step if it is used; whether to add it to the homepage "New today" strip — `waiting-on-mh`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh`. Nothing to provision: AUTH_DB and PC_RATES_KV are already bound and the table creates itself — `waiting-on-mh`
+
+---
+
+## Front page rethink: `/home-next/` prototype (2026-11-11)
+
+Mike: "reconsider homepage redesign ... bell labs pixel utility with style design minimal smart readable fonts". Note: `docs/briefs/2026-11-11-homepage-rethink.md`. Static prototype at `public/home-next/`, tests in `tests/home-next.test.mjs`. The current homepage is untouched.
+
+- [x] (CC) Design note, prototype, tests, screenshots at 390/768/1280 light and dark — `done`
+- [ ] (MH) Decide the three open questions in the note (the one button, the dock, how to swap) — `waiting-on-mh`
+- [ ] (M) After deploy: open https://pointcast.xyz/home-next/ on an iPhone (Safari) and an Android phone (Chrome), light and dark; confirm the four gauges fill or say "unavailable", newest posts load, every link opens; log to `docs/manus-logs/2026-11-11-home-next.md` — `queued`
+- [ ] (CC) If Mike says go: port to `src/pages/index.astro` with newest posts rendered at build time, update homepage tests — `queued`
 
 ---
 
