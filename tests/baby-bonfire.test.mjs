@@ -3,7 +3,9 @@
 // the area's content rules in step.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -11,7 +13,8 @@ const twin = JSON.parse(read('public/baby-bonfire.json'));
 const hub = read('public/baby-bonfire/index.html');
 const page = (slug) => read(`public/baby-bonfire/${slug}/index.html`);
 const WORKSHOP = ['open-spec', 'open-mesh', 'barter-board', 'make-a-piece'];
-const all = [...twin.scenes.map((s) => s.slug), ...WORKSHOP];
+const KITS = ['first-place'];
+const all = [...twin.scenes.map((s) => s.slug), ...WORKSHOP, ...KITS];
 
 test('the twin lists twenty-one scenes and four workshop pages, and every one is a file', () => {
   assert.equal(twin.scenes.length, 21);
@@ -286,4 +289,92 @@ test('third pass: make a piece points at the Home Press, and the ledger block ha
   assert.match(block.body, /opens one of twenty-one sketches/);
   assert.equal(block.companions[0].label, 'The street: twenty-one sketches');
   assert.doesNotMatch(JSON.stringify(block), /thirteen|fifteen/i);
+});
+
+// First place kit, 2026-11-11: the first printable place. The files are written by
+// scripts/baby-bonfire/first-place.mjs from one params.json; these checks read the files
+// themselves, so a hand-edited STL or a stale page fails here.
+const kitDir = 'public/baby-bonfire/first-place';
+const readStl = (file) => {
+  const buf = readFileSync(new URL(`${kitDir}/files/${file}`, root));
+  const count = buf.readUInt32LE(80);
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  const edges = new Map();
+  for (let t = 0; t < count; t++) {
+    const keys = [];
+    for (let v = 0; v < 3; v++) {
+      const o = 84 + t * 50 + 12 + v * 12;
+      const p = [buf.readFloatLE(o), buf.readFloatLE(o + 4), buf.readFloatLE(o + 8)];
+      p.forEach((n, i) => { if (n < min[i]) min[i] = n; if (n > max[i]) max[i] = n; });
+      keys.push(p.join(','));
+    }
+    for (let v = 0; v < 3; v++) { const k = `${keys[v]}>${keys[(v + 1) % 3]}`; edges.set(k, (edges.get(k) || 0) + 1); }
+  }
+  let open = 0;
+  for (const [k, n] of edges) { const [a, b] = k.split('>'); if (n !== 1 || edges.get(`${b}>${a}`) !== 1) open++; }
+  return { buf, count, open, size: max.map((n, i) => Math.round((n - min[i]) * 1000) / 1000), floor: min[2] };
+};
+
+test('first place: the page and its files exist, and the twin lists them', () => {
+  const kit = twin.kits.find((k) => k.slug === 'first-place');
+  assert.equal(kit.url, 'https://pointcast.xyz/baby-bonfire/first-place/');
+  assert.match(kit.status, /proposal, not yet printed/);
+  assert.ok(existsSync(new URL(`${kitDir}/index.html`, root)));
+  for (const f of ['place-tile.stl', 'puck-blank.stl', 'puck-shell.stl', 'puck-lid.stl', 'params.json', 'manifest.json']) assert.ok(existsSync(new URL(`${kitDir}/files/${f}`, root)), f);
+  assert.deepEqual(kit.files, ['place-tile', 'puck-blank', 'puck-shell', 'puck-lid'].map((n) => `https://pointcast.xyz/baby-bonfire/first-place/files/${n}.stl`));
+  for (const slug of ['make-a-piece', 'open-spec']) assert.ok(page(slug).includes('href="/baby-bonfire/first-place/"'), `${slug} links to it`);
+  assert.ok(read('src/pages/sitemap-discovery.xml.ts').includes("'https://pointcast.xyz/baby-bonfire/first-place/'"));
+  for (const f of ['public/llms.txt', 'public/llms-full.txt']) assert.ok(read(f).includes('https://pointcast.xyz/baby-bonfire/first-place/'), f);
+});
+
+test('first place: each STL parses, is closed, and matches params.json and the manifest', () => {
+  const p = JSON.parse(read(`${kitDir}/files/params.json`));
+  const manifest = JSON.parse(read(`${kitDir}/files/manifest.json`));
+  const want = {
+    'place-tile.stl': [p.tile.size, p.tile.size, p.tile.bodyHeight + p.feet.height],
+    'puck-blank.stl': [p.puck.diameter, p.puck.diameter, p.puck.blankHeight],
+    'puck-shell.stl': [p.puck.diameter, p.puck.diameter, p.shell.height],
+    'puck-lid.stl': [p.puck.diameter, p.puck.diameter, p.lid.thickness + p.lid.lipHeight],
+  };
+  assert.deepEqual(manifest.files.map((f) => f.file), Object.keys(want));
+  const data = JSON.parse(page('first-place').match(/<script type="application\/json" id="kit-data">([\s\S]*?)<\/script>/)[1]);
+  for (const f of manifest.files) {
+    const stl = readStl(f.file);
+    assert.ok(!stl.buf.subarray(0, 5).toString('ascii').toLowerCase().startsWith('solid'), `${f.file} is binary`);
+    assert.equal(stl.buf.length, 84 + 50 * stl.count, `${f.file} length matches its header`);
+    assert.ok(stl.buf.length < 1_000_000, `${f.file} under 1 MB`);
+    assert.equal(stl.count, f.triangles, `${f.file} triangle count`);
+    assert.equal(stl.open, 0, `${f.file} is watertight`);
+    assert.deepEqual(stl.size, want[f.file].map((n) => Math.round(n * 1000) / 1000), `${f.file} bounding box`);
+    assert.deepEqual(f.size, stl.size);
+    assert.equal(stl.floor, 0, `${f.file} sits on z = 0`);
+    assert.equal(data.parts[f.id].f.length / 3, f.triangles, `${f.id}: the drawing uses the same triangles`);
+  }
+  assert.ok(manifest.thinnestWall.mm >= 1.2);
+});
+
+test('first place: committed files are what the generator writes', () => {
+  execFileSync(process.execPath, [fileURLToPath(new URL('scripts/baby-bonfire/first-place.mjs', root)), '--check'], { stdio: 'pipe' });
+});
+
+test('first place: the plain box, the labels and the licence note', () => {
+  const html = page('first-place');
+  const box = html.slice(html.indexOf('id="plain"'), html.indexOf('</header>'));
+  assert.ok(html.indexOf('id="plain"') < html.indexOf('<main>'), 'the box is in the header');
+  assert.match(box, /Nobody has printed or built this yet/);
+  assert.match(box, /first draft for makers to try and correct/);
+  assert.match(box, /This place holds no flame/);
+  assert.match(box, /away from candles, stoves and anything hot/);
+  assert.match(box, /63&nbsp;°C[\s\S]*84&nbsp;°C/);
+  assert.match(box, /Not a product\. Nothing is for sale\./);
+  assert.match(box, /No health claims/);
+  assert.match(html, /v0\.1 proposal/);
+  assert.match(html, /<text class="warn"[^>]*>UNTESTED SKETCH<\/text>/);
+  assert.match(html, /Licence: none chosen\.<\/strong> CERN-OHL-P v2 for the hardware files and CC BY 4\.0 for the words are proposed and undecided/);
+  assert.ok(!existsSync(new URL(`${kitDir}/LICENSE`, root)) && !existsSync(new URL(`${kitDir}/files/LICENSE`, root)));
+  assert.doesNotMatch(html, /[$€£]\s?\d|\bUSD\b/, 'no prices');
+  assert.doesNotMatch(html, /Sense<\/a>/, 'the board with a microphone is not linked as a part');
+  assert.ok(html.includes('mailto:hello@pointcast.xyz?subject=Baby%20Bonfire') && html.includes('https://github.com/mhoydich/pointcast/issues'));
+  for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'keydown']) assert.ok(html.includes(`'${ev}'`), ev);
+  assert.doesNotMatch(html, /localStorage|sessionStorage|document\.cookie/, 'the page stores nothing');
 });

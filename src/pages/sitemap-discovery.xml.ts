@@ -352,6 +352,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/baby-bonfire/open-mesh/', 'weekly', '0.8'],
   ['https://pointcast.xyz/baby-bonfire/barter-board/', 'weekly', '0.8'],
   ['https://pointcast.xyz/baby-bonfire/make-a-piece/', 'weekly', '0.8'],
+  ['https://pointcast.xyz/baby-bonfire/first-place/', 'weekly', '0.8'],
   ['https://pointcast.xyz/baby-bonfire/light-the-hearth/', 'weekly', '0.8'],
   ['https://pointcast.xyz/baby-bonfire/the-shelf/', 'weekly', '0.8'],
   ['https://pointcast.xyz/baby-bonfire/pieces-roam/', 'weekly', '0.8'],
