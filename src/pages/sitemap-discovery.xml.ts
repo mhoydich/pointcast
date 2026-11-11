@@ -327,6 +327,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/coast-commons/', 'weekly', '0.9'],
   ['https://pointcast.xyz/coast-commons.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/coast-commons/pattern/', 'weekly', '0.85'],
+  ['https://pointcast.xyz/coast-commons/sb-surf-house/', 'weekly', '0.85'],
+  ['https://pointcast.xyz/coast-commons/fresh-milk/', 'weekly', '0.85'],
   ['https://pointcast.xyz/coast-commons/malibu/', 'weekly', '0.8'],
   ['https://pointcast.xyz/coast-commons/santa-monica/', 'weekly', '0.8'],
   ['https://pointcast.xyz/coast-commons/venice/', 'weekly', '0.8'],

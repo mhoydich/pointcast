@@ -45,6 +45,8 @@ export const AGENT_SURFACES = {
     coastCommons: 'https://pointcast.xyz/coast-commons/',
     coastCommonsElSegundo: 'https://pointcast.xyz/coast-commons/el-segundo/',
     coastCommonsPattern: 'https://pointcast.xyz/coast-commons/pattern/',
+    coastCommonsSurfHouse: 'https://pointcast.xyz/coast-commons/sb-surf-house/',
+    coastCommonsFreshMilk: 'https://pointcast.xyz/coast-commons/fresh-milk/',
     guides: 'https://pointcast.xyz/guides',
     radioNetwork: 'https://pointcast.xyz/radio-network',
     houseChannel: 'https://pointcast.xyz/house/about/',

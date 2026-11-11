@@ -6,6 +6,7 @@
 // Pages are plain HTML with one shared stylesheet, inline SVG and small inline scripts.
 // They load nothing from outside pointcast.xyz.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { studiesIndex } from '../coast-commons-studies/build.mjs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEFT_OUT, ORIGIN, SRC, STAY, TOWNS, VERIFIED, miles, rulesFor } from './data.mjs';
@@ -116,6 +117,8 @@ ${stops}
 }
 
 // ---- hub ----
+const STUDIES = studiesIndex();
+
 function hub() {
   const stays = [...new Set(towns.map((t) => t.r.stay))];
   const list = towns.map((t) => `<li data-miles="${t.miles}" data-stay="${t.r.stay}"><a href="/coast-commons/${t.slug}/"><b>${esc(t.name)}</b></a> <span class="mi">${t.flagship ? 'home' : `${t.miles} mi`}</span><br><span class="st st-${t.r.stay}">${esc(STAY[t.r.stay].label)}</span> <span class="by">${esc(t.r.body)}</span></li>`).join('\n');
@@ -131,6 +134,14 @@ function hub() {
 <h2 id="flag-h">Start at home: the El Segundo house</h2>
 <p>El Segundo is the flagship. The city only permits hosted rooms, so the first step there is not the usual rented weekend. The page works out what it could be instead.</p>
 <p><a class="btn" href="/coast-commons/el-segundo/">Open the El Segundo study</a> <a class="btn alt" href="/coast-commons/pattern/">Read the pattern</a></p>
+</section>
+
+<section aria-labelledby="studies-h">
+<h2 id="studies-h">Two longer studies</h2>
+<p>The same idea followed all the way through, twice. Each is a study and a public resource, not an offer, with every source linked beside the claim and what could not be verified marked where it matters.</p>
+<ul class="finds">
+${STUDIES.list.map((x) => `<li><a href="/coast-commons/${x.slug}/"><b>${esc(x.title)}</b></a>. ${esc(x.summary)}</li>`).join('\n')}
+</ul>
 </section>
 
 <section aria-labelledby="map-h">
@@ -491,6 +502,7 @@ function twin() {
       not_verified: notVerified(t), verified: VERIFIED,
     })),
     left_out: LEFT_OUT,
+    studies: STUDIES,
     sources: { official_pages_opened: official.length, third_party_copies_opened: Object.values(SRC).length - official.length, list: Object.values(SRC).map((s) => ({ ...s, opened: VERIFIED })) },
   };
 }
