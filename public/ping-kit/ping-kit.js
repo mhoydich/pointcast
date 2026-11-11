@@ -35,7 +35,13 @@
     });
     return out;
   }
-  var PURE = { project: project, bounds: bounds, radius: radius, links: links };
+  // Towns in the home region go on the map. Towns from farther away are listed under it.
+  function split(net) {
+    var home = [], far = [];
+    (net.towns || []).forEach(function (t) { (!net.home_region || !t.region || t.region === net.home_region ? home : far).push(t); });
+    return { home: home, far: far };
+  }
+  var PURE = { project: project, bounds: bounds, radius: radius, links: links, split: split };
   if (typeof module !== 'undefined' && module.exports) { module.exports = PURE; }
   if (typeof document === 'undefined') return;
 
@@ -51,6 +57,10 @@
     fetch(town.ping.replace('https://pointcast.xyz', '')).then(function (r) { return r.json(); }).then(function (p) {
       card.textContent = '';
       card.appendChild(el('h3', '', p.town));
+      var where = [p.region];
+      if (p.status === 'draft') where.push('draft');
+      if (p.review === 'unread') where.push('not yet read by a resident');
+      card.appendChild(el('p', 'pk-where', where.filter(Boolean).join(' · ')));
       var dl = el('dl');
       p.signals.forEach(function (sig) {
         dl.appendChild(el('dt', '', sig.label));
@@ -61,6 +71,7 @@
       dl.appendChild(el('dd', '', p.needs.map(function (n) { return n.need + ' (' + n.confidence + ' confidence)'; }).join('. ') + '.'));
       dl.appendChild(el('dt', '', 'Asks'));
       dl.appendChild(el('dd', '', p.asks.join(' ')));
+      if (!(p.neighbors || []).length) { dl.appendChild(el('dt', '', 'Neighbors')); dl.appendChild(el('dd', '', 'None on the network yet.')); }
       card.appendChild(dl);
       var row = el('div', 'pk-links');
       [['The full town page', p.home.replace('https://pointcast.xyz', '')], ['The ping file', town.ping.replace('https://pointcast.xyz', '')]].forEach(function (l) {
@@ -71,7 +82,7 @@
   }
 
   function draw(net) {
-    var towns = net.towns, box = bounds(towns), pos = {}, groups = {};
+    var parts = split(net), towns = parts.home, box = bounds(towns), pos = {}, groups = {};
     var max = Math.max.apply(null, towns.map(function (t) { return t.jobs_posted_30d; }));
     towns.forEach(function (t) { pos[t.slug] = project(t.lat, t.lon, box, W, H, 46); });
     // The coast runs down the west side of these towns.
@@ -97,6 +108,17 @@
       label.textContent = t.town; g.appendChild(label);
       svg.appendChild(g);
     });
+    var far = document.getElementById('pk-far');
+    if (far && parts.far.length) {
+      parts.far.forEach(function (t) {
+        var b = el('button', 'pk-far-btn'); b.type = 'button';
+        b.appendChild(el('b', '', t.town));
+        b.appendChild(el('span', '', t.region + (t.status === 'draft' ? ' · draft' : '')));
+        b.addEventListener('click', function () { show(t, groups); card.scrollIntoView({ block: 'nearest' }); });
+        far.appendChild(b);
+      });
+      document.getElementById('pk-far-wrap').hidden = false;
+    }
     var first = towns.filter(function (t) { return t.slug === 'el-segundo'; })[0] || towns[0];
     show(first, groups);
   }

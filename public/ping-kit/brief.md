@@ -4,6 +4,8 @@ Hand this whole file to an AI agent (Claude, ChatGPT, or another that can search
 
 Working examples: https://pointcast.xyz/local-census/el-segundo/ and its ping at https://pointcast.xyz/local-census/el-segundo/ping.json
 
+A draft built from this brief with no one local involved, to show what the first pass looks like: https://pointcast.xyz/local-census/medway/
+
 ## What you are building
 
 Three things for one town:
@@ -43,10 +45,11 @@ Template files to copy, unchanged:
    - Office and admin: Administrative, Assistant, Coordinator, Receptionist
    - Finance and accounting: Accountant, Financial, Controller, Bookkeeper
 3. **Six sample postings.** Title and employer only, taken from the results you actually saw.
-4. **Two or three readings.** For each: the need in a short headline, the numbers behind it, what it means for living in the town, one next step someone could take, the confidence, and why it is not higher. Compare with a neighboring town where that sharpens the point.
+4. **Two or three readings.** For each: the need in a short headline, the numbers behind it, what it means for living in the town, one next step someone could take, the confidence, and why it is not higher. Give each a short `id` in lowercase words and hyphens (`long-commute`); it names the next step when people back it. Compare with a neighboring town where that sharpens the point.
 5. **Three or four gaps.** What you looked for and could not find, or what the feed cannot see (small shops, restaurants, schools, union halls).
-6. **The ping.** Fill in the shape below from the town file. List the three nearest towns that already have a ping as neighbors.
-7. **Check.** Every figure on the page traces to a link. Postings per 100 households equals postings divided by households, times 100. The page loads on a phone with no sideways scrolling.
+6. **Status.** Set `"review": { "state": "unread" }` in the town file. Only a person who lives in the town can change it to `read`. If nobody local asked for the page, also set `"status": "draft"`.
+7. **The ping.** Fill in the shape below from the town file. List the three nearest towns in the same region that already have a ping as neighbors. If there are none, leave the list empty.
+8. **Check.** Every figure on the page traces to a link. Postings per 100 households equals postings divided by households, times 100. The page loads on a phone with no sideways scrolling.
 
 ## The ping
 
@@ -56,6 +59,8 @@ Template files to copy, unchanged:
   "town": "Medway",
   "slug": "medway",
   "region": "Norfolk County, Massachusetts",
+  "status": "draft",
+  "review": "unread",
   "lat": 42.142,
   "lon": -71.397,
   "updated": "2026-11-11",
@@ -67,7 +72,7 @@ Template files to copy, unchanged:
     { "kind": "jobs_per_100_households", "label": "Postings per 100 households", "value": 0, "grade": "C" },
     { "kind": "top_job_family", "label": "Largest job family", "value": "", "count": 0, "grade": "C" }
   ],
-  "needs": [ { "need": "", "next_step": "", "confidence": "low" } ],
+  "needs": [ { "id": "short-name", "need": "", "next_step": "", "confidence": "low" } ],
   "asks": [ "What this town wants to know and does not" ],
   "neighbors": [ "slug-of-a-nearby-town" ],
   "maintainer": "Who keeps this up to date",
@@ -75,7 +80,7 @@ Template files to copy, unchanged:
 }
 ```
 
-The zeros and empty strings are placeholders to replace. `signals` can carry more kinds than these four; a reader skips the ones it does not know. `needs` and `asks` are the point of the file: a ping that only reports numbers is a dashboard, and a ping that says what the town needs can be answered.
+The zeros and empty strings are placeholders to replace. Leave `status` out once the town has someone local behind it. A ping may also carry `backing`: an address that returns a live count of taps for each next step, keyed by the need's `id`. `signals` can carry more kinds than these four; a reader skips the ones it does not know. `needs` and `asks` are the point of the file: a ping that only reports numbers is a dashboard, and a ping that says what the town needs can be answered.
 
 ## What needs a person
 
@@ -84,7 +89,8 @@ An agent can do everything above except these:
 - **A place to publish.** Any static host works. The files are plain HTML, CSS, JavaScript and JSON.
 - **A name.** A domain for the town, or a folder on a site you already have.
 - **A jobs feed.** A paid data account if you want live counts; the South Bay towns took about 30 lookups each. Without one, the agent can still build the page from official figures and leave the job section out.
-- **A read-through.** Someone who lives in the town should read the two or three readings before it goes up. They will know in a minute if one is wrong.
+- **A read-through.** Someone who lives in the town should read the two or three readings before it goes up. They will know in a minute if one is wrong. Until then the page says at the top that no resident has read it.
+- **A small server, if you want the two boxes.** "Back this step" and "Ping back" call `/api/poll` and `/api/feedback` on the same host. If your host has neither, the page leaves the boxes out and nothing else changes.
 
 ## Joining the network
 
