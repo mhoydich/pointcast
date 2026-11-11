@@ -32,14 +32,32 @@ const SCENES = [
     alt: 'The Roaming Shelf, a Baby Bonfire concept sketch. A drawing of a home seen from above: four rooms, seventeen round places and eight glowing pieces, one being carried from the desk to the window.',
   }],
   ['the-rounds', 'The Rounds', ['The Rounds'], ['Carry a piece to a spot at dawn,', 'midday, dusk or night.']],
+  ['the-helper', 'The Helper', ['The Helper'], ['Send a small helper on its chores', 'around an evening home.'], {
+    description: 'A teapot-size helper on three wheels does small chores at home: it returns stray pieces, brings the snuffer and waters the fern. It never lights a flame.',
+  }],
   ['any-object', 'Any Object, Any World', ['Any Object,', 'Any World'], ['Stick a dot on anything you love', 'and it becomes a piece.']],
+  ['home-press', 'The Home Press', ['The Home', 'Press'], ['Design a piece and watch five', 'small machines make it.'], {
+    description: 'Five small machines on one bench: clay, wax, paper, felt and food. Design a piece, watch it made, and read what a home machine would still need.',
+  }],
   ['paired-hearths', 'Paired Hearths', ['Paired', 'Hearths'], ['Tap one hearth to light it', 'and the other home glows.']],
   ['mesh-street', 'Mesh Street', ['Mesh Street'], ['Tap a house to light it and watch', 'the signal cross town.'], {
     motif: 'mesh',
     alt: 'Mesh Street, a Baby Bonfire concept sketch. A drawing of four small houses at dusk with a signal hopping from roof to roof and up to a relay mast.',
   }],
+  ['house-power', 'House Power', ['House Power'], ['Gather tiny energy from the house', 'and spend it on small signs.'], {
+    description: 'Gather tiny amounts of energy from sun, heat, water, footsteps and a hand crank into one ember bank, then spend it on small signs of presence. Every sum shown.',
+  }],
   ['stations', 'Stations', ['Stations'], ['Try four places that like company:', 'drum, voice, dance, stretch.']],
+  ['the-table', 'The Table', ['The Table'], ['Set six seats, one kept for', 'someone far away.'], {
+    description: 'A table seen from above with six seats, one kept for someone far away. Begin a meal, pass the plate, hold a pause, then wash up, on wood, tile or Mars.',
+  }],
   ['weather-in-the-house', 'Weather in the House', ['Weather in', 'the House'], ['Set the sky and watch six pieces', 'follow it indoors.']],
+  ['creatures', 'Creatures', ['Creatures'], ['Set out seed, water and a bell', 'and see which animals come.'], {
+    description: 'One house, one yard, one day. Set out seed, water, a blanket, a bell, a ball and a stone, then move the time and see which animals come where.',
+  }],
+  ['four-seasons', 'Four Seasons', ['Four Seasons'], ['Turn a year wheel and watch', 'one home change with it.'], {
+    description: 'Turn a year wheel and one home changes with it: where the noon light lands, which pieces come out, the scent, the sound and one gathering per season.',
+  }],
   ['five-levels', 'Five Levels of Magic', ['Five Levels', 'of Magic'], ['Step one hearth through five', 'levels of magic.']],
   ['seven-homes', 'Seven Homes', ['Seven Homes'], ['Explore seven houses, then', 'build your own.']],
   ['cabinet-of-no-bounds', 'The Cabinet of No Bounds', ['The Cabinet', 'of No Bounds'], ['Open a niche and try one of', 'sixteen impossible objects.']],
