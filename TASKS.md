@@ -4,6 +4,15 @@
 
 ---
 
+## Readability: Baby Bonfire, Coast Commons, House Channel, Light Companion (2026-11-11)
+
+Every public page in the four areas meets one head standard, and a test keeps it that way. No Block.
+
+- [x] (CC) `scripts/audit-area-readability.mjs` (`npm run audit:areas`) and `tests/area-readability.test.mjs`: titles and descriptions unique, canonical, Open Graph, Twitter, one JSON-LD block, 1200x630 card, h1, alt, sitemap, llms files, agent-surfaces, JSON twin `pageIndex`; `/house/r/` and `/light/c/` noindex and in no index. Fixes: 20 new unfurl cards (`scripts/unfurl-cards/`), descriptions and JSON-LD from `scripts/unfurl-cards/seo.mjs`, `pageIndex` in the four twins, llms and agents entries. Report: `docs/research/2026-11-11-area-readability-audit.md`.
+- [ ] (MH) Look at the 20 new cards and the unfurl in a real Messages, X, Slack and Discord paste, once deployed; nothing in source can say how those apps draw them — `waiting-on-mh`
+
+---
+
 ## Baby Bonfire: Prayer Fire (2026-11-11)
 
 `/baby-bonfire/prayer/`, listed in `/baby-bonfire.json` under `screens`. Mike in chat on 2026-11-11, after seeing a generated film of the fireplace: "turn that into a prayer site with animations audio multi media". The one Baby Bonfire page that is a screen on purpose: it plays a film and recorded sound from its own folder. A concept sketch; nothing is for sale; it lights no real flame.
