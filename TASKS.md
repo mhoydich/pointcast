@@ -4,6 +4,18 @@
 
 ---
 
+## Baby Bonfire: third pass (2026-11-11)
+
+`/baby-bonfire/the-helper/`, `/baby-bonfire/home-press/`, `/baby-bonfire/house-power/`, `/baby-bonfire/the-table/`, `/baby-bonfire/creatures/`, `/baby-bonfire/four-seasons/`. Mike in chat on 2026-11-11: "publish all". Six finished private scenes brought in as public scenes; the street now has twenty-one windows. Concept sketches; nothing is for sale.
+
+- [x] (CC) Six scenes imported with the same wrapper as Mesh Street (head tags, back link, street marker) — `done`
+- [x] (CC) Editorial pass, every page read end to end. Changed: Home Press clay recipe no longer says a second glaze firing makes a piece fit for food or drink (it is a potter's call, and the recipe does not settle it); Home Press sources line now reads "as read Nov 11, 2026"; House Power lede no longer calls every tap "real size" (sized from a source where one was read, illustrative where none was); Four Seasons gained a line saying a release is the sketch's word for a set of ideas, nothing is for sale or ships, and the temperatures and flame nights are illustrative. The Helper, The Table and Creatures needed no change. Source names appear only inside the two sources drawers — `done`
+- [x] (CC) Hub (21 windows), JSON twin, sitemap-discovery, `llms.txt`, `llms-full.txt`, make a piece (links the Home Press), `tests/baby-bonfire.test.mjs`. Block 0782 now says twenty-one; only the count wording changed. The atlas needed no new records; `node scripts/atlas/build.mjs --check` passes — `done`
+- [x] (CC) Re-read the twelve cited pages against the figures quoted from them (2026-11-11). Eleven match, the Cricut help article and the MDPI paper included. The Southampton ePrints PDF would not open on a second try, so House Power now says its three figures are not confirmed — `done`
+- [ ] (X) Review the fire and food wording on The Helper, The Home Press and The Table, the sums in House Power, and the new rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-pass-3.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-pass-3.md` — `queued`
+- [ ] (MH) Decide: whether "release" is the right word on Four Seasons; whether The Helper putting out a flame when everyone is out reads the way you meant it — `waiting-on-mh`
+
 ## Baby Bonfire: first place kit (2026-11-11)
 
 `/baby-bonfire/first-place/`, files under `/baby-bonfire/first-place/files/`. The first step from sketches to something makeable: a printable place. A v0.1 proposal; nobody has printed it; it holds no flame; nothing is for sale; no licence chosen. The open spec's claims are not edited.
@@ -12,6 +24,7 @@
 - [x] (CC) Page with a drag-to-turn drawing made from the same triangles, generated dimension tables, print starting points, tag notes, an untested sensing puck parts list and wiring sketch; 14 source pages opened 2026-11-11, unverified points marked — `done`
 - [x] (CC) Mesh checks: generator self-check plus `scripts/baby-bonfire/verify-first-place.py` (trimesh): watertight, bounding boxes, volumes against a hand calculation, sampled points, overhangs at most 45 degrees; thinnest wall 1.6 mm by design — `done`
 - [x] (CC) Linked from make a piece and the open spec; `baby-bonfire.json` (`kits`), sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire.test.mjs`. `agent-surfaces.ts`, the hub and the atlas are not touched — `done`
+- [ ] (CC) Unfurl card for `/baby-bonfire/first-place/`. The page is not on the hub street, so the house template in `scripts/unfurl-cards/` cannot draw it; it needs a motif of its own (the tile and puck) and a row in `CARDS`. Until then it keeps the request-time card — `queued`
 - [ ] (X) Review the plain box, the sensing puck doubts (coin cell on the 3V3 pin, USB with the cell on), the generator and the test — `queued`
 - [ ] (M) One real test print with photos and measured fit per `docs/briefs/2026-11-11-manus-first-place-kit.md`; results to `docs/manus-logs/2026-11-11-first-place-kit.md` — `queued`, needs MH approval before any order
 - [ ] (MH) Approve or decline a paid test print; choose the licence (CERN-OHL-P v2 and CC BY 4.0 are proposed; no LICENSE file added); decide whether the hub should link the page — `waiting-on-mh`
