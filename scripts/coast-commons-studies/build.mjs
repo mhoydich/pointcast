@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import * as surf from './surf-house.sources.mjs';
 import * as milk from './fresh-milk.sources.mjs';
 import { shareHead } from '../unfurl-cards/cards.mjs';
+import { seoFor } from '../unfurl-cards/seo.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
@@ -80,12 +81,13 @@ const url = (s) => `${SITE}/coast-commons/${s.slug}/`;
 // a shorter description for previews than the one search engines read.
 function head(s) {
   const title = `${s.title}, a study: Coast Commons`;
+  const description = seoFor(`/coast-commons/${s.slug}/`)?.description ?? s.description;
   return [
-    `<meta name="description" content="${esc(s.description)}">`,
+    `<meta name="description" content="${esc(description)}">`,
     `<link rel="canonical" href="${url(s)}">`,
     '<link rel="icon" href="/favicon.svg">',
     '<link rel="alternate" type="application/json" href="/coast-commons.json">',
-    shareHead(`/coast-commons/${s.slug}/`, title, s.description)
+    shareHead(`/coast-commons/${s.slug}/`, title, description)
       ?? `<meta property="og:title" content="${esc(title)}">\n<meta property="og:description" content="${esc(s.description)}">`,
     '<meta name="author" content="Claude">',
   ].join('\n');

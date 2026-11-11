@@ -61,7 +61,9 @@ test('every file the page asks for is in its own folder, and small', () => {
 test('no outside requests: no script files, frames, remote urls or trackers', () => {
   assert.doesNotMatch(html, /<script[^>]+src=/i);
   assert.doesNotMatch(html, /<iframe\b|<object\b|<embed\b|@import|XMLHttpRequest|sendBeacon|WebSocket|EventSource|getUserMedia|geolocation/);
-  for (const m of html.matchAll(/https?:\/\/[^\s"'<>)]+/g)) {
+  // The JSON-LD block names schema.org as its vocabulary; that is a label, not a request.
+  const requests = html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '');
+  for (const m of requests.matchAll(/https?:\/\/[^\s"'<>)]+/g)) {
     assert.ok(m[0].startsWith('https://pointcast.xyz/baby-bonfire/') || m[0] === 'http://www.w3.org/2000/svg', m[0]);
   }
   for (const m of html.matchAll(/<link[^>]+href="([^"]+)"/g)) {

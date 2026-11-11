@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { CARDS, GENERATED, H, ROOT, W, pageFile, pngFile, scenesWithoutCard, stale, stampHead } from './cards.mjs';
+import { CARDS, GENERATED, H, ROOT, TWINS, W, pageFile, pngFile, scenesWithoutCard, stale, stampHead, withPageIndex } from './cards.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -78,6 +78,13 @@ for (const card of CARDS.filter((c) => !GENERATED(c))) {
   const html = readFileSync(file, 'utf8');
   const next = stampHead(html, card);
   if (next !== html) { writeFileSync(file, next); stamped += 1; }
+}
+// The hand-written JSON twins list every public page of their area.
+for (const area of TWINS) {
+  const file = resolve(ROOT, `public/${area}.json`);
+  const text = readFileSync(file, 'utf8');
+  const next = withPageIndex(text, area);
+  if (next !== text) { writeFileSync(file, next); stamped += 1; }
 }
 for (const script of ['scripts/coast-commons-studies/build.mjs', 'scripts/coast-commons/build.mjs']) {
   execFileSync(process.execPath, [resolve(ROOT, script)], { cwd: ROOT, stdio: 'pipe' });

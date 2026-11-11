@@ -30,13 +30,15 @@ const SCENES = ['light-the-hearth', 'the-shelf', 'pieces-roam', 'the-rounds', 't
 test('every page that was asked for has a card: the hubs, the street\'s scenes, the studies', () => {
   const want = [
     '/baby-bonfire/', ...SCENES.map((s) => `/baby-bonfire/${s}/`),
+    ...['open-spec', 'open-mesh', 'barter-board', 'make-a-piece', 'first-place', 'prayer'].map((s) => `/baby-bonfire/${s}/`),
     '/coast-commons/', '/coast-commons/el-segundo/', '/coast-commons/pattern/', '/coast-commons/sb-surf-house/', '/coast-commons/fresh-milk/',
+    ...['malibu', 'santa-monica', 'venice', 'marina-del-rey', 'playa-del-rey', 'manhattan-beach', 'hermosa-beach', 'redondo-beach', 'torrance', 'palos-verdes-estates', 'rancho-palos-verdes', 'san-pedro', 'long-beach', 'seal-beach'].map((s) => `/coast-commons/${s}/`),
     '/house/', '/house/about/',
   ];
   assert.deepEqual(CARDS.map((c) => c.path), want);
   assert.equal(new Set(CARDS.map((c) => c.path)).size, CARDS.length);
   for (const slug of SCENES) assert.ok(street.includes(slug), `${slug} is still on the street`);
-  assert.equal(cardFor('/coast-commons/venice/'), null, 'pages without a card keep the request-time card');
+  assert.equal(cardFor('/coast-commons/nowhere/'), null, 'pages without a card keep the request-time card');
   assert.ok(!cardFor('/house/r/'), 'the remote is noindex and has no card');
 });
 
@@ -190,5 +192,5 @@ test('stamping a hand-written page adds the tags after og:type and changes nothi
   const block = shareHead('/coast-commons/', 'A longer page title that only the browser tab shows, not the preview', 'Page description.', dir);
   assert.ok(block.startsWith(`<meta property="og:title" content="${hub.title}">`));
   assert.ok(block.includes(`<meta name="twitter:image" content="${cardUrl(hub, dir)}">`));
-  assert.equal(shareHead('/coast-commons/venice/', 'Venice', 'x', dir), null);
+  assert.equal(shareHead('/coast-commons/nowhere/', 'Nowhere', 'x', dir), null);
 });
