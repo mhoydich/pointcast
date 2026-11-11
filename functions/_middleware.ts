@@ -341,6 +341,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
   if (['/agents/', '/agents/spec/'].includes(url.pathname)) return next();
+  // Light Companion circle links are capability URLs: the path is the key to
+  // the circle. Hand them straight to functions/light/c/[[path]].ts so the
+  // path is never logged as a visit or written into an unfurl-card URL.
+  if (url.pathname.startsWith('/light/c/')) return next();
 
   // Generic trailing-slash rewrite — applies to ANY path that
   //   • is a GET asking for HTML
