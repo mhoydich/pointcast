@@ -42,6 +42,19 @@
 - [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
+## Baby Bonfire: second pass (2026-11-11)
+
+`/baby-bonfire/mesh-street/`, `/baby-bonfire/pieces-roam/`, a new shelf on `/baby-bonfire/precedents/`. Mike in chat on 2026-11-11 corrected the fixed shelf: "all these pieces i move around my home it's part of the ritual", and a cluttered desk "is a shrine". The street now has fifteen windows. Concept sketches; nothing is for sale.
+
+- [x] (CC) Mesh Street imported as a scene (same wrapper as the other scenes) and linked from the open mesh notes — `done`
+- [x] (CC) The Roaming Shelf: a four-room plan in SVG, eight pieces, seventeen places, six arrangement rules; drag by mouse or touch, tap-tap, keyboard; The Shelf kept, with a line pointing to it — `done`
+- [x] (CC) Precedents wall: "Earlier on PointCast" shelf, 14 entries, each line taken from its block's title or dek (or the page's own description for `/mesh`, `/tv`, `/drum-tv`); every route answered 200 on pointcast.xyz on 2026-11-11 — `done`
+- [x] (CC) Hub, JSON twin, sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire.test.mjs`. The atlas needed no new records (scenes are not atlas records); `node scripts/atlas/build.mjs --check` passes. Block 0782 is left as written on the day (it says thirteen) — `done`
+- [ ] (X) Review the Roaming Shelf wording (presence only, no cameras or microphones, no flame) and the precedents lines against their blocks — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-pass-2.md`, touch drag on iOS Safari first; results to `docs/manus-logs/2026-11-11-baby-bonfire-pass-2.md` — `queued`
+- [ ] (MH) Decide: whether Block 0782 should be edited to say fifteen; whether "a hat on its hook means out today" reads the way you meant it — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
 ## Light Companion v0 (2026-11-11)
 
 `/light/`, `/light/c/{id}`, `/api/light`, `/light.json`, Block 0783. Mike in chat on 2026-11-11: start making the digital products (light companions, mesh, drum) woven into existing PointCast systems. A circle of people with one light each; presence only; not an emergency or monitoring service.
