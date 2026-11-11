@@ -14,6 +14,18 @@
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
 - [ ] (MH) Choose a licence for the Baby Bonfire files and designs — `waiting-on-mh`
 - [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
+## Coast Commons: an open study for the beach towns (2026-11-11)
+
+`/coast-commons/`, `/coast-commons/el-segundo/` (flagship), `/coast-commons/pattern/`, fourteen more town pages, `/coast-commons.json`, Block 0785. Mike in chat on 2026-11-11: publish to PointCast, for El Segundo, Manhattan Beach, PV and the other beach towns within 25 miles, as a public good; make El Segundo the flagship. A study, not an offer; nothing for sale; no money raised.
+
+- [x] (CC) Hub with the drawn coast strip and filter, flagship El Segundo page with step ladder, fourteen town pages, pattern page with split calculator and ledger template; all generated into `public/coast-commons/` by `node scripts/coast-commons/build.mjs` from `scripts/coast-commons/data.mjs` — `done`
+- [x] (CC) 46 official pages opened and paraphrased on 2026-11-11; unchecked entries say "Not verified" — `done`
+- [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/coast-commons.test.mjs` — `done`
+- [ ] (X) Review the rule paraphrases against the linked pages, the plain box wording and the content rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-coast-commons-qa.md`; results to `docs/manus-logs/2026-11-11-coast-commons-qa.md` — `queued`
+- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [ ] (MH) Decide: keep the homepage "New today" entry; whether Pacific Palisades and Sunset Beach join the list; whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
+- [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
 ## Light Companion v0 (2026-11-11)
