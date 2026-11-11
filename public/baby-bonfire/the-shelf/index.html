@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baby Bonfire — The Shelf</title>
+<meta name="description" content="Five stone places and seven pieces. Set the shelf, light the hearth, and see what the room does. A concept sketch from Baby Bonfire, an open exploration on PointCast. Nothing is for sale.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://pointcast.xyz/baby-bonfire/the-shelf/">
+<link rel="alternate" type="application/json" href="/baby-bonfire.json" title="Baby Bonfire, machine-readable">
+<meta property="og:title" content="The Shelf · Baby Bonfire">
+<meta property="og:description" content="Five stone places and seven pieces. Set the shelf, light the hearth, and see what the room does.">
+<meta property="og:url" content="https://pointcast.xyz/baby-bonfire/the-shelf/">
+<meta property="og:type" content="website">
+<style>
+:root{
+  /* layout: one column. A lit room on top, a walnut shelf of five stones below; light is the interface. */
+  --bg:#16100c; --panel:#211812; --ink:#f3e8d8; --muted:#b59e86; --line:rgba(243,232,216,.14);
+  --ember:#f2a03d; --walnut:#5b3a24; --stone:#aaa79a; --sky:#8fb7c9;
+  --display:ui-rounded,"SF Pro Rounded","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --body:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+  --quiet:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --dark:0; --lamp:1; --lampglow:.4; --fire:0; --shaft:.3; --fx:0; --haze:0;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.4;
+  -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+.wrap{max-width:540px;margin:0 auto;padding:12px 16px 28px;display:flex;flex-direction:column;gap:12px}
+
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.brand{display:flex;flex-direction:column;gap:1px}
+.eyebrow{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ember)}
+h1{font-family:var(--display);font-size:24px;line-height:1.1;font-weight:800;margin:0;letter-spacing:-.01em}
+.sub{margin:0;color:var(--muted);font-size:13px}
+.snd{flex:none;display:flex;align-items:center;gap:6px;height:36px;padding:0 12px;border-radius:18px;
+  background:var(--panel);border:1px solid var(--line);font-size:12px;font-weight:600}
+.snd svg{width:16px;height:16px}
+.snd[aria-pressed="true"]{color:var(--muted)}
+.snd[aria-pressed="true"] .wave{display:none}
+.snd[aria-pressed="false"] .cross{display:none}
+
+.sky{display:flex;align-items:center;gap:8px}
+.sky .lab{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);flex:none}
+.seg{display:grid;grid-template-columns:repeat(4,auto);flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:2px;gap:2px}
+.seg button{border:0;background:none;border-radius:8px;height:30px;font-size:12px;font-weight:600;color:var(--muted);padding:0 4px;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:#3a2b20;color:var(--ink);box-shadow:inset 0 0 0 1px rgba(242,160,61,.35)}
+
+.scene{border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#120c09;
+  box-shadow:0 18px 40px rgba(0,0,0,.45)}
+.roomwrap{position:relative;line-height:0}
+#room{display:block;width:100%;height:auto}
+#room *{transition:opacity 1.4s ease}
+.since{position:absolute;right:8px;bottom:8px;line-height:1.2;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;
+  background:rgba(18,12,9,.72);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:3px 8px}
+.since[hidden]{display:none}
+
+/* room light, driven by custom properties */
+.L-dark{opacity:var(--dark);mix-blend-mode:multiply}
+.L-lamp{opacity:var(--lampglow);mix-blend-mode:screen}
+.L-shade{opacity:var(--lamp)}
+.L-fire{opacity:var(--fire);mix-blend-mode:screen;transform:translateX(calc(var(--fx)*1px));transition:opacity 1.4s ease,transform 1.2s ease}
+.L-tv{opacity:var(--fire);transform:translateX(calc(var(--fx)*.12px))}
+.L-shaft{opacity:var(--shaft)}
+.L-haze{opacity:var(--haze)}
+.flick{animation:flick 2.4s ease-in-out infinite}
+@keyframes flick{0%,100%{opacity:1}22%{opacity:.86}40%{opacity:.97}63%{opacity:.82}80%{opacity:.94}}
+#room .sk{opacity:0}
+#room[data-sky="clear"] .sk-clear,#room[data-sky="marine"] .sk-marine,#room[data-sky="rain"] .sk-rain,#room[data-sky="night"] .sk-night{opacity:1}
+.rainfall{animation:rain .5s linear infinite}
+@keyframes rain{to{stroke-dashoffset:-32}}
+.fogdrift{animation:drift 7s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translateX(-3px)}to{transform:translateX(4px)}}
+.blind{transform:translateY(-92px);transition:transform 1.8s ease}
+#room[data-scene="close"] .blind{transform:none}
+#room .prop{opacity:0;transform:translateY(-8px);transition:opacity .9s ease,transform .9s ease}
+#room[data-scene="game"] .p-game,#room[data-scene="morning"] .p-morning,#room[data-scene="company"] .p-company,#room[data-scene="someone"] .p-someone{opacity:1;transform:none}
+#room .arcs{opacity:0}
+#room[data-scene="game"] .arcs,#room.heard .arcs{opacity:1}
+.arcs path{animation:pulse 1s ease-in-out infinite}
+.arcs path:nth-child(2){animation-delay:.2s}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+.sway{transform-box:fill-box;transform-origin:50% 0;animation:sway 3.2s ease-in-out infinite alternate}
+@keyframes sway{from{transform:rotate(-1.2deg)}to{transform:rotate(1.2deg)}}
+.steam path{animation:steam 2.6s ease-in-out infinite}
+.steam path:nth-child(2){animation-delay:.9s}
+@keyframes steam{0%{opacity:0;transform:translateY(3px)}40%{opacity:.7}100%{opacity:0;transform:translateY(-7px)}}
+
+.cap{display:flex;flex-direction:column;gap:1px;padding:10px 14px 11px;min-height:60px;background:#1b130e;border-top:1px solid rgba(0,0,0,.4)}
+.cap-t{font-family:var(--display);font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--ember)}
+.cap-l{font-family:var(--quiet);font-style:italic;font-size:16px;line-height:1.3;color:var(--ink);text-wrap:balance}
+.cap.say .cap-t,.cap.say .cap-l{animation:say .9s ease both}
+.cap.say .cap-l{animation-delay:.12s}
+@keyframes say{from{opacity:.15;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* the shelf */
+.shelf{position:relative;padding:16px 10px 6px;background:var(--walnut);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.wood{position:absolute;inset:0;width:100%;height:100%;filter:brightness(calc(1 - var(--dark)*.5));transition:filter 1.4s ease}
+.shelf::after{content:"";position:absolute;left:0;right:0;bottom:0;height:7px;background:linear-gradient(#3a2416,#24160d)}
+.tiles{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:1px}
+.place{position:relative;display:flex;flex-direction:column}
+.tile{position:relative;display:block;width:100%;aspect-ratio:1;padding:0;border:0;background:none;perspective:420px;touch-action:none;border-radius:4px}
+.flipper{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .6s ease}
+.flipper>*{position:absolute;inset:0;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.stone{filter:brightness(calc(1 - var(--dark)*.5));transition:filter 1.4s ease}
+.under{transform:rotateX(180deg);border-radius:4px;background:#5f5c54;display:grid;place-items:center;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+.under i{width:56%;aspect-ratio:1;border-radius:50%;background:var(--pk,#f2a03d);
+  box-shadow:inset 0 0 0 3px rgba(0,0,0,.25),0 0 0 4px #403d37,0 0 12px var(--pk,#f2a03d)}
+.place.flipped .flipper{transform:rotateX(180deg)}
+.place.flipped .piece{transform:translateY(-18%) scale(.9);opacity:.5}
+.place[data-puck="light"]{--pk:#f2a03d}.place[data-puck="air"]{--pk:#9fd3d6}
+.place[data-puck="sound"]{--pk:#e08f74}.place[data-puck="weather"]{--pk:#e4e7e2}
+.piece{position:absolute;inset:0;pointer-events:none;transition:transform .5s ease,opacity .4s ease;z-index:2}
+.piece svg{display:block;width:100%;height:100%;overflow:visible}
+.piece:not(.lit) svg{filter:brightness(calc(1 - var(--dark)*.42));transition:filter 1.4s ease}
+.piece.lifting{opacity:.25}
+.glow{position:absolute;left:50%;top:30%;width:300%;aspect-ratio:1;transform:translate(-50%,-50%);pointer-events:none;z-index:1;
+  background:radial-gradient(circle,rgba(255,176,74,.55) 0,rgba(255,150,50,.2) 28%,rgba(255,140,40,0) 62%);
+  mix-blend-mode:screen;opacity:0;transition:opacity .8s ease}
+.place.lit .glow{opacity:1;animation:flick 2.1s ease-in-out infinite}
+.place.lit{z-index:3}
+.tile.over{outline:2px solid var(--ember);outline-offset:-2px}
+.shelf.await .tile{box-shadow:inset 0 0 0 2px rgba(242,160,61,.55)}
+.tcard{position:absolute;right:2%;bottom:5%;z-index:3;max-width:62%;padding:2px 4px;background:#f6ecd8;color:#3a2a1c;border-radius:2px;
+  font-family:var(--quiet);font-style:italic;font-size:9px;line-height:1.15;transform:rotate(-5deg);box-shadow:0 1px 3px rgba(0,0,0,.4);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.tcard:empty{display:none}
+.lip{display:flex;align-items:flex-start;justify-content:center;width:100%;height:26px;padding:0;border:0;background:none}
+.lip span{display:flex;align-items:center;justify-content:center;width:100%;height:10px;border-radius:0 0 4px 4px;
+  background:linear-gradient(#76736a,#57544d);filter:brightness(calc(1 - var(--dark)*.4));transition:filter 1.4s ease}
+.lip i{width:5px;height:5px;border-radius:50%;background:var(--pk);box-shadow:0 0 5px var(--pk)}
+.place.flipped .lip span{background:linear-gradient(#f2a03d,#b96f1d)}
+.ring{fill:#8f8a7c;transition:fill 1.6s ease}
+.piece.dull .ring{fill:#4a443c}
+.piece.amber .ring{fill:#f2a03d;filter:drop-shadow(0 0 3px #f2a03d)}
+.flame{animation:flame 1.1s ease-in-out infinite alternate}
+.flame.b{animation-duration:.8s}
+@keyframes flame{0%{transform:scale(1,1) skewX(0)}35%{transform:scale(.94,1.08) skewX(3deg)}70%{transform:scale(1.05,.95) skewX(-3deg)}100%{transform:scale(.97,1.05) skewX(1deg)}}
+.bellg{transform-origin:32px 12px}
+.piece.ringing .bellg{animation:ring .9s ease-out}
+@keyframes ring{0%{transform:rotate(0)}15%{transform:rotate(14deg)}35%{transform:rotate(-11deg)}55%{transform:rotate(7deg)}75%{transform:rotate(-4deg)}100%{transform:rotate(0)}}
+.rip ellipse{opacity:0;transform-box:fill-box;transform-origin:50% 50%}
+.piece.rippling .rip ellipse{animation:rip 1.3s ease-out}
+.piece.rippling .rip ellipse:nth-child(2){animation-delay:.22s}
+.piece.rippling .rip ellipse:nth-child(3){animation-delay:.44s}
+@keyframes rip{0%{opacity:.9;transform:scale(.1)}100%{opacity:0;transform:scale(1)}}
+#air{position:absolute;inset:0;pointer-events:none;z-index:5;overflow:visible}
+.puff{position:absolute;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,rgba(230,224,214,.8),rgba(230,224,214,0) 70%);opacity:0}
+
+.under-panel{background:#2a2620;border-top:1px solid rgba(0,0,0,.5);padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.under-panel[hidden]{display:none}
+.under-panel h2{font-family:var(--display);font-size:14px;font-weight:800;margin:0}
+.under-panel p{margin:0;font-size:13px;color:#cfc5b5}
+.pucks{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pucks button{display:flex;gap:8px;align-items:flex-start;text-align:left;padding:8px;border-radius:10px;background:#211e19;border:1px solid var(--line);min-height:64px}
+.pucks button i{flex:none;width:14px;height:14px;border-radius:50%;margin-top:2px;background:var(--c);box-shadow:0 0 6px var(--c)}
+.pucks b{display:block;font-family:var(--display);font-size:13px}
+.pucks small{display:block;font-size:11.5px;line-height:1.25;color:var(--muted)}
+.pucks button[aria-pressed="true"]{border-color:var(--ember);background:#33291d}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-size:13px;font-weight:600}
+.btn.pri{background:var(--ember);border-color:var(--ember);color:#22140a}
+
+.tray{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px 6px 8px;background:#1b130e;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.tray button{display:flex;flex-direction:column;align-items:center;gap:0;padding:2px 0 4px;border:1px solid transparent;border-radius:10px;background:none;touch-action:none;min-width:0}
+.tray button svg{width:100%;max-width:52px;aspect-ratio:1;pointer-events:none}
+.tray button span{font-size:10px;font-weight:600;color:var(--muted);white-space:nowrap;pointer-events:none}
+.tray button[aria-pressed="true"]{border-color:var(--ember);background:#33291d}
+.tray button[aria-pressed="true"] span{color:var(--ink)}
+.ghost{position:fixed;left:0;top:0;width:76px;height:76px;pointer-events:none;z-index:50;filter:drop-shadow(0 10px 10px rgba(0,0,0,.5))}
+.ghost svg{width:100%;height:100%;overflow:visible}
+
+.hint{display:flex;gap:8px;align-items:baseline;margin:0;padding:0 2px;font-size:14px;color:var(--ink);min-height:40px}
+.hint::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--ember);box-shadow:0 0 8px var(--ember);transform:translateY(-1px)}
+
+.block{display:flex;flex-direction:column;gap:8px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.block[hidden]{display:none}
+.block h2{margin:0;font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;height:34px;border-radius:17px;border:1px solid var(--line);background:#2a1f17;font-size:13px;font-weight:600;overflow:hidden}
+.chip button{height:100%;border:0;background:none;padding:0 12px}
+.chip button.x{padding:0 10px 0 6px;color:var(--muted);font-size:15px;border-left:1px solid var(--line)}
+button.chip{padding:0 12px}
+.field{flex:1;min-width:0;height:36px;border-radius:10px;border:1px solid var(--line);background:#150f0b;padding:0 10px;font-size:16px}
+.field::placeholder{color:#806f5f}
+.empty{margin:0;font-size:13px;color:var(--muted)}
+footer{font-size:12px;color:var(--muted);padding:4px 2px 0}
+.defs{position:absolute;width:0;height:0;overflow:hidden}
+
+@media (min-width:560px){.wrap{padding-top:22px}h1{font-size:28px}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01s!important}
+}
+</style>
+<style>
+/* PointCast: the way back to the Baby Bonfire street. Added on import; the scene below is unchanged. */
+.bb-back{display:block;box-sizing:border-box;height:32px;padding:9px 16px 0;font:600 12px/14px system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.02em;color:inherit;text-decoration:none;opacity:.82}
+.bb-back:hover,.bb-back:focus-visible{opacity:1;text-decoration:underline}
+</style>
+</head>
+<body>
+<a class="bb-back" href="/baby-bonfire/">&larr; Back to the street</a>
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="gWax" x1="0" x2="1"><stop offset="0" stop-color="#f7ecd4"/><stop offset=".6" stop-color="#ead9b6"/><stop offset="1" stop-color="#cdb890"/></linearGradient>
+    <linearGradient id="gFlame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f06a1d"/><stop offset=".5" stop-color="#ffb23e"/><stop offset="1" stop-color="#ffe08a"/></linearGradient>
+    <linearGradient id="gCeramic" x1="0" x2="1"><stop offset="0" stop-color="#efe6d4"/><stop offset=".55" stop-color="#ddd0b8"/><stop offset="1" stop-color="#b3a388"/></linearGradient>
+    <linearGradient id="gWater" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc3cf"/><stop offset="1" stop-color="#4f7f90"/></linearGradient>
+    <linearGradient id="gBrass" x1="0" x2="1"><stop offset="0" stop-color="#f3d27a"/><stop offset=".5" stop-color="#d4a443"/><stop offset="1" stop-color="#946a22"/></linearGradient>
+    <linearGradient id="gClay" x1="0" x2="1"><stop offset="0" stop-color="#5a5148"/><stop offset=".5" stop-color="#3f3832"/><stop offset="1" stop-color="#28231f"/></linearGradient>
+    <linearGradient id="gPebble" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d6d2c6"/><stop offset="1" stop-color="#8c887c"/></linearGradient>
+    <filter id="fStone" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 .2  0 0 0 0 .18  0 0 0 0 .16  0 0 0 1.5 -.6"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+    <filter id="fWood" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".006 .24" numOctaves="3" seed="11"/><feColorMatrix values="0 0 0 0 .13  0 0 0 0 .07  0 0 0 0 .04  1.9 0 0 0 -.62"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+    <filter id="fBlur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <filter id="fBlurBig" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="eyebrow">Baby Bonfire</span>
+      <h1>The Shelf</h1>
+      <p class="sub">Five stones, seven pieces. Fire is the switch.</p>
+    </div>
+    <button class="snd" id="mute" type="button" aria-pressed="false" aria-label="Mute sound">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6v4h2.5L8 13V3L4.5 6z" fill="currentColor"/><path class="wave" d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.3 6.3 0 0 1 0 9"/><path class="cross" d="M10.5 6l4 4M14.5 6l-4 4"/></svg>
+      <span id="muteLab">Sound on</span>
+    </button>
+  </header>
+
+  <div class="sky">
+    <span class="lab" id="skyLab">Outside</span>
+    <div class="seg" id="sky" role="group" aria-labelledby="skyLab">
+      <button type="button" data-sky="clear" aria-pressed="false">Clear</button>
+      <button type="button" data-sky="marine" aria-pressed="false">Marine layer</button>
+      <button type="button" data-sky="rain" aria-pressed="false">Rain</button>
+      <button type="button" data-sky="night" aria-pressed="false">Night</button>
+    </div>
+  </div>
+
+  <div class="scene">
+    <div class="roomwrap">
+      <svg id="room" viewBox="0 0 390 270" role="img" aria-label="A living room: a sofa under a window, a floor lamp, a TV that is off, and a speaker." data-sky="clear" data-scene="">
+        <defs>
+          <linearGradient id="skyClear" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fabd3"/><stop offset="1" stop-color="#d6ebf0"/></linearGradient>
+          <linearGradient id="skyMarine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b3bbbd"/><stop offset="1" stop-color="#dcddd8"/></linearGradient>
+          <linearGradient id="skyRain" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d6d7b"/><stop offset="1" stop-color="#919da3"/></linearGradient>
+          <linearGradient id="skyNight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1326"/><stop offset="1" stop-color="#27344e"/></linearGradient>
+          <radialGradient id="lampGlow"><stop offset="0" stop-color="#ffdca0" stop-opacity=".95"/><stop offset=".35" stop-color="#ffc878" stop-opacity=".45"/><stop offset="1" stop-color="#ffb860" stop-opacity="0"/></radialGradient>
+          <radialGradient id="fireGlow"><stop offset="0" stop-color="#ffb050" stop-opacity=".95"/><stop offset=".4" stop-color="#f08a30" stop-opacity=".45"/><stop offset="1" stop-color="#e06a20" stop-opacity="0"/></radialGradient>
+          <clipPath id="winClip"><rect x="80" y="24" width="96" height="90"/></clipPath>
+          <clipPath id="tvClip"><rect x="240" y="88" width="88" height="52" rx="1"/></clipPath>
+        </defs>
+
+        <!-- wall and floor -->
+        <rect width="390" height="214" fill="#c9b69b"/>
+        <rect y="152" width="390" height="62" fill="#bea88b"/>
+        <rect y="151" width="390" height="2" fill="#d8c8ae"/>
+        <rect y="207" width="390" height="7" fill="#e8dcc8"/>
+        <rect y="214" width="390" height="56" fill="#7a5237"/>
+        <path d="M0 232H390M0 252H390M60 214v18M210 214v18M330 214v18M130 232v20M280 232v20M40 252v18M190 252v18M350 252v18" stroke="rgba(0,0,0,.2)" stroke-width="1" fill="none"/>
+        <ellipse cx="150" cy="246" rx="132" ry="16" fill="#a4553b"/>
+        <ellipse cx="150" cy="246" rx="116" ry="12" fill="none" stroke="#dcb47c" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <path class="L-shaft" d="M118 214H236L300 270H132Z" fill="#fff0c8"/>
+
+        <!-- window -->
+        <rect x="74" y="18" width="108" height="102" rx="3" fill="#f1e8d8"/>
+        <g clip-path="url(#winClip)">
+          <rect class="sk sk-clear" x="80" y="24" width="96" height="90" fill="url(#skyClear)"/>
+          <rect class="sk sk-marine" x="80" y="24" width="96" height="90" fill="url(#skyMarine)"/>
+          <rect class="sk sk-rain" x="80" y="24" width="96" height="90" fill="url(#skyRain)"/>
+          <rect class="sk sk-night" x="80" y="24" width="96" height="90" fill="url(#skyNight)"/>
+          <g class="sk sk-clear"><circle cx="160" cy="42" r="15" fill="#fff6d6" opacity=".35"/><circle cx="160" cy="42" r="8" fill="#fff6d6"/></g>
+          <g class="sk sk-night"><path d="M158 34a9 9 0 1 0 8 13a7.5 7.5 0 0 1-8-13z" fill="#f4ecd2"/><g fill="#f4ecd2"><circle cx="92" cy="36" r=".9"/><circle cx="112" cy="30" r=".7"/><circle cx="124" cy="46" r=".9"/><circle cx="140" cy="33" r=".6"/><circle cx="100" cy="54" r=".6"/><circle cx="148" cy="58" r=".8"/><circle cx="170" cy="64" r=".6"/></g></g>
+          <!-- roofline and a palm -->
+          <path d="M80 114V98h14l8-7 8 7h18v-6h16v6h10l7-6 7 6h8v16z" fill="#4c5a5c"/>
+          <path d="M148 98c0-14 1-22 3-30" stroke="#3b4747" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <path d="M151 68c-6-5-12-5-16-2M151 68c-4-7-9-9-14-9M151 68c1-7 5-11 10-12M151 68c5-4 11-4 16-1M151 68c6 0 10 3 12 8M151 68c-5 2-8 6-9 11" stroke="#3b4747" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <rect class="sk sk-night" x="112" y="101" width="5" height="6" fill="#ffcf7a"/>
+          <g class="sk sk-marine" filter="url(#fBlur)"><g class="fogdrift"><ellipse cx="110" cy="72" rx="44" ry="10" fill="#eceee9" opacity=".9"/><ellipse cx="150" cy="60" rx="40" ry="9" fill="#eceee9" opacity=".8"/><ellipse cx="120" cy="92" rx="54" ry="9" fill="#eceee9" opacity=".7"/></g></g>
+          <g class="sk sk-rain"><path class="rainfall" d="M88 14l-7 110M100 14l-7 110M112 14l-7 110M124 14l-7 110M136 14l-7 110M148 14l-7 110M160 14l-7 110M172 14l-7 110M184 14l-7 110" stroke="rgba(235,242,246,.55)" stroke-width="1" stroke-dasharray="7 9" fill="none"/></g>
+          <g class="blind"><rect x="80" y="24" width="96" height="90" fill="#e3d3b2"/><path d="M80 34h96M80 44h96M80 54h96M80 64h96M80 74h96M80 84h96M80 94h96M80 104h96" stroke="#c9b68f" stroke-width="1"/><rect x="80" y="110" width="96" height="4" fill="#b9a57d"/></g>
+        </g>
+        <path d="M128 24V114M80 69H176" stroke="#f1e8d8" stroke-width="3" fill="none"/>
+        <rect x="70" y="118" width="116" height="6" rx="2" fill="#e6dac4"/>
+
+        <!-- game day -->
+        <g class="prop p-game">
+          <path d="M0 6Q195 53 390 6" stroke="#6b4a33" stroke-width="1" fill="none"/>
+          <g id="bunting"></g>
+          <g class="sway"><path d="M240 40v34l78-17z" fill="#b8402e"/><path d="M240 40v34l10-2.2V42.2z" fill="#f1e8d8"/><text x="256" y="60.5" font-family="ui-rounded,'Avenir Next','Segoe UI',system-ui,sans-serif" font-size="9" font-weight="800" fill="#f1e8d8" letter-spacing=".5">GO TEAM</text></g>
+        </g>
+
+        <!-- lamp -->
+        <ellipse cx="30" cy="213" rx="13" ry="3" fill="#8f6f3a"/>
+        <rect x="28.8" y="96" width="2.6" height="117" fill="#b08a4a"/>
+        <path d="M13 98L20 66H40L47 98Z" fill="#cdb78d"/>
+
+        <!-- sofa -->
+        <rect x="64" y="204" width="6" height="9" fill="#4a2f1e"/><rect x="196" y="204" width="6" height="9" fill="#4a2f1e"/>
+        <rect x="66" y="140" width="134" height="48" rx="11" fill="#3f6668"/>
+        <rect x="54" y="158" width="21" height="47" rx="9" fill="#365759"/><rect x="191" y="158" width="21" height="47" rx="9" fill="#365759"/>
+        <rect x="70" y="174" width="126" height="31" rx="8" fill="#4b797b"/>
+        <path d="M133 176v27" stroke="#3f6668" stroke-width="1.5"/>
+        <rect x="80" y="150" width="26" height="26" rx="5" fill="#d9a441" transform="rotate(-8 93 163)"/>
+        <rect x="156" y="152" width="26" height="24" rx="5" fill="#eadfc8" transform="rotate(7 169 164)"/>
+
+        <!-- console, TV (off), speaker -->
+        <rect x="234" y="208" width="5" height="6" fill="#3d2616"/><rect x="367" y="208" width="5" height="6" fill="#3d2616"/>
+        <rect x="226" y="176" width="152" height="33" rx="3" fill="#6b4429"/>
+        <path d="M277 180v25M327 180v25" stroke="#53331e" stroke-width="1.5"/>
+        <rect x="226" y="176" width="152" height="3" rx="1.5" fill="#83573a"/>
+        <rect x="236" y="84" width="96" height="60" rx="4" fill="#1d1e21"/>
+        <rect x="240" y="88" width="88" height="52" rx="1" fill="#0d0e11"/>
+        <path d="M240 88h34l-26 52h-8z" fill="#fff" opacity=".035"/>
+        <rect x="341" y="134" width="27" height="42" rx="5" fill="#2c2a2c"/>
+        <circle cx="354.500" cy="146" r="4" fill="#191819" stroke="#45423f"/><circle cx="354.500" cy="162" r="8" fill="#191819" stroke="#45423f"/><circle cx="354.500" cy="162" r="2.5" fill="#45423f"/>
+
+        <!-- scene props on the console -->
+        <g class="prop p-morning"><path d="M252 164h11v10a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z" fill="#eadfc8"/><path d="M263 166h2.500a2.500 2.500 0 0 1 0 6H263" fill="none" stroke="#eadfc8" stroke-width="1.6"/><g class="steam" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round"><path d="M255 160c-2-3 2-4 0-7"/><path d="M260 160c-2-3 2-4 0-7"/></g></g>
+        <g class="prop p-game"><path d="M284 168h28c0 5-5 8-14 8s-14-3-14-8z" fill="#eadfc8"/><path d="M286 168c2-5 6-5 8-2 2-5 7-5 9-1 2-3 6-2 7 3z" fill="#e2b04e"/></g>
+        <g class="prop p-company"><path d="M250 158h8l-1 18h-6z" fill="#cfe3e6" opacity=".85"/><path d="M262 158h8l-1 18h-6z" fill="#cfe3e6" opacity=".85"/><path d="M274 158h8l-1 18h-6z" fill="#cfe3e6" opacity=".85"/><path d="M292 150h8v6l3 5v15h-14v-15l3-5z" fill="#dfeef0" opacity=".8"/></g>
+        <g class="prop p-someone"><path d="M286 150h34l2 26h-38z" fill="#f6ecd8"/><text id="roomCard" x="303" y="167" text-anchor="middle" font-family="'Iowan Old Style',Palatino,Georgia,serif" font-style="italic" font-size="9" fill="#3a2a1c"></text></g>
+
+        <!-- light -->
+        <rect class="L-haze" width="390" height="270" fill="#d9d0c2"/>
+        <rect class="L-dark" width="390" height="270" fill="#0f0a12"/>
+        <circle class="L-lamp" cx="30" cy="96" r="120" fill="url(#lampGlow)"/>
+        <path class="L-shade" d="M13 98L20 66H40L47 98Z" fill="#ffe9b4"/>
+        <g class="L-fire"><ellipse class="flick" cx="195" cy="292" rx="230" ry="170" fill="url(#fireGlow)"/></g>
+        <g clip-path="url(#tvClip)"><g class="L-tv"><ellipse class="flick" cx="284" cy="134" rx="26" ry="9" fill="#ff9f3a" opacity=".5" filter="url(#fBlurBig)"/></g></g>
+        <g class="prop p-company"><path d="M0 4Q195 40 390 4" stroke="#3a2a1c" stroke-width="1" fill="none"/><g id="lights"></g></g>
+        <g class="arcs" fill="none" stroke="#f3e8d8" stroke-width="1.6" stroke-linecap="round"><path d="M347 128a10 10 0 0 1 15 0"/><path d="M342 122a17 17 0 0 1 25 0"/></g>
+      </svg>
+      <div class="since" id="since" hidden></div>
+    </div>
+
+    <div class="cap" id="cap" aria-live="polite"><span class="cap-t" id="capT"></span><span class="cap-l" id="capL"></span></div>
+
+    <div class="shelf" id="shelf">
+      <svg class="wood" preserveAspectRatio="none" viewBox="0 0 400 120" aria-hidden="true"><rect width="400" height="120" fill="#6a4429"/><rect width="400" height="120" filter="url(#fWood)"/><rect width="400" height="2" fill="#8a5c3a" opacity=".7"/></svg>
+      <div class="tiles" id="tiles"></div>
+      <div id="air"></div>
+    </div>
+
+    <div class="under-panel" id="under" hidden>
+      <h2 id="underT"></h2>
+      <p>A puck sits in the stone. Swap it and this place senses something else. No cameras, no microphones.</p>
+      <div class="pucks" id="pucks"></div>
+      <div class="row"><button class="btn pri" type="button" id="flipBack">Flip it back</button><button class="btn" type="button" id="liftOff">Lift the piece off</button></div>
+    </div>
+
+    <div class="tray" id="tray" aria-label="Tray of pieces"></div>
+  </div>
+
+  <p class="hint" id="hint" aria-live="polite"></p>
+
+  <div class="block" id="cardRow" hidden>
+    <h2><label for="cardName">A card for the candle</label></h2>
+    <div class="row"><input class="field" id="cardName" type="text" maxlength="18" placeholder="Write a name" autocomplete="off"></div>
+  </div>
+
+  <div class="block">
+    <h2>Set the shelf for</h2>
+    <div class="chips" id="presets"></div>
+  </div>
+
+  <div class="block">
+    <h2><label for="sceneName">Your scenes</label></h2>
+    <form class="row" id="saveForm"><input class="field" id="sceneName" type="text" maxlength="24" placeholder="Name this layout" autocomplete="off"><button class="btn pri" type="submit">Save</button></form>
+    <div class="chips" id="mine"></div>
+    <p class="empty" id="mineEmpty">Nothing saved yet. Arrange the shelf, name it, keep it.</p>
+  </div>
+
+  <footer>Concept sketch — Hoydich Enterprises, Nov 2026</footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var reduce=window.matchMedia?window.matchMedia('(prefers-reduced-motion: reduce)'):{matches:false};
+var clamp=function(v,a,b){return Math.max(a,Math.min(b,v))};
+
+var PIECES=[['candle','Candle'],['hearth','Hearth'],['water','Water'],['bell','Bell'],['fog','Fog dome'],['chimney','Chimney'],['stone','Stone']];
+var LABEL={};PIECES.forEach(function(p){LABEL[p[0]]=p[1]});
+var NEED={bell:'sound',fog:'weather',chimney:'air'};
+var PUCKS={
+  light:{name:'Light + heat',line:'Feels a flame. Standard in every place.',c:'#f2a03d'},
+  air:{name:'Air',line:'Flame, plus smoke and draught. Runs a chimney.',c:'#9fd3d6'},
+  sound:{name:'Sound',line:'Flame, plus a ring or a drip, felt through the stone.',c:'#e08f74'},
+  weather:{name:'Weather',line:'Flame, plus the sky outside. Fills a fog dome.',c:'#e4e7e2'}
+};
+var PRESETS=[
+  ['Morning',['','','candle','',''],{}],
+  ['Game day',['','hearth','candle','bell',''],{}],
+  ['For someone',['','candle','','',''],{someone:true}],
+  ["Company's coming",['candle','','candle','','candle'],{}],
+  ['Close the day',['','water','','hearth',''],{lit:[3]}]
+];
+var KEY='baby-bonfire-shelf-scenes';
+
+var hr=new Date().getHours();
+var state={
+  places:[0,1,2,3,4].map(function(){return {piece:null,lit:false,wasLit:false,puck:'light',auto:true}}),
+  sky:(hr>=10&&hr<17)?'clear':((hr>=6&&hr<10)||(hr>=17&&hr<19))?'marine':'night',
+  muted:false,sel:null,flipped:-1,card:'',bellAt:0,scenes:[],airUntil:0,hazeUntil:0
+};
+
+/* ---------- storage ---------- */
+var mem=[];
+function loadScenes(){try{var v=JSON.parse(window.localStorage.getItem(KEY)||'[]');if(Array.isArray(v))return v}catch(e){}return mem.slice()}
+function storeScenes(){mem=state.scenes.slice();try{window.localStorage.setItem(KEY,JSON.stringify(state.scenes))}catch(e){}}
+
+/* ---------- pieces ---------- */
+function flame(x,y,s,b){return '<g transform="translate('+x+' '+y+') scale('+s+')"><g class="flame'+(b?' b':'')+'"><path d="M0 0C-6.500-5-4-12 0-19C4-12 6.500-5 0 0Z" fill="url(#gFlame)"/><path d="M0-1C-2.600-3.500-1.600-7 0-10.500C1.600-7 2.600-3.500 0-1Z" fill="#fff5cf"/></g></g>'}
+var SH='<ellipse cx="32" cy="56" rx="19" ry="3.600" fill="rgba(0,0,0,.3)"/>';
+var DRAW={
+  candle:function(s){return SH+'<path d="M16 51h32l-3 5.500H19z" fill="#8b877a"/><rect x="24" y="27" width="16" height="25" rx="3" fill="url(#gWax)"/><ellipse cx="32" cy="28" rx="8" ry="2.400" fill="#fff6e0"/><path d="M32 28v-4.500" stroke="#3a2a1c" stroke-width="1.400" stroke-linecap="round"/>'+(s.lit?flame(32,24.500,1):'')},
+  hearth:function(s){
+    var slats='<path d="M25.500 52.500h13M25.500 49.500h13" stroke="'+(s.lit?'#ffb24a':'#a87645')+'" stroke-width="1.700"/><path d="M27.500 47.500v6.500M32 47.500v6.500M36.500 47.500v6.500" stroke="'+(s.lit?'#ff8a2a':'#7d5330')+'" stroke-width="1.300"/>';
+    var body=SH+'<path d="M12 55V41a9 9 0 0 1 9-9h22a9 9 0 0 1 9 9v14z" fill="url(#gCeramic)"/><path d="M23 55V46a9 9 0 0 1 18 0v9z" fill="'+(s.lit?'#5a230c':'#2a1a12')+'"/>'+slats+'<rect x="16" y="30" width="32" height="3.400" rx="1.700" fill="#3b2f28"/>';
+    if(s.lit)return body+'<g transform="translate(55 49) rotate(68)"><path d="M-12 0a12 7 0 0 1 24 0z" fill="url(#gCeramic)"/><circle cx="0" cy="-8" r="2" fill="#3b2f28"/></g>'+flame(25,31,.7,1)+flame(39,31,.75,1)+flame(32,31,1.150)+'<g transform="translate(32 54.500) scale(.4)"><g class="flame b"><path d="M0 0C-6.500-5-4-12 0-19C4-12 6.500-5 0 0Z" fill="#ffd27a"/></g></g>';
+    return body+'<path d="M17 30.500a15 10 0 0 1 30 0z" fill="url(#gCeramic)"/><circle cx="32" cy="19.500" r="2.600" fill="#3b2f28"/>';
+  },
+  water:function(){return SH+'<path d="M9 41c0 10 9 15.500 23 15.500S55 51 55 41z" fill="url(#gCeramic)"/><ellipse cx="32" cy="41" rx="23" ry="6.200" fill="#efe8d8"/><ellipse cx="32" cy="41.500" rx="20" ry="4.700" fill="url(#gWater)"/><path d="M18 40.500c4-1.600 9-2.200 14-2.200" stroke="#fff" stroke-width="1" opacity=".5" fill="none" stroke-linecap="round"/><g class="rip" fill="none" stroke="#fff" stroke-width="1"><ellipse cx="32" cy="41.500" rx="18" ry="4"/><ellipse cx="32" cy="41.500" rx="18" ry="4"/><ellipse cx="32" cy="41.500" rx="18" ry="4"/></g>'},
+  bell:function(){return SH+'<g class="bellg"><rect x="29.300" y="9" width="5.400" height="18" rx="2.700" fill="#6b4429"/><path d="M16.500 50c1-14.500 5-23 15.500-23s14.500 8.500 15.500 23z" fill="url(#gBrass)"/><rect x="14.500" y="49" width="35" height="4.200" rx="2.100" fill="#b98a34"/><circle cx="32" cy="54.500" r="2.700" fill="#8a6424"/><path d="M23 46c.5-8 2.500-13 6-15" stroke="#fff" stroke-width="1.400" opacity=".45" fill="none" stroke-linecap="round"/></g>'},
+  fog:function(s){return SH+'<rect x="11" y="52" width="42" height="5.500" rx="2" fill="#6b4429"/><clipPath id="fc'+s.uid+'"><path d="M15 52V36a17 17 0 0 1 34 0v16z"/></clipPath><g clip-path="url(#fc'+s.uid+')">'+fogInner(s)+'</g><path d="M15 52V36a17 17 0 0 1 34 0v16z" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.75)" stroke-width="1.200"/><path d="M20 44v-8a12 12 0 0 1 5-9.500" stroke="#fff" stroke-width="1.400" opacity=".55" fill="none" stroke-linecap="round"/><circle cx="32" cy="17" r="2.600" fill="#ddd8cc"/>'},
+  chimney:function(){return SH+'<rect x="22.500" y="11" width="19" height="45" rx="4" fill="url(#gClay)"/><ellipse cx="32" cy="12.500" rx="9" ry="2.600" fill="#15110f"/><rect class="ring" x="21.500" y="20" width="21" height="4.600" rx="2.300"/><path d="M27 46v6M32 46v6M37 46v6" stroke="#15110f" stroke-width="2.200" stroke-linecap="round"/>'},
+  stone:function(){return SH+'<path d="M13 49c-3-8 2-17.500 12-19.500s23 2 25 10.500-4 13-17 14-17 1-20-5z" fill="url(#gPebble)"/><path d="M22 37c5-3 12-4 18-2" stroke="#fff" stroke-width="1.300" opacity=".5" fill="none" stroke-linecap="round"/><g fill="#6f6b61" opacity=".6"><circle cx="24" cy="46" r=".9"/><circle cx="36" cy="43" r=".8"/><circle cx="43" cy="48" r=".9"/><circle cx="30" cy="50" r=".7"/></g>'}
+};
+function fogInner(s){
+  if(!s.sense)return '';
+  var k=s.sky;
+  if(k==='marine')return '<g filter="url(#fBlur)"><g class="fogdrift"><ellipse cx="26" cy="45" rx="15" ry="7" fill="#eef0ec" opacity=".95"/><ellipse cx="40" cy="37" rx="13" ry="7" fill="#eef0ec" opacity=".85"/><ellipse cx="29" cy="28" rx="13" ry="6" fill="#eef0ec" opacity=".75"/></g></g>';
+  if(k==='rain')return '<rect x="14" y="18" width="36" height="36" fill="#6f7f8c" opacity=".4"/><path class="rainfall" d="M22 14l-3 42M30 14l-3 42M38 14l-3 42M46 14l-3 42" stroke="#e3edf1" stroke-width="1" stroke-dasharray="4 6" fill="none"/>';
+  if(k==='night')return '<rect x="14" y="18" width="36" height="36" fill="#141c33" opacity=".88"/><path d="M38 27a5 5 0 1 0 4.500 7.300a4.200 4.200 0 0 1-4.500-7.300z" fill="#f4ecd2"/><g fill="#f4ecd2"><circle cx="24" cy="30" r=".8"/><circle cx="29" cy="40" r=".7"/><circle cx="21" cy="44" r=".6"/><circle cx="43" cy="45" r=".7"/></g>';
+  return '<circle cx="39" cy="32" r="9" fill="#ffe09a" opacity=".25"/><circle cx="39" cy="32" r="4.500" fill="#ffe09a"/>';
+}
+function pieceSVG(type,s){return '<svg viewBox="0 0 64 64" aria-hidden="true">'+DRAW[type](s||{})+'</svg>'}
+
+/* ---------- audio ---------- */
+var ac=null,master=null,nbuf=null,rainSrc=null,rainGain=null;
+function audio(){
+  if(ac)return ac;
+  try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return null;
+    ac=new C();master=ac.createGain();master.gain.value=state.muted?0:.9;master.connect(ac.destination);
+    nbuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);var d=nbuf.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  }catch(e){ac=null}
+  return ac;
+}
+function wake(){var a=audio();if(a&&a.state==='suspended'){try{a.resume()}catch(e){}}ambience()}
+function tone(f,dur,o){
+  var a=audio();if(!a||state.muted)return;o=o||{};
+  try{var t=a.currentTime+(o.delay||0),os=a.createOscillator(),g=a.createGain();
+    os.type=o.type||'sine';os.frequency.setValueAtTime(f,t);if(o.to)os.frequency.exponentialRampToValueAtTime(o.to,t+dur);
+    g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(o.gain||.15,t+(o.attack||.006));g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    os.connect(g);g.connect(master);os.start(t);os.stop(t+dur+.05);
+  }catch(e){}
+}
+function noise(dur,o){
+  var a=audio();if(!a||state.muted)return;o=o||{};
+  try{var t=a.currentTime+(o.delay||0),s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();
+    s.buffer=nbuf;s.loop=true;f.type=o.type||'bandpass';f.Q.value=o.q||1;f.frequency.setValueAtTime(o.freq||1000,t);
+    if(o.to)f.frequency.exponentialRampToValueAtTime(o.to,t+dur);
+    g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(o.gain||.1,t+(o.attack||.008));g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    s.connect(f);f.connect(g);g.connect(master);s.start(t,Math.random()*.5);s.stop(t+dur+.05);
+  }catch(e){}
+}
+var sfx={
+  place:function(){tone(150,.13,{gain:.28,to:70});noise(.05,{gain:.1,freq:2200})},
+  lift:function(){tone(220,.09,{gain:.1,to:330})},
+  light:function(){noise(.4,{gain:.16,freq:3200,to:900,attack:.02});tone(420,.3,{gain:.04,to:660})},
+  snuff:function(){noise(.55,{gain:.11,freq:1700,to:280})},
+  lid:function(){tone(920,.09,{type:'triangle',gain:.13});tone(1380,.14,{gain:.06,delay:.01});noise(.5,{gain:.07,freq:1200,to:250,delay:.05})},
+  bell:function(){[[1,.16,2.6],[2.01,.09,2],[2.76,.07,1.5],[4.1,.04,1],[5.43,.025,.7]].forEach(function(p){tone(830*p[0],p[2],{gain:p[1],attack:.003})})},
+  plink:function(){tone(1250,.2,{to:520,gain:.17});tone(1900,.12,{to:900,gain:.06,delay:.08})},
+  chime:function(){tone(523.25,1,{gain:.06,attack:.02});tone(783.99,1.3,{gain:.05,delay:.16,attack:.02})},
+  air:function(){noise(1.3,{gain:.07,freq:420,to:1500,attack:.35,q:.8})},
+  cheer:function(){noise(1.8,{gain:.06,freq:800,to:1700,attack:.6,q:.6})},
+  knock:function(){tone(115,.1,{gain:.22,to:80})},
+  flip:function(){tone(180,.16,{gain:.16,to:95});noise(.08,{gain:.07,freq:900})},
+  crackle:function(){noise(.03+Math.random()*.03,{gain:.03+Math.random()*.07,freq:1800+Math.random()*3500,q:2})}
+};
+function ambience(){
+  if(!ac)return;
+  var want=state.sky==='rain'&&!state.muted;
+  try{
+    if(want&&!rainSrc){rainSrc=ac.createBufferSource();rainSrc.buffer=nbuf;rainSrc.loop=true;var f=ac.createBiquadFilter();f.type='bandpass';f.frequency.value=3600;f.Q.value=.5;
+      rainGain=ac.createGain();rainGain.gain.value=0.0001;rainGain.gain.linearRampToValueAtTime(.022,ac.currentTime+1.2);rainSrc.connect(f);f.connect(rainGain);rainGain.connect(master);rainSrc.start()}
+    else if(!want&&rainSrc){var s=rainSrc;rainSrc=null;rainGain.gain.linearRampToValueAtTime(0.0001,ac.currentTime+.6);setTimeout(function(){try{s.stop()}catch(e){}},700)}
+  }catch(e){}
+}
+function buzz(p){try{if(navigator.vibrate)navigator.vibrate(p)}catch(e){}}
+
+/* ---------- DOM build ---------- */
+var tilesEl=$('#tiles'),trayEl=$('#tray'),shelfEl=$('#shelf'),roomEl=$('#room'),root=document.documentElement;
+var placeEls=[];
+state.places.forEach(function(p,i){
+  var d=document.createElement('div');d.className='place';d.dataset.i=i;
+  d.innerHTML='<button class="tile" type="button"><span class="flipper"><svg class="stone" viewBox="0 0 64 64" preserveAspectRatio="none" aria-hidden="true"><rect width="64" height="64" rx="4" fill="#aeab9e"/><rect width="64" height="64" rx="4" filter="url(#fStone)" opacity=".55"/><rect x=".6" y=".6" width="62.800" height="62.800" rx="3.600" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.200"/><path d="M4 63.200h56" stroke="rgba(0,0,0,.35)" stroke-width="1.600"/></svg><span class="under"><i></i></span></span><span class="glow"></span><span class="piece"></span><span class="tcard"></span></button><button class="lip" type="button"><span><i></i></span></button>';
+  tilesEl.appendChild(d);placeEls.push(d);
+  var tile=d.querySelector('.tile'),lip=d.querySelector('.lip');
+  tile.addEventListener('click',function(){if(swallow){swallow=false;return}tapTile(i)});
+  tile.addEventListener('pointerdown',function(e){if(state.places[i].piece&&state.flipped!==i)startDrag(e,{from:'tile',i:i,type:state.places[i].piece})});
+  bindDrag(tile);
+  lip.addEventListener('click',function(){flip(state.flipped===i?-1:i)});
+});
+PIECES.forEach(function(p){
+  var b=document.createElement('button');b.type='button';b.dataset.type=p[0];b.setAttribute('aria-pressed','false');
+  b.innerHTML=pieceSVG(p[0],{uid:'t',sense:true,sky:'marine'})+'<span>'+p[1]+'</span>';
+  b.addEventListener('click',function(){if(swallow){swallow=false;return}select(state.sel===p[0]?null:p[0])});
+  b.addEventListener('pointerdown',function(e){startDrag(e,{from:'tray',type:p[0]})});
+  bindDrag(b);trayEl.appendChild(b);
+});
+(function(){
+  var s='',cols=['#d9a441','#f1e8d8','#3f6668','#b8402e'],k,t,x,y;
+  for(k=0;k<14;k++){t=(k+.5)/14;x=390*t;y=6+94*t*(1-t);s+='<path d="M'+(x-8).toFixed(1)+' '+y.toFixed(1)+'h16l-8 15z" fill="'+cols[k%4]+'"/>'}
+  $('#bunting').innerHTML=s;s='';
+  for(k=0;k<12;k++){t=(k+.5)/12;x=390*t;y=4+72*t*(1-t);s+='<circle cx="'+x.toFixed(1)+'" cy="'+(y+3).toFixed(1)+'" r="7" fill="#ffd27a" opacity=".28"/><circle cx="'+x.toFixed(1)+'" cy="'+(y+3).toFixed(1)+'" r="2.600" fill="#ffe7b0"/>'}
+  $('#lights').innerHTML=s;
+})();
+PRESETS.forEach(function(p){
+  var b=document.createElement('button');b.type='button';b.className='chip';b.textContent=p[0];
+  b.addEventListener('click',function(){applyLayout(p[1],p[2]);if(p[2].someone)hint('One candle is out. Write a name on the card below.');else if(p[2].lit)hint('The hearth is going. Tap it to put the lid on.');else hint('Set. Now light it. Fire is the switch.')});
+  $('#presets').appendChild(b);
+});
+Object.keys(PUCKS).forEach(function(k){
+  var b=document.createElement('button');b.type='button';b.dataset.puck=k;b.style.setProperty('--c',PUCKS[k].c);b.setAttribute('aria-pressed','false');
+  b.innerHTML='<i></i><span><b>'+PUCKS[k].name+'</b><small>'+PUCKS[k].line+'</small></span>';
+  b.addEventListener('click',function(){choosePuck(k)});
+  $('#pucks').appendChild(b);
+});
+
+/* ---------- hint + caption ---------- */
+var hintEl=$('#hint');
+function hint(t){hintEl.textContent=t}
+var lastKey='',lastId='';
+function caption(a){
+  var key=a.id+(a.active?'+':'-')+a.title+a.line;
+  $('#capT').textContent=a.title;$('#capL').textContent=a.line;
+  if(key!==lastKey){var c=$('#cap');c.classList.remove('say');void c.offsetWidth;c.classList.add('say')}
+  var idNow=a.active&&a.named?a.id:'';
+  if(idNow&&idNow!==lastId&&ready){sfx.chime();buzz([12,40,12]);if(a.id==='game')setTimeout(sfx.cheer,350)}
+  lastId=idNow;lastKey=key;
+}
+
+/* ---------- state helpers ---------- */
+function senses(p){return !NEED[p.piece]||p.puck===NEED[p.piece]}
+function types(){return state.places.map(function(p){return p.piece||''})}
+function litCount(){return state.places.filter(function(p){return p.lit}).length}
+function chimneyIdx(){for(var i=0;i<5;i++){var p=state.places[i];if(p.piece==='chimney'&&senses(p))return i}return -1}
+
+function renderTile(i){
+  var p=state.places[i],el=placeEls[i],holder=el.querySelector('.piece');
+  holder.className='piece'+(p.lit?' lit':'');
+  holder.innerHTML=p.piece?pieceSVG(p.piece,{lit:p.lit,uid:i,sense:senses(p),sky:state.sky}):'';
+  el.classList.toggle('lit',!!p.lit);el.classList.toggle('flipped',state.flipped===i);el.dataset.puck=p.puck;
+  var onlyCandle=soloCandle();
+  el.querySelector('.tcard').textContent=(onlyCandle===i&&state.card)?'For '+state.card:'';
+  el.querySelector('.tile').setAttribute('aria-label','Stone '+(i+1)+': '+(p.piece?LABEL[p.piece].toLowerCase()+((p.piece==='candle'||p.piece==='hearth')?(p.lit?', lit':', not lit'):''):'empty'));
+  el.querySelector('.lip').setAttribute('aria-label','Look under stone '+(i+1)+'. Puck: '+PUCKS[p.puck].name);
+}
+function renderAll(){for(var i=0;i<5;i++)renderTile(i);update()}
+function soloCandle(){var t=types(),f=t.filter(Boolean);return (f.length===1&&f[0]==='candle')?t.indexOf('candle'):-1}
+
+function fitPuck(i){
+  var p=state.places[i],need=NEED[p.piece];
+  if(!need||p.puck===need)return '';
+  if(p.auto){p.puck=need;return 'Fitted the '+PUCKS[need].name+' puck under that stone. Tap its front edge to look.'}
+  return 'This stone has the '+PUCKS[p.puck].name+' puck, so the '+LABEL[p.piece].toLowerCase()+' is just nice to look at. Tap the front edge to swap.';
+}
+function placeAt(i,type){
+  var p=state.places[i];p.piece=type;p.lit=false;p.wasLit=false;
+  var msg=fitPuck(i);sfx.place();buzz(8);select(null);renderAll();
+  if(msg)hint(msg);
+  else if(type==='candle'||type==='hearth')hint('Tap the '+type+' to light it.');
+  else if(type==='water')hint('Tap the water.');
+  else if(type==='stone')hint('A stone on a stone. Tap it if you must.');
+  else hint('Tap it.');
+}
+function removeAt(i,quiet){
+  var p=state.places[i];if(!p.piece)return;
+  var was=p.lit;p.piece=null;p.lit=false;p.wasLit=false;
+  if(was)smoke(i,true);sfx.lift();renderAll();if(!quiet)hint('Back in the tray.');
+}
+function moveTo(a,b){
+  var A=state.places[a],B=state.places[b],t={piece:A.piece,lit:A.lit,wasLit:A.wasLit};
+  A.piece=B.piece;A.lit=B.lit;A.wasLit=B.wasLit;B.piece=t.piece;B.lit=t.lit;B.wasLit=t.wasLit;
+  var m1=fitPuck(b),m2=A.piece?fitPuck(a):'';sfx.place();buzz(8);renderAll();
+  if(m1||m2)hint(m1||m2);
+}
+function select(type){
+  state.sel=type;
+  Array.prototype.forEach.call(trayEl.children,function(b){b.setAttribute('aria-pressed',b.dataset.type===type?'true':'false')});
+  shelfEl.classList.toggle('await',!!type);
+  if(type)hint('Now tap a stone for the '+LABEL[type].toLowerCase()+'.');
+}
+
+var stoneLines=["It's a stone. It's doing great.","Still a stone.","The stone has no settings. That is the feature."],stoneN=0,firstLight=true;
+function tapTile(i){
+  var p=state.places[i];
+  if(state.flipped===i){flip(-1);return}
+  if(state.sel){placeAt(i,state.sel);return}
+  if(!p.piece){hint('Pick a piece from the tray, then tap a stone. Or drag it up.');return}
+  var holder=placeEls[i].querySelector('.piece');
+  if(p.piece==='candle'||p.piece==='hearth'){
+    p.lit=!p.lit;
+    if(p.lit){p.wasLit=true;sfx.light();buzz(15);smoke(i,false);
+      if(firstLight){firstLight=false;hint('The lamp steps back. Tap again to snuff, or add more pieces.')}
+      else hint(p.piece==='hearth'?'Lid off, pallets lit.':'Lit.')}
+    else{if(p.piece==='hearth')sfx.lid();else sfx.snuff();buzz(8);smoke(i,true);
+      hint(chimneyIdx()>=0?'The chimney takes the smoke. Its ring clears when the air does.':(p.piece==='hearth'?'Lid on.':'Snuffed. A little smoke hangs about. A chimney would take it.'))}
+    renderAll();return;
+  }
+  if(p.piece==='bell'){
+    sfx.bell();buzz([10,30,10]);retrigger(holder,'ringing');
+    if(senses(p)){state.bellAt=Date.now();heard();tick();hint('The stone felt that. The room marks a start.')}
+    else hint('It rang, but this stone cannot feel a ring. Tap its front edge and fit the Sound puck.');
+    update();return;
+  }
+  if(p.piece==='water'){sfx.plink();buzz(6);retrigger(holder,'rippling');
+    if(p.puck==='sound'){heard();hint('One drip. The stone felt it.')}else hint('Just water. It ripples, then it stops.');return}
+  if(p.piece==='fog'){sfx.knock();
+    hint(senses(p)?{clear:'Clear outside, clear inside.',marine:'Marine layer is in. So is the dome.',rain:'Raining in there too.',night:'Night in the dome.'}[state.sky]:'This stone cannot read the sky. Tap its front edge and fit the Weather puck.');return}
+  if(p.piece==='chimney'){
+    if(senses(p)){sfx.air();state.airUntil=Date.now()+4200;refreshAir();setTimeout(refreshAir,4300);hint('Drawing. Amber means it is working. It clears on its own.')}
+    else{sfx.knock();hint('This stone cannot feel air. Tap its front edge and fit the Air puck.')}
+    return;
+  }
+  sfx.knock();buzz(5);hint(stoneLines[stoneN++%stoneLines.length]);
+}
+function retrigger(el,c){el.classList.remove(c);void el.offsetWidth;el.classList.add(c)}
+var heardT=0;
+function heard(){roomEl.classList.add('heard');clearTimeout(heardT);heardT=setTimeout(function(){roomEl.classList.remove('heard')},1800)}
+
+/* ---------- air ---------- */
+function tileXY(i){var t=placeEls[i];return {x:t.offsetLeft+t.offsetWidth/2,y:t.offsetTop+t.offsetWidth*.18}}
+function puff(from,to){
+  if(reduce.matches)return;
+  var layer=$('#air'),a=tileXY(from),el=document.createElement('div');el.className='puff';
+  el.style.left=(a.x-9)+'px';el.style.top=(a.y-9)+'px';layer.appendChild(el);
+  var kf,dur;
+  if(to>=0&&to!==from){var b=tileXY(to),dx=b.x-a.x;
+    kf=[{transform:'translate(0,0) scale(.5)',opacity:0},{transform:'translate('+(dx*.35)+'px,-26px) scale(1.2)',opacity:.8,offset:.35},{transform:'translate('+dx+'px,-12px) scale(.3)',opacity:0}];dur=1700}
+  else{kf=[{transform:'translate(0,0) scale(.5)',opacity:0},{transform:'translate(4px,-30px) scale(1.4)',opacity:.7,offset:.4},{transform:'translate(-5px,-74px) scale(2.2)',opacity:0}];dur=2300}
+  try{var an=el.animate(kf,{duration:dur,easing:'ease-in-out'});an.onfinish=function(){el.remove()}}catch(e){el.remove()}
+}
+function smoke(i,big){
+  var c=chimneyIdx();
+  if(c>=0){puff(i,c);if(big)setTimeout(function(){puff(i,c)},260);state.airUntil=Date.now()+4200;setTimeout(refreshAir,4300);if(big)setTimeout(sfx.air,300)}
+  else if(big){puff(i,-1);setTimeout(function(){puff(i,-1)},300);state.hazeUntil=Date.now()+3200;setTimeout(update,3300)}
+  refreshAir();
+}
+function refreshAir(){
+  var busy=litCount()>0||Date.now()<state.airUntil;
+  state.places.forEach(function(p,i){
+    if(p.piece!=='chimney')return;var h=placeEls[i].querySelector('.piece');
+    h.classList.toggle('dull',!senses(p));h.classList.toggle('amber',senses(p)&&busy);
+  });
+}
+setInterval(function(){
+  var c=chimneyIdx();if(c<0||document.hidden)return;
+  var lit=[];state.places.forEach(function(p,i){if(p.lit)lit.push(i)});
+  if(lit.length)puff(lit[Math.floor(Math.random()*lit.length)],c);
+},2400);
+setInterval(function(){
+  if(document.hidden)return;
+  if(state.places.some(function(p){return p.piece==='hearth'&&p.lit})&&Math.random()<.55)sfx.crackle();
+},170);
+
+/* ---------- under the stone ---------- */
+function flip(i){
+  var prev=state.flipped;state.flipped=i;
+  if(prev>=0)renderTile(prev);
+  var panel=$('#under');
+  if(i<0){panel.hidden=true;if(prev>=0)sfx.flip();return}
+  select(null);sfx.flip();buzz(10);renderTile(i);panel.hidden=false;
+  $('#underT').textContent='Under stone '+(i+1);syncPucks();
+  hint(state.places[i].lit?'We held the flame for you. Pick a puck.':'Pick a puck. It changes what this stone can sense.');
+}
+function syncPucks(){
+  var p=state.places[state.flipped];if(!p)return;
+  Array.prototype.forEach.call($('#pucks').children,function(b){b.setAttribute('aria-pressed',b.dataset.puck===p.puck?'true':'false')});
+  $('#liftOff').hidden=!p.piece;
+}
+function choosePuck(k){
+  var i=state.flipped,p=state.places[i];if(!p)return;
+  p.puck=k;p.auto=false;sfx.place();buzz(8);syncPucks();renderAll();
+  var need=NEED[p.piece];
+  hint(need&&need!==k?PUCKS[k].name+' puck in. The '+LABEL[p.piece].toLowerCase()+' on top needs '+PUCKS[need].name+' to do its thing.':PUCKS[k].name+' puck in. '+PUCKS[k].line);
+}
+$('#flipBack').addEventListener('click',function(){flip(-1);hint('Stone down. Carry on.')});
+$('#liftOff').addEventListener('click',function(){var i=state.flipped;removeAt(i,true);syncPucks();hint('Piece is back in the tray.')});
+
+/* ---------- arrangements ---------- */
+function detect(){
+  var ps=state.places,t=types(),f=t.filter(Boolean),n=litCount();
+  var has=function(x){return t.indexOf(x)>=0},only=function(list){return f.every(function(x){return list.indexOf(x)>=0})};
+  var a=null,h;
+  if(has('hearth')&&has('candle')&&has('bell')&&only(['hearth','candle','bell','stone'])){
+    h=ps[t.indexOf('hearth')];
+    a=h.lit?{id:'game',active:true,title:'Game day',line:state.bellAt?'TV stays off. The speaker has it, and the bell called the start.':'TV stays off. The speaker has it. Ring the bell for the start.'}
+           :{id:'game',title:'Game day, almost',line:'All three are out. Light the hearth to call it.'};
+  }else if(has('water')&&has('hearth')&&only(['water','hearth','stone'])){
+    h=ps[t.indexOf('hearth')];
+    a=h.lit?{id:'close',title:'Close the day, almost',line:'Enjoy the fire. When you are done, put the lid on.'}
+      :h.wasLit?{id:'close',active:true,title:'Close the day',line:'Lid on, lamp off, blind down. Go to bed.'}
+      :{id:'close',title:'Close the day, almost',line:'Light the hearth first. The lid going on is the switch.'};
+  }else if(t[0]==='candle'&&t[2]==='candle'&&t[4]==='candle'&&['candle','hearth'].indexOf(t[1])<0&&['candle','hearth'].indexOf(t[3])<0){
+    var k=[0,2,4].filter(function(i){return ps[i].lit}).length;
+    a=k===3?{id:'company',active:true,title:"Company's coming",line:'Three lit, glasses out, lights up. Hide the laundry.'}
+           :{id:'company',title:"Company's coming, almost",line:k+' of 3 lit. Keep going.'};
+  }else if(f.length===1&&f[0]==='candle'&&state.card){
+    a=ps[t.indexOf('candle')].lit?{id:'someone',active:true,title:'For someone',line:'For '+state.card+'. Nothing else needed.'}
+      :{id:'someone',title:'For someone, almost',line:'The card says '+state.card+'. Light it when you are ready.'};
+  }else if(f.length===1&&t[2]==='candle'){
+    a=ps[2].lit?{id:'morning',active:true,title:'Morning',line:state.sky==='night'?'Morning, technically. Lamp off, coffee on.':'Lamp off. The window and one flame do the work.'}
+      :{id:'morning',title:'Morning, almost',line:'One candle, centre stone. Light it.'};
+  }else if(f.length===1&&f[0]==='candle'){
+    a={id:'one',title:n?'Flame on':'One candle',line:'Centre stone makes it Morning. A card makes it for someone.',plain:true};
+  }else if(has('fog')&&has('chimney')&&!has('candle')&&!has('hearth')){
+    a={id:'weather',active:true,title:'Weather watch',line:'The dome copies the sky. The chimney minds the air.',plain:true};
+  }else if(f.length&&only(['stone'])){
+    a={id:'still',active:true,title:'Still life',line:f.length>1?'Stones on stones. Very calm.':'A stone on a stone. Very calm.',plain:true};
+  }
+  if(!a){
+    a=!f.length?{id:'empty',title:'The shelf',line:'Five stones, nothing on them. The lamp carries on.',plain:true}
+      :n?{id:'flame',title:'Flame on',line:(n>1?n+' flames have':'One flame has')+' the room. The lamp steps back.',plain:true}
+      :{id:'none',title:'No name yet',line:'Light something, or save this layout as your own.',plain:true};
+  }
+  a.named=!a.plain;
+  var sig=t.join(','),mine=null;
+  state.scenes.forEach(function(s){if(s.pieces.join(',')===sig)mine=s});
+  if(mine&&f.length){
+    if(a.plain){a={id:'mine:'+mine.name,title:mine.name,line:n?'Yours. Lit and running.':'Your layout. Light something to start it.',active:n>0,named:true,room:''}}
+    else a.title=mine.name+(a.active?'':', almost');
+  }
+  return a;
+}
+
+function update(){
+  var a=detect(),n=litCount(),sky=state.sky;
+  var day={clear:1,marine:.72,rain:.45,night:.04}[sky];
+  var lamp=n?[0,.3,.18,.1,.08,.06][n]:1,extra=0,shaft=day*(sky==='clear'?.5:.22);
+  var sc=a.active&&!a.plain&&a.id.indexOf('mine:')<0?a.id:'';
+  if(sc==='morning'){lamp=0;shaft=sky==='night'?.1:Math.max(shaft*1.7,.3)}
+  if(sc==='someone'){lamp=.05;extra=.12}
+  if(sc==='game'){lamp=.95}
+  if(sc==='company'){lamp=.55}
+  if(sc==='close'){lamp=0;extra=.3;shaft*=.1}
+  var amb=clamp(day*.6+lamp*.4,0,1),dark=clamp(.8*(1-amb)+extra,0,.88);
+  var fire=n?clamp((.4+.5*(1-day))*(.6+.2*n),0,1):0;
+  var fx=0;if(n){var sum=0;state.places.forEach(function(p,i){if(p.lit)sum+=(i+.5)/5*390-195});fx=sum/n}
+  var st=root.style;
+  st.setProperty('--dark',dark.toFixed(3));st.setProperty('--lamp',lamp.toFixed(3));
+  st.setProperty('--lampglow',(lamp*(.3+.6*(1-day))).toFixed(3));st.setProperty('--fire',fire.toFixed(3));
+  st.setProperty('--shaft',shaft.toFixed(3));st.setProperty('--fx',fx.toFixed(1));
+  st.setProperty('--haze',Date.now()<state.hazeUntil?'.14':'0');
+  roomEl.dataset.scene=sc;roomEl.dataset.sky=sky;
+  $('#roomCard').textContent=state.card?'For '+state.card:'';
+  var solo=soloCandle();$('#cardRow').hidden=solo<0;
+  if(solo<0&&state.card){state.card='';$('#cardName').value=''}
+  placeEls.forEach(function(el,i){el.querySelector('.tcard').textContent=(solo===i&&state.card)?'For '+state.card:''});
+  refreshAir();caption(a);tick();
+}
+function tick(){
+  var el=$('#since');
+  if(!state.bellAt||!state.places.some(function(p){return p.piece==='bell'})){state.bellAt=0;el.hidden=true;return}
+  var s=Math.floor((Date.now()-state.bellAt)/1000);el.hidden=false;
+  el.textContent='Since the bell '+Math.floor(s/60)+':'+('0'+(s%60)).slice(-2);
+}
+setInterval(tick,1000);
+
+/* ---------- sky, mute, card ---------- */
+function setSky(k,say){
+  state.sky=k;
+  Array.prototype.forEach.call($('#sky').children,function(b){b.setAttribute('aria-pressed',b.dataset.sky===k?'true':'false')});
+  ambience();renderAll();
+  if(say){var fogOn=state.places.some(function(p){return p.piece==='fog'&&senses(p)});
+    hint({clear:'Clear out.',marine:'Marine layer rolls in.',rain:'Rain.',night:'Night.'}[k]+(fogOn?' The dome follows.':' Put a fog dome out and it will follow.'))}
+}
+$('#sky').addEventListener('click',function(e){var b=e.target.closest('button');if(b){setSky(b.dataset.sky,true);tone(660,.12,{gain:.05})}});
+$('#mute').addEventListener('click',function(){
+  state.muted=!state.muted;this.setAttribute('aria-pressed',state.muted?'true':'false');
+  this.setAttribute('aria-label',state.muted?'Turn sound on':'Mute sound');$('#muteLab').textContent=state.muted?'Sound off':'Sound on';
+  if(master){try{master.gain.value=state.muted?0:.9}catch(e){}}ambience();if(!state.muted)tone(660,.15,{gain:.07});
+});
+$('#cardName').addEventListener('input',function(){state.card=this.value.replace(/\s+/g,' ').trim();update()});
+
+/* ---------- layouts and saving ---------- */
+function applyLayout(pieces,o){
+  o=o||{};if(state.flipped>=0)flip(-1);select(null);
+  state.card=o.card||'';$('#cardName').value=state.card;state.bellAt=0;
+  state.places.forEach(function(p,i){
+    p.piece=pieces[i]||null;p.lit=!!(o.lit&&o.lit.indexOf(i)>=0);p.wasLit=p.lit;
+    if(o.pucks&&PUCKS[o.pucks[i]]){p.puck=o.pucks[i]}
+    if(p.piece&&NEED[p.piece]&&p.puck!==NEED[p.piece]&&(p.auto||!o.pucks)){p.puck=NEED[p.piece]}
+  });
+  sfx.place();buzz(10);
+  if(o.sky)setSky(o.sky,false);else renderAll();
+}
+function renderMine(){
+  var box=$('#mine');box.innerHTML='';$('#mineEmpty').hidden=state.scenes.length>0;
+  state.scenes.forEach(function(s,idx){
+    var c=document.createElement('span');c.className='chip';
+    var b=document.createElement('button');b.type='button';b.textContent=s.name;
+    b.addEventListener('click',function(){applyLayout(s.pieces,{pucks:s.pucks,sky:s.sky,card:s.card});hint(s.name+' is back on the shelf. Light it.')});
+    var x=document.createElement('button');x.type='button';x.className='x';x.textContent='×';x.setAttribute('aria-label','Delete '+s.name);
+    x.addEventListener('click',function(){state.scenes.splice(idx,1);storeScenes();renderMine();update();hint('Deleted.')});
+    c.appendChild(b);c.appendChild(x);box.appendChild(c);
+  });
+}
+$('#saveForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var inp=$('#sceneName'),name=inp.value.replace(/\s+/g,' ').trim(),t=types();
+  if(!t.some(Boolean)){hint('Put something on a stone first.');return}
+  if(!name){hint('Give it a name first.');inp.focus();return}
+  var sig=t.join(',');
+  state.scenes=state.scenes.filter(function(s){return s.pieces.join(',')!==sig&&s.name!==name});
+  state.scenes.push({name:name,pieces:t,pucks:state.places.map(function(p){return p.puck}),sky:state.sky,card:state.card});
+  storeScenes();renderMine();inp.value='';inp.blur();sfx.chime();buzz(12);update();
+  hint('Saved as '+name+'. Set it out like this again and the room will know.');
+});
+
+/* ---------- drag ---------- */
+var drag=null,swallow=false,ghost=null;
+function startDrag(e,src){
+  if(e.button!==undefined&&e.button!==0)return;
+  drag={src:src,id:e.pointerId,x0:e.clientX,y0:e.clientY,active:false,el:e.currentTarget,touch:e.pointerType!=='mouse'};
+  try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){}
+}
+function dropIndex(x,y){
+  var r=tilesEl.getBoundingClientRect();
+  if(y<r.top-44||y>r.bottom+24||x<r.left-24||x>r.right+24)return -1;
+  return clamp(Math.floor((x-r.left)/r.width*5),0,4);
+}
+function markOver(i){placeEls.forEach(function(el,k){el.querySelector('.tile').classList.toggle('over',k===i)})}
+function bindDrag(el){
+  el.addEventListener('pointermove',function(e){
+    if(!drag||e.pointerId!==drag.id)return;
+    var dx=e.clientX-drag.x0,dy=e.clientY-drag.y0;
+    if(!drag.active){
+      if(dx*dx+dy*dy<64)return;
+      drag.active=true;select(null);
+      ghost=document.createElement('div');ghost.className='ghost';
+      var lit=drag.src.from==='tile'&&state.places[drag.src.i].lit;
+      ghost.innerHTML=pieceSVG(drag.src.type,{lit:lit,uid:'g',sense:true,sky:state.sky});document.body.appendChild(ghost);
+      if(drag.src.from==='tile')placeEls[drag.src.i].querySelector('.piece').classList.add('lifting');
+    }
+    var gy=e.clientY-(drag.touch?40:0);
+    ghost.style.transform='translate('+(e.clientX-38)+'px,'+(gy-46)+'px)';
+    markOver(dropIndex(e.clientX,gy));
+  });
+  var end=function(e,cancel){
+    if(!drag||e.pointerId!==drag.id)return;
+    var d=drag;drag=null;
+    try{d.el.releasePointerCapture(e.pointerId)}catch(_){}
+    if(!d.active)return;
+    swallow=true;setTimeout(function(){swallow=false},350);
+    if(ghost){ghost.remove();ghost=null}markOver(-1);
+    var t=cancel?-2:dropIndex(e.clientX,e.clientY-(d.touch?40:0));
+    if(d.src.from==='tray'){if(t>=0)placeAt(t,d.src.type);else if(t===-1)hint('Missed the shelf. Drop it on a stone.')}
+    else{if(t===-1)removeAt(d.src.i);else if(t>=0&&t!==d.src.i)moveTo(d.src.i,t);else renderTile(d.src.i)}
+  };
+  el.addEventListener('pointerup',function(e){end(e,false)});
+  el.addEventListener('pointercancel',function(e){end(e,true)});
+}
+document.addEventListener('pointerdown',wake,{passive:true});
+document.addEventListener('keydown',wake);
+
+/* ---------- start ---------- */
+var ready=false;
+state.scenes=loadScenes().filter(function(s){return s&&typeof s.name==='string'&&Array.isArray(s.pieces)&&s.pieces.length===5});
+renderMine();
+state.places[2].piece='candle';
+setSky(state.sky,false);
+hint('Tap the candle to light it.');
+ready=true;
+window.__shelf={state:state,detect:detect};
+})();
+</script>
+<script>
+/* PointCast: remember that this window was opened, so it is lit back on the street. Stays in this browser. */
+try{var k='bb-street-v1',a=JSON.parse(localStorage.getItem(k)||'[]');if(!Array.isArray(a))a=[];if(a.indexOf('the-shelf')<0){a.push('the-shelf');localStorage.setItem(k,JSON.stringify(a))}}catch(e){}
+</script>
+</body>
+</html>

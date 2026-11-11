@@ -4,6 +4,20 @@
 
 ---
 
+## Baby Bonfire: an open exploration (2026-11-11)
+
+`/baby-bonfire/`, `/baby-bonfire.json`, Block 0782 (0781 is held by #1618). Mike in chat on 2026-11-11: publish it on PointCast as an open-source exploration, with trade between makers and networked objects each owner can switch on or off. Concept sketches; nothing is for sale; no licence chosen.
+
+- [x] (CC) Hub street, thirteen scene pages, open spec v0, open mesh notes, barter board (static v0, example cards), make a piece; all static under `public/baby-bonfire/` — `done`
+- [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/baby-bonfire.test.mjs` — `done`
+- [ ] (X) Review the open spec and mesh wording, the fire safety list and the content rules in the test — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
+- [ ] (MH) Choose a licence for the Baby Bonfire files and designs — `waiting-on-mh`
+- [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
+- [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
+
+---
+
 ## Cartography: the Atlas (2026-11-08)
 
 One open map of what PointCast and elsegundo.xyz can place, CC0, every record sourced. `/cartography/map`, `/atlas.json`, `/atlas/index.json`.
