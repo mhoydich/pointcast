@@ -38,13 +38,56 @@ test('every town has a data file, a page and a ping that agree', () => {
     assert.equal(p.ping, '0.1');
     assert.equal(p.signals.find((s) => s.kind === 'jobs_posted_30d').value, r.postings);
     assert.equal(p.needs.length, t.reads.length);
+    assert.equal(t.review.state, 'unread', `${r.slug} has not been read by a resident`);
+    assert.equal(p.backing, `https://pointcast.xyz/api/poll?slug=${lc.backSlug(r.slug)}`);
+    const ids = t.reads.map((x) => x.id);
+    assert.equal(new Set(ids).size, ids.length, `${r.slug} step ids are unique`);
+    for (const id of ids) assert.match(id, /^[a-z0-9][a-z0-9-]{0,30}$/, `${r.slug} step id ${id}`);
+    assert.deepEqual(p.needs.map((x) => x.id), ids);
     assert.equal(p.neighbors.length, 3);
     for (const n of p.neighbors) assert.ok(region.towns.some((x) => x.slug === n), `${r.slug} neighbor ${n}`);
   }
 });
 
-test('the network file lists every town once', () => {
-  assert.deepEqual(network.towns.map((t) => t.slug).sort(), region.towns.map((t) => t.slug).sort());
+test('the network maps the home region and lists far towns apart', () => {
+  const { home, far } = pk.split(network);
+  assert.deepEqual(home.map((t) => t.slug).sort(), region.towns.map((t) => t.slug).sort());
+  assert.deepEqual(far.map((t) => t.slug), region.elsewhere.map((t) => t.slug));
+  assert.equal(new Set(network.towns.map((t) => t.slug)).size, network.towns.length);
+});
+
+test('Medway is a draft: marked, unread, kept out of the South Bay totals and out of search', () => {
+  const t = json('local-census/towns/medway.json');
+  const p = json('local-census/medway/ping.json');
+  assert.equal(t.status, 'draft');
+  assert.equal(p.status, 'draft');
+  assert.equal(p.review, 'unread');
+  assert.deepEqual(p.neighbors, []);
+  assert.ok(!region.towns.some((x) => x.slug === 'medway'));
+  assert.ok(t.postings.note.includes('no filter for state'));
+  assert.equal(lc.per100(t.postings.total, t.official.find((o) => o.label === 'Households').value), region.elsewhere[0].per100);
+  for (const rd of t.reads) assert.equal(rd.confidence, 'low');
+  assert.match(readFileSync(at('local-census/medway/index.html'), 'utf8'), /name="robots" content="noindex"/);
+  assert.doesNotMatch(readFileSync(at('local-census/carson/index.html'), 'utf8'), /noindex/);
+});
+
+test('backing and ping-back helpers build what the server accepts', () => {
+  for (const s of [lc.backSlug('manhattan-beach'), lc.hereSlug('manhattan-beach')]) assert.match(s, /^[a-z0-9][a-z0-9-]{0,60}$/);
+  assert.deepEqual(lc.vote('census-carson', 'town-of-owners', 'now'), { type: 'pc-poll-v1', slug: 'census-carson', optionId: 'town-of-owners', timestamp: 'now' });
+  for (const [id] of lc.HERE) assert.match(id, /^[a-z0-9][a-z0-9-]{0,30}$/);
+  assert.equal(lc.count({ a: 3 }, 'a'), 3);
+  assert.equal(lc.count({ a: 'x' }, 'a'), 0);
+  assert.equal(lc.count(undefined, 'a'), 0);
+  assert.equal(lc.backLine(0), 'No one has backed this step yet');
+  assert.equal(lc.backLine(1), '1 person would start here');
+  assert.equal(lc.backLine(12), '12 people would start here');
+  assert.equal(lc.note('Medway', '   ', '', '/x/'), null);
+  const n = lc.note('Medway', 'x'.repeat(3000), 'c'.repeat(300), '/local-census/medway/');
+  assert.equal(n.message.length, 2000);
+  assert.ok(n.message.startsWith('Census note, Medway: '));
+  assert.equal(n.contact.length, 200);
+  assert.equal(lc.fmt(5.3, '+%'), '+5.3%');
+  assert.equal(lc.fmt(-5.1, '+%'), '-5.1%');
 });
 
 test('map helpers: dots stay in the box, links are not doubled', () => {
