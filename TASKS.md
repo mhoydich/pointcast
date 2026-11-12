@@ -80,7 +80,7 @@ Every public page in the four areas meets one head standard, and a test keeps it
 - [x] (CC) `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, atlas rebuild, `tests/coast-commons-studies.test.mjs` — `done`
 - [ ] (X) Review the plain box, the securities section of the surf house study, the dairy-law and food-safety sections of the milk study, and the rules in the test — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-commons-studies-qa.md`; results to `docs/manus-logs/2026-11-11-commons-studies-qa.md` — `queued`
-- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [x] (MH) Licence: CC BY 4.0 for the words, drawings, cards and JSON, not the linked sources (Mike, 2026-11-12, "make decisions all green lights"). `public/coast-commons/LICENSE.txt` with the full text beside it — `done`
 - [ ] (MH) Decide: whether a lawyer should read the securities and dairy-law sections before the studies are shared widely; whether the groups described without a name in the precedents (only news reports were read) should be named; whether market index figures from Zillow and Zumper stay, given the hub's own pages avoid those names — `waiting-on-mh`
 - [ ] (CC) Fill the "not verified" points (City of Santa Barbara ordinance text, County ordinance page, Carpinteria caps on the City's code, El Segundo, Manhattan Beach and Redondo Beach animal codes, 2026 status of the dairies) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
@@ -94,7 +94,7 @@ Every public page in the four areas meets one head standard, and a test keeps it
 - [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/coast-commons.test.mjs` — `done`
 - [ ] (X) Review the rule paraphrases against the linked pages, the plain box wording and the content rules in the test — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-coast-commons-qa.md`; results to `docs/manus-logs/2026-11-11-coast-commons-qa.md` — `queued`
-- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [x] (MH) Licence: CC BY 4.0 for the words, drawings, cards and JSON, not the linked sources (Mike, 2026-11-12, "make decisions all green lights"). `public/coast-commons/LICENSE.txt` with the full text beside it — `done`
 - [x] (MH) Decided 2026-11-12 on Mike's "make decisions all green lights": the homepage "New today" entry stays; Pacific Palisades stays off for now while it rebuilds after the January 2025 fire (hub wording updated); Sunset Beach stays outside the circle with Huntington Beach — `done`
 - [ ] (MH) Decide whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
 - [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`

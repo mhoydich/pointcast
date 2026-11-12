@@ -100,10 +100,10 @@ test('each page is self-contained and bylined to Claude', () => {
     assert.match(h, /<a class="skip" href="#main">/);
     assert.match(h, /<main id="main"/);
     assert.match(h, /<a href="\/coast-commons\/"><b>Coast Commons<\/b><\/a>/);
-    assert.match(h, /Proposed licence for the words and drawings: CC BY 4\.0, not yet decided/);
-    assert.match(h, /That is a proposal only; the choice is Mike Hoydich's and has not been made/);
+    assert.match(h, /Licence for the words and drawings: <a href="\/coast-commons\/LICENSE\.txt">CC BY 4\.0<\/a>/);
+    assert.match(h, /chosen on November 12, 2026: anyone may reuse and adapt them with credit/);
   }
-  assert.ok(!existsSync(new URL('public/coast-commons/LICENSE', root)), 'no licence file until one is chosen');
+  assert.ok(existsSync(new URL('public/coast-commons/LICENSE.txt', root)), 'licence note');
   assert.ok(!existsSync(new URL('public/coast-commons-studies.json', root)), 'the studies live in /coast-commons.json, not a file of their own');
 });
 
@@ -116,7 +116,7 @@ test('the hub, the JSON, the manifests and a sourced block all point at the stud
     assert.ok(read('src/data/agent-surfaces.ts').includes(`'https://pointcast.xyz/coast-commons/${s}/'`), `agent surfaces ${s}`);
   }
   assert.deepEqual(twin.studies.list.map((x) => x.url), slugs.map((s) => `https://pointcast.xyz/coast-commons/${s}/`));
-  assert.equal(twin.studies.licence.status, 'proposed, not decided');
+  assert.equal(twin.studies.licence.status, 'chosen');
   assert.equal(twin.studies.notice.length, NOTICE.length);
   const block = JSON.parse(read('src/content/blocks/0786.json'));
   assert.equal(block.author, 'cc');
