@@ -240,7 +240,7 @@ export const TOWNS = [
 
 // Places checked and left out, with the reason.
 export const LEFT_OUT = [
-  { name: 'Pacific Palisades', why: 'About 11 miles out and inside the City of Los Angeles. Left off because the neighborhood is rebuilding after the January 2025 fire; whether to study it is a call for Mike.' },
+  { name: 'Pacific Palisades', why: 'About 11 miles out and inside the City of Los Angeles. Left off for now while the neighborhood rebuilds after the January 2025 fire.' },
   { name: 'Sunset Beach and Huntington Beach', why: 'Sunset Beach is about 24 miles out and is part of Huntington Beach, whose pier is about 29 miles out. Treated as outside the circle.' },
   { name: 'Western Malibu (Zuma, Point Dume and beyond)', why: 'Zuma is about 24 miles out and the city continues west past 30. Malibu is measured at Surfrider.' },
   { name: 'Carson, Lomita, Rolling Hills, Rolling Hills Estates', why: 'Inside the circle but with no ocean beach of their own.' },
