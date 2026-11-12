@@ -43,11 +43,11 @@ Every public page in the four areas meets one head standard, and a test keeps it
 - [x] (CC) Baby Bonfire: The Room (`/baby-bonfire/room/`) and On Your Table (`/baby-bonfire/ar/`, model-viewer 4.4.0 vendored); hub section now "Three screens, for now"; JSON twin `screens`; the fireplace model is generated (Hunyuan3D) and says so — `done`
 - [x] (CC) Independent review of the kit by a second model before this was opened: three blockers found (script URLs from a manifest ran; gaze dwell could move the viewer or follow a link; a third input source reached nothing), all fixed, each with a test that fails when the fix is reverted — `done`
 - [x] (CC) `tests/spatial-geo.test.mjs`, `tests/spatial-safe.test.mjs`, `tests/spatial-pages.test.mjs`; `scripts/spatial/e2e.py` with `serve.py` and a hostile-manifest fixture (Playwright and an emulated headset; not run in CI); sitemap-discovery, `llms.txt`, `llms-full.txt`; cache rules in `public/_headers` for the vendored libraries and the models — `done`
-- [ ] (X) Review `public/spatial/spatial.mjs` and `safe.mjs` (the URL rule, session handling, input), the `_headers` rules, and the rules in the tests — `queued`
+- [x] (CC) Review `public/spatial/spatial.mjs` and `safe.mjs` (the URL rule, session handling, input) and the tests, by a second model standing in for Codex (not connected): no blockers, nine fixes applied; the `_headers` rules were dropped (Pages honours 100 rules) — `done`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-spatial-qa.md`, a headset first if one is to hand; results to `docs/manus-logs/2026-11-11-spatial-qa.md`. Getting hardware needs Mike's approval — `queued`
 - [ ] (MH) Decide: whether `/town` should link to the 3D town; whether the town's portal list should include other sites once they have 3D pages; whether the generated fireplace model is close enough to what you picture to keep showing — `waiting-on-mh`
 - [ ] (CC) After a real headset run: frame rate and comfort notes, panel and label sharpness, whether a session carries from the town into the room, AR on iPhone and Android — `queued`
-- [ ] (MH) Merge and deploy — `waiting-on-mh`
+- [x] (MH) Merge and deploy: approved by Mike on 2026-11-12 ("All three"), merged by Duet — `done`
 
 ## Baby Bonfire: third pass (2026-11-11)
 
