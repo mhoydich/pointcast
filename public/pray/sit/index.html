@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="strict-origin">
+<title>Sit a minute · Pray</title>
+<meta name="description" content="One minute. A bell to begin, six slow breaths, a bell to end.">
+<meta property="og:title" content="Sit a minute">
+<meta property="og:description" content="One minute. A bell to begin, six slow breaths, a bell to end.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://pointcast.xyz/baby-bonfire/prayer/card.png">
+<meta property="og:image:alt" content="A small hearth with a lit flame in its arched opening, in warm brown light.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#17152e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2317152e'/%3E%3Ccircle cx='16' cy='17' r='7' fill='%23ff9a4a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../pray.css">
+<style>
+.top{text-align:center}
+.top h1{font-size:34px;margin-top:6px}
+.stage{flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:320px;margin:8px 0;text-align:center}
+.breath{position:relative;width:min(64vw,260px);aspect-ratio:1;display:grid;place-items:center}
+.disc{position:absolute;inset:0;border-radius:50%;transform:scale(.55);
+  background:radial-gradient(circle,rgba(255,190,110,.55) 0,rgba(255,154,74,.22) 45%,rgba(255,154,74,0) 72%);border:1.5px solid rgba(255,210,122,.35)}
+.going .disc{animation:breathe 10s ease-in-out 6}
+@keyframes breathe{0%{transform:scale(.55)}50%{transform:scale(1)}100%{transform:scale(.55)}}
+.word{position:relative;font:500 12px/1.4 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--glow);min-height:1.4em}
+.left{margin:14px 0 0;font:500 11px/1.4 var(--mono);letter-spacing:.1em;color:var(--dim);min-height:1.4em}
+.end{margin:18px 0 0;font:italic 400 24px/1.3 var(--display);min-height:1.3em;max-width:16em;text-wrap:balance}
+.controls{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:16px 0 0;width:100%}
+.controls .primary{max-width:320px}
+@media (prefers-reduced-motion:reduce){.disc{transform:scale(.8)}.going .disc{animation:none}}
+</style>
+</head>
+<body>
+<main class="room">
+  <a class="back" href="../">&larr; Pray</a>
+  <header class="top">
+    <h1>Sit a minute</h1>
+    <p class="hour" id="hour">One minute</p>
+    <p class="forline" id="forLine" hidden></p>
+    <p class="quiet" id="quiet">Nothing to do. Breathe in as it grows, out as it shrinks.</p>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="breath" aria-hidden="true"><div class="disc"></div><p class="word" id="word"></p></div>
+    <p class="left" id="left" aria-hidden="true"></p>
+    <p class="end" id="end" role="status" aria-live="polite"></p>
+    <div class="controls">
+      <button class="primary" id="begin" type="button">Begin</button>
+      <button class="ghost" id="stop" type="button" hidden>Stop</button>
+      <a class="ghost warm" id="home" href="../" hidden>Back to the door</a>
+      <button class="ghost" id="again" type="button" hidden>Sit another</button>
+    </div>
+    <p class="fine" id="note" style="margin-top:12px">A bell sounds at the start and at the end.</p>
+    <noscript><p class="fine">The bells need scripts. Without them: breathe in for five, out for five, six times. That is a minute.</p></noscript>
+  </div>
+</main>
+<script src="../pray.js"></script>
+<script>
+(function(){
+'use strict';
+var P=window.Pray;if(!P)return;
+var $=function(id){return document.getElementById(id)};
+var part=P.part(),stage=$('stage'),word=$('word'),left=$('left'),endEl=$('end');
+var begin=$('begin'),stop=$('stop'),home=$('home'),again=$('again'),note=$('note');
+var LEN=60000,CYCLE=10000,t0=0,timer=0,state='ready';
+$('hour').textContent={dawn:'Early',day:'Daytime',dusk:'Evening',night:'Late'}[part]+' · one minute';
+var i=P.intent();if(i)$('quiet').textContent=P.INTENTS[i].line;
+var who=P.forName();if(who){$('forLine').textContent='A minute is kept for '+who+'.';$('forLine').hidden=false}
+
+function show(el,on){el.hidden=!on}
+function tickView(){
+  var e=performance.now()-t0;
+  if(e>=LEN){finish();return}
+  var c=e%CYCLE,lab=c<CYCLE/2?'In':'Out';if(word.textContent!==lab)word.textContent=lab;
+  var s=Math.ceil((LEN-e)/1000);left.textContent=s+'s';
+}
+function start(){
+  if(state==='going')return;
+  P.strike({part:part,vel:0.5});P.buzz(18);
+  state='going';t0=performance.now();endEl.textContent='';
+  stage.classList.remove('going');void stage.offsetWidth;stage.classList.add('going');
+  show(begin,false);show(again,false);show(home,false);show(stop,true);note.hidden=true;
+  try{stop.focus()}catch(e){}
+  tickView();timer=setInterval(tickView,200);
+}
+function quiet(){clearInterval(timer);stage.classList.remove('going');word.textContent='';left.textContent=''}
+function finish(){
+  if(state!=='going')return;state='done';quiet();
+  P.strike({part:part,vel:0.6,pitch:0.75,decay:1.4});P.buzz([0,40,60,30]);
+  P.markToday();
+  endEl.textContent=who?'That was a minute, for '+who+'.':'That was a minute. It was enough.';
+  show(stop,false);show(home,true);show(again,true);
+  try{home.focus()}catch(e){}
+}
+begin.addEventListener('click',start);
+again.addEventListener('click',start);
+stop.addEventListener('click',function(){
+  if(state!=='going')return;state='ready';quiet();
+  endEl.textContent='Stopped. Come back any time.';
+  show(stop,false);show(home,true);show(again,true);
+});
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&state==='going')tickView()});
+window.__sit={get state(){return state},set len(v){LEN=v},get audio(){return P.audioState()}};
+})();
+</script>
+</body>
+</html>

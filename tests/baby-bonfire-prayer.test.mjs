@@ -76,12 +76,15 @@ test('sound and film wait for a tap, and can be turned off', () => {
   assert.doesNotMatch(html, /<video[^>]*\bautoplay\b/i);
   assert.doesNotMatch(html, /<audio[^>]*\bautoplay\b/i);
   assert.match(html, /<video id="vid" muted loop playsinline/);
-  // the audio context is made inside initAudio, which light() calls from the button press
+  // the audio context is made inside initAudio, which startSound() calls; light() calls startSound() from the button press
   const initAudio = html.slice(html.indexOf('function initAudio('), html.indexOf('function setMaster('));
   assert.match(initAudio, /new AC\(/);
   assert.equal((html.match(/new AC\(/g) || []).length, 1);
+  const startSound = html.slice(html.indexOf('function startSound('), html.indexOf('function kindle('));
+  assert.match(startSound, /initAudio\(\)/);
+  assert.doesNotMatch(html.slice(html.indexOf('function kindle('), html.indexOf('function light(')), /startSound\(|initAudio\(/, 'lighting from a link makes no sound');
   const light = html.slice(html.indexOf('function light('), html.indexOf('function offer('));
-  assert.match(light, /initAudio\(\)/);
+  assert.match(light, /startSound\(\)/);
   assert.match(html, /lightBtn\.addEventListener\('click'/);
   assert.ok(html.includes('id="soundBtn" type="button" aria-pressed="true"'));
   assert.match(html, /It has sound: a fire, a bowl, a gong\. Sound starts when you light it\./);
@@ -175,7 +178,9 @@ test('send the fire: the picture is 1080x1350 JPEG, made before the tap', () => 
 test('send the fire: share is guarded by canShare and called straight from the tap', () => {
   const handler = between("sendBtn.addEventListener('click'", 'openKeep();\n});');
   assert.ok(handler.length > 0, 'the send handler is there');
-  assert.equal((script.match(/navigator\.share\(/g) || []).length, 1, 'one share call');
+  // two share calls: Send the fire (a picture) and Light one for someone (a link)
+  assert.equal((script.match(/navigator\.share\(/g) || []).length, 2, 'two share calls');
+  assert.equal((handler.match(/navigator\.share\(/g) || []).length, 1, 'one in the send handler');
   assert.ok(handler.indexOf('navigator.canShare(d)') > -1 && handler.indexOf('navigator.canShare(d)') < handler.indexOf('navigator.share(d)'), 'canShare comes first');
   assert.match(handler, /var d=\{files:\[f\]\}/, 'only the file is shared');
   const beforeShare = handler.slice(0, handler.indexOf('navigator.share('));
@@ -188,7 +193,18 @@ test('send the fire: share is guarded by canShare and called straight from the t
   // Copy link copies the page address only
   assert.match(script, /var SITE='https:\/\/pointcast\.xyz\/baby-bonfire\/prayer\/'/);
   assert.match(script, /navigator\.clipboard\.writeText\(SITE\)/);
-  assert.equal((script.match(/writeText\(/g) || []).length, 1);
+  assert.equal((script.match(/writeText\(/g) || []).length, 2, 'the page address, and the for-someone link');
+});
+
+test('light one for someone: a checked first name, a link, and nothing kept', () => {
+  assert.match(html, /id="forBtn" type="button"[^>]*>Light one for someone</);
+  assert.match(html, /id="forName"[^>]*maxlength="24"/);
+  const forPart = between('/* ---------- light one for someone', '/* ---------- the keepsake');
+  assert.match(forPart, /function cleanName\(/);
+  assert.match(forPart, /arrivedFor=cleanName\(new URLSearchParams\(location\.search\)\.get\('for'\)\)/);
+  assert.match(forPart, /forLine\.textContent='A fire is lit for '\+arrivedFor\+'\.'/);
+  assert.doesNotMatch(forPart, /innerHTML|document\.title|localStorage/);
+  assert.match(html, /<meta name="referrer" content="strict-origin">/);
 });
 
 test('send the fire: the words go nowhere and are kept nowhere', () => {

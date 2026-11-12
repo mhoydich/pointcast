@@ -25,6 +25,7 @@
 <meta property="og:site_name" content="PointCast">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"Prayer Fire · Baby Bonfire","description":"A film of a small fireplace, with sound. Light it, say what it is for, give the words to the flame and sit for a minute. Nothing is for sale.","url":"https://pointcast.xyz/baby-bonfire/prayer/","inLanguage":"en","image":"https://pointcast.xyz/baby-bonfire/prayer/card.png?v=37a3920b0b","isPartOf":{"@type":"WebSite","name":"PointCast","url":"https://pointcast.xyz"}}</script>
 <meta name="theme-color" content="#17152e">
+<meta name="referrer" content="strict-origin">
 <style>
 :root{
   /* One world: a dusk room with one small fire. Picture on top, one line of words, a few controls below.
@@ -140,6 +141,16 @@ button{font:inherit;color:inherit}
 .notice b{font-weight:500;color:var(--glow)}
 .foot .fine{margin:0 0 8px}
 .more{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14.5px;border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+/* for someone */
+.forline{position:absolute;left:0;right:0;top:62px;margin:0;padding:0 22px;text-align:center;font:italic 400 22px/1.3 var(--display);color:var(--paper);text-shadow:0 1px 12px rgba(18,15,34,.9);pointer-events:none;text-wrap:balance}
+.for{margin:10px 0 0;text-align:center}
+.forform{display:flex;gap:6px;margin:8px 0 0}
+.forin{flex:1 1 auto;min-width:0;height:44px;border:1.5px solid var(--line);border-radius:2px;background:rgba(23,21,46,.72);color:var(--paper);font:16px/1.2 var(--body);padding:0 12px;user-select:text;-webkit-user-select:text}
+.forin::placeholder{color:var(--dim);opacity:.9}
+.forform .ghost{flex:0 0 auto}
+#forLink{display:block;width:100%;margin:8px 0 0;font-size:14px}
+.for [hidden]{display:none!important}
+.forsaid{font-size:13.5px;line-height:1.4;color:var(--glow);margin:6px 0 0;min-height:1.4em}
 @media (max-height:640px){.intro h1{font-size:36px}.line{font-size:22px}}
 @media (prefers-reduced-motion:reduce){.pic img,.shade,.ringx,.intro{transition:none}.ripple{animation-duration:.01s}
   /* no movement, only a plain cross-fade between the words and the minute */
@@ -171,6 +182,7 @@ button{font:inherit;color:inherit}
         </button>
       </div>
     </header>
+    <p class="forline" id="forLine" hidden></p>
 
     <div class="intro" id="intro">
       <h1>Prayer fire</h1>
@@ -189,6 +201,17 @@ button{font:inherit;color:inherit}
         <button class="primary" id="offerBtn" type="submit">Offer it to the fire</button>
       </form>
       <p class="hold">Press and hold the fire to blow on it</p>
+      <div class="for" id="forBox" hidden>
+        <button class="ghost" id="forBtn" type="button" aria-expanded="false" aria-controls="forForm">Light one for someone</button>
+        <form class="forform" id="forForm" autocomplete="off" hidden>
+          <label class="sr" for="forName">Their first name</label>
+          <input class="forin" id="forName" name="forName" type="text" maxlength="24" enterkeyhint="send" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Their first name">
+          <button class="ghost" id="forSend" type="submit">Send</button>
+        </form>
+        <label class="sr" for="forLink">Link to send</label>
+        <input class="forin" id="forLink" type="text" readonly hidden>
+        <p class="forsaid" id="forSaid" role="status" aria-live="polite"></p>
+      </div>
     </section>
 
     <div class="sit away" id="sit" hidden>
@@ -256,11 +279,11 @@ INTENTS.forEach(function(it,i){
   b.setAttribute('aria-checked',i===0?'true':'false');b.tabIndex=i===0?0:-1;b.textContent=it.label;b.dataset.i=String(i);
   chipsEl.appendChild(b);
 });
-function pick(i,focus){
+function pick(i,focus,quiet){
   intent=INTENTS[i];
   for(var k=0;k<chipsEl.children.length;k++){var c=chipsEl.children[k];var on=k===i;c.setAttribute('aria-checked',on?'true':'false');c.tabIndex=on?0:-1;if(on&&focus)c.focus()}
   wordsEl.placeholder=intent.ph;wordsEl.disabled=intent.id==='sit';if(intent.id==='sit')wordsEl.value='';
-  tick();
+  if(!quiet)tick();
 }
 chipsEl.addEventListener('click',function(e){var b=e.target.closest?e.target.closest('.chip'):null;if(b)pick(+b.dataset.i,false)});
 chipsEl.addEventListener('keydown',function(e){
@@ -532,8 +555,9 @@ var state='unlit',blow=0,swell=0,offered='',blowing=false,holdTimer=0,blowTimer=
 function play(){if(RM)return;try{var p=vid.play();if(p&&p.catch)p.catch(function(){})}catch(e){}}
 function show(el){el.hidden=false;void el.offsetWidth;el.classList.remove('away')}
 function hide(el){el.classList.add('away');setTimeout(function(){if(el.classList.contains('away'))el.hidden=true},700)}
-function light(){
-  if(state!=='unlit')return;
+var heard=false;
+function startSound(){ /* only ever called from a visitor's touch, click or key */
+  if(heard)return;heard=true;
   initAudio();unlockPhone();
   if(A.ok){
     try{A.ctx.resume()}catch(e){}
@@ -544,11 +568,17 @@ function light(){
     decode('gong').catch(function(){});
     decode('pad').then(function(b){A.stops.push(looper(b,A.pad,4));A.pad.gain.setTargetAtTime(state==='sitting'?0.6:0.22,A.ctx.currentTime,3)},function(){});
   }
-  state='lit';stage.classList.add('lit');t0=performance.now();play();
-  buzz([0,30,60,20]);if(!canVibe)tick();burst=6;
-  intro.style.opacity='0';setTimeout(function(){intro.hidden=true},650);
+}
+function kindle(arrived){ /* the picture side of lighting; arrived = opened from a "for someone" link, so no touch yet */
+  state='lit';stage.classList.add('lit');t0=performance.now();play();burst=6;
+  if(arrived){intro.hidden=true}
+  else{buzz([0,30,60,20]);if(!canVibe)tick();intro.style.opacity='0';setTimeout(function(){intro.hidden=true},650)}
   gongBtn.disabled=false;
-  setTimeout(function(){show(sheet)},1300);
+  setTimeout(function(){show(sheet)},arrived?600:1300);
+}
+function light(){
+  if(state!=='unlit')return;
+  startSound();kindle(false);
 }
 lightBtn.addEventListener('click',light);
 function offer(){
@@ -580,7 +610,7 @@ function endSit(){
   if(state!=='sitting')return;
   clearInterval(sitTimer);state='closing';stage.classList.remove('sitting');sit.classList.add('closing');
   gong(0.85);ripple();buzz([0,70,40,50,50,34,60,22,80,14,100,8]);if(!canVibe)tick();
-  var n=bump();
+  var n=bump();forBox.hidden=false;
   lineEl.classList.remove('show');
   setTimeout(function(){if(state!=='closing')return;lineEl.textContent=CLOSE;lineEl.classList.add('show');breathEl.innerHTML='&nbsp;';after.hidden=false},700);
   if(A.ok)A.pad.gain.setTargetAtTime(0.22,A.ctx.currentTime,4);
@@ -610,9 +640,63 @@ stage.addEventListener('pointerdown',function(e){
 });
 ['pointerup','pointercancel','pointerleave'].forEach(function(n){stage.addEventListener(n,stopBlow)});
 stage.addEventListener('contextmenu',function(e){if(!(e.target.closest&&e.target.closest('input')))e.preventDefault()});
-document.addEventListener('keydown',function(e){if((e.key==='b'||e.key==='B')&&!e.repeat&&document.activeElement!==wordsEl&&state!=='unlit')startBlow()});
+document.addEventListener('keydown',function(e){if((e.key==='b'||e.key==='B')&&!e.repeat&&!(document.activeElement&&document.activeElement.tagName==='INPUT')&&state!=='unlit')startBlow()});
 document.addEventListener('keyup',function(e){if(e.key==='b'||e.key==='B')stopBlow()});
 
+/* ---------- light one for someone: a link, nothing stored, nothing sent ---------- */
+var forBox=$('forBox'),forBtn=$('forBtn'),forForm=$('forForm'),forNameEl=$('forName'),forLink=$('forLink'),forSaid=$('forSaid'),forLine=$('forLine');
+var NAME_RE;
+try{NAME_RE=new RegExp("^\\p{L}[\\p{L}\\p{M} '\u2019-]{0,23}$",'u')}
+catch(e){NAME_RE=/^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F][A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F '\u2019-]{0,23}$/}
+function cleanName(v){
+  if(typeof v!=='string')return null;
+  if(v.normalize)v=v.normalize('NFC');
+  v=v.trim().replace(/ {2,}/g,' ');
+  return v.length>0&&v.length<=24&&NAME_RE.test(v)?v:null;
+}
+function said(t){forSaid.textContent=t}
+forBtn.addEventListener('click',function(){
+  var open=forForm.hidden;forForm.hidden=!open;forBtn.setAttribute('aria-expanded',open?'true':'false');
+  if(open){said('');try{forNameEl.focus()}catch(e){}}
+});
+function copyLink(url){
+  var done=false;
+  var manual=function(){if(done)return;done=true;forLink.value=url;forLink.hidden=false;try{forLink.focus();forLink.select()}catch(e){}said('Copy this link and send it.')};
+  var copied=function(){if(done)return;done=true;said('Link copied. It opens with the fire lit.')};
+  said('');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    try{navigator.clipboard.writeText(url).then(copied,manual)}catch(e){manual();return}
+    setTimeout(manual,1500); /* a clipboard that never answers still leaves a link to copy */
+  }
+  else manual();
+}
+forForm.addEventListener('submit',function(e){
+  e.preventDefault();
+  var name=cleanName(forNameEl.value);
+  if(!name){said('A first name: letters, spaces, hyphens, apostrophes.');try{forNameEl.focus()}catch(_){}return}
+  forNameEl.value=name;forLink.hidden=true;
+  var url=location.origin+'/baby-bonfire/prayer/?for='+encodeURIComponent(name);
+  if(navigator.share){
+    navigator.share({title:'Prayer Fire',text:'A fire is lit for '+name+'.',url:url}).then(function(){said('Sent.')},function(err){if(err&&err.name==='AbortError'){said('');return}copyLink(url)});
+  }else copyLink(url);
+});
+/* opened from a link: the fire is already lit; sound waits for the first touch */
+var arrivedFor=null;
+try{if(window.URLSearchParams)arrivedFor=cleanName(new URLSearchParams(location.search).get('for'))}catch(e){arrivedFor=null}
+if(arrivedFor){
+  forLine.textContent='A fire is lit for '+arrivedFor+'.';forLine.hidden=false;
+  pick(INTENTS.map(function(it){return it.id}).indexOf('someone'),false,true);
+  wordsEl.value=arrivedFor;
+  kindle(true);
+  var wakeEvents=['pointerup','touchend','keydown'];
+  var wake=function(e){
+    if(e.type==='keydown'&&(e.key==='Escape'||e.key==='Tab'||e.key==='Shift'))return;
+    startSound();
+    if(A.ok&&A.ctx.state!=='running'){try{A.ctx.resume()}catch(_){}return}
+    wakeEvents.forEach(function(n){document.removeEventListener(n,wake,true)});
+  };
+  wakeEvents.forEach(function(n){document.addEventListener(n,wake,true)});
+}
 /* ---------- the keepsake: a picture of this fire with the words, made on this device ---------- */
 /* Made as soon as the words reach the fire, so the File is ready before the tap.
    Nothing here is sent or stored: the picture lives in memory until "Offer another". */
