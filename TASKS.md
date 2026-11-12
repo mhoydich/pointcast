@@ -57,7 +57,7 @@ Every public page in the four areas meets one head standard, and a test keeps it
 - [ ] (CC) Unfurl card for `/baby-bonfire/first-place/`. The page is not on the hub street, so the house template in `scripts/unfurl-cards/` cannot draw it; it needs a motif of its own (the tile and puck) and a row in `CARDS`. Until then it keeps the request-time card — `queued`
 - [ ] (X) Review the plain box, the sensing puck doubts (coin cell on the 3V3 pin, USB with the cell on), the generator and the test — `queued`
 - [ ] (M) One real test print with photos and measured fit per `docs/briefs/2026-11-11-manus-first-place-kit.md`; results to `docs/manus-logs/2026-11-11-first-place-kit.md` — `queued`, needs MH approval before any order
-- [ ] (MH) Approve or decline a paid test print; choose the licence (CERN-OHL-P v2 and CC BY 4.0 are proposed; no LICENSE file added); decide whether the hub should link the page — `waiting-on-mh`
+- [ ] (MH) Approve or decline a paid test print; decide whether the hub should link the page — `waiting-on-mh`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
 ## Baby Bonfire: an open exploration (2026-11-11)
@@ -68,7 +68,7 @@ Every public page in the four areas meets one head standard, and a test keeps it
 - [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/baby-bonfire.test.mjs` — `done`
 - [ ] (X) Review the open spec and mesh wording, the fire safety list and the content rules in the test — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
-- [ ] (MH) Choose a licence for the Baby Bonfire files and designs — `waiting-on-mh`
+- [x] (MH) Choose a licence for the Baby Bonfire files and designs: CC BY 4.0 for the words and drawings, CERN-OHL-P v2 for files to print (Mike, 2026-11-12). `public/baby-bonfire/LICENSE.txt` says which is which; full texts from the SPDX licence list sit beside it — `done`
 - [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
 ## Coast Commons studies: SB Surf House and Fresh Milk, Local (2026-11-11)
 
