@@ -35,7 +35,7 @@ export const PRIVATE_URL = /\/house\/r\/|\/light\/circle\/|\/light\/c\/(?![{<])/
 // Each area's main pages, which llms.txt must name (llms-full.txt names every public page).
 export const MAIN = [
   '/baby-bonfire/', '/baby-bonfire/open-spec/', '/baby-bonfire/open-mesh/', '/baby-bonfire/barter-board/',
-  '/baby-bonfire/make-a-piece/', '/baby-bonfire/first-place/', '/baby-bonfire/precedents/', '/baby-bonfire/prayer/', '/baby-bonfire/higher-purpose/',
+  '/baby-bonfire/make-a-piece/', '/baby-bonfire/first-place/', '/baby-bonfire/precedents/', '/baby-bonfire/prayer/', '/baby-bonfire/higher-purpose/', '/baby-bonfire/room/', '/baby-bonfire/ar/',
   '/coast-commons/', '/coast-commons/el-segundo/', '/coast-commons/pattern/', '/coast-commons/sb-surf-house/', '/coast-commons/fresh-milk/',
   '/house/', '/house/about/', '/light/',
 ];

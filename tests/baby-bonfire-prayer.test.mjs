@@ -124,7 +124,7 @@ test('content rules: no claims, no prices, nothing the area leaves out', () => {
 test('the hub links it from its own section, not from the street or the earlier-work strip', () => {
   const section = hub.slice(hub.indexOf('id="screen-h"'), hub.indexOf('id="work-h"'));
   assert.ok(section.includes('<a href="/baby-bonfire/prayer/">'));
-  assert.match(section, /These two are screens\./);
+  assert.match(section, /These four are screens\./);
   assert.equal((hub.match(/class="house" href=/g) || []).length, twin.scenes.length, 'the street is unchanged');
   const earlier = hub.slice(hub.indexOf('id="earlier-h"'), hub.indexOf('<footer>'));
   assert.ok(!earlier.includes('/baby-bonfire/prayer/'));

@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PointCast Town in 3D</title>
+<meta name="description" content="The twelve PointCast town buildings as a small 3D plaza. Works on a phone, a laptop and in a WebXR headset. Every place is also a plain link.">
+<link rel="canonical" href="https://pointcast.xyz/vr/">
+<link rel="alternate" type="application/json" href="places.json" title="Places manifest (spatial.places/v1)">
+<meta name="theme-color" content="#17152e">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:title" content="PointCast Town in 3D">
+<meta property="og:description" content="The twelve PointCast town buildings as a small plaza at dusk. Look around on a phone or a laptop, or stand in it with a WebXR headset.">
+<meta property="og:url" content="https://pointcast.xyz/vr/">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="/spatial/spatial.css">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #17152e; color: #f3e9d8;
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; }
+  header { padding: 18px 0 12px; }
+  .kicker { font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .14em; text-transform: uppercase; color: #ff9a4a; margin: 0 0 8px; }
+  h1 { font: 700 22px/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .02em; text-transform: uppercase; margin: 0 0 6px; }
+  .how { margin: 0; color: #b9aec4; font-size: 15px; max-width: 60ch; }
+  #town .spatial-stage { border: 1px solid #3a2a52; }
+  footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #3a2a52; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #b9aec4; }
+  footer a { color: #f3e9d8; }
+  @media (min-width: 900px) { h1 { font-size: 28px; } }
+</style>
+<script type="importmap">
+{ "imports": { "three": "/spatial/vendor/three-r185/three.module.min.js",
+               "three/addons/": "/spatial/vendor/three-r185/addons/" } }
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="kicker">PointCast · spatial</p>
+    <h1>PointCast Town in 3D</h1>
+    <p class="how">The twelve town buildings as a small plaza at dusk. Drag to look, tap the ground to walk, tap a building to open it. In a headset, point and pull the trigger or pinch.</p>
+  </header>
+  <main id="town">
+    <noscript><p>The 3D view needs JavaScript. The places are listed in <a href="places.json">places.json</a> and on the <a href="/town">town map</a>.</p></noscript>
+  </main>
+  <footer>
+    <a href="/town">2D town map</a> · <a href="places.json">places.json</a> · <a href="/baby-bonfire/room/">Hearth room</a> · <a href="/spatial/README.md">How this is built</a> · Checked in a WebXR emulator only; nobody has tried it in a headset yet. By Claude, at Mike Hoydich's direction, Nov 11, 2026.
+  </footer>
+</div>
+<script type="module">
+// If the 3D view cannot start, the page still lists real links: a short fixed list, then every place in places.json.
+async function listFallback(mount, fixed) {
+  const note = document.createElement('p');
+  note.textContent = 'The 3D view could not start. These links work without it.';
+  const ul = document.createElement('ul');
+  const add = (title, url) => { const li = document.createElement('li'), a = document.createElement('a'); a.href = url; a.textContent = title; li.appendChild(a); ul.appendChild(li); };
+  for (const [title, url] of fixed) add(title, url);
+  try {
+    const m = await (await fetch('places.json')).json();
+    for (const p of (m.places || [])) if (p && typeof p.title === 'string' && typeof p.url === 'string' && /^\/(?!\/)/.test(p.url)) add(p.title, p.url);
+  } catch (e) { /* the fixed links stay */ }
+  mount.replaceChildren(note, ul);
+}
+
+// Palette: warm earth at dusk, windows lit in each building's kind colour.
+const C = {
+  stone: '#5e4a44', sand: '#d9c3a0', sand2: '#bfa27e', roof: '#4a2f26', fascia: '#2b1c1a', pier: '#7a4a34',
+  leaf: '#4f5a34', leaf2: '#66703f', trunk: '#4a3026', mullion: '#2a1b18',
+};
+const GLOW = { civic: '#ffc46b', play: '#ff8a4a', commerce: '#ffd98a', agent: '#c2a6ff', nature: '#e2e89a' };
+
+// Textile block: a small repeating relief pattern drawn once into a 256 px canvas.
+function textileTexture(THREE) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#c99d74'; g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = '#8f5f3f'; g.lineWidth = 10; g.strokeRect(5, 5, 246, 246);
+  g.fillStyle = '#a8764f'; g.fillRect(40, 40, 176, 176);
+  g.fillStyle = '#c99d74'; g.fillRect(64, 64, 128, 128);
+  g.fillStyle = '#8f5f3f'; g.fillRect(118, 24, 20, 208); g.fillRect(24, 118, 208, 20);
+  g.fillStyle = '#e0bf92';
+  for (const [x, y] of [[80, 80], [156, 80], [80, 156], [156, 156]]) g.fillRect(x, y, 20, 20);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+// Shared materials, made once (builders run before decorate).
+let M = null;
+function mats(THREE) {
+  if (!M) M = {
+    textile: new THREE.MeshLambertMaterial({ color: 0xffffff, map: textileTexture(THREE) }),
+    glow: new THREE.MeshBasicMaterial({ color: 0xffffff }), // lit windows: unlit, one draw call for all
+  };
+  return M;
+}
+
+// One Prairie / Usonian pavilion: podium, textile-block core, lit clerestory band, wide cantilevered
+// roof, name on the fascia, threshold stone in front. Archetype by kind, one distinct piece by name.
+function pavilion(place, ctx) {
+  const { THREE } = ctx, a = ctx.anchor, m = mats(THREE), glow = GLOW[place.kind] || GLOW.civic;
+  const box = (o) => ctx.addBox({ parent: a, ...o });
+  const tex = (o) => ctx.addBox({ parent: a, key: 'textile', material: m.textile, color: '#ffffff', ...o });
+  const lit = (o) => ctx.addBox({ parent: a, key: 'glow', material: m.glow, color: glow, ...o });
+  const id = place.id, kind = place.kind;
+  const A = {
+    civic: { w: 2.4, h: 1.4, d: 1.6, band: 0.36, roofW: 3.8, roofD: 3.0 },
+    play: { w: 2.8, h: 1.2, d: 1.8, band: 0.5, roofW: 4.0, roofD: 3.1 },
+    commerce: { w: 2.0, h: 1.3, d: 1.6, band: 0.42, roofW: 3.6, roofD: 2.8 },
+    agent: { w: 1.6, h: 1.6, d: 1.4, band: 0.3, roofW: 3.4, roofD: 2.6 },
+    nature: { w: 1.6, h: 1.1, d: 1.2, band: 0.3, roofW: 3.6, roofD: 2.8 },
+  }[kind] || { w: 2.4, h: 1.4, d: 1.6, band: 0.36, roofW: 3.8, roofD: 3.0 };
+  if (id === 'gallery') A.band = 0.8;
+  if (id === 'mailbox') { A.w = 1.6; A.roofW = 3.6; }
+  const P = 0.2;                                   // podium height
+  box({ y: P / 2, sx: 3.6, sy: P, sz: 2.8, color: C.sand2 });
+  if (id === 'town-hall') box({ y: 0.05, sx: 4.4, sy: 0.1, sz: 3.6, color: C.sand });
+  // textile-block core: 0.8 m blocks (front and back faces carry the pattern)
+  const nx = Math.max(1, Math.round(A.w / 0.8)), ny = Math.max(1, Math.round(A.h / 0.7)), bw = A.w / nx, bh = A.h / ny;
+  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++)
+    tex({ x: -A.w / 2 + bw * (i + 0.5), y: P + bh * (j + 0.5), z: 0, sx: bw, sy: bh, sz: A.d });
+  // clerestory band, lit, with mullions
+  const bandY = P + A.h + A.band / 2;
+  lit({ y: bandY, sx: A.w - 0.08, sy: A.band, sz: A.d - 0.08 });
+  for (let x = -A.w / 2; x <= A.w / 2 + 1e-6; x += A.w / Math.round(A.w / 0.4))
+    for (const z of [A.d / 2 - 0.02, -A.d / 2 + 0.02]) box({ x, y: bandY, z, sx: 0.06, sy: A.band, sz: 0.06, color: C.mullion });
+  // wide flat roof, cantilevered toward the front, on two slim piers
+  const roofY = P + A.h + A.band + 0.07, rz = 0.35, front = rz + A.roofD / 2;
+  box({ y: roofY, z: rz, sx: A.roofW, sy: 0.14, sz: A.roofD, color: C.roof });
+  for (const sx of [-1, 1]) box({ x: sx * (A.roofW / 2 - 0.3), y: (P + roofY) / 2, z: front - 0.35, sx: 0.18, sy: roofY - P, sz: 0.18, color: C.pier });
+  // fascia board with the name
+  const fasciaH = 0.5;
+  box({ y: roofY - 0.07 + fasciaH / 2, z: front, sx: A.roofW, sy: fasciaH, sz: 0.08, color: C.fascia });
+  const label = ctx.addLabel(place.title, { glyph: place.glyph, size: 0.19, bg: C.fascia, border: C.fascia, maxWidth: A.roofW - 0.3,
+    boost: true, bottom: roofY - 0.04 }, a, 0, 0, front + 0.05);
+  if (label) label.setColor('#efe4d2');
+
+  // one distinct piece where the name invites it
+  if (id === 'lighthouse') {
+    box({ x: 1.1, y: P + 2.3, z: -0.5, sx: 0.28, sy: 4.6, sz: 0.28, color: C.sand });
+    lit({ x: 1.1, y: P + 4.9, z: -0.5, sx: 0.55, sy: 0.55, sz: 0.55, color: '#ffe7a8' });
+    box({ x: 1.1, y: P + 5.24, z: -0.5, sx: 0.85, sy: 0.1, sz: 0.85, color: C.roof });
+  } else if (id === 'broadcast-tower') {
+    box({ x: -1.1, y: P + 2.9, z: -0.5, sx: 0.14, sy: 5.8, sz: 0.14, color: C.sand });
+    for (const y of [3.4, 4.3, 5.1]) box({ x: -1.1, y: P + y, z: -0.5, sx: 0.9 - y * 0.1, sy: 0.06, sz: 0.06, color: C.sand });
+    lit({ x: -1.1, y: P + 5.9, z: -0.5, sx: 0.22, sy: 0.22, sz: 0.22, color: '#ff6a4a' });
+  } else if (id === 'library') {
+    box({ y: roofY + 0.95, z: -0.4, sx: 2.6, sy: 0.12, sz: 1.8, color: C.roof });
+    lit({ y: roofY + 0.5, z: -0.4, sx: 1.8, sy: 0.6, sz: 1.0 });
+  } else if (id === 'mailbox') {
+    box({ x: -1.35, y: P + 0.45, z: 1.15, sx: 0.08, sy: 0.9, sz: 0.08, color: C.pier });
+    box({ x: -1.35, y: P + 1.0, z: 1.15, sx: 0.45, sy: 0.32, sz: 0.3, color: '#7d3a2c' });
+  } else if (id === 'drum-hall') {
+    const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), mm = new THREE.Matrix4();
+    for (const [x, r] of [[-1.25, 0.9], [1.3, 0.65]]) {
+      a.updateWorldMatrix(true, false);
+      ctx.addInstance('disc', ctx.shared.disc, ctx.shared.lambert, mm.compose(p.set(x, P + 0.3, 1.0), q, s.set(r, 0.6, r)).premultiply(a.matrixWorld), '#9c3f33');
+      ctx.addInstance('disc', ctx.shared.disc, ctx.shared.lambert, mm.compose(p.set(x, P + 0.61, 1.0), q, s.set(r * 0.98, 0.03, r * 0.98)).premultiply(a.matrixWorld), '#efe0c4');
+    }
+  } else if (id === 'cafe') {
+    box({ y: P + 1.55, z: 1.95, sx: 2.6, sy: 0.08, sz: 1.2, color: '#b07a45' });
+    for (const x of [-1.3, 1.3]) { box({ x, y: P + 0.37, z: 2.2, sx: 0.06, sy: 0.74, sz: 0.06, color: C.mullion }); box({ x, y: P + 0.75, z: 2.2, sx: 0.6, sy: 0.04, sz: 0.6, color: C.sand }); }
+  } else if (id === 'agent-gate') {
+    for (const x of [-1.25, 1.25]) box({ x, y: P + 1.45, z: 1.9, sx: 0.3, sy: 2.9, sz: 0.3, color: C.pier });
+    lit({ y: P + 2.75, z: 1.9, sx: 2.2, sy: 0.08, sz: 0.08 });
+  } else if (id === 'workbench') {
+    box({ x: 0, y: P + 0.85, z: 1.2, sx: 2.2, sy: 0.08, sz: 0.6, color: C.sand });
+    for (const x of [-1, 1]) box({ x, y: P + 0.42, z: 1.2, sx: 0.08, sy: 0.84, sz: 0.5, color: C.pier });
+  } else if (id === 'garden') {
+    for (let x = -1.6; x <= 1.61; x += 0.4) box({ x, y: roofY + 0.12, z: rz - 0.1, sx: 0.08, sy: 0.08, sz: A.roofD - 0.4, color: C.sand });
+    for (const x of [-1.25, 1.25]) {
+      box({ x, y: P + 0.25, z: 1.4, sx: 0.8, sy: 0.5, sz: 0.6, color: '#6b4a3a' });
+      box({ x, y: P + 0.52, z: 1.4, sx: 0.72, sy: 0.06, sz: 0.52, color: C.leaf2 });
+    }
+  } else if (id === 'boardwalk') {
+    for (let x = -1.7; x <= 1.71; x += 0.34) box({ x, y: 0.24, z: 2.0, sx: 0.28, sy: 0.05, sz: 1.4, color: '#a9825d' });
+    for (const x of [-1.75, 1.75]) box({ x, y: 0.55, z: 2.0, sx: 0.06, sy: 0.6, sz: 1.4, color: C.pier });
+  }
+
+  // select target: the whole pavilion opens the panel; the threshold stone moves you in front of it
+  ctx.addPlaceHit(place, a, { center: [0, (roofY + 0.7) / 2, 0.3], size: [A.roofW, roofY + 0.7, A.roofD + 0.2], highlightRadius: 2.1,
+    onHover: (h) => { if (label) label.setColor(h ? '#ffffff' : '#efe4d2'); } });
+  box({ y: 0.04, z: 3.0, sx: 1.4, sy: 0.08, sz: 0.7, color: C.sand });
+  ctx.addSpot(place, a, { distance: 3.0, visual: false, size: [1.4, 0.12, 0.7], highlightRadius: 0.75 });
+  return a;
+}
+
+async function decorate(ctx) {
+  const { THREE, addBox, addInstance, shared } = ctx;
+  const m = mats(THREE);
+  const block = (x, y, z) => addBox({ key: 'textile', material: m.textile, x, y, z, sx: 1, sy: 1, sz: 1, color: '#ffffff' });
+  const lit = (o) => addBox({ key: 'glow', material: m.glow, color: '#ffc46b', ...o });
+  // Plaza terrace that the buildings grow from, with cream paving bands between rows and columns.
+  addBox({ x: 0, y: 0.02, z: 1.5, sx: 33, sy: 0.04, sz: 29, color: C.stone });
+  for (const z of [-9.75, -3.25, 3.25, 9.75]) addBox({ x: 0, y: 0.046, z, sx: 31, sy: 0.012, sz: 0.14, color: C.sand });
+  for (const x of [-14, -7, 7, 14]) addBox({ x, y: 0.046, z: 1.5, sx: 0.14, sy: 0.012, sz: 27, color: C.sand });
+  // Hearth: a clear 1.5 m circle at the origin. Flat inlays only (another page adds the fireplace).
+  const mm = new THREE.Matrix4();
+  addInstance('hearth-inlay', new THREE.CircleGeometry(1.5, 48), new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    mm.makeRotationX(-Math.PI / 2).setPosition(0, 0.045, 0), '#2a1b1d');
+  addInstance('hearth-ring', new THREE.RingGeometry(1.5, 1.8, 48), new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    mm.makeRotationX(-Math.PI / 2).setPosition(0, 0.05, 0), C.sand);
+  // North wings: textile-block walls with a lit band, piers, stacked cantilevered roofs. Portal in the gap.
+  for (const side of [-1, 1]) {
+    const x0 = side * 2.6, x1 = side * 13;
+    for (let x = Math.min(x0, x1) + 0.5; x < Math.max(x0, x1); x += 1) for (let y = 0.5; y < 2; y += 1) block(x, y, -12.5);
+    const cx = (x0 + x1) / 2, len = Math.abs(x1 - x0);
+    lit({ x: cx, y: 2.2, z: -12.5, sx: len - 0.2, sy: 0.35, sz: 0.9 });
+    addBox({ x: cx + side * 1.2, y: 2.45, z: -11.7, sx: len + 3.6, sy: 0.16, sz: 3.6, color: C.roof });
+    addBox({ x: cx - side * 1.0, y: 3.1, z: -12.1, sx: len * 0.55, sy: 0.12, sz: 2.4, color: C.sand });
+    for (let k = 0; k < 4; k++) addBox({ x: x0 + side * (1.4 + k * 3), y: 1.2, z: -10.3, sx: 0.4, sy: 2.4, sz: 0.4, color: C.pier });
+  }
+  // West pergola behind the hearth-room portal.
+  for (let z = -5; z <= 5; z += 2.5) addBox({ x: -17, y: 1.3, z, sx: 0.4, sy: 2.6, sz: 0.4, color: C.pier });
+  addBox({ x: -16.4, y: 2.68, z: 0, sx: 3.2, sy: 0.14, sz: 13, color: C.roof });
+  for (let z = -6; z <= 6; z += 1) addBox({ x: -16.4, y: 2.83, z, sx: 3.6, sy: 0.08, sz: 0.12, color: C.sand });
+  // East: a low textile planter wall behind the two off-grid markers.
+  for (let z = -4.5; z <= 4.5; z += 1) block(16.5, 0.5, z);
+  addBox({ x: 16.5, y: 1.04, z: 0, sx: 1.6, sy: 0.08, sz: 10.4, color: C.sand });
+  // South: benches either side of the arrival path, low planters.
+  for (const side of [-1, 1]) {
+    addBox({ x: side * 3, y: 0.22, z: 12.5, sx: 0.7, sy: 0.44, sz: 3.2, color: C.pier });
+    addBox({ x: side * 3, y: 0.47, z: 12.5, sx: 0.9, sy: 0.06, sz: 3.8, color: C.sand });
+    addBox({ x: side * 3.9, y: 0.3, z: 12.5, sx: 0.9, sy: 0.6, sz: 3.6, color: C.stone });
+    addBox({ x: side * 3.9, y: 0.62, z: 12.5, sx: 0.8, sy: 0.06, sz: 3.4, color: C.leaf });
+    addBox({ x: side * 13, y: 0.3, z: 12, sx: 3, sy: 0.6, sz: 1.6, color: C.stone });
+    addBox({ x: side * 13, y: 0.62, z: 12, sx: 2.8, sy: 0.06, sz: 1.4, color: C.leaf });
+  }
+  // Trees with flat, layered canopies (horizontal planes, not blobs).
+  const trees = [[-15, 9], [15, 9], [-15, -8.5], [15, -8.5], [-21, -11], [21, -11], [-22, 6], [22, 6]];
+  const s = new THREE.Vector3(), p = new THREE.Vector3(), q = new THREE.Quaternion();
+  for (const [x, z] of trees) {
+    addBox({ x, y: 1.2, z, sx: 0.22, sy: 2.4, sz: 0.22, color: C.trunk });
+    addInstance('disc', shared.disc, shared.lambert, mm.compose(p.set(x, 2.5, z), q, s.set(3.2, 0.14, 3.2)), C.leaf);
+    addInstance('disc', shared.disc, shared.lambert, mm.compose(p.set(x + 0.3, 3.0, z - 0.2), q, s.set(2.2, 0.12, 2.2)), C.leaf2);
+  }
+}
+
+const mount = document.getElementById('town');
+try {
+  const { createWorld } = await import('/spatial/spatial.mjs');
+  const world = await createWorld({
+    mount,
+    manifest: 'places.json',
+    basePath: './',
+    theme: {
+      skyTop: '#1d1840', skyHorizon: '#e08f5c', fog: '#4a3446', ground: '#2c231f', accent: '#ff9a4a', text: '#f3e9d8',
+      plinth: '#b5653f', plinthCap: '#ead7b4', hemiSky: '#a596cc', hemiGround: '#3a2a22', panel: '#17152e', sun: '#ffb27a', portal: '#6b4636', spot: '#ffd27a',
+      kinds: { marker: '#8a6a50' },
+    },
+    builders: { civic: pavilion, play: pavilion, commerce: pavilion, agent: pavilion, nature: pavilion },
+    xr: { vr: true, ar: false, handTracking: true },
+    labels: { max: 40, boostRef: 8, boostMax: 2 },
+    camera: { pageEye: 3.0, pitch: -9 },
+    decorate,
+  });
+  window.pointcastTown = world;
+  document.dispatchEvent(new CustomEvent('spatial:ready', { detail: { world } }));
+} catch (err) {
+  console.error(err);
+  await listFallback(mount, [['2D town map', '/town'], ['places.json', 'places.json'], ['The Baby Bonfire room', '/baby-bonfire/room/']]);
+}
+</script>
+</body>
+</html>

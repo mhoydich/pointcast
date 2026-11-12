@@ -113,6 +113,19 @@ export const CARDS = [
     description: seoFor('/baby-bonfire/higher-purpose/').description,
     alt: 'A Higher Purpose, a Baby Bonfire sketch. A drawing of a small island of square tiles at dusk, with a fire at its centre, water around it, white posts, standing stones and drifting motes.',
   },
+  // The Room and On Your Table show a rendered still of the fireplace model, `photoLeft`, a file under public/.
+  {
+    path: '/baby-bonfire/room/', area: BB, motif: 'photo', photoLeft: 'public/baby-bonfire/ar/models/poster.jpg', ld: 'CreativeWork',
+    headline: ['The Room'], line: ['Step into a small alcove', 'with the fireplace lit.'],
+    description: seoFor('/baby-bonfire/room/').description,
+    alt: 'The Room, a Baby Bonfire sketch. A rendered still of a small stone and copper tabletop fireplace with a stack of dark stones in its arched opening, on a black ground.',
+  },
+  {
+    path: '/baby-bonfire/ar/', area: BB, motif: 'photo', photoLeft: 'public/baby-bonfire/ar/models/poster.jpg', ld: 'CreativeWork',
+    headline: ['On Your', 'Table'], line: ['Turn the fireplace, 13 cm tall,', 'and stand it on a table.'],
+    description: seoFor('/baby-bonfire/ar/').description,
+    alt: 'On Your Table, a Baby Bonfire sketch. A rendered still of a small stone and copper tabletop fireplace with a stack of dark stones in its arched opening, on a black ground.',
+  },
   {
     path: '/coast-commons/', area: CC, kicker: 'A PUBLIC GOOD · OPEN STUDY', motif: 'coast',
     headline: ['Coast', 'Commons'], line: ['Read what a shared house could', 'be in fifteen beach towns.'],
