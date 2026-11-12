@@ -366,7 +366,50 @@ ${tile(2, 'LIGHTS', (x, y) => `<rect x="${x}" y="${y}" width="${w}" height="${h}
 ${tile(3, 'DRUM', (x, y) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#080a12"/>${pads.map(([dx, dy, on]) => `<rect x="${x + dx}" y="${y + dy}" width="32" height="32" rx="4" fill="${on ? '#ffb454' : '#14110e'}" stroke="${on ? '#ffb454' : '#3a3128'}" stroke-width="2"/>`).join('')}`)}`;
 }
 
-const MOTIFS = { street, house: sceneHouse, plan, mesh, coast, tenSeats, recipe, surfHouse, freshMilk, tv, fourViews };
+// A Higher Purpose: the page's island of square tiles seen from above at an angle, in the page's
+// own sixteen colours: a hearth at the centre, a pier, four white posts and a ring of stones.
+function island() {
+  const cx = MOTIF_CX, cy = 330, tw = 21, th = 10.5;
+  const at = (gx, gz) => [cx + (gx - gz) * tw, cy + (gx + gz) * th];
+  const out = [];
+  // water: short strokes in rows, lighter near the shore
+  for (let r = 0; r < 26; r++) for (let i = 0; i < 9; i++) {
+    const y = 196 + r * 12, x = MOTIF_X - 20 + ((i * 53 + r * 29) % 460);
+    out.push(`<rect x="${x}" y="${y}" width="${14 + ((i * r) % 3) * 8}" height="3" fill="${(i + r) % 4 ? '#3f86a0' : '#8fd3d0'}" opacity=".8"/>`);
+  }
+  const tiles = [];
+  for (let gz = -6; gz <= 6; gz++) for (let gx = -6; gx <= 6; gx++) {
+    const d = Math.hypot(gx, gz), edge = 5 + 0.5 * Math.sin(gx * 1.7 + gz * 0.9);
+    if (d <= edge) tiles.push([gx, gz, d > edge - 1.1]);
+  }
+  tiles.sort((a, b) => a[0] + a[1] - b[0] - b[1]);
+  for (const [gx, gz, shore] of tiles) {
+    const [x, y] = at(gx, gz);
+    const lift = gz <= -3 && gz >= -5 && Math.abs(gx) <= 1 ? 8 : 0;
+    const top = lift ? '#b4c46a' : shore || ((gx === 0 || gz === 0) && Math.hypot(gx, gz) < 4) ? '#b08a5e' : (gx + gz) & 1 ? '#5f8f43' : '#4f7d3a';
+    out.push(`<path d="M${x - tw} ${y - lift}L${x} ${y + th - lift}L${x + tw} ${y - lift}V${y + 12}L${x} ${y + th + 12}L${x - tw} ${y + 12}Z" fill="#6b4a38"/>`);
+    out.push(`<path d="M${x} ${y - th - lift}L${x + tw} ${y - lift}L${x} ${y + th - lift}L${x - tw} ${y - lift}Z" fill="${top}"/>`);
+  }
+  const block = (x, y, w, h, fill) => `<rect x="${n(x - w / 2)}" y="${n(y - h)}" width="${w}" height="${h}" fill="${fill}"/>`;
+  // the pier, east (down and right on the drawing)
+  for (let i = 0; i < 5; i++) { const [x, y] = at(5 + i * 0.5, 0); out.push(block(x, y + 4, 24, 5, i % 2 ? '#b08a5e' : '#9c7a52')); }
+  const [lx, ly] = at(7.3, 0); out.push(block(lx, ly, 5, 40, '#6b4a38'), `<circle cx="${lx}" cy="${ly - 46}" r="22" fill="url(#bbGlow)"/>`, block(lx, ly - 38, 12, 12, '#8fd3d0'));
+  // the stones, west (up and left)
+  for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2 + 0.4; const [x, y] = at(-4 + Math.cos(a), Math.sin(a)); out.push(block(x, y, 15, 26 + (i * 7) % 14, '#5a3558'), block(x - 3.5, y, 7, 26 + (i * 7) % 14, '#7a4a6e')); }
+  // the posts and floating cubes, north (up and right)
+  for (const [gx, gz] of [[-0.8, -3.4], [0.8, -3.4], [-0.8, -5], [0.8, -5]]) { const [x, y] = at(gx, gz); out.push(block(x, y - 8, 7, 62, '#f3e9d8')); }
+  const [ax, ay] = at(0, -4.2); out.push(block(ax, ay - 74, 12, 12, '#8fd3d0'), block(ax + 12, ay - 92, 8, 8, '#8fd3d0'));
+  // trees
+  for (const [gx, gz] of [[2.4, 2.6], [-2.6, 2.9], [3, -2.4], [-2.8, -2.6]]) { const [x, y] = at(gx, gz); out.push(block(x, y, 6, 16, '#6b4a38'), block(x, y - 14, 28, 18, '#2f5a3a'), block(x, y - 30, 18, 14, '#3f6e44')); }
+  // the hearth and its fire, at the centre
+  const [hx, hy] = at(0, 0);
+  out.push(`<circle cx="${hx}" cy="${hy - 34}" r="64" fill="url(#bbGlow)"/>`, block(hx, hy + 6, 44, 12, '#a8554a'), block(hx, hy - 4, 26, 16, '#d23c14'), block(hx - 1, hy - 18, 18, 16, '#ff9a4a'), block(hx + 1, hy - 32, 12, 14, '#ffd27a'), block(hx, hy - 44, 6, 10, '#f3e9d8'));
+  // motes
+  for (const [x, y] of [[760, 150], [812, 108], [902, 134], [1010, 96], [1080, 160], [1120, 118], [954, 180], [850, 200]]) out.push(`<rect x="${x}" y="${y}" width="5" height="5" fill="#f3e9d8" opacity=".85"/>`);
+  return out.join('');
+}
+
+const MOTIFS = { street, house: sceneHouse, island, plan, mesh, coast, tenSeats, recipe, surfHouse, freshMilk, tv, fourViews };
 
 
 // ---------------------------------------------------------------- a card that is a photograph
