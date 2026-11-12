@@ -49,6 +49,7 @@ export const AGENT_SURFACES = {
     coastCommonsFreshMilk: 'https://pointcast.xyz/coast-commons/fresh-milk/',
     guides: 'https://pointcast.xyz/guides',
     radioNetwork: 'https://pointcast.xyz/radio-network',
+    houseChannelHub: 'https://pointcast.xyz/house/',
     houseChannel: 'https://pointcast.xyz/house/about/',
     guidesIntake: 'https://pointcast.xyz/guides/intake',
     pickleballHome: 'https://pointcast.xyz/pickleball/home/',

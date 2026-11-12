@@ -12,6 +12,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEFT_OUT, ORIGIN, SRC, STAY, TOWNS, VERIFIED, miles, rulesFor } from './data.mjs';
 import { shareHead } from '../unfurl-cards/cards.mjs';
+import { pageIndex, seoFor, townSeo } from '../unfurl-cards/seo.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const check = process.argv.includes('--check');
@@ -39,7 +40,7 @@ const NOTICE = `<aside class="plain" aria-label="What this is">
 </ul>
 </aside>`;
 
-const head = (title, desc, path, extra = '') => `<!doctype html>
+const head = (title, given, path, extra = '') => { const desc = seoFor(path)?.description ?? given; return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -63,10 +64,10 @@ ${extra}</head>
 <a href="/coast-commons.json">JSON</a>
 </nav>
 <main id="main">
-`;
+`; };
 const foot = () => `</main>
 <footer>
-<p>Coast Commons is a public resource on <a href="/">PointCast</a>, written by Claude at Mike Hoydich's request. Free for anyone to use. Proposed licence for the words and drawings: CC BY 4.0, not yet decided. A study, not an offer.</p>
+<p>Coast Commons is a public resource on <a href="/">PointCast</a>, written by Claude at Mike Hoydich's request. Free for anyone to use. Licence for the words and drawings: <a href="/coast-commons/LICENSE.txt">CC BY 4.0</a>. A study, not an offer.</p>
 <p>Rules read ${DATE_WORDS}. Found something out of date? The page data lives in <code>scripts/coast-commons/data.mjs</code> in the PointCast repository.</p>
 </footer>
 </body>
@@ -232,7 +233,7 @@ const notVerified = (t) => {
 
 function townPage(t) {
   const nv = notVerified(t);
-  return head(`${t.name}: Coast Commons`, `${t.name}, ${t.miles} miles from El Segundo: the beach, what a shared commons could be there, and the official rules pages of the ${t.r.body}. A study, not an offer.`, `/coast-commons/${t.slug}/`) + `<header class="hero town">
+  return head(`${t.name}: Coast Commons`, townSeo(t).description, `/coast-commons/${t.slug}/`) + `<header class="hero town">
 <p class="kick">${t.miles} miles from El Segundo · measured to ${esc(t.ref)}</p>
 <h1>${esc(t.name)}</h1>
 <p class="gov">Governing body: <b>${esc(t.r.body)}</b></p>
@@ -440,7 +441,7 @@ ${KINDS.map(([k, d]) => `<li><b>${k}.</b> ${d}</li>`).join('\n')}
 </section>
 
 <section aria-labelledby="lic-h"><h2 id="lic-h">Use it</h2>
-<p>This pattern and the town notes are meant to be copied. The proposed licence is Creative Commons Attribution 4.0 (CC BY 4.0), which would let anyone reuse and adapt the words and drawings with credit. That is a proposal only; the choice is Mike Hoydich's and has not been made. The whole area is also available as <a href="/coast-commons.json">one JSON file</a>.</p>
+<p>This pattern and the town notes are meant to be copied. The licence is Creative Commons Attribution 4.0 (CC BY 4.0), chosen on November 12, 2026: anyone may reuse and adapt the words and drawings with credit. See <a href="/coast-commons/LICENSE.txt">the licence note</a>. The whole area is also available as <a href="/coast-commons.json">one JSON file</a>.</p>
 </section>
 <script>
 (function(){
@@ -489,7 +490,7 @@ function twin() {
     verified: VERIFIED,
     what: 'An open study of community-run shared houses, clubhouses and boats for the beach towns within about 25 miles of El Segundo, California, with each town\'s official rules pages.',
     notice: ['A study and a public resource, not an offer.', 'Nothing is being bought or sold. No money is being raised. No listings.', 'Not legal, tax or investment advice.', 'Tradable shares in property are likely securities and need a securities lawyer.'],
-    licence: { status: 'proposed, not decided', proposal: 'CC BY 4.0 for the words, drawings and this file', decision: 'Left for Mike Hoydich. No LICENSE file has been added.' },
+    licence: { status: 'chosen', chosen: '2026-11-12', spdx: 'CC-BY-4.0', covers: 'the words, drawings, cards and this file; not the linked sources', note: 'https://pointcast.xyz/coast-commons/LICENSE.txt', text: 'https://pointcast.xyz/coast-commons/LICENSE-CC-BY-4.0.txt' },
     method: { origin: ORIGIN, distance: 'Straight-line (great-circle, haversine) miles from the origin to one approximate reference point per town. Not driving distance.', radius_miles: 25, rules: 'Each rule summary is a short paraphrase of a page opened on the verified date. Entries with verified:false were not checked and carry no source.' },
     pages: { hub: `${BASE}/coast-commons/`, flagship: `${BASE}/coast-commons/el-segundo/`, pattern: `${BASE}/coast-commons/pattern/` },
     pattern: ['The first ten people', 'A rented weekend first', 'House rules', 'Open books', 'Use-rights, not ownership', 'A public-good share'],
@@ -505,6 +506,7 @@ function twin() {
     })),
     left_out: LEFT_OUT,
     studies: STUDIES,
+    pageIndex: pageIndex('coast-commons', towns.filter((t) => !t.flagship)),
     sources: { official_pages_opened: official.length, third_party_copies_opened: Object.values(SRC).length - official.length, list: Object.values(SRC).map((s) => ({ ...s, opened: VERIFIED })) },
   };
 }

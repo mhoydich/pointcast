@@ -1,6 +1,6 @@
 # AGENTS.md
 
-> **Operations (2026-10-01):** worktrees, builds, and deploys follow [`docs/OPERATIONS.md`](docs/OPERATIONS.md). Deploy only with `scripts/deploy.sh`. Older deploy notes below (Vercel, Netlify, `blocks-rebuild`) are historical.
+> **Operations (2026-10-01):** worktrees, builds, and deploys follow [`docs/OPERATIONS.md`](docs/OPERATIONS.md). Merging to main deploys through GitHub; `scripts/deploy.sh --fallback` is the iMac fallback only. Older deploy notes below (Vercel, Netlify, `blocks-rebuild`) are historical.
 
 **Multi-agent workflow for pointcast.xyz v2**
 

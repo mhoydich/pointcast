@@ -23,7 +23,14 @@ with (root / 'calls.jsonl').open('a') as out:
 if name == 'git':
     if args[:1] == ['-C']: args = args[2:]
     if args[:1] == ['rev-parse']:
-        print(data['main'] if args[-1] == 'origin/main' else root / 'repository')
+        if args[-1] == 'origin/main':
+            # The fallback re-reads origin/main right before upload; mainAfter
+            # simulates GitHub merging something new during the build.
+            with (root / 'calls.jsonl').open() as seen:
+                reads = sum(1 for line in seen if json.loads(line)['args'][-1:] == ['origin/main'])
+            print(data['mainAfter'] if reads > 1 and data.get('mainAfter') else data['main'])
+        else:
+            print(root / 'repository')
     elif args[:2] == ['cat-file', '-t']:
         if args[-1] not in data['known']: sys.exit(1)
         print('tag' if args[-1] in data['tags'] else 'commit')
@@ -59,13 +66,15 @@ sys.exit(92)
 
 class PinnedReleaseTests(unittest.TestCase):
     def run_case(self, args, *, live=LIVE, known=None, ancestors=None,
-                 missing='', file_count=3001, tags=None, marker_missing=False):
+                 missing='', file_count=3001, tags=None, marker_missing=False,
+                 dry_run=True, main_after=None):
         with tempfile.TemporaryDirectory(prefix='pc-pin-offline-') as directory:
             root = Path(directory)
             data = {'live': live, 'main': MAIN, 'known': known or [LIVE, PIN, MAIN, OTHER],
                     'ancestors': ancestors if ancestors is not None else [[LIVE, PIN], [PIN, MAIN], [LIVE, MAIN]],
                     'missing': missing, 'fileCount': file_count,
-                    'tags': tags or [], 'markerMissing': marker_missing}
+                    'tags': tags or [], 'markerMissing': marker_missing,
+                    'mainAfter': main_after}
             (root / 'case.json').write_text(json.dumps(data))
             binary = root / 'bin'
             binary.mkdir()
@@ -91,8 +100,10 @@ class PinnedReleaseTests(unittest.TestCase):
                                PC_TEST_FIXTURE=str(root), PC_DEPLOY_DIR=str(work),
                                PC_DEPLOY_LOCK=str(root / 'lock'), PC_DEPLOY_LOG=str(root / 'deploy.log'))
             # HOME and the real global marker remain untouched. The cat transport
-            # supplies a fixture marker; --dry-run always stops before upload/write.
-            result = subprocess.run(['/bin/bash', str(SCRIPT), '--dry-run', *args],
+            # supplies a fixture marker; --dry-run always stops before upload/write,
+            # and a non-dry case is only used where main moves, which stops first.
+            mode = ['--fallback', '--dry-run'] if dry_run else ['--fallback']
+            result = subprocess.run(['/bin/bash', str(SCRIPT), *mode, *args],
                                     env=environment, text=True, capture_output=True, timeout=15)
             calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()] if (root / 'calls.jsonl').exists() else []
             self.assertFalse((root / 'lock').exists(), 'EXIT cleanup releases only fixture lock')
@@ -162,6 +173,14 @@ class PinnedReleaseTests(unittest.TestCase):
                 self.assertEqual(checkouts[0][-1], PIN)
                 self.assertEqual(len(builds), 1)
                 self.assertIn('GATE:', result.stdout)
+
+    def test_fallback_refuses_upload_when_main_moved_during_build(self):
+        result, checkouts, builds, calls = self.run_case([], dry_run=False, main_after=OTHER)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(checkouts[0][-1], MAIN)
+        self.assertEqual(len(builds), 1)
+        self.assertIn('MAIN MOVED', result.stdout)
+        self.assertEqual(sum(1 for row in calls if row['name'] == 'git' and 'fetch' in row['args']), 2)
 
 
 if __name__ == '__main__':

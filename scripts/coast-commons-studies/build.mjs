@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path';
 import * as surf from './surf-house.sources.mjs';
 import * as milk from './fresh-milk.sources.mjs';
 import { shareHead } from '../unfurl-cards/cards.mjs';
+import { seoFor } from '../unfurl-cards/seo.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
@@ -80,12 +81,13 @@ const url = (s) => `${SITE}/coast-commons/${s.slug}/`;
 // a shorter description for previews than the one search engines read.
 function head(s) {
   const title = `${s.title}, a study: Coast Commons`;
+  const description = seoFor(`/coast-commons/${s.slug}/`)?.description ?? s.description;
   return [
-    `<meta name="description" content="${esc(s.description)}">`,
+    `<meta name="description" content="${esc(description)}">`,
     `<link rel="canonical" href="${url(s)}">`,
     '<link rel="icon" href="/favicon.svg">',
     '<link rel="alternate" type="application/json" href="/coast-commons.json">',
-    shareHead(`/coast-commons/${s.slug}/`, title, s.description)
+    shareHead(`/coast-commons/${s.slug}/`, title, description)
       ?? `<meta property="og:title" content="${esc(title)}">\n<meta property="og:description" content="${esc(s.description)}">`,
     '<meta name="author" content="Claude">',
   ].join('\n');
@@ -138,7 +140,7 @@ ${li.map((x) => `<li>${x}</li>`).join('\n')}
 
 function licence(s) {
   const inner = `<h2 id="licence-h">Use it</h2>
-<p>This study is meant to be read, copied and corrected. The proposed licence for the words and drawings is Creative Commons Attribution 4.0 (CC BY 4.0), which would let anyone reuse and adapt them with credit. That is a proposal only; the choice is Mike Hoydich's and has not been made, so until it is, ask before republishing. The linked sources belong to their publishers and are not covered. Both studies are listed in <a href="/coast-commons.json">the Coast Commons JSON file</a>.</p>`;
+<p>This study is meant to be read, copied and corrected. The words and drawings are under Creative Commons Attribution 4.0 (CC BY 4.0), chosen on November 12, 2026: anyone may reuse and adapt them with credit. See <a href="/coast-commons/LICENSE.txt">the licence note</a>. The linked sources belong to their publishers and are not covered. Both studies are listed in <a href="/coast-commons.json">the Coast Commons JSON file</a>.</p>`;
   return s.slug === 'sb-surf-house'
     ? `<section id="licence" aria-labelledby="licence-h"><div class="wrap">\n<p class="eyebrow">Licence</p>\n${inner}\n</div></section>`
     : `<section id="licence" aria-labelledby="licence-h">\n${inner}\n</section>`;
@@ -147,7 +149,7 @@ function licence(s) {
 function footer(s) {
   const other = STUDIES.find((x) => x.slug !== s.slug);
   return `<footer class="ccfoot">
-<p>A <a href="/coast-commons/">Coast Commons</a> study on <a href="/">PointCast</a>, written by Claude at Mike Hoydich's request. Free for anyone to read. Proposed licence for the words and drawings: CC BY 4.0, not yet decided. A study, not an offer.</p>
+<p>A <a href="/coast-commons/">Coast Commons</a> study on <a href="/">PointCast</a>, written by Claude at Mike Hoydich's request. Free for anyone to read. Licence for the words and drawings: <a href="/coast-commons/LICENSE.txt">CC BY 4.0</a>. A study, not an offer.</p>
 <p>Sources opened ${READ_ON_WORDS}. The companion study is <a href="/coast-commons/${other.slug}/">${esc(other.title)}</a>. Found something out of date? The page source lives in <code>scripts/coast-commons-studies/</code> in the PointCast repository.</p>
 </footer>`;
 }
@@ -230,7 +232,7 @@ export function studiesIndex() {
     author: "Claude, at Mike Hoydich's request",
     notice: NOTICE,
     method: `Every source was opened on ${READ_ON} and is linked beside the claim it supports. Paraphrase only. No private individuals are named, and a business is named only where the page links its own site or an official page. What could not be verified is listed here and repeated on the page beside the claim it affects.`,
-    licence: { status: 'proposed, not decided', proposal: 'CC BY 4.0 for the words and drawings of the two study pages, not the linked sources', decision: 'Left for Mike Hoydich. No LICENSE file has been added.' },
+    licence: { status: 'chosen', chosen: '2026-11-12', spdx: 'CC-BY-4.0', covers: 'the words and drawings of the two study pages; not the linked sources', note: 'https://pointcast.xyz/coast-commons/LICENSE.txt' },
     list: build().index,
   };
 }

@@ -430,7 +430,8 @@ test('both pages carry the plain not-an-emergency line and the mobile meta', () 
     assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/);
     assert.match(html, /apple-mobile-web-app-capable/);
     assert.match(html, /apple-touch-icon/);
-    assert.doesNotMatch(html, /https?:\/\/(?!pointcast\.xyz)/, `${p} makes no third-party request`);
+    // The JSON-LD block names schema.org as its vocabulary; that is a label, not a request.
+    assert.doesNotMatch(html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, ''), /https?:\/\/(?!pointcast\.xyz)/, `${p} makes no third-party request`);
   }
   assert.match(read(PAGES[0]), /<link rel="manifest" href="\/light\/manifest\.webmanifest">/);
   assert.match(read(PAGES[1]), /<meta name="robots" content="noindex, nofollow, noarchive">/);

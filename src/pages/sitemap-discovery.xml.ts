@@ -379,6 +379,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/baby-bonfire/prayer/', 'weekly', '0.8'],
   ['https://pointcast.xyz/baby-bonfire/room/', 'weekly', '0.8'],
   ['https://pointcast.xyz/baby-bonfire/ar/', 'weekly', '0.8'],
+  ['https://pointcast.xyz/baby-bonfire/higher-purpose/', 'weekly', '0.8'],
   ['https://pointcast.xyz/light/', 'weekly', '0.9'],
   ['https://pointcast.xyz/light.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/wild', 'daily', '0.96'],

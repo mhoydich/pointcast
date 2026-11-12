@@ -12,7 +12,8 @@
  * never inside the repo, with owner-only permissions. Keys are never printed.
  *
  * Running it again rotates every key: the old ones stop working at the next deploy.
- * Pages reads new secrets on the next deployment, so finish with scripts/deploy.sh --force.
+ * Pages reads new secrets on the next deployment, so finish with
+ * gh workflow run cloudflare-pages.yml --ref main.
  * Setup notes: docs/setup/family-room.md.
  */
 import { randomBytes } from 'node:crypto';
@@ -115,7 +116,7 @@ if (flag('--set')) {
 }
 
 console.log('Then:');
-console.log('  1. Redeploy so the secrets reach the Functions: scripts/deploy.sh --force');
+console.log('  1. Redeploy so the secrets reach the Functions: gh workflow run cloudflare-pages.yml --ref main');
 console.log('  2. Send each bot file to its person and have them paste it into their Grok.');
 console.log(`  3. Watch at ${origin}/family-room/`);
 console.log('  4. Delete the files once everyone has pasted theirs.');

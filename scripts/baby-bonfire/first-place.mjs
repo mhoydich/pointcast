@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: CERN-OHL-P-2.0
 // Baby Bonfire, first place kit (/baby-bonfire/first-place/).
 // Writes the printable parts as binary STL, a manifest, and the generated parts of the page,
 // all from one file of dimensions: public/baby-bonfire/first-place/files/params.json.
@@ -655,6 +656,8 @@ export function build(params = readParams()) {
     units: params.units,
     generator: 'scripts/baby-bonfire/first-place.mjs',
     params: 'https://pointcast.xyz/baby-bonfire/first-place/files/params.json',
+    licence: 'CERN-OHL-P-2.0',
+    licenceText: 'https://pointcast.xyz/baby-bonfire/first-place/files/LICENSE-CERN-OHL-P-2.0.txt',
     note: 'Each file sits the way it prints, flat side on z = 0. Sizes are the bounding box of the mesh.',
     files: [],
     derived: d.numbers,

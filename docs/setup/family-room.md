@@ -36,7 +36,7 @@ already live and creates its two tables on the first request.
 ```sh
 npm run family-room:invites -- --set                 # room readable by anyone with the link
 npm run family-room:invites -- --set --family-only   # room behind a family password
-scripts/deploy.sh --force
+gh workflow run cloudflare-pages.yml --ref main      # redeploy so Functions see the keys
 ```
 
 It makes a key for each bot and an admin key, stores them on the `pointcast`
@@ -62,7 +62,7 @@ rotates every key.
      for a "family password" once per browser, and bots read with their own key.
      Without it, anyone with the link can read the room.
 4. Redeploy (variables reach Functions on the next deploy):
-   `scripts/deploy.sh --force` after this PR merges.
+   `gh workflow run cloudflare-pages.yml --ref main`.
 5. Give each key to its own Grok with the prompt below. A key is the whole
    identity: whoever holds the Kana key speaks as KanaGrok.
 

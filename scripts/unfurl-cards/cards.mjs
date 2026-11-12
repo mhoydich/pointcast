@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pageIndex, seoFor } from './seo.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const PUBLIC = resolve(ROOT, 'public');
@@ -82,6 +83,36 @@ export const CARDS = [
     alt: `${name}, a Baby Bonfire concept sketch. A drawing of a small house on a dusk street with its window lit.`,
     ...extra,
   })),
+  // Baby Bonfire's workshop pages and the film page are not houses on the street, so their
+  // cards wear the street itself (or the mesh drawing, for the mesh notes).
+  ...[
+    ['open-spec', 'Open spec v0', ['Open spec', 'v0'], ['Read the draft rules for a place,', 'a piece and four signals.'], 'street'],
+    ['open-mesh', 'Open mesh notes', ['Open mesh', 'notes'], ['Read how places could talk inside', 'a home and between homes.'], 'mesh'],
+    ['barter-board', 'Barter board', ['Barter', 'board'], ['Browse example trades between', 'makers, with no payments.'], 'street'],
+    ['make-a-piece', 'Make a piece', ['Make a', 'piece'], ['Add a scene, an idea, a file', 'or a test result.'], 'street'],
+    ['first-place', 'First place', ['First place'], ['Look at a printable tile, puck', 'and tag recess, with files.'], 'street'],
+  ].map(([slug, name, headline, line, motif]) => ({
+    path: `/baby-bonfire/${slug}/`, area: BB, kicker: 'BABY BONFIRE', motif, headline, line,
+    description: seoFor(`/baby-bonfire/${slug}/`).description,
+    alt: motif === 'mesh'
+      ? `${name}, a Baby Bonfire concept sketch. A drawing of four small houses at dusk with a signal hopping from roof to roof and up to a relay mast.`
+      : `${name}, a Baby Bonfire concept sketch. A drawing of small houses on a hillside street at dusk, every window lit, and a beacon burning on the hilltop.`,
+  })),
+  // Prayer Fire's card is the fire itself: the page's own poster photograph, cropped to the
+  // hearth, with the title over a dark gradient. `photo` is a file under public/.
+  {
+    path: '/baby-bonfire/prayer/', area: BB, motif: 'photo', photo: 'public/baby-bonfire/prayer/media/hearth-poster.jpg',
+    headline: ['Prayer Fire'], line: ['Say what it is for.', 'Give it to the fire.'],
+    description: seoFor('/baby-bonfire/prayer/').description,
+    alt: 'Prayer Fire. A small copper and dark stone hearth with a lit flame in its arched opening, on a linen-covered table in warm brown light.',
+  },
+  // A Higher Purpose is a 3D place, so its card draws the island itself in square tiles.
+  {
+    path: '/baby-bonfire/higher-purpose/', area: BB, kicker: 'BABY BONFIRE', motif: 'island', ld: 'CreativeWork',
+    headline: ['A Higher', 'Purpose'], line: ['Walk a small island of fire,', 'water, air and ground.'],
+    description: seoFor('/baby-bonfire/higher-purpose/').description,
+    alt: 'A Higher Purpose, a Baby Bonfire sketch. A drawing of a small island of square tiles at dusk, with a fire at its centre, water around it, white posts, standing stones and drifting motes.',
+  },
   {
     path: '/coast-commons/', area: CC, kicker: 'A PUBLIC GOOD · OPEN STUDY', motif: 'coast',
     headline: ['Coast', 'Commons'], line: ['Read what a shared house could', 'be in fifteen beach towns.'],
@@ -113,6 +144,27 @@ export const CARDS = [
     description: 'Could a South Bay neighbourhood get fresh milk from close by? Dairy law, food safety, animal zoning by town and a six-rung ladder. A study, not an offer.',
     alt: 'Fresh Milk, Local, a Coast Commons study, not an offer. A drawing of a cow on a hill above the ocean, a barn, bands of fog and a glass milk bottle.',
   },
+  // The fifteen town pages share the coast drawing, with the town named in the words.
+  ...[
+    ['malibu', 'Malibu', ['Malibu'], 'Read the beach and city rules'],
+    ['santa-monica', 'Santa Monica', ['Santa Monica'], 'Read the beach and city rules'],
+    ['venice', 'Venice', ['Venice'], 'Read the beach and city rules'],
+    ['marina-del-rey', 'Marina del Rey', ['Marina del Rey'], 'Read the marina and county rules'],
+    ['playa-del-rey', 'Playa del Rey', ['Playa del Rey'], 'Read the beach and city rules'],
+    ['manhattan-beach', 'Manhattan Beach', ['Manhattan', 'Beach'], 'Read the beach and city rules'],
+    ['hermosa-beach', 'Hermosa Beach', ['Hermosa', 'Beach'], 'Read the beach and city rules'],
+    ['redondo-beach', 'Redondo Beach', ['Redondo', 'Beach'], 'Read the beach and city rules'],
+    ['torrance', 'Torrance Beach', ['Torrance', 'Beach'], 'Read the beach and city rules'],
+    ['palos-verdes-estates', 'Palos Verdes Estates', ['Palos Verdes', 'Estates'], 'Read the shore and city rules'],
+    ['rancho-palos-verdes', 'Rancho Palos Verdes', ['Rancho', 'Palos Verdes'], 'Read the shore and city rules'],
+    ['san-pedro', 'San Pedro', ['San Pedro'], 'Read the beach and city rules'],
+    ['long-beach', 'Long Beach', ['Long Beach'], 'Read the beach and city rules'],
+    ['seal-beach', 'Seal Beach', ['Seal Beach'], 'Read the beach and city rules'],
+  ].map(([slug, name, headline, first]) => ({
+    path: `/coast-commons/${slug}/`, area: CC, kicker: 'COAST COMMONS', motif: 'coast', headline,
+    line: [first, 'for a shared house.'],
+    alt: `${name}, a Coast Commons study, not an offer. A drawn strip of coast with fifteen stops from Malibu to Seal Beach and a small house marking El Segundo.`,
+  })),
   {
     path: '/house/', area: HC, kicker: 'A TV AND A PHONE', motif: 'tv',
     headline: ['House', 'Channel'], line: ['Put a hearth on the TV and', 'use your phone as the remote.'],
@@ -180,6 +232,31 @@ export function cardTags(card, title, description, publicDir = PUBLIC) {
   ].join('\n');
 }
 
+const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+/**
+ * The two things every page in these areas also carries: og:site_name, and one JSON-LD block
+ * (a CollectionPage for an area's hub, a WebPage for any other page). `title` and `description`
+ * are the words as read, not escaped. The block names no author, offer, price or rating.
+ */
+export function readableTags(card, title, description, publicDir = PUBLIC) {
+  const hub = card.path === `/${card.path.split('/')[1]}/`;
+  const ld = {
+    '@context': 'https://schema.org',
+    '@type': card.ld ?? (hub ? 'CollectionPage' : 'WebPage'),
+    name: title,
+    description,
+    url: `${SITE}${card.path}`,
+    inLanguage: 'en',
+    image: cardUrl(card, publicDir),
+    isPartOf: { '@type': 'WebSite', name: 'PointCast', url: SITE },
+  };
+  return [
+    '<meta property="og:site_name" content="PointCast">',
+    `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`,
+  ].join('\n');
+}
+
 /**
  * For the page generators: the whole Open Graph block of a page with a card, given the title
  * and description the page would otherwise use. Returns null for a page without a card.
@@ -195,10 +272,11 @@ export function shareHead(path, title, description, publicDir = PUBLIC) {
     `<meta property="og:url" content="${SITE}${path}">`,
     '<meta property="og:type" content="website">',
     cardTags(card, t, d, publicDir),
+    readableTags(card, unesc(esc(title)), unesc(esc(description)), publicDir),
   ].join('\n');
 }
 
-const OWNED = /^<meta (?:property="og:image(?::[a-z_]+)?"|name="twitter:[a-z:_]+") content="[^"]*">\n/gm;
+const OWNED = /^(?:<meta (?:property="og:(?:image(?::[a-z_]+)?|site_name)"|name="twitter:[a-z:_]+") content="[^"]*">|<script type="application\/ld\+json">[^\n]*<\/script>)\n/gm;
 const META = (prop) => new RegExp(`(<meta property="${prop}" content=")([^"]*)(">)`);
 
 /**
@@ -209,6 +287,8 @@ export function stampHead(html, card, publicDir = PUBLIC) {
   const end = html.indexOf('</head>');
   if (end < 0) throw new Error(`unfurl cards: ${pageFile(card)} has no </head>`);
   let head = html.slice(0, end).replace(OWNED, '');
+  const seo = seoFor(card.path);
+  if (seo) head = head.replace(/(<meta name="description" content=")[^"]*(">)/, (_, a, c) => `${a}${esc(seo.description)}${c}`);
   for (const [prop, value] of [['og:title', card.title], ['og:description', card.description]]) {
     if (!META(prop).test(head)) throw new Error(`unfurl cards: ${pageFile(card)} has no ${prop}`);
     if (value !== undefined) head = head.replace(META(prop), (_, a, __, c) => `${a}${esc(value)}${c}`);
@@ -218,8 +298,21 @@ export function stampHead(html, card, publicDir = PUBLIC) {
   const lines = head.split('\n');
   let last = -1;
   lines.forEach((line, i) => { if (line.startsWith('<meta property="og:')) last = i; });
-  lines.splice(last + 1, 0, cardTags(card, title, description, publicDir));
+  lines.splice(last + 1, 0, cardTags(card, title, description, publicDir), readableTags(card, unesc(title), seo?.description ?? unesc(description), publicDir));
   return lines.join('\n') + html.slice(end);
+}
+
+
+/** The hand-written JSON twins; Coast Commons' is written by scripts/coast-commons/build.mjs. */
+export const TWINS = ['baby-bonfire', 'house', 'light'];
+const INDEX_AT = /,\n  "pageIndex": \[[\s\S]*\]\n\}\n?$/;
+
+/** A twin's text with its pageIndex (every public page: url, title, summary) set from seo.mjs. */
+export function withPageIndex(text, area) {
+  const rows = pageIndex(area).map((r) => `    ${JSON.stringify(r).replace(/^\{/, '{ ').replace(/\}$/, ' }').replace(/","/g, '", "').replace(/":"/g, '": "')}`);
+  const block = `,\n  "pageIndex": [\n${rows.join(',\n')}\n  ]\n}\n`;
+  const body = text.replace(INDEX_AT, '').replace(/\n\}\n?$/, '');
+  return `${body}${block}`;
 }
 
 /** Scenes on the Baby Bonfire street (public/baby-bonfire.json) that have no card yet. */
@@ -253,6 +346,11 @@ export function stale(root = ROOT) {
     if (GENERATED(card)) {
       if (!html.includes(`<meta property="og:image" content="${cardUrl(card, publicDir)}">`)) out.push(`${pageFile(card)}: card tags are out of date; run its generator`);
     } else if (stampHead(html, card, publicDir) !== html) out.push(`${pageFile(card)}: card tags are out of date`);
+  }
+  for (const area of TWINS) {
+    const file = resolve(root, `public/${area}.json`);
+    const text = readFileSync(file, 'utf8');
+    if (withPageIndex(text, area) !== text) out.push(`public/${area}.json: pageIndex is out of date`);
   }
   return out;
 }

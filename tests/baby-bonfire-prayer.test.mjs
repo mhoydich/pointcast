@@ -61,7 +61,9 @@ test('every file the page asks for is in its own folder, and small', () => {
 test('no outside requests: no script files, frames, remote urls or trackers', () => {
   assert.doesNotMatch(html, /<script[^>]+src=/i);
   assert.doesNotMatch(html, /<iframe\b|<object\b|<embed\b|@import|XMLHttpRequest|sendBeacon|WebSocket|EventSource|getUserMedia|geolocation/);
-  for (const m of html.matchAll(/https?:\/\/[^\s"'<>)]+/g)) {
+  // The JSON-LD block names schema.org as its vocabulary; that is a label, not a request.
+  const requests = html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '');
+  for (const m of requests.matchAll(/https?:\/\/[^\s"'<>)]+/g)) {
     assert.ok(m[0].startsWith('https://pointcast.xyz/baby-bonfire/') || m[0] === 'http://www.w3.org/2000/svg', m[0]);
   }
   for (const m of html.matchAll(/<link[^>]+href="([^"]+)"/g)) {
@@ -122,7 +124,7 @@ test('content rules: no claims, no prices, nothing the area leaves out', () => {
 test('the hub links it from its own section, not from the street or the earlier-work strip', () => {
   const section = hub.slice(hub.indexOf('id="screen-h"'), hub.indexOf('id="work-h"'));
   assert.ok(section.includes('<a href="/baby-bonfire/prayer/">'));
-  assert.match(section, /These three are screens\./);
+  assert.match(section, /These four are screens\./);
   assert.equal((hub.match(/class="house" href=/g) || []).length, twin.scenes.length, 'the street is unchanged');
   const earlier = hub.slice(hub.indexOf('id="earlier-h"'), hub.indexOf('<footer>'));
   assert.ok(!earlier.includes('/baby-bonfire/prayer/'));
@@ -132,4 +134,95 @@ test('it is listed for machines: sitemap, llms and the full text', () => {
   assert.ok(read('src/pages/sitemap-discovery.xml.ts').includes("'https://pointcast.xyz/baby-bonfire/prayer/'"));
   assert.ok(read('public/llms.txt').includes('https://pointcast.xyz/baby-bonfire/prayer/'));
   assert.ok(read('public/llms-full.txt').includes('https://pointcast.xyz/baby-bonfire/prayer/'));
+});
+
+// Send the fire: after an offering, one tap makes a picture of this fire with the words and
+// hands it to the device's share sheet. The picture is made on the device and goes nowhere
+// unless the person sends or saves it.
+const script = html.slice(html.indexOf('<script>'), html.indexOf('</script>', html.indexOf('<script>')));
+const between = (a, b) => script.slice(script.indexOf(a), script.indexOf(b, script.indexOf(a)));
+
+test('send the fire: the closing line gets two quiet buttons, and End stays', () => {
+  assert.match(html, /<button class="ghost warm" id="sendBtn" type="button">Send the fire<\/button>/);
+  assert.match(html, /<button class="ghost" id="againBtn" type="button">Offer another<\/button>/);
+  assert.match(html, /<button class="ghost" id="endBtn" type="button">End<\/button>/);
+  assert.match(html, /<div class="keep" id="keepsake" role="dialog" aria-modal="true"/);
+  assert.match(html, /id="saveLink" download="prayer-fire\.jpg"/);
+  assert.match(html, />Save picture</);
+  assert.match(html, />Copy link</);
+  assert.match(html, /id="closeKeep"/);
+  assert.match(script, /CLOSE='Offered\. The fire has it now\.'/);
+  // the buttons show with the closing line, and the minute no longer hides them on a timer
+  assert.match(between('function endSit(', 'function again('), /lineEl\.textContent=CLOSE;[^}]*after\.hidden=false/);
+  assert.doesNotMatch(between('function endSit(', 'function again('), /6500/);
+});
+
+test('send the fire: the picture is 1080x1350 JPEG, made before the tap', () => {
+  assert.match(script, /var PW=1080,PH=1350/);
+  assert.match(script, /'image\/jpeg',0\.9\)/);
+  assert.match(script, /new File\(\[blob\],'prayer-fire\.jpg',\{type:'image\/jpeg'\}\)/);
+  assert.match(script, /posterEl\.src='media\/hearth-poster\.jpg'/);
+  assert.match(script, /document\.fonts/);
+  assert.match(script, /PRAYER FIRE · POINTCAST\.XYZ\/BABY-BONFIRE\/PRAYER/);
+  assert.match(script, /toLocaleDateString\(undefined/);
+  // made when the words reach the fire, not when the button is pressed
+  assert.match(between('function startSit(', 'function nextLine('), /makeKeep\(offered\)/);
+  // the alt text carries the words
+  assert.match(script, /keepImg\.alt=keep\.alt/);
+  assert.match(script, /with the words “'\+words/);
+});
+
+test('send the fire: share is guarded by canShare and called straight from the tap', () => {
+  const handler = between("sendBtn.addEventListener('click'", 'openKeep();\n});');
+  assert.ok(handler.length > 0, 'the send handler is there');
+  assert.equal((script.match(/navigator\.share\(/g) || []).length, 1, 'one share call');
+  assert.ok(handler.indexOf('navigator.canShare(d)') > -1 && handler.indexOf('navigator.canShare(d)') < handler.indexOf('navigator.share(d)'), 'canShare comes first');
+  assert.match(handler, /var d=\{files:\[f\]\}/, 'only the file is shared');
+  const beforeShare = handler.slice(0, handler.indexOf('navigator.share('));
+  assert.doesNotMatch(beforeShare, /await|\.then\(|setTimeout|Promise/, 'nothing is awaited before share');
+  // a cancelled share is silent; anything else, or no share at all, opens the keepsake
+  assert.match(handler, /e\.name!=='AbortError'\)openKeep\(\)/);
+  // focus returns to the send button when the keepsake closes
+  assert.match(between('function shutKeep(', 'closeKeep.addEventListener'), /sendBtn\.focus\(\)/);
+  assert.match(script, /e\.key==='Escape'/);
+  // Copy link copies the page address only
+  assert.match(script, /var SITE='https:\/\/pointcast\.xyz\/baby-bonfire\/prayer\/'/);
+  assert.match(script, /navigator\.clipboard\.writeText\(SITE\)/);
+  assert.equal((script.match(/writeText\(/g) || []).length, 1);
+});
+
+test('send the fire: the words go nowhere and are kept nowhere', () => {
+  // no new network: the one fetch is still the media loader, and nothing else talks out
+  assert.equal((script.match(/fetch\(/g) || []).length, 1);
+  assert.doesNotMatch(script, /XMLHttpRequest|sendBeacon|WebSocket|EventSource|navigator\.sendBeacon|import\(|new Worker|postMessage/);
+  // the only things given a src or href are the poster, a blob of this page, or nothing
+  for (const m of script.matchAll(/\.(src|href)=([^;,)]+)/g)) {
+    assert.ok(["'media/hearth-poster.jpg'", 'keep.url', 'URL.createObjectURL(new Blob([buf]'].some((ok) => m[2].startsWith(ok)), m[0]);
+  }
+  // storage: still only the count
+  assert.deepEqual(script.match(/localStorage\.setItem\([^)]*\)/g), ['localStorage.setItem(KEY,String(n)']);
+  assert.doesNotMatch(script, /sessionStorage|document\.cookie|indexedDB|caches\.|openDatabase/);
+  // nothing written to the address bar
+  assert.doesNotMatch(script, /location\s*\.\s*(href|hash|search|pathname)\s*=|location\.(assign|replace|reload)\(|(window|document)\.location\s*=|history\.(pushState|replaceState|go|back|forward)\(/);
+  // the words are dropped with the picture on "Offer another"
+  assert.match(between('function dropKeep(', 'function fillKeep('), /offered=''/);
+  assert.match(between('function dropKeep(', 'function fillKeep('), /revokeObjectURL|dropUrl\(\)/);
+  assert.match(between('function again(', "endBtn.addEventListener"), /dropKeep\(\)/);
+});
+
+test('the offering moment: about a second and a half, and a plain cross-fade without motion', () => {
+  const launch = between('function launch(', 'function frame(');
+  assert.match(launch, /if\(RM\)\{/, 'a reduced-motion branch');
+  assert.match(launch, /return 1\.2;/);
+  assert.match(launch, /return 0\.06\+\(n-1\)\*gap\+1\.05;/);
+  assert.match(script, /swell=Math\.min\(1,swell\+0\.45\)/, 'the flame swells as the words arrive');
+  assert.match(html, /\.sheet,\.sit,\.line\{transition:opacity \.6s ease\}/);
+});
+
+test('iPhone manners and a page that reads without scripts', () => {
+  assert.match(html, /<input id="words"[^>]*enterkeyhint="send"/);
+  assert.match(between('function offer(', 'form.addEventListener'), /wordsEl\.blur\(\)/);
+  assert.match(html, /\.chips\{-webkit-mask-image:linear-gradient/);
+  assert.match(html, /env\(safe-area-inset-bottom\)\) calc\(14px \+ env\(safe-area-inset-left\)\)/);
+  assert.match(html, /<noscript><p class="fine">This page needs scripts to light the fire\. How it works:/);
 });

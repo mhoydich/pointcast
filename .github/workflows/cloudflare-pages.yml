@@ -2,12 +2,19 @@ name: Deploy PointCast to Cloudflare Pages
 
 # The Cloudflare Pages project "pointcast" is a Direct Upload project (it has no
 # Git connection, and Cloudflare can't add one to an existing Direct Upload
-# project). This workflow is the auto-deploy: every push to main builds the site
-# and uploads it with wrangler, so what's on main is what's live.
+# project). This workflow is the deploy path: every push to main is built,
+# gated (the same checks as scripts/deploy.sh: a failed build retries once;
+# dist must hold /, /court/, /blocks.json and at least 3,000 files), uploaded
+# with wrangler, and smoke-tested on https://pointcast.xyz. A green run means
+# that commit is live.
 #
-# One-time setup (repo owner): add a repository secret CLOUDFLARE_API_TOKEN with
-# the "Cloudflare Pages: Edit" permission on the account. Until that secret
-# exists the build still runs (a useful check) and the deploy step is skipped.
+# The CLOUDFLARE_API_TOKEN repository secret has been set since early Nov 2026.
+# If it ever goes missing, the build and gate still run and the deploy and
+# smoke steps are skipped with a "Not deployed" warning.
+#
+# Redeploy the same commit: gh workflow run cloudflare-pages.yml --ref main
+# Fallback when this workflow is red or GitHub is down: scripts/deploy.sh
+# --fallback on the iMac (docs/OPERATIONS.md, section 3).
 
 on:
   push:
@@ -41,8 +48,28 @@ jobs:
       - name: Install
         run: npm ci
 
+      # One retry, as in scripts/deploy.sh: most failures are a transient
+      # fetch (api.tzkt.io). A partial dist never survives into the retry.
       - name: Build
-        run: npm run build
+        run: |
+          if ! npm run build; then
+            echo "::warning title=Build retry::Build failed once (often a transient fetch like api.tzkt.io); retrying."
+            rm -rf dist
+            npm run build
+          fi
+
+      # A failed or partial build never reaches the deploy step.
+      - name: Gate the build
+        id: gate
+        run: |
+          [ -d dist ] || { echo "::error title=Gate::dist/ does not exist. Not deploying."; exit 1; }
+          files=$(find dist -type f | wc -l | tr -d ' ')
+          echo "dist holds $files files"
+          for page in index.html court/index.html blocks.json; do
+            [ -f "dist/$page" ] || { echo "::error title=Gate::dist/$page is missing. Not deploying."; exit 1; }
+          done
+          [ "$files" -ge 3000 ] || { echo "::error title=Gate::Only $files files in dist (need at least 3000). Not deploying."; exit 1; }
+          echo "files=$files" >> "$GITHUB_OUTPUT"
 
       - name: Check for the Cloudflare token
         id: token
@@ -54,15 +81,15 @@ jobs:
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
             # A green run here does not mean the site changed. Say so where people look.
-            echo "::warning title=Not deployed::Build passed, but nothing was deployed. CLOUDFLARE_API_TOKEN is not set, so pointcast.xyz still serves the last scripts/deploy.sh release, not ${GITHUB_SHA::8}."
+            echo "::warning title=Not deployed::Build and gate passed, but nothing was deployed: the CLOUDFLARE_API_TOKEN secret is not available to this run, so pointcast.xyz still serves an earlier deploy, not ${GITHUB_SHA::8}."
             {
               echo "## Not deployed"
               echo ""
-              echo "The build passed, but the deploy step was skipped because the \`CLOUDFLARE_API_TOKEN\` secret is not set."
-              echo "pointcast.xyz still serves the last \`scripts/deploy.sh\` release, not \`${GITHUB_SHA::8}\`."
+              echo "The build and gate passed, but the deploy and smoke steps were skipped because the \`CLOUDFLARE_API_TOKEN\` secret is not available to this run."
+              echo "pointcast.xyz still serves an earlier deploy, not \`${GITHUB_SHA::8}\`."
               echo ""
-              echo "To ship this commit, run \`scripts/deploy.sh\` on the deploy machine (see docs/OPERATIONS.md)."
-              echo "To see which merged blocks are not live, run \`npm run audit:publishing\`."
+              echo "Restore the secret, then redeploy with \`gh workflow run cloudflare-pages.yml --ref main\`."
+              echo "If that cannot happen soon, run \`scripts/deploy.sh --fallback\` on the iMac (see docs/OPERATIONS.md)."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -73,8 +100,46 @@ jobs:
         if: steps.token.outputs.present == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: >-
-          npx --yes wrangler@4.158.0 pages deploy dist
-          --project-name=pointcast
-          --branch=main
-          --commit-hash=${{ github.sha }}
+        run: |
+          # The commit subject is read from git, never interpolated into this script.
+          subject="$(git log -1 --format=%s)"
+          subject="${subject:0:200}"
+          npx --yes wrangler@4.158.0 pages deploy dist \
+            --project-name=pointcast \
+            --branch=main \
+            --commit-hash=${{ github.sha }} \
+            --commit-message="$subject"
+
+      # The pages an outage hits first. A few retries cover edge propagation.
+      - name: Smoke test pointcast.xyz
+        if: steps.token.outputs.present == 'true'
+        run: |
+          short="${GITHUB_SHA::8}"
+          bad=0
+          for path in / /court/ /blocks.json; do
+            code=000
+            for attempt in 1 2 3 4 5; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://pointcast.xyz${path}?deploy=${short}" || true)
+              [ "$code" = 200 ] && break
+              [ "$attempt" = 5 ] || sleep 10
+            done
+            echo "$path -> $code"
+            [ "$code" = 200 ] || { echo "::error title=Smoke::$path returned $code after 5 tries."; bad=1; }
+          done
+          if [ "$bad" = 1 ]; then
+            echo "::error title=Smoke::Deployed ${short}, but the smoke test failed. Check https://pointcast.xyz now."
+            exit 1
+          fi
+
+      - name: Summary
+        if: steps.token.outputs.present == 'true'
+        env:
+          FILES: ${{ steps.gate.outputs.files }}
+        run: |
+          {
+            echo "## Live: ${GITHUB_SHA::8}"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Files in dist: ${FILES}"
+            echo "- Smoke test passed: /, /court/ and /blocks.json on https://pointcast.xyz returned 200."
+          } >> "$GITHUB_STEP_SUMMARY"

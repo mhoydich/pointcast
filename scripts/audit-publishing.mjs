@@ -86,9 +86,9 @@ item('bare build script', packageJson?.scripts?.['build:bare']);
 item('agent audit script', packageJson?.scripts?.['audit:agents']);
 item('publish script', packageJson?.scripts?.['publish:live']);
 
-// Merged is not live. Main can sit many merges ahead of pointcast.xyz while every
-// PR reads "merged" and every Pages workflow run reads green with its deploy step
-// skipped. Compare the blocks on main with the blocks the live site serves.
+// Merged is live only once the GitHub deploy run for it is green. While that run
+// is going, or if it failed, main sits ahead of pointcast.xyz. Compare the
+// blocks on main with the blocks the live site serves.
 const liveSite = (process.env.PC_LIVE_SITE || 'https://pointcast.xyz').replace(/\/$/, '');
 const mainRef = run('git', ['rev-parse', '--verify', '--quiet', 'origin/main'], { cwd: root }).ok ? 'origin/main' : 'HEAD';
 const mainBlockIds = run('git', ['ls-tree', '--name-only', `${mainRef}:src/content/blocks`], { cwd: root })
@@ -148,9 +148,9 @@ if (live.ids) {
 }
 
 if (notLive.length > 0) {
-  console.log(`\n${notLive.length} merged block(s) are not live yet. Merged is not live.`);
-  console.log('Ship main with scripts/deploy.sh on the deploy machine (see docs/OPERATIONS.md).');
-  console.log('The GitHub Pages workflow skips its deploy step until the CLOUDFLARE_API_TOKEN secret exists.');
+  console.log(`\n${notLive.length} merged block(s) are not live yet.`);
+  console.log('GitHub deploys main on every merge. Check that run, or redeploy main (see docs/OPERATIONS.md, section 3):');
+  console.log('  gh run list --workflow cloudflare-pages.yml --branch main --limit 3');
 }
 
 if (dirty) {

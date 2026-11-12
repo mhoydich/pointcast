@@ -4,6 +4,24 @@
 
 ---
 
+## Readability: Baby Bonfire, Coast Commons, House Channel, Light Companion (2026-11-11)
+
+Every public page in the four areas meets one head standard, and a test keeps it that way. No Block.
+
+- [x] (CC) `scripts/audit-area-readability.mjs` (`npm run audit:areas`) and `tests/area-readability.test.mjs`: titles and descriptions unique, canonical, Open Graph, Twitter, one JSON-LD block, 1200x630 card, h1, alt, sitemap, llms files, agent-surfaces, JSON twin `pageIndex`; `/house/r/` and `/light/c/` noindex and in no index. Fixes: 20 new unfurl cards (`scripts/unfurl-cards/`), descriptions and JSON-LD from `scripts/unfurl-cards/seo.mjs`, `pageIndex` in the four twins, llms and agents entries. Report: `docs/research/2026-11-11-area-readability-audit.md`.
+- [ ] (MH) Look at the 20 new cards and the unfurl in a real Messages, X, Slack and Discord paste, once deployed; nothing in source can say how those apps draw them — `waiting-on-mh`
+
+---
+
+## Baby Bonfire: A Higher Purpose (2026-11-11)
+
+`/baby-bonfire/higher-purpose/`, listed in `/baby-bonfire.json` under `screens`. Sprint brief: `a higher purpose`, a small 3D place of fire, water, air and ground with generated sound, for a phone, a desktop and a headset, signed modestly. One hand-written HTML file (about 43 KB): raw WebGL in sixteen colours, rendered small and scaled up square, Web Audio loop at 88 bpm, WebXR when offered. Stores nothing, sends nothing.
+
+- [x] (CC) The page, its unfurl card (`island` motif in `scripts/unfurl-cards/draw.mjs`, JSON-LD as CreativeWork), hub card, twin `screens` entry and privacy line, sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire-higher-purpose.test.mjs` — `done`
+- [x] (CC) Scripted run in headless Chrome (software renderer) at 390x844 and 1280x800: draws, Begin works, all four walks reach their places, no console errors, no request off the host — `done`
+- [ ] (M) Real-device QA per `docs/briefs/2026-11-11-manus-higher-purpose-qa.md`: phones, desktop and a headset; results to `docs/manus-logs/2026-11-11-higher-purpose-qa.md` — `queued`
+- [ ] (MH) Listen to the mix and decide whether it stays in Baby Bonfire — `waiting-on-mh`
+
 ## Baby Bonfire: Prayer Fire (2026-11-11)
 
 `/baby-bonfire/prayer/`, listed in `/baby-bonfire.json` under `screens`. Mike in chat on 2026-11-11, after seeing a generated film of the fireplace: "turn that into a prayer site with animations audio multi media". The one Baby Bonfire page that is a screen on purpose: it plays a film and recorded sound from its own folder. A concept sketch; nothing is for sale; it lights no real flame.
@@ -54,7 +72,7 @@
 - [ ] (CC) Unfurl card for `/baby-bonfire/first-place/`. The page is not on the hub street, so the house template in `scripts/unfurl-cards/` cannot draw it; it needs a motif of its own (the tile and puck) and a row in `CARDS`. Until then it keeps the request-time card — `queued`
 - [ ] (X) Review the plain box, the sensing puck doubts (coin cell on the 3V3 pin, USB with the cell on), the generator and the test — `queued`
 - [ ] (M) One real test print with photos and measured fit per `docs/briefs/2026-11-11-manus-first-place-kit.md`; results to `docs/manus-logs/2026-11-11-first-place-kit.md` — `queued`, needs MH approval before any order
-- [ ] (MH) Approve or decline a paid test print; choose the licence (CERN-OHL-P v2 and CC BY 4.0 are proposed; no LICENSE file added); decide whether the hub should link the page — `waiting-on-mh`
+- [ ] (MH) Approve or decline a paid test print; decide whether the hub should link the page — `waiting-on-mh`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
 ## Baby Bonfire: an open exploration (2026-11-11)
@@ -65,8 +83,9 @@
 - [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/baby-bonfire.test.mjs` — `done`
 - [ ] (X) Review the open spec and mesh wording, the fire safety list and the content rules in the test — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
-- [ ] (MH) Choose a licence for the Baby Bonfire files and designs — `waiting-on-mh`
-- [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
+- [x] (MH) Choose a licence for the Baby Bonfire files and designs: CC BY 4.0 for the words and drawings, CERN-OHL-P v2 for files to print (Mike, 2026-11-12). `public/baby-bonfire/LICENSE.txt` says which is which; full texts from the SPDX licence list sit beside it — `done`
+- [x] (MH) Footer and New today, decided 2026-11-12 on Mike's "make decisions all green lights": the six scenes keep "Concept sketch — Hoydich Enterprises" (his own enterprise; the other scenes stay as they are), and the homepage "New today" entry stays — `done`
+- [ ] (MH) Decide whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
 ## Coast Commons studies: SB Surf House and Fresh Milk, Local (2026-11-11)
 
 `/coast-commons/sb-surf-house/`, `/coast-commons/fresh-milk/`, listed on `/coast-commons/` and in `/coast-commons.json` (`studies`), Block 0786. Mike in chat on 2026-11-11: publish all, and publish the beach-town commons work as a public good. Two private studies edited for public release. Studies, not offers; nothing bought, sold or raised; not legal, tax, health or investment advice.
@@ -76,7 +95,7 @@
 - [x] (CC) `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, atlas rebuild, `tests/coast-commons-studies.test.mjs` — `done`
 - [ ] (X) Review the plain box, the securities section of the surf house study, the dairy-law and food-safety sections of the milk study, and the rules in the test — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-commons-studies-qa.md`; results to `docs/manus-logs/2026-11-11-commons-studies-qa.md` — `queued`
-- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
+- [x] (MH) Licence: CC BY 4.0 for the words, drawings, cards and JSON, not the linked sources (Mike, 2026-11-12, "make decisions all green lights"). `public/coast-commons/LICENSE.txt` with the full text beside it — `done`
 - [ ] (MH) Decide: whether a lawyer should read the securities and dairy-law sections before the studies are shared widely; whether the groups described without a name in the precedents (only news reports were read) should be named; whether market index figures from Zillow and Zumper stay, given the hub's own pages avoid those names — `waiting-on-mh`
 - [ ] (CC) Fill the "not verified" points (City of Santa Barbara ordinance text, County ordinance page, Carpinteria caps on the City's code, El Segundo, Manhattan Beach and Redondo Beach animal codes, 2026 status of the dairies) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
@@ -90,8 +109,9 @@
 - [x] (CC) JSON twin, `agent-surfaces.ts`, sitemap-discovery, `llms.txt`, `llms-full.txt`, new-today strip, atlas rebuild, `tests/coast-commons.test.mjs` — `done`
 - [ ] (X) Review the rule paraphrases against the linked pages, the plain box wording and the content rules in the test — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-coast-commons-qa.md`; results to `docs/manus-logs/2026-11-11-coast-commons-qa.md` — `queued`
-- [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
-- [ ] (MH) Decide: keep the homepage "New today" entry; whether Pacific Palisades and Sunset Beach join the list; whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
+- [x] (MH) Licence: CC BY 4.0 for the words, drawings, cards and JSON, not the linked sources (Mike, 2026-11-12, "make decisions all green lights"). `public/coast-commons/LICENSE.txt` with the full text beside it — `done`
+- [x] (MH) Decided 2026-11-12 on Mike's "make decisions all green lights": the homepage "New today" entry stays; Pacific Palisades stays off for now while it rebuilds after the January 2025 fire (hub wording updated); Sunset Beach stays outside the circle with Huntington Beach — `done`
+- [ ] (MH) Decide whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
 - [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
@@ -170,7 +190,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [x] (CC) `/api/weather` now also returns `windMph`, `windDirDeg`, `cloudCover` (additive; null when Open-Meteo does not report them) — `done`
 - [ ] (X) Review `/api/house` (public write surface: code space, rate limits, what is stored, use of `PC_RATES_KV`), the command reducer in `public/house/core.js` (input from any paired phone) and the additive `/api/weather` fields — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-house-channel.md` (a smart TV browser, a cast tab, an iPhone, an Android phone); results to `docs/manus-logs/2026-11-11-house-channel.md` — `queued`
-- [ ] (MH) Decide: is an hour the right time for an unattended TV to let its room go, or should a Window left up all afternoon stay; and should pairing get its own `HOUSE_KV` namespace instead of sharing `PC_RATES_KV` — `waiting-on-mh`
+- [x] (MH) Decided 2026-11-12 on Mike's "make decisions all green lights": the hour stays (an unattended TV goes dark after an hour with nobody there, which keeps KV writes low); pairing keeps sharing `PC_RATES_KV` for now, since the free plan's KV limits are per account and a new namespace would not raise them (the code already prefers `HOUSE_KV` if one is ever bound); the Window view keeps naming Open-Meteo and NOAA as its data sources — `done`
 - [ ] (MH) Deploy with `scripts/deploy.sh` after review. Nothing new to provision for v0 — `waiting-on-mh`
 - [ ] (CC) When Light Companion (`/api/light`) is live, re-run the Lights view against a real circle and drop the demo wording from Block 0784 — `queued`
 
@@ -187,7 +207,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
 - [x] (CC) Merged to main on Mike's go, no further review: mhoydich/pointcast#1477, merge commit `df8ab42b` — `done`
 - [x] (CC) 1.1.1: the 12 findings a second adversarial review confirmed on 1.1 (inspector off-screen on desktop, "will grow" promises that were wrong most of the time, shop/home advice loops, stale inspector, hidden phone tools, header overflow, local-download links, name truncation, browser Back out of a visit) plus constant workshop smoke so no town cycles — `done`
-- [ ] (MH) Publish: merged is not live. The "Deploy PointCast to Cloudflare Pages" run skipped its deploy step on 2026-10-22 (no `CLOUDFLARE_API_TOKEN` secret). Run `scripts/deploy.sh` on the iMac, or add the repo secret, then check https://pointcast.xyz/gridtown/ and /b/0742 — `waiting-on-mh`
+- [ ] (MH) Publish: merged is not live. The "Deploy PointCast to Cloudflare Pages" run skipped its deploy step on 2026-10-22 (no `CLOUDFLARE_API_TOKEN` secret). Since early Nov 2026 the secret is set and GitHub deploys main on every merge; check https://pointcast.xyz/gridtown/ and /b/0742 — `waiting-on-mh`
 - [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
 
 ---
@@ -203,7 +223,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [ ] (CC) v0.3 rooms, three to five friends (`cc/pmm-rooms-20261022`, session_01YX6g6wYdDEnjzvBfWzkpud) — `in-progress`
 - [ ] (CC) v0.4 Tezos settle for TAB: `/pmm/settle` page, TzKT check on the receiving phone (`cc/pmm-settle-20261022`, session_01R5xW9R1R3uD9Zjcq8rw7q5); wires into `app.js` after rooms — `in-progress`
 - [ ] (MH) Deploy with `scripts/deploy.sh` on the iMac; then create and bind `PMM_KV` (brief step 1) and set `CF_TURN_KEY_ID` / `CF_TURN_API_TOKEN` (step 1b) — `waiting-on-mh`
-- [ ] (MH) Optional: add a `CLOUDFLARE_API_TOKEN` repo secret so the Pages workflow deploys merges on its own — `waiting-on-mh`
+- [x] (MH) Optional: add a `CLOUDFLARE_API_TOKEN` repo secret so the Pages workflow deploys merges on its own — `done` — set between 2026-11-03 and 2026-11-09
 - [ ] (M) Two-phone test, offline open and QR connect per `docs/briefs/2026-10-22-manus-pmm.md`, log to `docs/manus-logs/2026-10-22-pmm.md` — `queued`
 - [ ] (CC) A week after deploy: read `GET /api/pmm/stat?days=7` and decide whether the relay or the code flow needs work to reach 90% — `queued`
 - [ ] (X) Review v0.4 settle before it moves real tez (wallet code) — `queued`
@@ -215,7 +235,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 `/radio-network`, `/radio-network/{station}`, `/radio-network/kit`, `/radio-network/print`, `/radio-network/status` (each with `.json`), MCP `radio_network` / `radio_station`. A plan; nothing on air. Tracking: issue #1503.
 
 - [x] (CC) Plan, block 0718 (#1466); station pages + Phase 0 kit, block 0726 (#1494); RN-01..RN-10 on the jobs board (#1514); MCP tools + status board (#1517); print campaign + block 0741 — `done`
-- [ ] (MH) Deploy: run `scripts/deploy.sh` or add the `CLOUDFLARE_API_TOKEN` repo secret (CI builds green; deploy step skipped) — `waiting-on-mh`
+- [ ] (MH) Deploy: the `CLOUDFLARE_API_TOKEN` secret is now set, so GitHub deploys main on every merge; confirm the latest run is green — `waiting-on-mh`
 - [ ] (MH) Decisions before Phase 0 week 1: network name, talk-first vs music-first, nonprofit partner/fiscal sponsor, first host of The Town Desk, synthetic voices, LPFM channel study — `waiting-on-mh`
 - [ ] (M) QA after deploy: `docs/briefs/2026-10-20-manus-radio-network-qa.md`; Phase 0 research + QA (no outreach): `docs/briefs/2026-10-22-manus-radio-phase0.md` — `queued`
 - [ ] (X) Review the MCP tools in `src/lib/radio-mcp.ts` and the radio rows in `public/opportunities/catalog.json` — `queued`
@@ -231,8 +251,8 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [x] (CC) Build v1: AIM-style chat room and Buddy List, D1 storage on `AUTH_DB` (self-provisioned), one key per bot, away messages, enter/leave lines, per-bot rate limit, admin hide, optional family read key, noindex, `tests/family-room.test.mjs` — `done`
 - [x] (CC) v0.1 merged, PR #1499 — `done`
 - [x] (CC) v0.2: `npm run family-room:invites -- --set` (keys, wrangler secrets, one private invite per bot), today's topic, lines per bot in the last 24 h, product brief `docs/prd/family-room.md`, block 0749, New today strip — `done`
-- [ ] (MH) On the iMac: `npm run family-room:invites -- --set` (add `--family-only` for a family password), then `scripts/deploy.sh --force`, then hand each person their invite file — `waiting-on-mh`
-- [ ] (MH) Optional, unblocks every merge: add the `CLOUDFLARE_API_TOKEN` repository secret so the GitHub deploy step stops skipping — `waiting-on-mh`
+- [ ] (MH) On the iMac: `npm run family-room:invites -- --set` (add `--family-only` for a family password), then `gh workflow run cloudflare-pages.yml --ref main`, then hand each person their invite file — `waiting-on-mh`
+- [x] (MH) Optional, unblocks every merge: add the `CLOUDFLARE_API_TOKEN` repository secret so the GitHub deploy step stops skipping — `done` — set between 2026-11-03 and 2026-11-09
 - [ ] (M) Two-phone check after keys and deploy: `docs/briefs/2026-10-22-manus-family-room.md` — `queued`
 - [ ] (X) Optional: review `/api/family-room` and the two MCP tools (public write surface, kids' bots). Mike waived review on 2026-10-22 — `queued`
 
@@ -299,7 +319,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
 - [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0727–0731 after the renumber (main took 0725): Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
 - [x] (CC) Ship the row: Mike 2026-10-22, "be the product manager publish, ship, etc no review necessary". #1478 merged to main; the five stacked PRs merged through this branch to main, with every shared discovery file checked to differ from main by exactly the games' own rows — `done`
-- [ ] (MH) Deploy: `scripts/deploy.sh` from the iMac (the GitHub deploy workflow skips its deploy step without `CLOUDFLARE_API_TOKEN`), then `npm run audit:publishing` — `waiting-on-mh`
+- [ ] (MH) Deploy: GitHub now deploys main on every merge (the `CLOUDFLARE_API_TOKEN` secret is set); confirm the run is green, then `npm run audit:publishing` — `waiting-on-mh`
 
 ---
 

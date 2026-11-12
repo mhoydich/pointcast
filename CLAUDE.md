@@ -4,7 +4,7 @@ You are Claude Code working inside the PointCast repository.
 
 Read first:
 
-0. `docs/OPERATIONS.md` — worktrees, building, and the one deploy path (`scripts/deploy.sh`). It wins where older docs disagree.
+0. `docs/OPERATIONS.md` — worktrees, building, and the deploy path (merge to main; GitHub deploys it; `scripts/deploy.sh --fallback` on the iMac only when that fails). It wins where older docs disagree.
 1. `AGENTS.md`
 2. `TASKS.md`
 3. `docs/setup/agent-bridge.md`

@@ -150,20 +150,21 @@ automatically.
 
 ## Publishing live
 
-`pointcast.xyz` is Cloudflare Pages with no Git hookup: a push to main does
-not deploy by itself. Deploy with:
+`pointcast.xyz` is a Cloudflare Pages Direct Upload project. Every push to
+main runs the GitHub workflow "Deploy PointCast to Cloudflare Pages", which
+builds, gates on a complete build, uploads, and smoke-tests the site. A merge
+is live when that run is green:
 
 ```sh
-scripts/deploy.sh
+gh run list --workflow cloudflare-pages.yml --branch main --limit 3
 ```
 
-It builds the tip of `origin/main` in the shared `~/pc-deploy` worktree,
-queues behind any other deploy, gates on a complete build, and skips if that
-sha is already live. Details in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+`scripts/deploy.sh --fallback` on the iMac is the fallback for when that run
+fails or GitHub is down. Details in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 `npm run publish:live -- "feat(scope): describe the ship"` fetches
 `origin/main`, refuses if the current HEAD is behind, builds, commits local
-changes, pushes `HEAD:main`, then runs `scripts/deploy.sh`.
+changes, and pushes `HEAD:main`; GitHub then deploys it.
 
 ### After the deploy: walk the town
 

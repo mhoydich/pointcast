@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { CARDS, GENERATED, H, ROOT, W, pageFile, pngFile, scenesWithoutCard, stale, stampHead } from './cards.mjs';
+import { CARDS, GENERATED, H, ROOT, TWINS, W, pageFile, pngFile, scenesWithoutCard, stale, stampHead, withPageIndex } from './cards.mjs';
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
@@ -50,7 +50,7 @@ function measure(line) {
 
 let drawn = 0;
 for (const card of CARDS) {
-  const { svg, lines, column } = cardSvg(card, measure);
+  const { svg, lines, column, photo } = cardSvg(card, measure);
   // Nothing may run past its column, and the two ends of the foot may not meet.
   for (const line of lines.filter((l) => l.anchor !== 'end')) {
     if (line.x + measure(line) > column[1] + 1) throw new Error(`unfurl cards: "${line.text}" on ${card.path} is ${Math.round(measure(line))} wide; the column is ${column[1] - column[0]}`);
@@ -60,7 +60,9 @@ for (const card of CARDS) {
   const r = new Resvg(svg, { font, fitTo: { mode: 'width', value: W } });
   const image = r.render();
   if (image.width !== W || image.height !== H) throw new Error(`unfurl cards: ${card.path} drew at ${image.width}x${image.height}`);
-  const png = Buffer.from(image.asPng());
+  let png = Buffer.from(image.asPng());
+  // A photograph does not fit a plain PNG in a link preview's size budget: reduce it to a palette (sharp, already a dependency).
+  if (photo) png = await (await import('sharp')).default(png).png({ palette: true, colours: 96, dither: 0.6, effort: 10 }).toBuffer();
   r.free();
   const file = resolve(ROOT, pngFile(card));
   if (!existsSync(file) || !readFileSync(file).equals(png)) { writeFileSync(file, png); drawn += 1; }
@@ -78,6 +80,13 @@ for (const card of CARDS.filter((c) => !GENERATED(c))) {
   const html = readFileSync(file, 'utf8');
   const next = stampHead(html, card);
   if (next !== html) { writeFileSync(file, next); stamped += 1; }
+}
+// The hand-written JSON twins list every public page of their area.
+for (const area of TWINS) {
+  const file = resolve(ROOT, `public/${area}.json`);
+  const text = readFileSync(file, 'utf8');
+  const next = withPageIndex(text, area);
+  if (next !== text) { writeFileSync(file, next); stamped += 1; }
 }
 for (const script of ['scripts/coast-commons-studies/build.mjs', 'scripts/coast-commons/build.mjs']) {
   execFileSync(process.execPath, [resolve(ROOT, script)], { cwd: ROOT, stdio: 'pipe' });

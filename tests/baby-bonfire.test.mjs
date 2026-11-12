@@ -22,8 +22,12 @@ test('the twin lists twenty-one scenes and four workshop pages, and every one is
   for (const slug of all) assert.ok(existsSync(new URL(`public/baby-bonfire/${slug}/index.html`, root)), slug);
   for (const entry of [...twin.scenes, ...twin.workshop]) assert.equal(entry.url, `https://pointcast.xyz/baby-bonfire/${entry.slug}/`);
   assert.deepEqual(twin.signals, ['landed', 'lifted', 'lit', 'snuffed']);
-  assert.equal(twin.licence, 'Not chosen yet.');
-  assert.ok(!existsSync(new URL('public/baby-bonfire/LICENSE', root)), 'no licence file until one is chosen');
+  assert.deepEqual([twin.licence.words, twin.licence.printables, twin.licence.chosen], ['CC-BY-4.0', 'CERN-OHL-P-2.0', '2026-11-12']);
+  assert.ok(!twin.undecided.includes('licence'), 'the licence is no longer open');
+  for (const file of ['LICENSE.txt', 'LICENSE-CC-BY-4.0.txt', 'first-place/files/LICENSE-CERN-OHL-P-2.0.txt']) assert.ok(existsSync(new URL(`public/baby-bonfire/${file}`, root)), file);
+  assert.match(read('public/baby-bonfire/LICENSE-CC-BY-4.0.txt'), /^Creative Commons Attribution 4\.0 International/);
+  assert.match(read('public/baby-bonfire/first-place/files/LICENSE-CERN-OHL-P-2.0.txt'), /^CERN Open Hardware Licence Version 2 - Permissive/);
+  assert.match(read('public/baby-bonfire/LICENSE.txt'), /SPDX-License-Identifier: CERN-OHL-P-2\.0[\s\S]*SPDX-License-Identifier: CC-BY-4\.0/);
 });
 
 test('the street has one window per scene, in the twin order, and links the workshop', () => {
@@ -84,7 +88,8 @@ test('the spec keeps to four signals and lists its open questions without invent
   const spec = page('open-spec');
   for (const s of ['Landed', 'Lifted', 'Lit', 'Snuffed']) assert.ok(spec.includes(`<b>${s}</b>`), s);
   assert.equal((spec.match(/<ul class="sig">[\s\S]*?<\/ul>/)[0].match(/<li>/g) || []).length, 4);
-  for (const q of ['Dimensions.', 'The connector.', 'The radio.', 'The licence.']) assert.ok(spec.includes(`<strong>${q}</strong>`), q);
+  for (const q of ['Dimensions.', 'The connector.', 'The radio.']) assert.ok(spec.includes(`<strong>${q}</strong>`), q);
+  assert.match(spec, /<strong>The licence is chosen<\/strong> \(Nov 12, 2026\): CC BY 4\.0 for the spec and the words, CERN-OHL-P v2 for files to print/);
   assert.match(spec, /This is a draft and it is open to change/);
   assert.doesNotMatch(spec, /\b\d+(\.\d+)?\s?(mm|cm|inch|in\b|GHz|MHz)|Bluetooth|Zigbee|Thread\b|Matter\b|LoRa|Wi-?Fi|NFC|RFID/i, 'no hardware specifics in v0');
   assert.match(spec, /never ignited remotely/);
@@ -370,8 +375,7 @@ test('first place: the plain box, the labels and the licence note', () => {
   assert.match(box, /No health claims/);
   assert.match(html, /v0\.1 proposal/);
   assert.match(html, /<text class="warn"[^>]*>UNTESTED SKETCH<\/text>/);
-  assert.match(html, /Licence: none chosen\.<\/strong> CERN-OHL-P v2 for the hardware files and CC BY 4\.0 for the words are proposed and undecided/);
-  assert.ok(!existsSync(new URL(`${kitDir}/LICENSE`, root)) && !existsSync(new URL(`${kitDir}/files/LICENSE`, root)));
+  assert.match(html, /Licence:<\/strong> the files to print and the script that writes them are under <a href="\/baby-bonfire\/first-place\/files\/LICENSE-CERN-OHL-P-2\.0\.txt">CERN-OHL-P v2<\/a>; the words and drawings are under <a href="\/baby-bonfire\/LICENSE-CC-BY-4\.0\.txt">CC BY 4\.0<\/a>/);
   assert.doesNotMatch(html, /[$€£]\s?\d|\bUSD\b/, 'no prices');
   assert.doesNotMatch(html, /Sense<\/a>/, 'the board with a microphone is not linked as a part');
   assert.ok(html.includes('mailto:hello@pointcast.xyz?subject=Baby%20Bonfire') && html.includes('https://github.com/mhoydich/pointcast/issues'));

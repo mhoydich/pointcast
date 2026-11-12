@@ -30,13 +30,15 @@ const SCENES = ['light-the-hearth', 'the-shelf', 'pieces-roam', 'the-rounds', 't
 test('every page that was asked for has a card: the hubs, the street\'s scenes, the studies', () => {
   const want = [
     '/baby-bonfire/', ...SCENES.map((s) => `/baby-bonfire/${s}/`),
+    ...['open-spec', 'open-mesh', 'barter-board', 'make-a-piece', 'first-place', 'prayer', 'higher-purpose'].map((s) => `/baby-bonfire/${s}/`),
     '/coast-commons/', '/coast-commons/el-segundo/', '/coast-commons/pattern/', '/coast-commons/sb-surf-house/', '/coast-commons/fresh-milk/',
+    ...['malibu', 'santa-monica', 'venice', 'marina-del-rey', 'playa-del-rey', 'manhattan-beach', 'hermosa-beach', 'redondo-beach', 'torrance', 'palos-verdes-estates', 'rancho-palos-verdes', 'san-pedro', 'long-beach', 'seal-beach'].map((s) => `/coast-commons/${s}/`),
     '/house/', '/house/about/',
   ];
   assert.deepEqual(CARDS.map((c) => c.path), want);
   assert.equal(new Set(CARDS.map((c) => c.path)).size, CARDS.length);
   for (const slug of SCENES) assert.ok(street.includes(slug), `${slug} is still on the street`);
-  assert.equal(cardFor('/coast-commons/venice/'), null, 'pages without a card keep the request-time card');
+  assert.equal(cardFor('/coast-commons/nowhere/'), null, 'pages without a card keep the request-time card');
   assert.ok(!cardFor('/house/r/'), 'the remote is noindex and has no card');
 });
 
@@ -144,7 +146,8 @@ test('the words on a card: a short headline, one line of what to do, small type 
     assert.ok(card.headline.join(' ').length <= 26, `${card.path} headline is short`);
     assert.ok(card.line.length >= 1 && card.line.length <= 2, `${card.path} line rows`);
     for (const row of card.line) assert.ok(row.length <= 36, `${card.path}: "${row}" is ${row.length} characters`);
-    assert.match(card.line.join(' '), /^[A-Z][^.]*\.$/, `${card.path} line is one sentence`);
+    // The one photograph card (Prayer Fire) says two short sentences; every other card says one.
+    assert.match(card.line.join(' '), card.motif === 'photo' ? /^[A-Z][^.]*\. [A-Z][^.]*\.$/ : /^[A-Z][^.]*\.$/, `${card.path} line is one sentence`);
     const words = [card.kicker, ...card.headline, ...card.line, card.alt, STATUS[card.area]].join(' ');
     assert.equal(words.match(banned), null, `${card.path}: ${words.match(banned)}`);
   }
@@ -162,8 +165,10 @@ test('every card draws as a 1200x630 SVG from the pages’ own drawings', () => 
     const image = new Resvg(svg, { font: { loadSystemFonts: false } }).render();
     assert.deepEqual([image.width, image.height], [W, H], card.path);
     assert.ok(lines.some((l) => l.text === 'pointcast.xyz'), `${card.path} carries the site mark`);
-    assert.ok(lines.some((l) => l.text === STATUS[card.area]), `${card.path} carries its small type`);
-    assert.doesNotMatch(svg, /<image\b|href=|@font-face|url\(\s*['"]?https?:/i, `${card.path} loads nothing`);
+    assert.ok(lines.some((l) => l.text === (card.motif === 'photo' ? 'concept sketch' : STATUS[card.area])), `${card.path} carries its small type`);
+    // Nothing loads from outside. The photograph card embeds its page's own poster as a data URI.
+    const outside = card.motif === 'photo' ? svg.replace(/(?:xlink:)?href="data:image\/jpeg;base64,[^"]*"/g, '') : svg;
+    assert.doesNotMatch(outside, /<image\b[^>]*href=|(?<!<image)\shref=|@font-face|url\(\s*['"]?https?:/i, `${card.path} loads nothing`);
   }
 });
 
@@ -190,5 +195,5 @@ test('stamping a hand-written page adds the tags after og:type and changes nothi
   const block = shareHead('/coast-commons/', 'A longer page title that only the browser tab shows, not the preview', 'Page description.', dir);
   assert.ok(block.startsWith(`<meta property="og:title" content="${hub.title}">`));
   assert.ok(block.includes(`<meta name="twitter:image" content="${cardUrl(hub, dir)}">`));
-  assert.equal(shareHead('/coast-commons/venice/', 'Venice', 'x', dir), null);
+  assert.equal(shareHead('/coast-commons/nowhere/', 'Nowhere', 'x', dir), null);
 });
