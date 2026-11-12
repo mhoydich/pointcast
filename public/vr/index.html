@@ -49,7 +49,19 @@
   </footer>
 </div>
 <script type="module">
-import { createWorld } from '/spatial/spatial.mjs';
+// If the 3D view cannot start, the page still lists real links: a short fixed list, then every place in places.json.
+async function listFallback(mount, fixed) {
+  const note = document.createElement('p');
+  note.textContent = 'The 3D view could not start. These links work without it.';
+  const ul = document.createElement('ul');
+  const add = (title, url) => { const li = document.createElement('li'), a = document.createElement('a'); a.href = url; a.textContent = title; li.appendChild(a); ul.appendChild(li); };
+  for (const [title, url] of fixed) add(title, url);
+  try {
+    const m = await (await fetch('places.json')).json();
+    for (const p of (m.places || [])) if (p && typeof p.title === 'string' && typeof p.url === 'string' && /^\/(?!\/)/.test(p.url)) add(p.title, p.url);
+  } catch (e) { /* the fixed links stay */ }
+  mount.replaceChildren(note, ul);
+}
 
 // Palette: warm earth at dusk, windows lit in each building's kind colour.
 const C = {
@@ -226,6 +238,7 @@ async function decorate(ctx) {
 
 const mount = document.getElementById('town');
 try {
+  const { createWorld } = await import('/spatial/spatial.mjs');
   const world = await createWorld({
     mount,
     manifest: 'places.json',
@@ -245,9 +258,7 @@ try {
   document.dispatchEvent(new CustomEvent('spatial:ready', { detail: { world } }));
 } catch (err) {
   console.error(err);
-  const p = document.createElement('p');
-  p.textContent = 'The 3D view could not start. The places are in places.json and on the town map.';
-  mount.appendChild(p);
+  await listFallback(mount, [['2D town map', '/town'], ['places.json', 'places.json'], ['The Baby Bonfire room', '/baby-bonfire/room/']]);
 }
 </script>
 </body>

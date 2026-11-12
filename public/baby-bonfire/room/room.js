@@ -15,6 +15,7 @@ export function doorBuilder(place, ctx) {
   const { THREE, addBox, addInstance, addLabel, shared } = ctx;
   const a = ctx.anchor, sl = place.slot;
   a.rotation.y = Math.atan2(-(ROOM_C.x - sl.x), -(ROOM_C.z - sl.z));   // local -z faces the room centre
+  a.userData.standDistance = -1.2;   // doors face inward: the stand point is 1.2 m inside the room, not outside the wall
   a.updateWorldMatrix(true, false);
   const wood = '#7a5240', lintel = '#d9b48a';
   addBox({ parent: a, x: -0.5, y: 1.0, sx: 0.1, sy: 2.0, sz: 0.14, color: wood });
@@ -278,6 +279,8 @@ export async function decorate(ctx) {
     blowBtn.addEventListener('pointerleave', off); blowBtn.addEventListener('pointercancel', off);
     blowBtn.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); state.blow = true; } });
     blowBtn.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') state.blow = false; });
+    // Losing focus or the window mid-press must not leave the fire being blown on.
+    blowBtn.addEventListener('blur', off); window.addEventListener('blur', () => { if (!held.some(Boolean)) state.blow = false; });
   }
 
   /* ---------- sound: starts only from a press on the "Sound" control ---------- */
@@ -327,10 +330,21 @@ export async function decorate(ctx) {
   }
   window.__hearth.toggleSound = toggleSound;
   const sbtn = document.getElementById('sound');
-  if (sbtn) sbtn.addEventListener('click', async () => {
-    const s = await toggleSound();
+  // The page button always shows the real state, whichever control (page or in-headset) changed it.
+  function syncSoundBtn(s = state.sound) {
+    if (!sbtn) return;
     sbtn.setAttribute('aria-pressed', String(s === 'on'));
-    sbtn.textContent = s === 'on' ? 'Sound: on' : s === 'off' ? 'Sound' : 'Sound unavailable';
+    sbtn.textContent = s === 'on' ? 'Sound: on' : (s === 'off' || s === undefined || s === null) ? 'Sound' : 'Sound unavailable';
+  }
+  if (sbtn) sbtn.addEventListener('click', async () => { syncSoundBtn(await toggleSound()); });
+  // Hidden tab: pause the audio; back again: resume only if sound was on.
+  let resumeOnShow = false;
+  document.addEventListener('visibilitychange', () => {
+    try {
+      if (!ac) return;
+      if (document.hidden) { resumeOnShow = !!src && ac.state === 'running'; if (resumeOnShow) ac.suspend(); }
+      else if (resumeOnShow) { resumeOnShow = false; ac.resume(); }
+    } catch (e) { /* never throw */ }
   });
   // A "Sound" control inside the scene, shown only while an XR session is running (a press, never automatic).
   let soundLbl = null;
@@ -338,7 +352,7 @@ export async function decorate(ctx) {
     soundLbl = ctx.makeLabel('Sound', { size: 0.07, color: '#17152e', bg: '#ffd27a', maxWidth: 0.3 });
     if (soundLbl) {
       soundLbl.position.set(FIRE.x + 0.4, FIRE.y + 0.14, FIRE.z + 0.28); soundLbl.visible = false; scene.add(soundLbl);
-      ctx.addInteractable(soundLbl, { label: 'Sound', onSelect: () => { if (renderer.xr.isPresenting) toggleSound(); } });
+      ctx.addInteractable(soundLbl, { label: 'Sound', onSelect: () => { if (renderer.xr.isPresenting) toggleSound().then((st) => syncSoundBtn(st)); } });
     }
   } catch (e) { /* labels are optional */ }
   const syncXR = () => { if (soundLbl) soundLbl.visible = !!renderer.xr.isPresenting; };

@@ -57,7 +57,7 @@ function sameOrigin(url, base) {
 function listItem(p, attrs, withKind) {
   const li = el('li', attrs);
   const href = safeUrl(p.url);
-  const a = href ? el('a', { href: p.url }) : el('span', { class: 'spatial-nolink' });
+  const a = href ? el('a', { href }) : el('span', { class: 'spatial-nolink' });
   if (href && typeof location !== 'undefined' && new URL(href).origin !== location.origin) a.setAttribute('rel', 'noopener');
   if (p.glyph) a.appendChild(el('span', { class: 'spatial-glyph', 'aria-hidden': 'true' }, p.glyph));
   a.appendChild(el('span', { class: 'spatial-name' }, p.title));
@@ -551,12 +551,13 @@ export async function createWorld(opts = {}) {
       kicker: String(item.kind || (item.spatial ? '3d room' : 'page')),
       title: `${item.glyph ? item.glyph + ' ' : ''}${item.title || ''}`,
       body: item.blurb || '',
-      link: href ? String(item.url) : '',
+      link: '',
     };
     let custom = null;
     if (isObj(item.panel)) custom = item.panel;
     else if (typeof opts.panel === 'function') { try { custom = opts.panel(item); } catch (e) { console.error(e); } }
-    return Object.assign(d, isObj(custom) ? custom : {}, { href });
+    // The shown link, the "Open: ..." status and the opened address always agree: a custom panel cannot change them.
+    return Object.assign(d, isObj(custom) ? custom : {}, { href, link: href ? String(item.url) : '' });
   }
   function drawPanel(L) {
     const g = pcv.getContext('2d'), M = 48, TW = PCW - 2 * M;
@@ -1041,7 +1042,7 @@ export async function createWorld(opts = {}) {
     saved.pitch = camera.rotation.x;
     glide.active = false;
     viewerXZ(_cw); const keepX = _cw.x, keepZ = _cw.z;
-    await renderer.xr.setSession(session);
+    try { await renderer.xr.setSession(session); } catch (e) { try { await session.end(); } catch (e2) { /* already ended */ } throw e; }
     mode = m;
     rig.position.y = type === 'local' ? EYE : 0;
     camera.position.set(0, 0, 0); camera.rotation.set(0, 0, 0);

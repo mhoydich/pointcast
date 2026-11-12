@@ -1,4 +1,4 @@
-// safe.mjs — DOM-free, three-free helpers for the spatial kit (runs under plain `node --test`).
+// safe.mjs: DOM-free, three-free helpers for the spatial kit (runs under plain `node --test`).
 // safeUrl: which manifest URLs may become links. validateManifest: shape checks. layoutPlaces: slots.
 
 import { bearingDistance, geoToLocal, makeGeoScale } from './geo.mjs';

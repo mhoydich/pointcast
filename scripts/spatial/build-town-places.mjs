@@ -56,10 +56,9 @@ offGrid.forEach((o, i) => {
     position: offPos[i] || { x: 14.2, z: -1.8 + i * 3.6 }, spatial: false });
 });
 
+// The one 3D neighbour that exists: the Baby Bonfire room. (The El Segundo ring is not a page yet, so it is not listed.)
 const defaultPortals = [
-  { id: 'el-segundo-ring', title: 'El Segundo ring', url: '../ring/', spatial: true,
-    blurb: 'Another 3D page on this site. In a headset you stay in VR where the browser allows it.', position: { x: 0, z: -13 } },
-  { id: 'hearth-room', title: 'Hearth room', url: '../hearth-room/', spatial: true,
+  { id: 'hearth-room', title: 'Hearth room', url: '/baby-bonfire/room/', spatial: true,
     blurb: 'Another 3D page on this site. In a headset you stay in VR where the browser allows it.', position: { x: -14, z: 0 } },
 ];
 let existing = null;

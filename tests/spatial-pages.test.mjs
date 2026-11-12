@@ -101,7 +101,7 @@ test('the town is a page first: title, canonical, a list fallback, its own files
 });
 
 test('The Room: Baby Bonfire head tags, the notice, three doors, sound only on a press', () => {
-  assert.ok(room.includes('<title>Baby Bonfire — The Room</title>'));
+  assert.ok(room.includes('<title>The Room · Baby Bonfire</title>'));
   assert.ok(room.includes('<link rel="canonical" href="https://pointcast.xyz/baby-bonfire/room/">'));
   assert.ok(room.includes('<link rel="alternate" type="application/json" href="/baby-bonfire.json"'));
   assert.match(room, /<meta name="description" content="[^"]+ Nothing is for sale\.">/);
@@ -123,7 +123,7 @@ test('The Room: Baby Bonfire head tags, the notice, three doors, sound only on a
 });
 
 test('On Your Table: the model, the notice, model-viewer vendored with its licence', () => {
-  assert.ok(table.includes('<title>Baby Bonfire — On Your Table</title>'));
+  assert.ok(table.includes('<title>On Your Table · Baby Bonfire</title>'));
   assert.ok(table.includes('<link rel="canonical" href="https://pointcast.xyz/baby-bonfire/ar/">'));
   assert.match(table, /<meta name="description" content="[^"]+ Nothing is for sale\.">/);
   assert.ok(table.includes('<a class="bb-back" href="/baby-bonfire/">'));
