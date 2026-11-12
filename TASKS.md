@@ -69,7 +69,8 @@ Every public page in the four areas meets one head standard, and a test keeps it
 - [ ] (X) Review the open spec and mesh wording, the fire safety list and the content rules in the test — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-baby-bonfire-qa.md`; results to `docs/manus-logs/2026-11-11-baby-bonfire-qa.md` — `queued`
 - [x] (MH) Choose a licence for the Baby Bonfire files and designs: CC BY 4.0 for the words and drawings, CERN-OHL-P v2 for files to print (Mike, 2026-11-12). `public/baby-bonfire/LICENSE.txt` says which is which; full texts from the SPDX licence list sit beside it — `done`
-- [ ] (MH) Decide: keep the "Concept sketch, Hoydich Enterprises" footer on six scenes; keep the homepage "New today" entry; whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
+- [x] (MH) Footer and New today, decided 2026-11-12 on Mike's "make decisions all green lights": the six scenes keep "Concept sketch — Hoydich Enterprises" (his own enterprise; the other scenes stay as they are), and the homepage "New today" entry stays — `done`
+- [ ] (MH) Decide whether real barter cards go through email and GitHub issues or a board of their own — `waiting-on-mh`
 ## Coast Commons studies: SB Surf House and Fresh Milk, Local (2026-11-11)
 
 `/coast-commons/sb-surf-house/`, `/coast-commons/fresh-milk/`, listed on `/coast-commons/` and in `/coast-commons.json` (`studies`), Block 0786. Mike in chat on 2026-11-11: publish all, and publish the beach-town commons work as a public good. Two private studies edited for public release. Studies, not offers; nothing bought, sold or raised; not legal, tax, health or investment advice.
@@ -94,7 +95,8 @@ Every public page in the four areas meets one head standard, and a test keeps it
 - [ ] (X) Review the rule paraphrases against the linked pages, the plain box wording and the content rules in the test — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-coast-commons-qa.md`; results to `docs/manus-logs/2026-11-11-coast-commons-qa.md` — `queued`
 - [ ] (MH) Decide the licence (CC BY 4.0 is proposed; no LICENSE file added) — `waiting-on-mh`
-- [ ] (MH) Decide: keep the homepage "New today" entry; whether Pacific Palisades and Sunset Beach join the list; whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
+- [x] (MH) Decided 2026-11-12 on Mike's "make decisions all green lights": the homepage "New today" entry stays; Pacific Palisades stays off for now while it rebuilds after the January 2025 fire (hub wording updated); Sunset Beach stays outside the circle with Huntington Beach — `done`
+- [ ] (MH) Decide whether a lawyer should read the plain box and the El Segundo page before it is shared widely — `waiting-on-mh`
 - [ ] (CC) Fill the "Not verified" entries (zoning maps, several ADU and coastal pages, six beach descriptions) and re-read every source each quarter — `queued`
 - [ ] (MH) Merge and deploy with `scripts/deploy.sh` — `waiting-on-mh`
 
@@ -173,7 +175,7 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [x] (CC) `/api/weather` now also returns `windMph`, `windDirDeg`, `cloudCover` (additive; null when Open-Meteo does not report them) — `done`
 - [ ] (X) Review `/api/house` (public write surface: code space, rate limits, what is stored, use of `PC_RATES_KV`), the command reducer in `public/house/core.js` (input from any paired phone) and the additive `/api/weather` fields — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-11-11-manus-house-channel.md` (a smart TV browser, a cast tab, an iPhone, an Android phone); results to `docs/manus-logs/2026-11-11-house-channel.md` — `queued`
-- [ ] (MH) Decide: is an hour the right time for an unattended TV to let its room go, or should a Window left up all afternoon stay; and should pairing get its own `HOUSE_KV` namespace instead of sharing `PC_RATES_KV` — `waiting-on-mh`
+- [x] (MH) Decided 2026-11-12 on Mike's "make decisions all green lights": the hour stays (an unattended TV goes dark after an hour with nobody there, which keeps KV writes low); pairing keeps sharing `PC_RATES_KV` for now, since the free plan's KV limits are per account and a new namespace would not raise them (the code already prefers `HOUSE_KV` if one is ever bound); the Window view keeps naming Open-Meteo and NOAA as its data sources — `done`
 - [ ] (MH) Deploy with `scripts/deploy.sh` after review. Nothing new to provision for v0 — `waiting-on-mh`
 - [ ] (CC) When Light Companion (`/api/light`) is live, re-run the Lights view against a real circle and drop the demo wording from Block 0784 — `queued`
 
