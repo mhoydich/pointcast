@@ -155,7 +155,7 @@ test('the hub, the twin and the machine lists know the four screens', () => {
   const hub = read('public/baby-bonfire/index.html');
   const section = hub.slice(hub.indexOf('id="screen-h"'), hub.indexOf('id="work-h"'));
   for (const href of ['/baby-bonfire/prayer/', '/baby-bonfire/higher-purpose/', '/baby-bonfire/room/', '/baby-bonfire/ar/']) assert.ok(section.includes(`<a href="${href}">`), href);
-  assert.equal((hub.match(/class="house" href=/g) || []).length, twin.scenes.length, 'the street is unchanged');
+  assert.equal((hub.match(/class="obj" href=/g) || []).length, twin.scenes.length, 'one cabinet object per scene');
   assert.deepEqual(twin.screens.map((s) => s.slug), ['prayer', 'room', 'ar', 'higher-purpose']);
   for (const s of twin.screens) {
     assert.equal(s.url, `https://pointcast.xyz/baby-bonfire/${s.slug}/`);
