@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Office Noun Drum · No. 07 · Mouse</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;font-family:ui-monospace,Menlo,Consolas,monospace;-webkit-tap-highlight-color:transparent;user-select:none}
+#stage{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;touch-action:manipulation}
+#top{position:absolute;top:3vmin;left:4vmin;right:4vmin;display:flex;justify-content:space-between;font-size:max(11px,2.2vmin);color:#1f1d29}
+#noun{width:min(70vmin,70vh);height:min(70vmin,70vh);image-rendering:pixelated;transform-origin:50% 100%;transition:transform .09s ease-out;margin-bottom:-1vmin;pointer-events:none}
+#noun.hit{transform:translateY(1.6vmin) scale(1.04,.96)}
+#desk{width:100%;height:24vh;background:#8a5a3c;border-top:1.4vmin solid #6f4830;display:flex;align-items:center;justify-content:center;gap:3vmin;position:relative}
+#pad{width:28vmin;height:11vmin;background:repeating-linear-gradient(90deg,#c8452c 0 5vmin,#f3ead8 5vmin 5.8vmin);border-top:2vmin solid #f3ead8;border-bottom:2vmin solid #1f1d29;transition:transform .07s}
+#pad.hit{transform:scale(1.08,.9)}
+#cap{position:absolute;left:4vmin;bottom:1.6vmin;color:#f3ead8;font-size:max(10px,1.9vmin)}
+#bar{position:absolute;right:4vmin;bottom:1.2vmin;display:flex;gap:1.5vmin}
+button,a.btn{font:inherit;font-size:max(10px,1.9vmin);background:#f3ead8;color:#1f1d29;border:0;padding:.8vmin 1.6vmin;cursor:pointer;text-decoration:none}
+button:focus-visible,a.btn:focus-visible{outline:2px solid #1f1d29;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){#noun,#pad{transition:none}}
+</style>
+</head>
+<body>
+<div id="stage" role="button" tabindex="0" aria-label="Tap to drum">
+  <div id="top"><span id="title"></span><span id="count">0 taps</span></div>
+  <img id="noun" alt="">
+  <div id="desk">
+    <div id="pad"></div>
+    <span id="cap"></span>
+    <div id="bar">
+      <button id="loop" type="button" aria-pressed="false">loop</button>
+      <a class="btn" id="room" target="_blank" rel="noopener noreferrer">drum with the room</a>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var C = {"n": 7, "head": "mouse", "day": 17, "voice": "click", "bg": "#e1d5dc", "caption": "mouse on clicks. left, right, left.", "noun": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABE0lEQVR42u2VPQ6CQBCFZ4gXsLQAKgo9FQ0cAhJAEz2EFpJ4Jy2MBVhYeoSxcQ3osln2RyiYZLObDGEe35tZAKYYOFCU9N0ldeWq+wVVn22GMzSBScAkwBn1GLIo8oxUXl6sN2hE5VsAd4lyxi0gIiCi3jkdC+i7CAAAInIFcHJoggAWeSayR/prfXdJbI1mCmZ9LOKhl8kNNoYyY2nVgrp+tnZrN2EUhxDF4c/Z8+atXaUHpOKwL7lnE00IAAC36q4k7FQecfQ/IyUL0qT78tnuNvYF9C2ibcEiWMEiWLU8TZPss2TIaBF4XM8/FjQpsMIqZGayBHgWMCE6ligTYEK+sVtpwi4CJhpSi8DfxlBEQDdeX59+ADUQlDUAAAAASUVORK5CYII=", "room": "https://pointcast.xyz/drum?from=office-noun-drum-07", "ping": ""};
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), noun = $('noun'), pad = $('pad'), count = $('count'), loopBtn = $('loop'), room = $('room');
+  document.body.style.background = C.bg;
+  if (typeof C.noun === 'string' && C.noun.indexOf('data:image/png;base64,') === 0) noun.src = C.noun;
+  noun.alt = 'Office Noun with a ' + C.head + ' head';
+  $('title').textContent = 'office noun drum · no. ' + (C.n < 10 ? '0' : '') + C.n + ' of 10';
+  $('cap').textContent = C.caption;
+  if (typeof C.room === 'string' && C.room.indexOf('https://') === 0) room.href = C.room; else room.hidden = true;
+
+  var ctx = null, taps = 0, pending = 0, timer = null, step = 0;
+  function audio() {
+    if (!ctx) { var A = window.AudioContext || window.webkitAudioContext; if (A) ctx = new A(); }
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  function env(g, t, a, d, peak) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
+  function tone(type, f0, f1, dur, peak) {
+    var c = audio(); if (!c) return; var t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    env(g, t, 0.004, dur, peak); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noise(dur, peak, hp, lp) {
+    var c = audio(); if (!c) return; var t = c.currentTime, n = Math.floor(c.sampleRate * dur), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    var s = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter(); s.buffer = b;
+    f.type = lp ? 'bandpass' : 'highpass'; f.frequency.value = lp ? (hp + lp) / 2 : hp;
+    env(g, t, 0.002, dur, peak); s.connect(f); f.connect(g); g.connect(c.destination); s.start(t);
+  }
+  var VOICES = {
+    kick:   function () { tone('sine', 150, 42, 0.28, 0.9); },
+    snare:  function () { noise(0.16, 0.5, 1500); tone('triangle', 190, 120, 0.1, 0.35); },
+    hat:    function () { noise(0.05, 0.3, 7000); },
+    shaker: function () { noise(0.11, 0.28, 3500, 9000); },
+    bell:   function () { tone('sine', 1320, 0, 0.5, 0.3); tone('sine', 1980, 0, 0.35, 0.15); },
+    bleep:  function () { tone('square', 880, 0, 0.09, 0.18); },
+    click:  function () { tone('square', 2400, 900, 0.03, 0.25); },
+    clink:  function () { tone('triangle', 540, 0, 0.22, 0.4); tone('triangle', 812, 0, 0.18, 0.25); },
+    rim:    function () { tone('triangle', 820, 400, 0.05, 0.5); noise(0.02, 0.2, 4000); },
+    clack:  function () { noise(0.03, 0.35, 2200, 5200); tone('square', 320, 180, 0.03, 0.12); }
+  };
+  var PATTERN = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0];
+  function bump(el) { el.classList.add('hit'); setTimeout(function () { el.classList.remove('hit'); }, 90); }
+  function hit(fromLoop) {
+    (VOICES[C.voice] || VOICES.rim)();
+    bump(noun); bump(pad);
+    if (!fromLoop) { taps++; pending++; count.textContent = taps + (taps === 1 ? ' tap' : ' taps'); }
+  }
+  // Optional ping back to the drum room. Off unless C.ping is an https URL; batched, best effort, never blocks the piece.
+  function flush() {
+    if (!pending || typeof C.ping !== 'string' || C.ping.indexOf('https://') !== 0) { pending = 0; return; }
+    var body = JSON.stringify({ source: 'office-noun-drum', piece: C.n, voice: C.voice, taps: pending }); pending = 0;
+    try { fetch(C.ping, { method: 'POST', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain' }, body: body }).catch(function () {}); } catch (e) {}
+  }
+  setInterval(flush, 5000);
+  stage.addEventListener('pointerdown', function (e) { if (e.target.closest('#bar')) return; hit(false); });
+  stage.addEventListener('keydown', function (e) { if (e.target.closest('#bar')) return; if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) hit(false); } });
+  loopBtn.addEventListener('click', function () {
+    if (timer) { clearInterval(timer); timer = null; loopBtn.setAttribute('aria-pressed', 'false'); loopBtn.textContent = 'loop'; return; }
+    audio(); step = 0; loopBtn.setAttribute('aria-pressed', 'true'); loopBtn.textContent = 'stop';
+    timer = setInterval(function () { if (PATTERN[(step + C.n * 3) % 16]) hit(true); step++; }, 150);
+  });
+})();
+</script>
+</body>
+</html>
