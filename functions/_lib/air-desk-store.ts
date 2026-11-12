@@ -32,6 +32,7 @@ import { kindOf, kindRole } from './air-kinds.mjs';
 import { DESK_REFUSALS, LOG_SIZE, RESOLVE_TIMEOUT_MS, SHIFT_LOG_DAYS, agentCard, agentOf, agentRowOf, askRefusal, callRowOf, callView, canPass, deskLog, isLiveCall, parseDeskPost, passRelay, shiftView } from './air-desk.mjs';
 // @ts-ignore — plain module shared with the tests
 import { isoSec, laDate } from './air-reading.mjs';
+import { presentsResidentKey } from './resident-key.ts';
 
 export type AirDeskEnv = { AUTH_DB?: D1Database; YARD_RESIDENT_KEY?: string };
 
@@ -51,23 +52,13 @@ type CallRow = {
 type ShiftRow = { day: string; feed: string; agent: string; outcome: string; reason: string | null; report_id: string | null; at: number; value?: string | null };
 type Belief = { value: string; source_url: string | null };
 
-/** Constant-time string compare: never a plain `===` on a secret. Portable (no crypto.subtle.timingSafeEqual, a Workers-only extension). */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 /**
  * Whether the request presents the house's own resident key
  * (X-Yard-Resident), compared in constant time. False whenever the key is
  * unset — the caller checks that first and answers 503, never this.
  */
 export async function isResident(request: Request, env: AirDeskEnv): Promise<boolean> {
-  if (!env.YARD_RESIDENT_KEY) return false;
-  const presented = request.headers.get('X-Yard-Resident') ?? '';
-  return timingSafeEqual(presented, env.YARD_RESIDENT_KEY);
+  return presentsResidentKey(request, env);
 }
 
 /** A GET on `url` answers under 400 within RESOLVE_TIMEOUT_MS. Network trouble or a slow host: false, never thrown. */

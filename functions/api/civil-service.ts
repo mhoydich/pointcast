@@ -12,6 +12,7 @@
  */
 import { rateLimit, rateLimitResponse } from '../_rate-limit';
 import { OPS_TYPE, board, fileReceipt, signUp } from '../_lib/civil-service-store.ts';
+import { presentsResidentKey } from '../_lib/resident-key.ts';
 import { CIVIL_SERVICE_POSTS, ESCS_DISCLAIMER, OFFER_CLOCK_DAYS } from '../../src/data/civil-service.ts';
 
 interface Env {
@@ -68,7 +69,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const rl = await rateLimit(request, env, { bucket: 'escs:desk', windowSec: 3600, maxRequests: 20 });
   if (!rl.allowed) return rateLimitResponse(rl, 'the civil service desk is busy; try again shortly');
 
-  const isResident = Boolean(env.YARD_RESIDENT_KEY) && request.headers.get('X-Yard-Resident') === env.YARD_RESIDENT_KEY;
+  const isResident = presentsResidentKey(request, env);
 
   try {
     if (body.action === 'sign_up') {
