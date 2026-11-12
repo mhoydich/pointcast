@@ -36,6 +36,7 @@ export const AGENT_SURFACES = {
     uesPhilosophyRadius: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/',
     uesPhilosophyUnmoderated: 'https://pointcast.xyz/ues/philosophy/the-unmoderated-label/',
     smallShrines: 'https://pointcast.xyz/small-shrines/',
+    pray: 'https://pointcast.xyz/pray/',
     babyBonfire: 'https://pointcast.xyz/baby-bonfire/',
     babyBonfireSpec: 'https://pointcast.xyz/baby-bonfire/open-spec/',
     babyBonfireMesh: 'https://pointcast.xyz/baby-bonfire/open-mesh/',

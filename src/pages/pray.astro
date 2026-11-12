@@ -1,0 +1,193 @@
+---
+/**
+ * /pray — the one front door for the quiet instruments.
+ *
+ * The Prayer Fire (/baby-bonfire/prayer/) is the main entry. Beneath it,
+ * eight existing rooms under three plain labels: Fire, Bells, Drum.
+ * Every route linked here exists in src/pages or public/.
+ *
+ * It meshes with the hour: a tiny inline script reorders the groups and
+ * rooms and changes the greeting for dawn, day, dusk and night, using the
+ * visitor's local clock. With scripts off, the default order below stands
+ * and every link works. Nothing is stored and nothing is sent.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'Pray';
+const description = 'Light a fire, strike a bell, sit for a minute. One door to the Prayer Fire and the quiet rooms of PointCast.';
+
+const GROUPS = [
+  {
+    id: 'fire',
+    label: 'Fire',
+    rooms: [
+      { id: 'candles', name: 'Prayer Candles', href: '/prayer-candles', text: 'Light a votive that burns twenty-four hours, shared.' },
+      { id: 'lantern', name: 'Lantern', href: '/lantern', text: 'One paper lantern to leave on, slowly changing color.' },
+    ],
+  },
+  {
+    id: 'bells',
+    label: 'Bells',
+    rooms: [
+      { id: 'prayer-bells', name: 'Prayer Bells', href: '/prayer-bells', text: 'Brass chimes tuned so nothing you play is wrong.' },
+      { id: 'bell-choir', name: 'Bell Choir', href: '/bell-choir', text: 'Twelve bells, and everyone in the room hears them.' },
+      { id: 'vespers', name: 'Vespers', href: '/drum-vespers', text: 'A bell tower that tolls on every hour.' },
+    ],
+  },
+  {
+    id: 'drum',
+    label: 'Drum',
+    rooms: [
+      { id: 'meditate', name: 'Meditate', href: '/drum-meditate', text: 'Five minutes of slow breathing with a soft chime.' },
+      { id: 'mantra', name: 'Mantra', href: '/drum-mantra', text: 'Type a short phrase, then let it sit on screen.' },
+      { id: 'offering', name: 'Offering', href: '/drum-offering', text: 'Leave one short intention in the shared archive.' },
+    ],
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'Pray',
+  url: 'https://pointcast.xyz/pray/',
+  description,
+  hasPart: [
+    { '@type': 'WebPage', name: 'Prayer Fire', url: 'https://pointcast.xyz/baby-bonfire/prayer/' },
+    ...GROUPS.flatMap((g) => g.rooms.map((r) => ({ '@type': 'WebPage', name: r.name, url: `https://pointcast.xyz${r.href}` }))),
+  ],
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image="/baby-bonfire/prayer/card.png"
+  imageAlt="Prayer Fire. A small copper and dark stone hearth with a lit flame in its arched opening, on a linen-covered table in warm brown light."
+  themeColor="#17152e"
+  immersive
+  jsonLd={jsonLd}
+>
+  <div class="pr" id="pray">
+    <a class="pr__back" href="/">&larr; PointCast</a>
+    <header class="pr__head">
+      <h1>Pray</h1>
+      <p class="pr__lede">Light a fire, strike a bell, sit for a minute.</p>
+      <p class="pr__hour" id="pray-hour">Any hour is fine.</p>
+    </header>
+
+    <a class="pr__fire" href="/baby-bonfire/prayer/">
+      <span class="pr__fire-name">Light the fire</span>
+      <span class="pr__fire-text">The Prayer Fire. Say what it is for, then sit with it.</span>
+    </a>
+
+    <nav class="pr__rooms" id="pray-rooms" aria-label="Quiet rooms">
+      {GROUPS.map((g) => (
+        <section class="pr__group" data-group={g.id} aria-labelledby={`pray-${g.id}`}>
+          <h2 id={`pray-${g.id}`}>{g.label}</h2>
+          <ul>
+            {g.rooms.map((r) => (
+              <li data-room={r.id}>
+                <a href={r.href}><b>{r.name}</b><span>{r.text}</span></a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </nav>
+
+    <p class="pr__fine">Nothing on this page is saved or sent. The order follows your clock.</p>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+(function () {
+  'use strict';
+  var root = document.getElementById('pray-rooms');
+  var hourEl = document.getElementById('pray-hour');
+  if (!root || !hourEl) return;
+  var h = new Date().getHours();
+  var part = h >= 5 && h < 9 ? 'dawn' : h >= 9 && h < 17 ? 'day' : h >= 17 && h < 21 ? 'dusk' : 'night';
+  var PLAN = {
+    dawn:  { line: 'Early. The room is still quiet.', order: ['bells', 'drum', 'fire'], rooms: ['prayer-bells', 'vespers', 'bell-choir', 'meditate', 'mantra', 'offering', 'candles', 'lantern'] },
+    day:   { line: 'Daytime. A minute is enough.', order: ['drum', 'bells', 'fire'], rooms: ['offering', 'mantra', 'meditate', 'bell-choir', 'prayer-bells', 'vespers', 'candles', 'lantern'] },
+    dusk:  { line: 'Evening. The light is going.', order: ['fire', 'bells', 'drum'], rooms: ['candles', 'lantern', 'vespers', 'prayer-bells', 'bell-choir', 'meditate', 'mantra', 'offering'] },
+    night: { line: 'Late. Keep it small.', order: ['fire', 'drum', 'bells'], rooms: ['lantern', 'candles', 'meditate', 'mantra', 'offering', 'vespers', 'prayer-bells', 'bell-choir'] }
+  };
+  var plan = PLAN[part];
+  hourEl.textContent = plan.line;
+  root.setAttribute('data-part', part);
+  plan.order.forEach(function (id) {
+    var g = root.querySelector('[data-group="' + id + '"]');
+    if (g) root.appendChild(g);
+  });
+  plan.rooms.forEach(function (id) {
+    var li = root.querySelector('[data-room="' + id + '"]');
+    if (li && li.parentNode) li.parentNode.appendChild(li);
+  });
+})();
+</script>
+
+<style>
+  :global(body) { background: #17152e; }
+  .pr {
+    --night: #17152e;
+    --ember: #ff9a4a;
+    --glow: #ffd27a;
+    --paper: #f3e9d8;
+    --dim: #b9aec4;
+    --line: rgba(243, 233, 216, .26);
+    --display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+    box-sizing: border-box;
+    max-width: 600px;
+    min-height: 100vh;
+    min-height: 100svh;
+    margin: 0 auto;
+    padding: 0 18px calc(28px + env(safe-area-inset-bottom));
+    background: var(--night);
+    color: var(--paper);
+    font: 16px/1.5 var(--body);
+  }
+  .pr *, .pr *::before, .pr *::after { box-sizing: border-box; }
+  .pr a { color: inherit; }
+  .pr a:focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; }
+  .pr__back {
+    display: inline-block; padding: 10px 0 6px;
+    font: 600 12px/14px var(--body); letter-spacing: .02em; text-decoration: none; opacity: .82;
+  }
+  .pr__back:hover, .pr__back:focus-visible { opacity: 1; text-decoration: underline; }
+  .pr__head { padding: 14px 0 16px; }
+  .pr__head h1 { margin: 0 0 8px; font: italic 500 44px/1 var(--display); letter-spacing: -.01em; }
+  .pr__lede { margin: 0 0 6px; font-size: 18px; line-height: 1.35; max-width: 22em; }
+  .pr__hour { margin: 0; font: 500 11px/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--glow); }
+  .pr__fire {
+    display: block; padding: 16px 16px 14px; margin: 0 0 22px;
+    background: var(--ember); color: #2a1206 !important; border-radius: 2px; text-decoration: none;
+  }
+  .pr__fire:hover { background: var(--glow); }
+  .pr__fire-name { display: block; font: 600 20px/1.2 var(--body); }
+  .pr__fire-text { display: block; margin-top: 4px; font-size: 14.5px; line-height: 1.4; }
+  .pr__rooms { display: grid; gap: 16px; }
+  .pr__group h2 {
+    margin: 0 0 6px; font: 500 11px/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
+  }
+  .pr__group ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .pr__group li { border-bottom: 1px solid var(--line); }
+  .pr__group li a {
+    display: flex; flex-direction: column; justify-content: center; min-height: 48px; padding: 8px 2px;
+    text-decoration: none;
+  }
+  .pr__group li a:hover b { color: var(--glow); }
+  .pr__group b { font: italic 600 18px/1.25 var(--display); }
+  .pr__group span { font-size: 14px; line-height: 1.4; color: var(--dim); }
+  .pr__fine { margin: 22px 0 0; font-size: 13px; line-height: 1.5; color: var(--dim); }
+  @media (min-width: 700px) {
+    .pr { padding-top: 24px; }
+    .pr__head h1 { font-size: 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pr * { transition: none !important; animation: none !important; }
+  }
+</style>
