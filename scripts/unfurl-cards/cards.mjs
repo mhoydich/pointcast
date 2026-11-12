@@ -106,6 +106,13 @@ export const CARDS = [
     description: seoFor('/baby-bonfire/prayer/').description,
     alt: 'Prayer Fire. A small copper and dark stone hearth with a lit flame in its arched opening, on a linen-covered table in warm brown light.',
   },
+  // A Higher Purpose is a 3D place, so its card draws the island itself in square tiles.
+  {
+    path: '/baby-bonfire/higher-purpose/', area: BB, kicker: 'BABY BONFIRE', motif: 'island', ld: 'CreativeWork',
+    headline: ['A Higher', 'Purpose'], line: ['Walk a small island of fire,', 'water, air and ground.'],
+    description: seoFor('/baby-bonfire/higher-purpose/').description,
+    alt: 'A Higher Purpose, a Baby Bonfire sketch. A drawing of a small island of square tiles at dusk, with a fire at its centre, water around it, white posts, standing stones and drifting motes.',
+  },
   {
     path: '/coast-commons/', area: CC, kicker: 'A PUBLIC GOOD · OPEN STUDY', motif: 'coast',
     headline: ['Coast', 'Commons'], line: ['Read what a shared house could', 'be in fifteen beach towns.'],
@@ -236,7 +243,7 @@ export function readableTags(card, title, description, publicDir = PUBLIC) {
   const hub = card.path === `/${card.path.split('/')[1]}/`;
   const ld = {
     '@context': 'https://schema.org',
-    '@type': hub ? 'CollectionPage' : 'WebPage',
+    '@type': card.ld ?? (hub ? 'CollectionPage' : 'WebPage'),
     name: title,
     description,
     url: `${SITE}${card.path}`,

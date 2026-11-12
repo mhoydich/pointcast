@@ -13,6 +13,15 @@ Every public page in the four areas meets one head standard, and a test keeps it
 
 ---
 
+## Baby Bonfire: A Higher Purpose (2026-11-11)
+
+`/baby-bonfire/higher-purpose/`, listed in `/baby-bonfire.json` under `screens`. Sprint brief: `a higher purpose`, a small 3D place of fire, water, air and ground with generated sound, for a phone, a desktop and a headset, signed modestly. One hand-written HTML file (about 43 KB): raw WebGL in sixteen colours, rendered small and scaled up square, Web Audio loop at 88 bpm, WebXR when offered. Stores nothing, sends nothing.
+
+- [x] (CC) The page, its unfurl card (`island` motif in `scripts/unfurl-cards/draw.mjs`, JSON-LD as CreativeWork), hub card, twin `screens` entry and privacy line, sitemap-discovery, `llms.txt`, `llms-full.txt`, `tests/baby-bonfire-higher-purpose.test.mjs` — `done`
+- [x] (CC) Scripted run in headless Chrome (software renderer) at 390x844 and 1280x800: draws, Begin works, all four walks reach their places, no console errors, no request off the host — `done`
+- [ ] (M) Real-device QA per `docs/briefs/2026-11-11-manus-higher-purpose-qa.md`: phones, desktop and a headset; results to `docs/manus-logs/2026-11-11-higher-purpose-qa.md` — `queued`
+- [ ] (MH) Listen to the mix and decide whether it stays in Baby Bonfire — `waiting-on-mh`
+
 ## Baby Bonfire: Prayer Fire (2026-11-11)
 
 `/baby-bonfire/prayer/`, listed in `/baby-bonfire.json` under `screens`. Mike in chat on 2026-11-11, after seeing a generated film of the fireplace: "turn that into a prayer site with animations audio multi media". The one Baby Bonfire page that is a screen on purpose: it plays a film and recorded sound from its own folder. A concept sketch; nothing is for sale; it lights no real flame.
