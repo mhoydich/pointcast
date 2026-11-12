@@ -139,7 +139,7 @@ test('it is listed for machines: sitemap, llms and the full text', () => {
 // Send the fire: after an offering, one tap makes a picture of this fire with the words and
 // hands it to the device's share sheet. The picture is made on the device and goes nowhere
 // unless the person sends or saves it.
-const script = html.slice(html.indexOf('<script>'), html.indexOf('</script>'));
+const script = html.slice(html.indexOf('<script>'), html.indexOf('</script>', html.indexOf('<script>')));
 const between = (a, b) => script.slice(script.indexOf(a), script.indexOf(b, script.indexOf(a)));
 
 test('send the fire: the closing line gets two quiet buttons, and End stays', () => {
