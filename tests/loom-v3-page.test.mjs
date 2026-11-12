@@ -1,0 +1,197 @@
+// The /loom v3 page, driven in jsdom against the real Loom service (src/lib/loom/service.mjs)
+// over an in-memory KV. Checks the live paths the prototype only ran against mocks:
+// read, append, reply as answer, +1, vote, edit, withdraw, ?to= links, and that
+// untrusted message text never becomes HTML.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { JSDOM } from 'jsdom';
+import { handleLoom } from '../src/lib/loom/service.mjs';
+
+const SOURCE = readFileSync(new URL('../src/pages/loom/index.astro', import.meta.url), 'utf8');
+const between = (s, a, b) => { const i = s.indexOf(a) + a.length; return s.slice(i, s.indexOf(b, i)); };
+const CSS = between(SOURCE, '<style is:inline>', '</style>');
+const BODY = between(SOURCE, '<body>', '<script is:inline>');
+const JS = between(SOURCE, '<script is:inline>', '</script>');
+
+function memoryKv() {
+  const map = new Map();
+  return { map, get: async (k) => map.get(k) ?? null, put: async (k, v) => { map.set(k, v); } };
+}
+const ORIGIN = 'https://pointcast.xyz';
+const api = (kv, path, init) => handleLoom(new Request(new URL(path, ORIGIN), init), { kv });
+const post = async (kv, body) => (await api(kv, '/api/loom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+const read = async (kv, to) => (await api(kv, `/api/loom?to=${encodeURIComponent(to)}`)).json();
+
+const open = [];
+test.afterEach(() => { while (open.length) open.pop().close(); });
+
+async function page(kv, { path = '/loom', name = 'tester' } = {}) {
+  const dom = new JSDOM(`<!doctype html><html><head><style>${CSS}</style></head><body>${BODY}</body></html>`, {
+    url: ORIGIN + path, runScripts: 'outside-only', pretendToBeVisual: true,
+  });
+  const w = dom.window;
+  open.push(w);
+  if (name) w.localStorage.setItem('loom.name', name);
+  w.fetch = async (url, init = {}) => {
+    const { signal, cache, ...rest } = init;
+    return api(kv, new URL(url, ORIGIN).href, rest);
+  };
+  w.HTMLElement.prototype.scrollIntoView = () => {};
+  w.eval(JS);
+  await settle(w);
+  return w;
+}
+const settle = async (w, ms = 60) => { for (let i = 0; i < 6; i += 1) await new Promise((r) => w.setTimeout(r, ms / 6)); };
+const texts = (w, sel) => [...w.document.querySelectorAll(sel)].map((n) => n.textContent);
+const msgEl = (w, id) => w.document.getElementById(`msg-${id}`);
+async function send(w, text) {
+  w.document.getElementById('bodyInput').value = text;
+  w.document.getElementById('composer').dispatchEvent(new w.Event('submit', { cancelable: true }));
+  await settle(w, 120);
+}
+
+test('boots live on #loom with the server seed, no sample data', async () => {
+  const kv = memoryKv();
+  const w = await page(kv);
+  assert.equal(w.document.getElementById('statusText').textContent, 'Live');
+  assert.ok(texts(w, '#dirList .row .label').includes('#loom'));
+  assert.match(w.document.getElementById('threadTitle').textContent, /#loom/);
+  assert.equal(w.document.querySelectorAll('#msgs .msg').length, 3);
+  assert.doesNotMatch(SOURCE, /SNAPSHOT|Sample data|officenoun/);
+});
+
+test('shows Offline with a retry when the API cannot be reached', async () => {
+  const kv = memoryKv();
+  const dom = new JSDOM(`<!doctype html><html><body>${BODY}</body></html>`, { url: `${ORIGIN}/loom`, runScripts: 'outside-only' });
+  open.push(dom.window);
+  dom.window.fetch = async () => { throw new TypeError('network down'); };
+  dom.window.eval(JS);
+  await settle(dom.window);
+  assert.equal(dom.window.document.getElementById('statusText').textContent, 'Offline');
+  assert.ok(texts(dom.window, '#dirList button').includes('Try again'));
+  dom.window.fetch = async (url, init = {}) => { const { signal, cache, ...rest } = init; return api(kv, new URL(url, ORIGIN).href, rest); };
+  [...dom.window.document.querySelectorAll('#dirList button')].find((b) => b.textContent === 'Try again').click();
+  await settle(dom.window);
+  assert.equal(dom.window.document.getElementById('statusText').textContent, 'Live');
+});
+
+test('append, reply as the answer, +1, edit and withdraw reach the server', async () => {
+  const kv = memoryKv();
+  const q = await post(kv, { to: '@tester', from: { name: 'Ledger desk', kind: 'agent' }, kind: 'question', body: 'Mint day 1 today?' });
+  const w = await page(kv, { path: '/loom?to=%40tester' });
+  assert.equal(w.document.getElementById('threadTitle').textContent, '@tester');
+  assert.ok(msgEl(w, q.message.id), 'question rendered');
+
+  // plain append
+  await send(w, 'hello from v3');
+  let log = await read(kv, '@tester');
+  const mine = log.messages.find((m) => m.body === 'hello from v3');
+  assert.ok(mine, 'note posted');
+  assert.equal(mine.from.name, 'tester');
+  assert.match(w.document.getElementById('sendStatus').textContent, /Posted to @tester/);
+
+  // reply to the open question: goes in as an answer under it
+  msgEl(w, q.message.id).querySelector('[data-act="reply"]').click();
+  await send(w, 'yes, go');
+  log = await read(kv, '@tester');
+  const ans = log.messages.find((m) => m.body === 'yes, go');
+  assert.equal(ans.kind, 'answer');
+  assert.equal(ans.parent, q.message.id);
+  assert.ok(msgEl(w, ans.id).classList.contains('d1'), 'answer renders under its question');
+
+  // +1
+  msgEl(w, q.message.id).querySelector('[data-act="plus"]').click();
+  await settle(w, 120);
+  log = await read(kv, '@tester');
+  assert.equal(log.messages.find((m) => m.id === q.message.id).plus, 1);
+
+  // edit my note through the message sheet
+  msgEl(w, mine.id).querySelector('[data-act="more"]').click();
+  [...w.document.querySelectorAll('.sheet .opt')].find((b) => b.textContent === 'Edit').click();
+  w.document.getElementById('editBody').value = 'hello again';
+  [...w.document.querySelectorAll('.sheet .btn')].find((b) => b.textContent === 'Save edit').click();
+  await settle(w, 120);
+  log = await read(kv, '@tester');
+  assert.equal(log.messages.find((m) => m.id === mine.id).body, 'hello again');
+
+  // withdraw it
+  msgEl(w, mine.id).querySelector('[data-act="more"]').click();
+  [...w.document.querySelectorAll('.sheet .opt')].find((b) => b.textContent === 'Withdraw').click();
+  [...w.document.querySelectorAll('.sheet .btn')].find((b) => b.textContent === 'Withdraw').click();
+  await settle(w, 120);
+  log = await read(kv, '@tester');
+  assert.equal(log.messages.some((m) => m.id === mine.id), false, 'withdrawn message is hidden');
+});
+
+test('a vote is recorded once per browser', async () => {
+  const kv = memoryKv();
+  const p = await post(kv, { to: '#officedesk', from: { name: 'mike', kind: 'human' }, kind: 'poll', body: 'Which first?', poll: { question: 'Which first?', options: ['Mint', 'Ship'] } });
+  const w = await page(kv, { path: '/loom?to=%23officedesk' });
+  msgEl(w, p.message.id).querySelector('[data-vote="1"]').click();
+  await settle(w, 120);
+  const log = await read(kv, '#officedesk');
+  assert.deepEqual(log.messages[0].poll.options.map((o) => o.votes), [0, 1]);
+  assert.ok(msgEl(w, p.message.id).querySelector('[data-vote="0"]').disabled, 'poll locks after voting');
+});
+
+test('message text and names are rendered as text, never HTML', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#xss', from: { name: '<img src=x onerror=alert(1)>', kind: 'human' }, body: '<script>alert(1)</script><img src=x onerror=alert(2)> javascript:alert(3) https://example.com/ok' });
+  const w = await page(kv, { path: '/loom?to=%23xss' });
+  const box = w.document.getElementById('msgs');
+  assert.equal(box.querySelectorAll('script, img').length, 0);
+  assert.match(box.textContent, /<script>alert\(1\)<\/script>/);
+  assert.deepEqual([...box.querySelectorAll('a')].map((a) => a.getAttribute('href')), ['https://example.com/ok']);
+  assert.equal(w.document.querySelectorAll('#dirList img, #fy img').length, 0);
+});
+
+test('a link to one message opens its thread', async () => {
+  const kv = memoryKv();
+  const m = await post(kv, { to: '#court', from: { name: 'sam', kind: 'human' }, body: 'courts are dry' });
+  const w = await page(kv, { path: `/loom?to=${encodeURIComponent(m.address)}` });
+  assert.equal(w.document.getElementById('threadTitle').textContent, '#court');
+  assert.ok(msgEl(w, m.message.id));
+  assert.match(w.location.search, /to=%23court/);
+});
+
+test('addresses follow the server grammar: one spelling per thread', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: 'https://www.example.com/page/?utm_source=x', from: { name: 'sam', kind: 'human' }, body: 'first' });
+  const w = await page(kv, { path: `/loom?to=${encodeURIComponent('http://example.com/page')}` });
+  assert.equal(w.document.getElementById('threadTitle').textContent, 'https://example.com/page');
+  assert.equal(w.document.querySelectorAll('#msgs .msg').length, 1);
+  assert.equal([...w.document.querySelectorAll('#dirList .row')].filter((r) => r.dataset.open.includes('example.com')).length, 1);
+  // "#My Topic" becomes #my-topic, which the server accepts
+  w.document.getElementById('addrInput').value = '#My_Topic';
+  w.document.getElementById('addrForm').dispatchEvent(new w.Event('submit', { cancelable: true }));
+  await settle(w);
+  assert.equal(w.document.getElementById('threadTitle').textContent, '#my-topic');
+  assert.doesNotMatch(w.document.getElementById('msgs').textContent, /Couldn’t load/);
+});
+
+test('server refusals are explained, and the text stays in the box', async () => {
+  const kv = memoryKv();
+  const w = await page(kv, { path: '/loom?to=%23names', name: 'Collator' });
+  await send(w, 'hi');
+  assert.match(w.document.getElementById('sendStatus').textContent, /That name is reserved/);
+  assert.equal(w.document.getElementById('bodyInput').value, 'hi');
+});
+
+test('a quick answer from For you takes a second tap', async () => {
+  const kv = memoryKv();
+  const q = await post(kv, { to: '@tester', from: { name: 'Ledger desk', kind: 'agent' }, kind: 'question', body: 'Go ahead with day 1?' });
+  const w = await page(kv);
+  await settle(w, 200);
+  const yes = () => [...w.document.querySelectorAll('#fyDyn button')].find((b) => /Yes, go ahead|Tap again/.test(b.textContent));
+  yes().click();
+  await settle(w, 120);
+  let log = await read(kv, '@tester');
+  assert.equal(log.messages.length, 1, 'first tap posts nothing');
+  yes().click();
+  await settle(w, 150);
+  log = await read(kv, '@tester');
+  const ans = log.messages.find((m) => m.parent === q.message.id);
+  assert.equal(ans?.body, 'Yes, go ahead');
+  assert.equal(ans.kind, 'answer');
+});
