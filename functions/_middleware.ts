@@ -311,6 +311,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
   if (url.pathname === '/el-segundo-motors/') return next();
 
+  // The prayer site (public/pray/) links relatively (./fire/, ./bell/), so its
+  // rooms must be served at their slash URLs. The generic rewrite below keeps
+  // the no-slash address in the URL bar, which breaks those links; redirect.
+  if ((isGet || request.method === 'HEAD') && ['/pray', '/pray/fire', '/pray/bell', '/pray/sit'].includes(url.pathname)) {
+    const target = new URL(url.pathname + '/', url.origin);
+    target.search = url.search;
+    return Response.redirect(target.toString(), 301);
+  }
+
   // Independent paper rooms omit visit logging, session injection and global
   // HTML transforms. Neighboring routes retain their existing behavior.
   const paperRooms = ['/nouns-money/workshop/', '/ues/currency-lab/', '/case-studies/launchpad/'];
