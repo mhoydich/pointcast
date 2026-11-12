@@ -104,8 +104,10 @@ test('content rules: nothing the area promised to leave out', () => {
     assert.equal(hit, null, `${slug || 'hub'}: ${hit && hit[0]}`);
   }
   assert.equal(JSON.stringify(twin).match(banned), null);
-  assert.equal(twin.licence.status, 'proposed, not decided');
-  assert.ok(!existsSync(new URL('public/coast-commons/LICENSE', root)), 'no licence file until one is chosen');
+  assert.equal(twin.licence.status, 'chosen');
+  assert.equal(twin.licence.spdx, 'CC-BY-4.0');
+  assert.ok(existsSync(new URL('public/coast-commons/LICENSE.txt', root)), 'licence note');
+  assert.ok(existsSync(new URL('public/coast-commons/LICENSE-CC-BY-4.0.txt', root)), 'full licence text');
 });
 
 test('the area is registered: manifest, sitemap, new-today, llms and a sourced block', () => {
