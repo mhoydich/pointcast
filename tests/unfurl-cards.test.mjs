@@ -30,7 +30,7 @@ const SCENES = ['light-the-hearth', 'the-shelf', 'pieces-roam', 'the-rounds', 't
 test('every page that was asked for has a card: the hubs, the street\'s scenes, the studies', () => {
   const want = [
     '/baby-bonfire/', ...SCENES.map((s) => `/baby-bonfire/${s}/`),
-    ...['open-spec', 'open-mesh', 'barter-board', 'make-a-piece', 'first-place', 'prayer', 'higher-purpose'].map((s) => `/baby-bonfire/${s}/`),
+    ...['open-spec', 'open-mesh', 'barter-board', 'make-a-piece', 'first-place', 'prayer', 'higher-purpose', 'room', 'ar'].map((s) => `/baby-bonfire/${s}/`),
     '/coast-commons/', '/coast-commons/el-segundo/', '/coast-commons/pattern/', '/coast-commons/sb-surf-house/', '/coast-commons/fresh-milk/',
     ...['malibu', 'santa-monica', 'venice', 'marina-del-rey', 'playa-del-rey', 'manhattan-beach', 'hermosa-beach', 'redondo-beach', 'torrance', 'palos-verdes-estates', 'rancho-palos-verdes', 'san-pedro', 'long-beach', 'seal-beach'].map((s) => `/coast-commons/${s}/`),
     '/house/', '/house/about/',
@@ -147,7 +147,7 @@ test('the words on a card: a short headline, one line of what to do, small type 
     assert.ok(card.line.length >= 1 && card.line.length <= 2, `${card.path} line rows`);
     for (const row of card.line) assert.ok(row.length <= 36, `${card.path}: "${row}" is ${row.length} characters`);
     // The one photograph card (Prayer Fire) says two short sentences; every other card says one.
-    assert.match(card.line.join(' '), card.motif === 'photo' ? /^[A-Z][^.]*\. [A-Z][^.]*\.$/ : /^[A-Z][^.]*\.$/, `${card.path} line is one sentence`);
+    assert.match(card.line.join(' '), card.photo ? /^[A-Z][^.]*\. [A-Z][^.]*\.$/ : /^[A-Z][^.]*\.$/, `${card.path} line is one sentence`);
     const words = [card.kicker, ...card.headline, ...card.line, card.alt, STATUS[card.area]].join(' ');
     assert.equal(words.match(banned), null, `${card.path}: ${words.match(banned)}`);
   }

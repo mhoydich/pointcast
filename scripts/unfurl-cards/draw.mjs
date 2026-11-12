@@ -416,6 +416,7 @@ const MOTIFS = { street, house: sceneHouse, island, plan, mesh, coast, tenSeats,
 
 /** Prayer Fire: the page's poster, cover-cropped so the hearth is in frame, words low on the right. */
 function photoCard(card) {
+  if (card.photoLeft) return modelCard(card);
   const jpeg = readFileSync(resolve(ROOT, card.photo)).toString('base64');
   const [pw, ph] = [720, 950]; // the poster's own size
   const k = W / pw;
@@ -432,6 +433,25 @@ function photoCard(card) {
 <rect width="${W}" height="${H}" fill="#3a2d24"/>
 <image x="0" y="${top}" width="${W}" height="${n(ph * k)}" preserveAspectRatio="xMidYMid slice" href="data:image/jpeg;base64,${jpeg}" xlink:href="data:image/jpeg;base64,${jpeg}"/>
 <rect y="300" width="${W}" height="${H - 300}" fill="url(#phLow)"/>
+${lines.map(type).join('\n')}
+</svg>`;
+  return { svg, lines, column: [x, W - 56], photo: true };
+}
+
+/** The Room and On Your Table: a rendered still of the fireplace model (black ground) on the left, words on the right. */
+function modelCard(card) {
+  const jpeg = readFileSync(resolve(ROOT, card.photoLeft)).toString('base64');
+  const x = 690;
+  const size = card.headline.length > 1 ? 64 : 76;
+  const lines = [
+    ...card.headline.map((text, i) => ({ text, x, y: 250 + i * (size + 4), size, fill: '#f6ead6', weight: 0.04, spacing: -1 })),
+    ...card.line.map((text, i) => ({ text, x, y: 250 + card.headline.length * (size + 4) + 26 + i * 38, size: 29, fill: '#e6d7bf' })),
+    { text: 'pointcast.xyz', x, y: FOOT, size: 24, fill: '#d9c6a6', family: MONO, spacing: 0.6 },
+    { text: 'concept sketch', x: W - 56, y: FOOT, size: 20, fill: '#bfae90', family: MONO, spacing: 0.8, anchor: 'end' },
+  ];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+<rect width="${W}" height="${H}" fill="#050409"/>
+<image x="30" y="0" width="630" height="630" href="data:image/jpeg;base64,${jpeg}" xlink:href="data:image/jpeg;base64,${jpeg}"/>
 ${lines.map(type).join('\n')}
 </svg>`;
   return { svg, lines, column: [x, W - 56], photo: true };

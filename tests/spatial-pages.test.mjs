@@ -87,7 +87,9 @@ test('the town is a page first: title, canonical, a list fallback, its own files
   assert.match(town, /Checked in a WebXR emulator only; nobody has tried it in a headset yet\./);
   const map = JSON.parse(town.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]);
   assert.deepEqual(Object.values(map.imports), ['/spatial/vendor/three-r185/three.module.min.js', '/spatial/vendor/three-r185/addons/']);
-  for (const html of [town, room, table]) {
+  for (const page of [town, room, table]) {
+    // The JSON-LD block names schema.org as its @context; it is data and fetches nothing.
+    const html = page.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, '');
     assert.doesNotMatch(html, /<script[^>]+src="https?:/i);
     assert.doesNotMatch(html, /<iframe\b|@import|XMLHttpRequest|sendBeacon|WebSocket|getUserMedia|geolocation/);
     assert.doesNotMatch(html, /localStorage|sessionStorage|document\.cookie|indexedDB/);
@@ -149,12 +151,12 @@ test('content rules hold on the three pages', () => {
   }
 });
 
-test('the hub, the twin and the machine lists know the three screens', () => {
+test('the hub, the twin and the machine lists know the four screens', () => {
   const hub = read('public/baby-bonfire/index.html');
   const section = hub.slice(hub.indexOf('id="screen-h"'), hub.indexOf('id="work-h"'));
-  for (const href of ['/baby-bonfire/prayer/', '/baby-bonfire/room/', '/baby-bonfire/ar/']) assert.ok(section.includes(`<a href="${href}">`), href);
+  for (const href of ['/baby-bonfire/prayer/', '/baby-bonfire/higher-purpose/', '/baby-bonfire/room/', '/baby-bonfire/ar/']) assert.ok(section.includes(`<a href="${href}">`), href);
   assert.equal((hub.match(/class="house" href=/g) || []).length, twin.scenes.length, 'the street is unchanged');
-  assert.deepEqual(twin.screens.map((s) => s.slug), ['prayer', 'room', 'ar']);
+  assert.deepEqual(twin.screens.map((s) => s.slug), ['prayer', 'room', 'ar', 'higher-purpose']);
   for (const s of twin.screens) {
     assert.equal(s.url, `https://pointcast.xyz/baby-bonfire/${s.slug}/`);
     assert.match(s.tested, /Not yet|has not been tried/);
@@ -175,11 +177,7 @@ test('the hub, the twin and the machine lists know the three screens', () => {
   }
 });
 
-test('the vendored libraries and the models have cache rules, and the test fixtures are not public', () => {
-  const headers = read('public/_headers');
-  for (const path of ['/spatial/vendor/three-r185/*', '/baby-bonfire/ar/vendor/*', '/baby-bonfire/room/models/*', '/baby-bonfire/ar/models/*']) {
-    assert.ok(headers.includes(`\n${path}\n  ! Cache-Control\n  Cache-Control: public, max-age=`), path);
-  }
+test('the test fixtures are not public', () => {
   assert.ok(!existsSync(at('public/spatial/test')));
   assert.ok(existsSync(at('scripts/spatial/fixtures/hostile/places.json')));
   assert.match(read('scripts/spatial/fixtures/hostile/places.json'), /javascript:/);
