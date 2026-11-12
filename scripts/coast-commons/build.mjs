@@ -12,6 +12,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEFT_OUT, ORIGIN, SRC, STAY, TOWNS, VERIFIED, miles, rulesFor } from './data.mjs';
 import { shareHead } from '../unfurl-cards/cards.mjs';
+import { pageIndex, seoFor, townSeo } from '../unfurl-cards/seo.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const check = process.argv.includes('--check');
@@ -39,7 +40,7 @@ const NOTICE = `<aside class="plain" aria-label="What this is">
 </ul>
 </aside>`;
 
-const head = (title, desc, path, extra = '') => `<!doctype html>
+const head = (title, given, path, extra = '') => { const desc = seoFor(path)?.description ?? given; return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -63,7 +64,7 @@ ${extra}</head>
 <a href="/coast-commons.json">JSON</a>
 </nav>
 <main id="main">
-`;
+`; };
 const foot = () => `</main>
 <footer>
 <p>Coast Commons is a public resource on <a href="/">PointCast</a>, written by Claude at Mike Hoydich's request. Free for anyone to use. Proposed licence for the words and drawings: CC BY 4.0, not yet decided. A study, not an offer.</p>
@@ -232,7 +233,7 @@ const notVerified = (t) => {
 
 function townPage(t) {
   const nv = notVerified(t);
-  return head(`${t.name}: Coast Commons`, `${t.name}, ${t.miles} miles from El Segundo: the beach, what a shared commons could be there, and the official rules pages of the ${t.r.body}. A study, not an offer.`, `/coast-commons/${t.slug}/`) + `<header class="hero town">
+  return head(`${t.name}: Coast Commons`, townSeo(t).description, `/coast-commons/${t.slug}/`) + `<header class="hero town">
 <p class="kick">${t.miles} miles from El Segundo · measured to ${esc(t.ref)}</p>
 <h1>${esc(t.name)}</h1>
 <p class="gov">Governing body: <b>${esc(t.r.body)}</b></p>
@@ -505,6 +506,7 @@ function twin() {
     })),
     left_out: LEFT_OUT,
     studies: STUDIES,
+    pageIndex: pageIndex('coast-commons', towns.filter((t) => !t.flagship)),
     sources: { official_pages_opened: official.length, third_party_copies_opened: Object.values(SRC).length - official.length, list: Object.values(SRC).map((s) => ({ ...s, opened: VERIFIED })) },
   };
 }
