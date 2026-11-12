@@ -30,10 +30,18 @@ test('the twin lists twenty-one scenes and four workshop pages, and every one is
   assert.match(read('public/baby-bonfire/LICENSE.txt'), /SPDX-License-Identifier: CERN-OHL-P-2\.0[\s\S]*SPDX-License-Identifier: CC-BY-4\.0/);
 });
 
-test('the street has one window per scene, in the twin order, and links the workshop', () => {
-  const windows = [...hub.matchAll(/class="house" href="\/baby-bonfire\/([a-z-]+)\/" data-scene="([a-z-]+)"/g)];
+test('the cabinet has one object per scene, in the twin order, and links the workshop', () => {
+  const windows = [...hub.matchAll(/class="obj" href="\/baby-bonfire\/([a-z-]+)\/" data-scene="([a-z-]+)"/g)];
   assert.deepEqual(windows.map((m) => m[1]), twin.scenes.map((s) => s.slug));
   for (const m of windows) assert.equal(m[1], m[2]);
+  // Each object is drawn once, as a named symbol a scene can copy, and each link wears its own.
+  for (const s of twin.scenes) {
+    assert.equal((hub.match(new RegExp(`<symbol id="bb-o-${s.slug}" `, 'g')) || []).length, 1, `${s.slug} symbol`);
+    assert.ok(hub.includes(`data-scene="${s.slug}" aria-label="`) && hub.includes(`<use href="#bb-o-${s.slug}"/>`), `${s.slug} object`);
+  }
+  assert.equal((hub.match(/<symbol id="bb-o-/g) || []).length, twin.scenes.length);
+  assert.equal((hub.match(/data-lit-note hidden>/g) || []).length, twin.scenes.length, 'every object can say it is lit');
+  assert.doesNotMatch(hub, /class="house"/, 'no houses on the hub');
   const slugs = JSON.parse(hub.match(/SLUGS=(\[[^\]]+\])/)[1]);
   assert.deepEqual(slugs, twin.scenes.map((s) => s.slug));
   for (const slug of WORKSHOP) assert.ok(hub.includes(`href="/baby-bonfire/${slug}/"`), slug);
@@ -45,6 +53,19 @@ test('the hub says what this is near the top', () => {
   assert.match(top, /concept sketches/);
   assert.match(top, /nothing is for sale/);
   assert.match(top, /Do not burn anything indoors on the strength of these pages/);
+  // The hearth film leads, and the notice sits directly under it.
+  assert.ok(top.indexOf('id="film"') < top.indexOf('class="notice"'), 'the film comes first');
+  assert.ok(top.indexOf('<h1>Baby Bonfire</h1>') < top.indexOf('class="notice"'));
+});
+
+test('the hearth film is muted, looping, inline, and waits for motion and data to allow it', () => {
+  const video = hub.match(/<video id="film"[^>]*>/)[0];
+  for (const attr of ['muted', 'loop', 'playsinline', 'preload="none"', 'poster="/baby-bonfire/prayer/media/hearth-poster.jpg"', 'data-src="/baby-bonfire/prayer/media/hearth-loop.mp4"']) assert.ok(video.includes(attr), attr);
+  assert.doesNotMatch(video, /autoplay|\ssrc=/, 'nothing plays or loads before the script decides');
+  assert.match(hub, /c&&c\.saveData\)return/);
+  assert.match(hub, /prefers-reduced-motion: reduce/);
+  assert.match(hub, /IntersectionObserver/);
+  for (const f of ['prayer/media/hearth-loop.mp4', 'prayer/media/hearth-poster.jpg', 'higher-purpose/island.png']) assert.ok(existsSync(new URL(`public/baby-bonfire/${f}`, root)), f);
 });
 
 test('lit windows are kept with try/catch and an in-memory fallback', () => {
@@ -62,9 +83,16 @@ test('lit windows are kept with try/catch and an in-memory fallback', () => {
 
 test('every page is self-contained: no outside requests, canonical set', () => {
   for (const slug of ['', ...all]) {
-    const html = slug ? page(slug) : hub;
+    let html = slug ? page(slug) : hub;
     assert.ok(html.includes(`<link rel="canonical" href="https://pointcast.xyz/baby-bonfire/${slug ? `${slug}/` : ''}">`), `${slug || 'hub'} canonical`);
     assert.doesNotMatch(html, /<script[^>]+src=/i, `${slug || 'hub'} loads no script file`);
+    // The hub shows two stills and the hearth film, all files already in this area. Nothing else.
+    if (!slug) {
+      const media = [...html.matchAll(/<img\b[^>]*\ssrc="([^"]+)"|\s(?:poster|data-src)="([^"]+)"|url\(\s*['"]?([^)#'"][^)'"]*)/g)].map((m) => m[1] || m[2] || m[3]);
+      assert.ok(media.length >= 4);
+      for (const src of media) assert.match(src, /^\/baby-bonfire\/(prayer\/media\/hearth-(loop\.mp4|poster\.jpg)|higher-purpose\/island\.png)$/, `hub media ${src}`);
+      html = html.replace(/<img\b[^>]*\ssrc="\/baby-bonfire\/[^"]+"[^>]*>/g, '');
+    }
     assert.doesNotMatch(html, /<img\b|<iframe\b|@import|fetch\(|XMLHttpRequest|sendBeacon|WebSocket|getUserMedia/, `${slug || 'hub'} makes no requests`);
     for (const m of html.matchAll(/<link[^>]+href="([^"]+)"/g)) {
       assert.ok(m[1] === '/favicon.svg' || m[1].startsWith('/baby-bonfire') || m[1].startsWith('https://pointcast.xyz/baby-bonfire'), `${slug || 'hub'} link ${m[1]}`);
@@ -184,11 +212,12 @@ test('the Earlier on PointCast shelf links only to routes and blocks in this rep
   assert.deepEqual(cited, ['0421', '0423', '0426', '0429', '0471', '0473', '0508', '0525', '0584', '0628', '0652', '0719']);
 });
 
-test('the hub counts twenty-one windows', () => {
-  assert.match(hub, /Twenty-one windows on one street/);
-  assert.match(hub, /' of twenty-one windows lit'/);
+test('the hub counts twenty-one objects', () => {
+  assert.match(hub, /Twenty-one objects in one cabinet/);
+  assert.match(hub, /' of twenty-one objects lit'/);
+  assert.match(hub, /'Twenty-one objects, none lit yet'/);
   assert.ok(hub.includes("'Nineteen','Twenty','Twenty-one']"));
-  assert.equal((hub.match(/class="house" href=/g) || []).length, 21);
+  assert.equal((hub.match(/class="obj" href=/g) || []).length, 21);
   assert.doesNotMatch(hub, /(fifteen|thirteen) (windows|concept sketches)/i);
 });
 

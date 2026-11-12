@@ -69,13 +69,14 @@ const AREAS = {
 // ---------------------------------------------------------------- Baby Bonfire
 
 let hubParts;
-/** The houses and the beacon, lifted from the hub street so the cards wear the page's own drawings. */
+/** The houses and the beacon of the hub street as drawn on 2026-11-11. The hub now shows objects
+ * (Nov 12 refresh); the cards keep the street, frozen in bb-street.html, until the scenes are redrawn. */
 function hub() {
   if (hubParts) return hubParts;
-  const html = readFileSync(resolve(ROOT, 'public/baby-bonfire/index.html'), 'utf8');
+  const html = readFileSync(resolve(ROOT, 'scripts/unfurl-cards/bb-street.html'), 'utf8');
   const houses = new Map([...html.matchAll(/<a class="house" href="\/baby-bonfire\/([a-z-]+)\/"[^>]*>\s*<svg viewBox="0 0 100 100"[^>]*>(.*?)<\/svg>/gs)].map((m) => [m[1], m[2]]));
   const beacon = html.match(/<svg class="beacon" viewBox="0 0 92 70"[^>]*>(.*?)<\/svg>/s);
-  if (!houses.size || !beacon) throw new Error('unfurl cards: could not read the houses and the beacon out of public/baby-bonfire/index.html');
+  if (!houses.size || !beacon) throw new Error('unfurl cards: could not read the houses and the beacon out of scripts/unfurl-cards/bb-street.html');
   hubParts = { houses, order: [...houses.keys()], beacon: beacon[1].replace(/class="fire" /g, '') };
   return hubParts;
 }
