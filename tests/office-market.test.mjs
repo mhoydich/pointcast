@@ -5,14 +5,14 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('office market data: six services, by-request prices, twelve collections', async () => {
+test('office market data: six services, by-request prices, fourteen collections', async () => {
   const data = JSON.parse(await read('src/data/office-market.json'));
   assert.equal(data.services.length, 6);
   for (const s of data.services) {
     for (const k of ['name', 'summary', 'give', 'get', 'turnaround', 'price']) assert.ok(s[k], `${s.id} missing ${k}`);
     assert.equal(s.price, 'by request');
   }
-  assert.equal(data.collections.length, 12);
+  assert.equal(data.collections.length, 14);
   for (const c of data.collections) assert.match(c.contract, /^KT1[1-9A-HJ-NP-Za-km-z]{33}$/);
   assert.equal(data.thread, '#officenoun-market');
 });

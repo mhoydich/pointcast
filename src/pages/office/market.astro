@@ -103,7 +103,7 @@ const config = JSON.stringify({
             <h3>collections</h3>
             <ul class="om__list">
               {collections.map((c) => (
-                <li><a href={`https://objkt.com/collections/${c.contract}`} rel="noopener">{c.name}</a> <span class="om__meta">{c.contract}</span></li>
+                <li><a href={c.url ?? `https://objkt.com/collections/${c.contract}`} rel="noopener">{c.name}</a> <span class="om__meta">{c.contract}</span></li>
               ))}
             </ul>
           </div>
@@ -166,6 +166,7 @@ const config = JSON.stringify({
           if (!uri) return '';
           if (uri.indexOf('ipfs://') === 0) return 'https://ipfs.io/ipfs/' + uri.slice(7);
           if (uri.indexOf('https://') === 0) return uri;
+          if (uri.indexOf('data:image/png;base64,') === 0) return uri;
           return '';
         }
         function tez(mutez) {
@@ -190,7 +191,7 @@ const config = JSON.stringify({
         function query() {
           var a = JSON.stringify(cfg.creator);
           return '{ fa(where:{creator_address:{_eq:' + a + '}}){name contract items owners volume_total logo} ' +
-            'listing_active(where:{seller_address:{_eq:' + a + '}}, limit:1000, order_by:{id:asc}){price amount_left token{name token_id fa_contract display_uri thumbnail_uri}} }';
+            'listing_active(where:{seller_address:{_eq:' + a + '}}, limit:1000, order_by:{id:asc}){price amount_left token{name token_id fa_contract display_uri thumbnail_uri artifact_uri mime}} }';
         }
 
         function build(fa, listings) {
@@ -201,7 +202,7 @@ const config = JSON.stringify({
             var t = l.token; if (!t) return;
             var key = t.fa_contract + ':' + t.token_id;
             var g = byC[t.fa_contract];
-            if (!g) { g = byC[t.fa_contract] = { meta: { name: t.fa_contract, contract: t.fa_contract }, tokens: [] }; }
+            if (!g) { var known = cfg.collections.filter(function (c) { return c.contract === t.fa_contract; })[0]; g = byC[t.fa_contract] = { meta: { name: known ? known.name : t.fa_contract, contract: t.fa_contract }, tokens: [] }; }
             if (seen[key]) {
               /* one card per token: keep the lowest price */
               if (l.price < seen[key].price) seen[key].price = l.price;
@@ -209,7 +210,7 @@ const config = JSON.stringify({
               return;
             }
             var row = { name: t.name || ('#' + t.token_id), id: t.token_id, contract: t.fa_contract,
-              uri: img(t.thumbnail_uri || t.display_uri), price: l.price, left: l.amount_left };
+              uri: img(t.thumbnail_uri || t.display_uri || (/^image\//.test(t.mime || '') ? t.artifact_uri : '')), price: l.price, left: l.amount_left };
             seen[key] = row; g.tokens.push(row);
           });
           var order = cfg.collections.map(function (c) { return c.contract; });
@@ -227,7 +228,7 @@ const config = JSON.stringify({
 
         function card(t) {
           var li = el('li', 'om__card');
-          if (t.uri) { var im = el('img'); im.src = t.uri; im.alt = t.name; im.loading = 'lazy'; im.width = 300; im.height = 300; li.appendChild(im); }
+          if (t.uri) { var im = el('img'); im.src = t.uri; im.alt = t.name; if (t.uri.indexOf('data:') === 0) im.style.imageRendering = 'pixelated'; im.loading = 'lazy'; im.width = 300; im.height = 300; li.appendChild(im); }
           li.appendChild(el('span', 'om__name', t.name));
           li.appendChild(el('span', 'om__meta', (t.price === 0 ? 'free' : tez(t.price)) + ' · ' + t.left + ' left'));
           var a = el('a', null, 'collect on objkt');
