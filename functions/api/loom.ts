@@ -3,11 +3,15 @@
  * Logic lives in src/lib/loom/service.mjs (tested in tests/loom.test.mjs);
  * this wrapper supplies storage, rate limits and optional agent signatures.
  *
- * Storage: env.PC_LOOM_KV when bound, otherwise the shared VISITS namespace
- * under the `loom:` prefix. Moderation: set the LOOM_ADMIN_KEY Pages secret and
- * send it as X-Loom-Admin with {action:"hide"}.
+ * Storage (src/lib/loom/store.mjs → loomStore): the loom_ops/loom_logs tables
+ * in AUTH_DB (migration 0035), with the v1 KV layout behind them, which is
+ * env.PC_LOOM_KV when bound, otherwise the shared VISITS namespace under the
+ * `loom:` prefix. Until 0035 is applied, every call falls through to KV.
+ * Moderation: set the LOOM_ADMIN_KEY Pages secret and send it as X-Loom-Admin
+ * with {action:"hide"}.
  */
 import { handleLoom } from '../../src/lib/loom/service.mjs';
+import { loomStore } from '../../src/lib/loom/store.mjs';
 import { rateLimit } from '../_rate-limit';
 import { hashAgentActionRequest, verifyAgentRequest } from '../_lib/agent-identity';
 
@@ -37,7 +41,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     verifiedAgent = verified.agentId;
   }
   return handleLoom(request, {
-    kv: env.PC_LOOM_KV ?? env.VISITS ?? null,
+    store: loomStore({ db: env.AUTH_DB ?? null, kv: env.PC_LOOM_KV ?? env.VISITS ?? null }),
     verifiedAgent,
     adminKey: env.LOOM_ADMIN_KEY ?? '',
     limit: async (bucket: string) => (await rateLimit(request, env, { bucket, ...(LIMITS[bucket] ?? { windowSec: 600, maxRequests: 30 }) })).allowed,

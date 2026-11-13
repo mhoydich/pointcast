@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseAddress, extractAddresses, addressKey } from '../src/lib/loom/address.mjs';
 import { fold } from '../src/lib/loom/fold.mjs';
 import { handleLoom } from '../src/lib/loom/service.mjs';
+import { upsertFront, stampOps } from '../src/lib/loom/log.mjs';
 
 function memoryKv() {
   const map = new Map();
@@ -144,6 +145,17 @@ test('ActivityStreams export', async () => {
   assert.equal(as2.type, 'OrderedCollection');
   assert.equal(as2.orderedItems[0].object.content, 'hello #t');
   assert.equal(typeof (await addressKey('#t')), 'string');
+});
+
+test('log helpers: stamping trims to the cap, lists upsert by key', () => {
+  const log = { seq: 0, ops: [], title: null };
+  stampOps(log, [{ op: 'append', id: 'a' }], 'now', { title: 'first' });
+  stampOps(log, [{ op: 'append', id: 'b' }, { op: 'append', id: 'c' }], 'later', { title: 'ignored', maxOps: 2 });
+  assert.equal(log.title, 'first');
+  assert.deepEqual(log.ops.map((o) => o.seq), [2, 3]);
+  assert.equal(log.trimmedBefore, 2);
+  assert.deepEqual(upsertFront([{ k: 1 }, { k: 2 }], { k: 2, n: 'new' }, { keyField: 'k' }), [{ k: 2, n: 'new' }, { k: 1 }]);
+  assert.deepEqual(upsertFront([1, 2, 3], 0, { cap: 3 }), [0, 1, 2]);
 });
 
 test('RSS export escapes content and links each message', async () => {

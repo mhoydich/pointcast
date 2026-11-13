@@ -10,25 +10,27 @@
  * (a house robot) tells the thread where else the same link is being talked
  * about. That is how threads on different pages and sites find each other.
  *
- * Storage (KV, prefix `loom:`):
- *   loom:log:<key>   { address, kind, label, title, seq, ops[] }   capped at MAX_OPS
- *   loom:index       recent logs, newest first                      capped at MAX_INDEX
- *   loom:out:<key>   what one sender appended, newest first         capped at MAX_OUTBOX
- * KV is read-modify-write; two writes to one log inside the same second can
- * race and the later one wins. Fine for a v1 commons; a Durable Object per log
- * is the upgrade path when it gets busy.
+ * Storage goes through a store (store.mjs). With AUTH_DB bound and migration
+ * 0035 applied, every op is a row in D1 and an append is one atomic INSERT,
+ * so concurrent writers never overwrite each other; the directory and
+ * outboxes are queries over those rows. Without it, the v1 KV layout (one
+ * read-modify-write value per log) still works, and stays readable after the
+ * switch: each thread is imported on its first new write.
  */
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
+import { MAX_OPS, emptyLog, excerpt, publicOp, senderAddress } from './log.mjs';
+import { kvStore } from './store.mjs';
 
+export { MAX_OPS };
 export const SPEC = 'pointcast.loom/v1';
-export const MAX_OPS = 600;
 export const MAX_INDEX = 300;
 export const MAX_OUTBOX = 200;
 export const BODY_MAX = 2000;
 const KINDS = new Set(['note', 'question', 'claim', 'answer', 'image', 'poll', 'link']);
 const SENDER_KINDS = new Set(['human', 'agent']);
 const RIPPLE_MAX = 4;
+const ACTIONS = new Set(['append', 'edit', 'withdraw', 'plus', 'vote', 'hide']);
 const READ_CACHE = 'public, max-age=10';
 
 const HEADERS = {
@@ -79,60 +81,38 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
-async function readJson(kv, key, fallback) {
-  if (!kv) return fallback;
-  try { const raw = await kv.get(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
-}
-const writeJson = (kv, key, value) => kv.put(key, JSON.stringify(value));
-
-async function loadLog(kv, address) {
+async function loadLog(store, address) {
   const key = await addressKey(address);
-  const stored = await readJson(kv, `loom:log:${key}`, null);
-  return stored ?? seedLog(address, key) ?? { v: 1, address, key, ...describe(address), title: null, createdAt: null, updatedAt: null, seq: 0, ops: [] };
+  const stored = store ? await store.getLog(key) : null;
+  return stored ?? seedLog(address, key) ?? emptyLog(address, key, describe(address));
 }
-async function loadLogByKey(kv, key) {
-  const stored = await readJson(kv, `loom:log:${key}`, null);
+async function loadLogByKey(store, key) {
+  const stored = store ? await store.getLog(key) : null;
   if (stored) return stored;
   for (const address of Object.keys(SEEDS)) if (await addressKey(address) === key) return seedLog(address, key);
   return null;
 }
-async function saveLog(kv, log) {
-  if (log.ops.length > MAX_OPS) {
-    log.trimmedBefore = log.ops[log.ops.length - MAX_OPS].seq;
-    log.ops = log.ops.slice(-MAX_OPS);
-  }
-  delete log.seed;
-  await writeJson(kv, `loom:log:${log.key}`, log);
-}
-function pushOp(log, op, now) {
-  log.seq += 1;
-  const stamped = { ...op, seq: log.seq, at: now };
-  log.ops.push(stamped);
-  log.createdAt ??= now;
-  log.updatedAt = now;
-  return stamped;
-}
-const excerpt = (s, n = 140) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+/**
+ * What a store needs to create a log it does not hold yet. A log read from the
+ * store itself travels without its ops (the store already has them); a seed or
+ * a log imported from the v1 KV archive travels whole, once.
+ */
+const initFor = (log) => (log.seed || log.archived ? log : { ...log, ops: [] });
 
-async function touchIndex(kv, log, op) {
-  const index = await readJson(kv, 'loom:index', []);
+async function touchIndex(store, log, op) {
   const folded = fold(log.ops);
-  const entry = { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, updatedAt: log.updatedAt, count: folded.count,
+  const entry = { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, updatedAt: log.updatedAt, seq: log.seq, count: folded.count,
     last: { name: op.from?.name, kind: op.from?.kind, body: excerpt(op.body, 120) } };
-  const next = [entry, ...index.filter((e) => e.key !== log.key)].slice(0, MAX_INDEX);
-  await writeJson(kv, 'loom:index', next);
+  await store.pushList('index', entry, { keyField: 'key', cap: MAX_INDEX });
 }
 
-async function touchOutbox(kv, from, record) {
-  const sender = from.address || `@${from.name.toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'anon'}`;
-  const key = await addressKey(sender);
-  const out = await readJson(kv, `loom:out:${key}`, []);
-  await writeJson(kv, `loom:out:${key}`, [record, ...out].slice(0, MAX_OUTBOX));
+async function touchOutbox(store, from, record) {
+  await store.pushList(`out:${await addressKey(senderAddress(from))}`, record, { cap: MAX_OUTBOX });
 }
 
 function publicView(log, { since = 0 } = {}) {
   const folded = fold(log.ops);
-  const ops = log.ops.filter((op) => op.seq > since).map(({ tokenHash, ...op }) => op);
+  const ops = log.ops.filter((op) => op.seq > since).map(publicOp);
   return {
     log: { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, createdAt: log.createdAt, updatedAt: log.updatedAt,
       reply: `loom:${log.key}#<message id>`, url: `${SITE}/loom?to=${encodeURIComponent(log.address)}`, trimmedBefore: log.trimmedBefore ?? null, seed: !!log.seed },
@@ -242,19 +222,23 @@ async function clientTag(request, body) {
   return `c_${(await sha(`loom:${seed}`)).slice(0, 12)}`;
 }
 
-async function resolveTarget(kv, to) {
+async function resolveTarget(store, to) {
   const target = parseAddress(to);
   if (target.kind === 'reply') {
-    const log = await loadLogByKey(kv, target.logKey);
+    const log = await loadLogByKey(store, target.logKey);
     if (!log) throw new AddressError('reply_log_not_found');
     if (!log.ops.some((op) => op.op === 'append' && op.id === target.parent)) throw new AddressError('reply_message_not_found');
     return { log, parent: target.parent };
   }
-  return { log: await loadLog(kv, target.address), parent: null };
+  return { log: await loadLog(store, target.address), parent: null };
 }
 
-/** Echo a message into every log it reaches (mentions, topics, cited URLs). */
-async function ripple(kv, source, op, now) {
+/**
+ * Echo a message into every log it reaches (mentions, topics, cited URLs).
+ * Returns the addresses reached and, when the same link is already threaded
+ * elsewhere, the Collator's note for the source thread (not yet appended).
+ */
+async function ripple(store, source, op, now) {
   const { links, mentions, topics } = extractAddresses(op.body);
   const targets = [];
   for (const raw of [...mentions, ...topics, ...op.cites, ...links]) {
@@ -263,51 +247,76 @@ async function ripple(kv, source, op, now) {
   const reached = [];
   const elsewhere = new Map();
   for (const address of targets.slice(0, RIPPLE_MAX)) {
-    const log = await loadLog(kv, address);
-    for (const prior of log.ops) {
+    const before = await loadLog(store, address);
+    for (const prior of before.ops) {
       if (prior.op === 'append' && prior.via && prior.via.address !== source.address && !elsewhere.has(prior.via.address)) elsewhere.set(prior.via.address, address);
     }
-    pushOp(log, { op: 'append', id: `m_${randomId(5)}`, kind: 'link', from: op.from, body: excerpt(op.body, 280), cites: [], tags: [], mentions: [],
-      via: { address: source.address, key: source.key, id: op.id, label: source.label } }, now);
-    log.title ??= null;
-    await saveLog(kv, log);
-    await touchIndex(kv, log, log.ops[log.ops.length - 1]);
+    const echo = { op: 'append', id: `m_${randomId(5)}`, kind: 'link', from: op.from, body: excerpt(op.body, 280), cites: [], tags: [], mentions: [],
+      via: { address: source.address, key: source.key, id: op.id, label: source.label } };
+    const { log, ops } = await store.appendOps(before.key, initFor(before), [echo], now);
+    await touchIndex(store, log, ops[0]);
     reached.push(address);
   }
   // The Collator: "this link is also being threaded over there."
   const others = [...elsewhere.entries()].slice(0, 3);
-  if (others.length) {
-    const body = `Also threaded elsewhere — ${others.map(([where, via]) => `${where} (via ${via})`).join('; ')}.`;
-    pushOp(source, { op: 'append', id: `m_${randomId(5)}`, kind: 'link', from: COLLATOR, parent: op.id, body, cites: others.map(([where]) => where), tags: [], mentions: [],
-      links: others.map(([where]) => where) }, now);
-  }
-  return reached;
+  const collated = others.length ? { op: 'append', id: `m_${randomId(5)}`, kind: 'link', from: COLLATOR, parent: op.id,
+    body: `Also threaded elsewhere — ${others.map(([where, via]) => `${where} (via ${via})`).join('; ')}.`,
+    cites: others.map(([where]) => where), tags: [], mentions: [], links: others.map(([where]) => where) } : null;
+  return { reached, collated };
 }
 
-export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '' } = {}) {
+async function append(store, request, body, { verifiedAgent, limit, now }) {
+  if (!await limit(verifiedAgent ? 'loom:append:verified' : 'loom:append')) return fail('rate_limited', 429);
+  const from = validateFrom(body.from, verifiedAgent);
+  const { log, parent: replyParent } = await resolveTarget(store, body.to);
+  const parent = replyParent ?? (typeof body.parent === 'string' && log.ops.some((o) => o.op === 'append' && o.id === body.parent) ? body.parent : null);
+  const token = randomId(12);
+  const message = validateMessage(body);
+  const { mentions, topics } = extractAddresses(message.body);
+  const draft = { op: 'append', id: `m_${randomId(5)}`, from, parent, ...message, tags: topics.slice(0, 8), mentions: mentions.slice(0, 8), tokenHash: await sha(token) };
+  // A title only names a thread nobody has written to yet.
+  const title = body.title && log.seq === 0 ? clean(body.title, 90) || null : null;
+  const first = await store.appendOps(log.key, initFor(log), [draft], now, { title, sender: senderAddress(from) });
+  const op = first.ops[0];
+  let current = first.log;
+  const rippled = await ripple(store, current, op, now);
+  if (rippled.collated) current = (await store.appendOps(log.key, initFor(current), [rippled.collated], now)).log;
+  await touchIndex(store, current, op);
+  await touchOutbox(store, from, { to: current.address, key: current.key, id: op.id, at: now, body: excerpt(op.body, 120) });
+  return json({ ok: true, spec: SPEC, message: publicOp(op), address: `loom:${current.key}#${op.id}`, log: current.address, editToken: token, reached: rippled.reached }, 201);
+}
+
+/**
+ * @param {Request} request
+ * @param {{ store?: object|null, kv?: object|null, clock?: () => Date, limit?: (bucket: string) => Promise<boolean>,
+ *   verifiedAgent?: string|null, adminKey?: string }} options
+ */
+export async function handleLoom(request, { store = undefined, kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '' } = {}) {
+  if (store === undefined) store = kv ? kvStore(kv) : null;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   const url = new URL(request.url);
+  const status = { kvBound: !!store, storage: store?.kind ?? null };
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {
       const to = url.searchParams.get('to');
       const from = url.searchParams.get('from');
       if (to) {
         const target = parseAddress(to);
-        const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
+        const log = target.kind === 'reply' ? await loadLogByKey(store, target.logKey) : await loadLog(store, target.address);
         if (!log) return fail('log_not_found', 404);
         const format = url.searchParams.get('format');
         if (format === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8', 'Cache-Control': READ_CACHE });
         if (format === 'rss') return new Response(asRss(log), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
         const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
         // Live polls (since=) stay uncached; whole-thread reads can ride a short edge cache.
-        return json({ ok: true, spec: SPEC, kvBound: !!kv, ...publicView(log, { since }) }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
+        return json({ ok: true, spec: SPEC, ...status, ...publicView(log, { since }) }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
       }
       if (from) {
         const sender = parseAddress(from);
-        const out = await readJson(kv, `loom:out:${await addressKey(sender.address)}`, []);
-        return json({ ok: true, spec: SPEC, kvBound: !!kv, from: sender.address, sent: out });
+        const out = store ? (await store.getList(`out:${await addressKey(sender.address)}`)) ?? [] : [];
+        return json({ ok: true, spec: SPEC, ...status, from: sender.address, sent: out });
       }
-      const stored = await readJson(kv, 'loom:index', []);
+      const stored = store ? (await store.getList('index')) ?? [] : [];
       const seeds = [];
       for (const address of Object.keys(SEEDS)) {
         const key = await addressKey(address);
@@ -320,66 +329,51 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       if (q) logs = logs.filter((e) => `${e.address} ${e.title ?? ''} ${e.last?.body ?? ''}`.toLowerCase().includes(q));
       const kinds = {};
       for (const e of stored) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
-      return json({ ok: true, spec: SPEC, kvBound: !!kv, logs: logs.slice(0, 120), network: { logs: stored.length, kinds, hosts: [...new Set(stored.filter((e) => e.kind === 'url').map((e) => new URL(e.address).hostname))].slice(0, 40) } });
+      return json({ ok: true, spec: SPEC, ...status, logs: logs.slice(0, 120), network: { logs: stored.length, kinds, hosts: [...new Set(stored.filter((e) => e.kind === 'url').map((e) => new URL(e.address).hostname))].slice(0, 40) } });
     }
 
     if (request.method !== 'POST') return fail('method_not_allowed', 405, {});
-    if (!kv) return fail('store_unbound', 503);
+    if (!store) return fail('store_unbound', 503);
     const length = Number(request.headers.get('content-length') ?? 0);
     if (length > 16_384) return fail('body_too_large', 413);
     let body;
     try { body = JSON.parse((await request.text()).slice(0, 16_384)); } catch { return fail('json_invalid'); }
     if (!body || typeof body !== 'object') return fail('json_invalid');
     const action = String(body.action ?? 'append');
+    if (!ACTIONS.has(action)) return fail('action_unknown');
     const now = clock().toISOString();
 
-    if (action === 'append') {
-      if (!await limit(verifiedAgent ? 'loom:append:verified' : 'loom:append')) return fail('rate_limited', 429);
-      const from = validateFrom(body.from, verifiedAgent);
-      const message = validateMessage(body);
-      const { log, parent } = await resolveTarget(kv, body.to);
-      if (body.title && !log.title && log.seq === 0) log.title = clean(body.title, 90) || null;
-      const { mentions, topics } = extractAddresses(message.body);
-      const token = randomId(12);
-      const op = pushOp(log, { op: 'append', id: `m_${randomId(5)}`, from, parent: parent ?? (typeof body.parent === 'string' ? body.parent : null), ...message,
-        tags: topics.slice(0, 8), mentions: mentions.slice(0, 8), tokenHash: await sha(token) }, now);
-      if (op.parent && !log.ops.some((o) => o.op === 'append' && o.id === op.parent)) op.parent = null;
-      const reached = await ripple(kv, log, op, now);
-      await saveLog(kv, log);
-      await touchIndex(kv, log, op);
-      await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
-      const { tokenHash, ...publicOp } = op;
-      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached }, 201);
-    }
+    if (action === 'append') return await append(store, request, body, { verifiedAgent, limit, now });
 
     const target = parseAddress(body.to);
-    const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
+    const log = target.kind === 'reply' ? await loadLogByKey(store, target.logKey) : await loadLog(store, target.address);
     const id = target.kind === 'reply' ? target.parent : String(body.id ?? '');
     const original = log?.ops.find((op) => op.op === 'append' && op.id === id);
     if (!original) return fail('message_not_found', 404);
 
+    let next;
     if (action === 'edit' || action === 'withdraw') {
       if (!original.tokenHash || !safeEqual(await sha(String(body.token ?? '')), original.tokenHash)) return fail('edit_token_invalid', 403);
       if (action === 'edit') {
         const text = clean(body.body, BODY_MAX);
         if (!text) return fail('body_required');
-        pushOp(log, { op: 'edit', id, body: text }, now);
-      } else pushOp(log, { op: 'hide', id, reason: 'withdrawn' }, now);
+        next = { op: 'edit', id, body: text };
+      } else next = { op: 'hide', id, reason: 'withdrawn' };
     } else if (action === 'plus') {
       if (!await limit('loom:plus')) return fail('rate_limited', 429);
-      pushOp(log, { op: 'plus', id, by: await clientTag(request, body) }, now);
+      next = { op: 'plus', id, by: await clientTag(request, body) };
     } else if (action === 'vote') {
       if (!await limit('loom:plus')) return fail('rate_limited', 429);
       const choice = Number(body.choice);
       if (!original.poll || !Number.isInteger(choice) || !original.poll.options[choice]) return fail('vote_invalid');
-      pushOp(log, { op: 'vote', id, choice, by: await clientTag(request, body) }, now);
+      next = { op: 'vote', id, choice, by: await clientTag(request, body) };
     } else if (action === 'hide') {
       if (!adminKey || !safeEqual(request.headers.get('X-Loom-Admin') ?? '', adminKey)) return fail('admin_required', 403);
-      pushOp(log, { op: 'hide', id, reason: clean(body.reason, 80) || 'moderated' }, now);
+      next = { op: 'hide', id, reason: clean(body.reason, 80) || 'moderated' };
     } else return fail('action_unknown');
-    await saveLog(kv, log);
-    const view = publicView(log);
-    return json({ ok: true, spec: SPEC, seq: log.seq, message: view.messages.find((m) => m.id === id) ?? null });
+    const { log: saved } = await store.appendOps(log.key, initFor(log), [next], now);
+    const view = publicView(saved);
+    return json({ ok: true, spec: SPEC, seq: saved.seq, message: view.messages.find((m) => m.id === id) ?? null });
   } catch (error) {
     if (error instanceof AddressError) return fail(error.message);
     return fail('loom_unavailable', 500);

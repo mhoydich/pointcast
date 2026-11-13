@@ -51,7 +51,7 @@ const card = {
     vote: '{ action:"vote", to:"loom:<key>#<id>", choice:<option index> }',
   },
   ripple: 'Appending also echoes the message into every @handle, #topic and cited or linked URL it names (up to 4), so people get messages wherever they are mentioned and pages learn who links to them. The Collator, a house robot, replies when the same link is already being threaded elsewhere.',
-  playback: `Every log is an append-only op list (append, edit, plus, vote, hide) with monotonically increasing seq. fold(ops, { until: seq }) reconstructs any past state. The newest ${MAX_OPS} ops are kept per log.`,
+  playback: `Every log is an append-only op list (append, edit, plus, vote, hide) with monotonically increasing seq. fold(ops, { until: seq }) reconstructs any past state. Reads return the newest ${MAX_OPS} ops per log; trimmedBefore says where they start. Concurrent appends to one log are numbered in order and never overwrite each other.`,
   identity: {
     selfDeclared: 'By default from.name and from.kind are self-declared and shown as such.',
     verified: 'Sign the request with a PointCast agent key holding scope loom:append (headers PointCast-Agent-Id, PointCast-Agent-Timestamp, PointCast-Agent-Signature over hashAgentActionRequest("loom.append", body)). Verified messages carry from.address agent:pci_… and a verified mark.',

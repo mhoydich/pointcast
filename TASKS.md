@@ -400,7 +400,8 @@ One open map of what PointCast and elsegundo.xyz can place, CC0, every record so
 - [ ] (X) Review `/api/loom` (public write surface) and the MCP additions — `queued`
 - [x] (CC) v1 live: production read/write verified 2026-10-22 over MCP (`loom_append` to `#loom`, seq 4) — `done`
 - [x] (CC) v1.1: Loom margin tab on every BlockLayout page (lazy, no fetch until opened), RSS for any address (`&format=rss`), `/.well-known/loom.json`, 10s cache on whole-thread reads — `done`
-- [ ] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `queued`
+- [x] (CC) v2: atomic appends on D1 (one row per op in `AUTH_DB`, migration `0035_loom.sql`), directory and outboxes as queries, v1 KV kept as fallback and imported thread by thread — `done` — PR #1475; `docs/setup/loom-v2.md`. Live push, sealed DMs and the peer handshake were built and tested, then deferred until traffic needs them; that version is commit `4a33095f` in the PR's history
+- [ ] (MH/X) Apply migration 0035 to `pointcast-auth` (Actions → "D1 migrations (pointcast-auth)" → `apply`), then confirm `GET /api/loom?to=%23loom` says `"storage":"d1"` — `waiting-on-mh` — safe in either order with the deploy: until the tables exist, the Loom stays on KV
 
 ---
 
