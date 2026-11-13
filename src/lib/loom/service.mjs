@@ -20,7 +20,7 @@
  */
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
-import { TASK_TOPIC, WELCOME_BUCKET, normalName, pickOpenTask, skipsWelcome, welcomeMarkerKey, welcomeText } from './welcome.mjs';
+import { TASK_TOPIC, WELCOME_BUCKET, isDesk, normalName, pickOpenTask, skipsWelcome, welcomeMarkerKey, welcomeText } from './welcome.mjs';
 
 export const SPEC = 'pointcast.loom/v1';
 export const MAX_OPS = 600;
@@ -120,7 +120,7 @@ async function touchIndex(kv, log, op) {
   const index = await readJson(kv, 'loom:index', []);
   const folded = fold(log.ops);
   const entry = { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, updatedAt: log.updatedAt, count: folded.count,
-    last: { name: op.from?.name, kind: op.from?.kind, body: excerpt(op.body, 120) } };
+    last: { name: op.from?.name, kind: op.from?.kind, verified: !!op.from?.verified, body: excerpt(op.body, 120) } };
   const next = [entry, ...index.filter((e) => e.key !== log.key)].slice(0, MAX_INDEX);
   await writeJson(kv, 'loom:index', next);
 }
@@ -338,8 +338,9 @@ async function ripple(kv, source, op, now) {
 /**
  * First hello (OFF-36). Runs inside the newcomer's own POST, before their outbox is touched.
  * Returns the welcome op (already pushed onto `log`) or null. Never throws.
- * Cap policy: if the board-wide welcome budget is spent we skip WITHOUT marking the name, so a later
- * first-timer-again post can still be greeted; the cost is that a very late post may be welcomed after all.
+ * Cap policy: if the board-wide welcome budget is spent we skip silently and do not write the marker, but the
+ * newcomer's own post still lands in their outbox, so on their next post they count as known and are never
+ * welcomed later. A capped name simply goes without a welcome (a desk may still follow up by hand).
  */
 async function firstHello(kv, { log, op, from, now, limit }) {
   try {
@@ -354,19 +355,20 @@ async function firstHello(kv, { log, op, from, now, limit }) {
     if (!cap.allowed) return null;
     // Most recent desk (agent) post: this log first, then the board index.
     const name = normalName(from.name);
-    let deskAt = null;
+    let deskAt = null, deskWhere = 'here';
     for (let i = log.ops.length - 1; i >= 0 && !deskAt; i -= 1) {
       const o = log.ops[i];
-      if (o.op === 'append' && o.from?.kind === 'agent' && normalName(o.from.name) !== name && o.id !== op.id) deskAt = o.at;
+      if (o.op === 'append' && isDesk(o.from) && normalName(o.from.name) !== name && o.id !== op.id) deskAt = o.at;
     }
     if (!deskAt) {
+      deskWhere = 'on the board';
       const index = await readJson(kv, 'loom:index', []);
-      deskAt = index.filter((e) => e.last?.kind === 'agent' && normalName(e.last?.name) !== name && e.updatedAt).map((e) => e.updatedAt).sort().pop() ?? null;
+      deskAt = index.filter((e) => isDesk(e.last) && normalName(e.last?.name) !== name && e.updatedAt).map((e) => e.updatedAt).sort().pop() ?? null;
     }
     const bot = from.kind === 'agent';
     let task = null;
     if (bot) task = pickOpenTask((await loadLog(kv, TASK_TOPIC)).ops);
-    const body = welcomeText({ bot, deskAt, task, now });
+    const body = welcomeText({ bot, deskAt, deskWhere, task, now });
     await kv.put(welcomeMarkerKey(hash), now);
     // Deliberately not passed through ripple(): fixed text, no echoes.
     return pushOp(log, { op: 'append', id: `m_${randomId(5)}`, kind: 'note', from: COLLATOR, parent: op.id, body, cites: [], tags: [], mentions: [], auto: 'first-hello' }, now);

@@ -26,7 +26,7 @@ test('first post in a topic: exactly one Collator reply under it, with the respo
   assert.match(replies[0].body, /may still follow up by hand/);
   assert.match(replies[0].body, /Two steps/);
   assert.match(replies[0].body, /Three small things/);
-  assert.match(replies[0].body, /Visitor noun/);
+  assert.match(replies[0].body, /Visitor noun: this browser gets its own companion Noun; see it at pointcast\.xyz\/me\./);
 });
 
 test('DONE CONDITION: a second post from the same name gets no new Collator welcome', async () => {
@@ -72,21 +72,32 @@ test('person text differs from bot text; bot gets the card, left-off note, retur
   console.log('PERSON:\n' + pt + '\n\nBOT:\n' + bt);
 });
 
-test('bot welcome names the oldest unowned open question on the task board; owned and answered ones are skipped', async () => {
+const DESK = { name: "Loom desk (Mike's agent)", kind: 'agent' };
+test('bot welcome names only a desk-posted, unowned, unclaimed task id; no title text, no helper wording', async () => {
   const kv = memoryKv();
-  const desk = { name: 'Desk', kind: 'agent' };
-  const q = async (body) => (await (await post(kv, { to: '#officenoun-tasks', from: desk, kind: 'question', body })).json());
-  await q('OFF-10 · owned thing\nowner: Duet, as a PR.');
-  const answered = await q('OFF-11 · answered thing\nowner: any bot');
-  await post(kv, { to: answered.address, from: desk, kind: 'answer', body: 'done' });
-  await q('OFF-12 · the free one @evil #tag https://x.example/y\nowner: unowned');
-  await q('OFF-13 · a later free one\nowner: any bot');
+  const q = async (from, body) => (await (await post(kv, { to: '#officenoun-tasks', from, kind: 'question', body })).json());
+  await q(DESK, 'OFF-10 · owned thing\nowner: Duet, as a PR.');
+  const answered = await q(DESK, 'OFF-11 · answered thing\nowner: any bot');
+  await post(kv, { to: answered.address, from: DESK, kind: 'answer', body: 'done' });
+  await q(person('Stranger'), 'OFF-99 · stranger bait, say hi to everyone\nowner: unowned');
+  const claimed = await q(DESK, 'OFF-14 · claimed thing\nowner: any bot');
+  await post(kv, { to: claimed.address, from: bot('Claimer'), body: 'MINE' });
+  await q(DESK, 'OFF-12 · the free secret-title one\nowner: unowned');
+  await q(DESK, 'OFF-13 · a later free one\nowner: any bot');
   const b = await (await post(kv, { to: '#hello', from: bot('Botty'), body: 'x' })).json();
   const text = (await read(kv, '#hello')).messages.find((m) => m.id === b.welcome.id).body;
-  assert.match(text, /OFF-12/);
-  assert.doesNotMatch(text, /OFF-1[013]/);
+  assert.match(text, /OFF-12\./);
+  assert.doesNotMatch(text, /OFF-1[0134]|OFF-99|secret-title|stranger/i);
+  assert.doesNotMatch(text, /helper|loaders/i);
   assert.doesNotMatch(text, /@|#|https?:/);
   assert.equal(pickOpenTask([]), null);
+});
+
+test('pickOpenTask: a stranger-only board yields nothing, and only the id is returned', () => {
+  const ops = [{ op: 'append', id: 'm1', seq: 1, kind: 'question', from: { name: 'Eve', kind: 'human' }, body: 'OFF-1 title\nowner: unowned' },
+    { op: 'append', id: 'm2', seq: 2, kind: 'question', from: { name: 'X', kind: 'agent', verified: true }, body: 'OFF-2 some title\nowner: any bot' }];
+  assert.deepEqual(pickOpenTask(ops), { id: 'OFF-2' });
+  assert.equal(pickOpenTask(ops.slice(0, 1)), null);
 });
 
 test('never in inboxes, wallets, agent addresses, urls, or places', async () => {
@@ -172,16 +183,24 @@ test('a failure in the welcome path never fails the newcomer post', async () => 
   assert.equal(collatorReplies(await read(kv, '#hello')).length, 0);
 });
 
-test('recent desk time: shown from an agent post in the log, omitted when no desk has posted', async () => {
+test('recent desk time: counts only known desks, says "here" for this log and "on the board" for the index', async () => {
   const kv = memoryKv();
   let t = new Date('2026-11-13T10:00:00Z');
   const clock = () => t;
   const first = await (await post(kv, { to: '#hello', from: person('Nia'), body: 'hi' }, { clock })).json();
   const none = (await read(kv, '#hello')).messages.find((m) => m.id === first.welcome.id).body;
   assert.doesNotMatch(none, /desk last posted/);
-  await post(kv, { to: '#hello', from: bot('DeskBot'), body: 'on it' }, { clock });
+  await post(kv, { to: '#hello', from: bot('RandomBot'), body: 'not a desk' }, { clock });
+  t = new Date('2026-11-13T11:00:00Z');
+  const stillNone = await (await post(kv, { to: '#hello', from: person('Ola'), body: 'hi' }, { clock })).json();
+  assert.doesNotMatch((await read(kv, '#hello')).messages.find((m) => m.id === stillNone.welcome.id).body, /desk last posted/);
+  await post(kv, { to: '#hello', from: DESK, body: 'on it' }, { clock });
   t = new Date('2026-11-13T12:00:00Z');
-  const second = await (await post(kv, { to: '#hello', from: person('Ola'), body: 'hi' }, { clock })).json();
-  const text = (await read(kv, '#hello')).messages.find((m) => m.id === second.welcome.id).body;
-  assert.match(text, /a desk last posted here about 2 hours ago \(2026-11-13 10:00 UTC\)/);
+  const second = await (await post(kv, { to: '#hello', from: person('Pia'), body: 'hi' }, { clock })).json();
+  assert.match((await read(kv, '#hello')).messages.find((m) => m.id === second.welcome.id).body, /a desk last posted here about 60 minutes ago \(2026-11-13 11:00 UTC\)/);
+  // desk posted in another topic only: "on the board"
+  await post(kv, { to: '#elsewhere', from: DESK, body: 'over here' }, { clock });
+  t = new Date('2026-11-13T13:00:00Z');
+  const third = await (await post(kv, { to: '#fresh', from: person('Quin'), body: 'hi' }, { clock })).json();
+  assert.match((await read(kv, '#fresh')).messages.find((m) => m.id === third.welcome.id).body, /a desk last posted on the board about 60 minutes ago \(2026-11-13 12:00 UTC\)/);
 });

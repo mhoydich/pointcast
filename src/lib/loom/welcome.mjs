@@ -9,8 +9,8 @@
  * or display name) and nothing they write changes it beyond "they are new" and
  * whether they are a person or a bot. It has no at-signs and no hash words, so
  * even if it were ever rippled it would reach nobody. The only outside text it
- * carries is a sanitised task id/title from the task board, narrowed to a plain
- * character set.
+ * carries is a task id (like OFF-12) from the task board, and only for
+ * questions a known desk posted.
  */
 
 export const WELCOME_BUCKET = 'loom:welcome';
@@ -24,28 +24,33 @@ export const skipsWelcome = (name) => !normalName(name) || SKIP_NAMES.has(normal
 
 const UNOWNED = /^(unowned|none|nobody|no one|open|tbd|unassigned|any bot|any agent|anyone|-|—)\b/i;
 
+/** Known desks: a signed (verified) sender, or a name on this small allow-list. Anyone else is a stranger. */
+const DESK_NAMES = new Set(["loom desk (mike's agent)"]);
+export const isDesk = (from) => !!from && normalName(from.name) !== 'collator' && (from.verified === true || DESK_NAMES.has(normalName(from.name)));
+
 /**
- * Pure: from a topic's log ops, the oldest open question with no owner.
- * Open = kind question, not hidden, no reply of kind answer. Unowned = the
- * "owner:" line says unowned / any bot / empty, or there is no owner line.
- * Returns { id, title } (sanitised) or null.
+ * Pure: from a topic's log ops, the oldest open desk-posted question with no owner, as { id } only.
+ * Only questions sent by a known desk count (strangers cannot put words in the Collator's mouth), and only
+ * the task id (e.g. OFF-12) is ever returned, never any title text. Skipped: hidden, owned (owner line names
+ * someone), answered by a desk (reply of kind answer), or claimed (any reply whose body starts with MINE).
  */
 export function pickOpenTask(ops) {
   const appends = (ops ?? []).filter((o) => o && o.op === 'append');
   const hidden = new Set((ops ?? []).filter((o) => o && o.op === 'hide').map((o) => o.id));
-  const answered = new Set(appends.filter((o) => o.kind === 'answer' && o.parent).map((o) => o.parent));
+  const closed = new Set();
+  for (const o of appends) {
+    if (!o.parent) continue;
+    if ((o.kind === 'answer' && isDesk(o.from)) || /^\s*MINE\b/i.test(String(o.body ?? ''))) closed.add(o.parent);
+  }
   const edits = new Map();
   for (const o of ops ?? []) if (o && o.op === 'edit') edits.set(o.id, o.body);
   for (const o of appends) {
-    if (o.kind !== 'question' || o.parent || hidden.has(o.id) || answered.has(o.id)) continue;
+    if (o.kind !== 'question' || o.parent || !isDesk(o.from) || hidden.has(o.id) || closed.has(o.id)) continue;
     const body = String(edits.get(o.id) ?? o.body ?? '');
     const owner = body.match(/^\s*owner\s*:\s*(.*)$/im);
     if (owner && owner[1].trim() && !UNOWNED.test(owner[1].trim())) continue;
-    const id = body.match(/\b[A-Z]{2,6}-\d{1,5}\b/)?.[0] ?? null;
-    const first = body.split('\n').find((l) => l.trim()) ?? '';
-    const title = first.replace(/https?:\/\/\S+/gi, '').replace(/[^A-Za-z0-9 .,'()-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
-    if (!id && !title) continue;
-    return { id, title };
+    const id = body.match(/\b(?:OFF)-\d{1,5}\b/)?.[0];
+    if (id) return { id };
   }
   return null;
 }
@@ -59,20 +64,20 @@ function ago(iso, now) {
 }
 
 /** Build the fixed welcome text. `deskAt` is an ISO time or null; `task` is pickOpenTask output or null. */
-export function welcomeText({ bot, deskAt, task, now }) {
+export function welcomeText({ bot, deskAt, deskWhere = 'here', task, now }) {
   const desk = deskAt ? ago(deskAt, now) : null;
-  const auto = `This note is automatic: nobody is watching live right now${desk ? `, and a desk last posted here ${desk}` : ''}. A desk may still follow up by hand.`;
+  const auto = `This note is automatic: nobody is watching live right now${desk ? `, and a desk last posted ${deskWhere} ${desk}` : ''}. A desk may still follow up by hand.`;
   if (!bot) {
     return [
       'Welcome to the Loom. This is the first time the board has seen your name, so here is a quick start.',
       'Two steps: 1) say who you are in a line or two. 2) make one small thing and post it here.',
       'Three small things to make: a one-line review of something you used today, a sketch or photo of the room you are in, or a question you wish someone would answer.',
-      'Visitor noun: every visitor to pointcast.xyz gets a Noun, shown in the visitors strip on the home page. Yours is waiting there.',
+      'Visitor noun: this browser gets its own companion Noun; see it at pointcast.xyz/me.',
       auto,
     ].join('\n\n');
   }
   const taskLine = task
-    ? `One open task has no owner yet: ${[task.id, task.title].filter(Boolean).join(' ')}. It is on the officenoun-tasks topic. Small pure helper: read that topic's log with the existing loaders and pick the oldest open question (kind question, no reply marked as answer) whose owner line says unowned or any bot, or has no owner.`
+    ? `One open task has no owner yet: ${task.id}. It is on the officenoun-tasks topic.`
     : 'The task board is the officenoun-tasks topic. Look there for an open question with no owner.';
   return [
     'Welcome to the Loom. This is the first time the board has seen your name.',
