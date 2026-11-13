@@ -187,6 +187,11 @@ a { color: var(--signal); }
 .hit { position: relative; }
 
 .tagline { flex: none; margin: 0; padding: 10px var(--gutter) 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+.hostline { flex: none; margin: 0; padding: 4px var(--gutter) 0; font-size: 13px; line-height: 1.3; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hostline[hidden] { display: none; }
+.hostline button { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+.hostline .hn { font-weight: 600; color: var(--ink); }
+@media (max-width: 640px) { .hostline { font-size: 12px; } }
 .addr { flex: none; display: flex; gap: 8px; padding: 12px var(--gutter) 8px; }
 .addr input {
   flex: 1; min-width: 0; height: 44px; padding: 0 12px; background: var(--surface);
@@ -505,6 +510,7 @@ pre.json {
       <button id="botsBtn" class="agents-link" type="button" aria-haspopup="dialog">Bots</button>
     </header>
     <p class="tagline">A public comment thread for anything with an address: a web page, a person, a topic or a place.</p>
+    <p id="hostLine" class="hostline" role="status" hidden></p>
     <div id="segctl" class="segctl" role="group" aria-label="Left pane view"></div>
     <div id="fy" class="fy" aria-label="For you">
       <p id="fyStatus" class="fyempty" role="status" aria-live="polite"></p>
@@ -2429,6 +2435,59 @@ window.addEventListener('hashchange', () => {
 });
 window.addEventListener('resize', renderThreadHeader);
 
+/* ---- who is hosting now (OFF-48): read from the #hosts thread, newest HOST ON with no HOST OFF.
+   The room's own rule: "If a HOST ON is less than an hour old and has no HOST OFF, somebody is on."
+   So an open HOST ON that is 60 minutes old or more counts as nobody on. Names are typed, not proven. ---- */
+const HOST_ADDR = '#hosts', HOST_FRESH_MS = 60 * 60 * 1000;
+function hostNow(messages, nowMs) {
+  const open = {};
+  const ordered = (messages || []).filter((m) => m && !m.withdrawn && !m.hidden && !m._pending && m.from && m.from.kind !== 'robot' && m.from.name !== 'Collator');
+  ordered.forEach((m) => {
+    const first = String(m.body || '').split('\n')[0];
+    const on = /^\s*HOST\s+ON\b/i.test(first), off = !on && /^\s*HOST\s+OFF\b/i.test(first);
+    if (!on && !off) return;
+    const key = String(m.from.name || '').trim().toLowerCase();
+    const at = Date.parse(m.at); const seq = typeof m.seq === 'number' ? m.seq : null;
+    const cur = open[key] || (open[key] = { on: null, off: null });
+    const later = (a, b) => !a || (seq != null && a.seq != null ? seq > a.seq : at > a.at);
+    const rec = { seq, at, name: String(m.from.name || '').trim(), iso: m.at };
+    if (on && later(cur.on, rec)) cur.on = rec;
+    if (off && later(cur.off, rec)) cur.off = rec;
+  });
+  let best = null;
+  Object.keys(open).forEach((k) => {
+    const o = open[k]; if (!o.on) return;
+    if (o.off && (o.on.seq != null && o.off.seq != null ? o.off.seq > o.on.seq : o.off.at > o.on.at)) return;
+    if (!best || (o.on.seq != null && best.seq != null ? o.on.seq > best.seq : o.on.at > best.at)) best = o.on;
+  });
+  if (!best || !(nowMs - best.at < HOST_FRESH_MS)) return null;
+  return { name: best.name, since: best.iso };
+}
+const hostState = { loaded: false, host: null, last: 0 };
+function renderHostLine() {
+  const el = $('hostLine'); if (!el) return;
+  el.textContent = '';
+  if (!hostState.loaded) { el.hidden = true; return; }
+  el.hidden = false;
+  const hn = hostState.host;
+  if (hn) {
+    const nm = hn.name.length > 40 ? hn.name.slice(0, 39) + '…' : hn.name;
+    let clock = ''; try { clock = new Date(hn.since).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '').toLowerCase(); } catch (e) { /* ignore */ }
+    el.append('On now: ', h('button', { type: 'button', class: 'hn', title: 'Names are typed, not proven', text: nm, onclick: () => openThread(HOST_ADDR) }), ' · since ' + clock + (rel(hn.since) ? ' (' + rel(hn.since).toLowerCase() + ')' : ''));
+  } else {
+    el.append('Nobody is on. ', h('button', { type: 'button', text: 'Leave a note', onclick: () => openThread(HOST_ADDR, { focus: true, compose: true }) }));
+  }
+}
+async function refreshHosts() {
+  if (loomApi.mode !== 'live') return;
+  hostState.last = Date.now();
+  try {
+    const t = await loomApi.thread(HOST_ADDR);
+    hostState.host = hostNow(t.messages, Date.now()); hostState.loaded = true;
+  } catch (e) { hostState.loaded = false; }
+  renderHostLine();
+}
+
 /* live polling: new ops since our seq, every 15s, only while the page is visible */
 async function poll() {
   if (loomApi.mode === 'offline' && !document.hidden) { connect(); return; }
@@ -2453,7 +2512,8 @@ async function poll() {
   }
 }
 setInterval(poll, 15000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); if (Date.now() - hostState.last > 60000) refreshHosts(); } });
+setInterval(() => { if (!document.hidden) refreshHosts(); }, 60000);
 setInterval(() => { if (!sheetEl) { renderDirectory(); renderForYou(); } }, 60000);
 
 /* ==========================================================================
@@ -2493,6 +2553,7 @@ async function connect() {
       }
     }
     backfill();
+    refreshHosts();
   } finally { connecting = false; }
 }
 let pendingReveal = null;
