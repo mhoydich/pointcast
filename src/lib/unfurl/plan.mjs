@@ -28,7 +28,7 @@ export function unfurlWords({ pathname, search = '' }) {
 
 export function planUnfurl({ pathname, search = '', currentImage: rawImage = '', missing = false, now = new Date() }) {
   // HTMLRewriter hands over attribute values undecoded, so "&amp;s=87" would parse as a param "amp;s".
-  const currentImage = String(rawImage).replace(/&amp;/gi, '&');
+  const currentImage = String(rawImage ?? '').replace(/&amp;/gi, '&');
   const path = cardPath(pathname);
   // The homepage keeps its daily art edition (injectHomeShareMetadata).
   if (!path || path === '/') return { image: '', headHtml: '' };
