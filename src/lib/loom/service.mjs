@@ -22,6 +22,7 @@
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
 import { ARRIVAL_MS, NEEDS_WINDOW_MS, buildPiles, forYouText, isCollator, normHandle } from './for-you.mjs';
+import { makeMagic } from './magic.mjs';
 import { TASK_TOPIC, WELCOME_BUCKET, isDesk, normalName, pickOpenTask, skipsWelcome, welcomeMarkerKey, welcomeText } from './welcome.mjs';
 
 export const SPEC = 'pointcast.loom/v1';
@@ -504,7 +505,11 @@ async function firstHello(kv, { log, op, from, now, limit }) {
   } catch { return null; }
 }
 
-export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '', firstHelloEnabled = true } = {}) {
+/**
+ * Options: `drumCount` is an optional async () => number|null, read only when a message's first
+ * line is the magic word "drum" (OFF-49); functions/api/loom.ts wires it to the drum counter.
+ */
+export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '', firstHelloEnabled = true, drumCount = null } = {}) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   const url = new URL(request.url);
   try {
@@ -628,8 +633,11 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       }
       const { mentions, topics } = extractAddresses(message.body);
       const token = randomId(12);
+      // Magic words (OFF-49): filled in here, by the server, so a client can never supply or fake one.
+      // validateMessage never copies a client `magic`; this is the only place the field is set.
+      const magic = await makeMagic(message.body, { from, now, drumCount });
       const op = pushOp(log, { op: 'append', id: `m_${randomId(5)}`, from, parent: parent ?? (typeof body.parent === 'string' ? body.parent : null), ...message,
-        tags: topics.slice(0, 8), mentions: mentions.slice(0, 8), tokenHash: await sha(token) }, now);
+        ...(magic ? { magic } : {}), tags: topics.slice(0, 8), mentions: mentions.slice(0, 8), tokenHash: await sha(token) }, now);
       if (op.parent && !log.ops.some((o) => o.op === 'append' && o.id === op.parent)) op.parent = null;
       const reached = await ripple(kv, log, op, now);
       const hello = firstHelloEnabled ? await firstHello(kv, { log, op, from, now, limit }) : null;
