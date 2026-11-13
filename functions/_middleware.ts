@@ -21,6 +21,7 @@ import { hasDirectorDeskAccess } from '../src/lib/director-access';
 import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-bridge-script';
 import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
 import { HOME_SHARE_EDITIONS, HOME_SHARE_CANONICAL, HOME_SHARE_TITLE, HOME_SHARE_DESCRIPTION, HOME_SHARE_WIDTH, HOME_SHARE_HEIGHT, homeShareEditionForDate } from '../src/lib/home-share-editions.mjs';
+import { loomShareResponse } from './_lib/loom-share';
 import { planUnfurl, unfurlWords } from '../src/lib/unfurl/plan.mjs';
 import { isQuietUesStudyPath } from '../src/lib/ues-living-study-boundaries.mjs';
 import { isStandaloneStaticRoom } from '../src/lib/standalone-static-rooms.mjs';
@@ -395,6 +396,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const contentType = upstream.headers.get('content-type') ?? '';
         if (upstream.status === 200 && contentType.startsWith('text/html')) {
           directoryAsset = upstream;
+          // Loom thread links get their own share tags (functions/_lib/loom-share.ts); fails open to the static page.
+          if (url.pathname === '/loom' && url.searchParams.has('to')) {
+            directoryAsset = await loomShareResponse(upstream, request, env as any);
+          }
           // Later gates and the unfurl card see the canonical slash path.
           url.pathname = internalUrl.pathname;
         } else {
