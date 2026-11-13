@@ -149,3 +149,12 @@ test('end to end against the real service: reply address resolves to its log', a
   assert.equal(direct.last.text, null);
   assert.equal(metaFor(viaReply, r.address, 1).url, 'https://pointcast.xyz/loom?to=' + encodeURIComponent(r.address));
 });
+
+test('the unfurl planner keeps a thread card as the page image', async () => {
+  const { isGeneratedCard } = await import('../src/lib/unfurl/urls.mjs');
+  const { planUnfurl } = await import('../src/lib/unfurl/plan.mjs');
+  const card = 'https://pointcast.xyz/og/loom.png?to=%23officenoun-tasks&s=70';
+  assert.equal(isGeneratedCard(card), true);
+  const plan = planUnfurl({ pathname: '/loom/', search: '?to=%23officenoun-tasks', currentImage: card });
+  assert.match(plan.image, /^https:\/\/pointcast\.xyz\/og\/loom\.png\?to=%23officenoun-tasks&s=70/);
+});

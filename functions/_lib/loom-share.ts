@@ -40,6 +40,9 @@ export async function loomShareResponse(page: Response, request: Request, env: L
       .on('meta[property="og:url"]', set(m.url))
       .on('meta[name="twitter:card"]', set(m.twitterCard))
       .on('link[rel="canonical"]', set(m.canonical, 'href'))
+      // The build gives every page a fallback og:image (src/lib/seo-build.mjs); drop it and its size and
+      // type tags so the thread card below is the only image, and the unfurl rewrite plans from it.
+      .on('meta[property^="og:image"], meta[name^="twitter:image"]', { element(e) { if (m.image) e.remove(); } })
       .on('head', {
         element(e) {
           e.onEndTag((end) => {
@@ -50,6 +53,7 @@ export async function loomShareResponse(page: Response, request: Request, env: L
             if (m.image) {
               tags.push(
                 `<meta property="og:image" content="${attr(m.image)}">`,
+                '<meta property="og:image:type" content="image/png">',
                 `<meta property="og:image:width" content="${m.imageWidth}">`,
                 `<meta property="og:image:height" content="${m.imageHeight}">`,
                 `<meta property="og:image:alt" content="${attr(m.imageAlt)}">`,
