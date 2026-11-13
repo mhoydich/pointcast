@@ -15,10 +15,10 @@ export async function serveFor(request, kv, rawName) {
   const name = String(rawName ?? '').replace(/\/+$/, '');
   let res;
   try { res = await handleLoom(new Request(`${API}?for=${encodeURIComponent(name)}&format=${format}`), { kv }); } catch { res = null; }
-  if (!res) return new Response('The Loom is out of reach right now. Try again in a minute.\n', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
+  if (!res || res.status >= 500) return new Response('The Loom is out of reach right now. Try again in a minute.\n', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
   const headers = new Headers(res.headers);
   headers.set('X-Robots-Tag', 'noindex');
-  if (res.status >= 400 && format === 'text') {
+  if (res.status === 400 && format === 'text') {
     // Same refusal as the API, said in a line a person or bot can read.
     return new Response(`Not a Loom name. Use a handle like /loom/for/mike (letters, digits, dot, dash, underscore; up to 32).\n`, {
       status: res.status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } });

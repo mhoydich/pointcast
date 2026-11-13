@@ -20,7 +20,7 @@
  */
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
-import { ARRIVAL_MS, WINDOW_MS, buildPiles, forYouText, isCollator, normHandle } from './for-you.mjs';
+import { ARRIVAL_MS, NEEDS_WINDOW_MS, buildPiles, forYouText, isCollator, normHandle } from './for-you.mjs';
 import { TASK_TOPIC, WELCOME_BUCKET, isDesk, normalName, pickOpenTask, skipsWelcome, welcomeMarkerKey, welcomeText } from './welcome.mjs';
 
 export const SPEC = 'pointcast.loom/v1';
@@ -190,8 +190,8 @@ ${items}
 
 /*
  * For you (OFF-45): GET /api/loom?for=NAME[&format=json|text|rss] answers "what needs NAME" in one request.
- * Reads are bounded: the board index, at most FOR_LOGS logs updated in the last 7 days (the owner's own
- * inbox always among them), at most FOR_OUTBOXES sender outboxes to find first posts, and one seen mark.
+ * Reads are bounded: the board index, at most FOR_LOGS logs, newest first, updated in the last 14 days (the
+ * Needs your yes window; People and the rest keep their own 7 days; the owner's own inbox always among them), at most FOR_OUTBOXES sender outboxes to find first posts, and one seen mark.
  * Nothing is written on GET.
  *
  * Alerts that leave the page (the "D" of OFF-45): email needs a mail service and key, web push needs VAPID
@@ -211,7 +211,7 @@ async function forYou(kv, owner, now) {
   const index = await readJson(kv, 'loom:index', []);
   const inboxAddress = `@${owner}`;
   const inboxKey = await addressKey(inboxAddress);
-  const recent = index.filter((e) => e && e.key && e.key !== inboxKey && Date.parse(e.updatedAt) >= nowMs - WINDOW_MS);
+  const recent = index.filter((e) => e && e.key && e.key !== inboxKey && Date.parse(e.updatedAt) >= nowMs - NEEDS_WINDOW_MS);
   const inbox = await readJson(kv, `loom:log:${inboxKey}`, null);
   const picked = recent.slice(0, inbox ? FOR_LOGS - 1 : FOR_LOGS);
   const logs = [];
@@ -240,7 +240,7 @@ async function forYou(kv, owner, now) {
   }
   const mark = kv ? await kv.get(await seenKey(owner)) : null;
   const seenAt = mark && Number.isFinite(Date.parse(mark)) ? mark : null;
-  return { ...buildPiles({ owner, threads, seenAt, now, firstPosts }), scanned: { logs: threads.length, window: '7d' } };
+  return { ...buildPiles({ owner, threads, seenAt, now, firstPosts }), scanned: { logs: threads.length, window: '14d' } };
 }
 
 function forYouRss(result) {
@@ -577,7 +577,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       // a future time is clamped to now.
       const g = await gate(limit, 'loom:seen');
       if (!g.allowed) return limited(g.retryAfter);
-      const owner = normHandle(body.name);
+      const owner = typeof body.name === 'string' ? normHandle(body.name.slice(0, 64)) : '';
       if (!owner) return fail('seen_name_required');
       if (!FOR_HANDLE.test(owner)) return fail('seen_name_invalid');
       let at = now;

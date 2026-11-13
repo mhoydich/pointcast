@@ -831,7 +831,7 @@ const state = {
   visitName: false,   // name came from ?as= for this visit only (never stored)
   hasTo: false,       // page was opened on a thread link (?to=)
   waitingCount: 0,
-  fy: { name: '', data: null, at: 0, loading: false, failed: false, seenFor: '', seenTimer: null },
+  fy: { name: '', data: null, at: 0, loading: false, failed: false, seenFor: '', seenTimer: null, fresh: {}, looked: undefined },
   fyMoreOpen: false,  // the "Everything else" fold on For you
   expanded: {},
   hideEchoes: false,
@@ -1763,12 +1763,24 @@ function pilesNow() {
 function ensurePiles() {
   const me = handleOf(state.name), p = state.fy;
   if (!me || loomApi.mode !== 'live') return;
-  if (p.name !== me) { p.name = me; p.data = null; p.failed = false; p.at = 0; p.seenFor = ''; }
+  if (p.name !== me) { p.name = me; p.data = null; p.failed = false; p.at = 0; p.seenFor = ''; p.fresh = {}; p.looked = undefined; }
   if (p.loading || Date.now() - p.at < 60000) return;
   p.loading = true; p.at = Date.now();
-  loomApi.forYou(me).then((j) => { if (p.name === me) { p.data = j; p.failed = false; } })
+  loomApi.forYou(me).then((j) => { if (p.name === me) { keepNew(p, j); p.data = j; p.failed = false; } })
     .catch(() => { if (p.name === me && !p.data) p.failed = true; })
     .then(() => { p.loading = false; if (p.name === me) renderForYou(); });
+}
+/* Our own seen POST moves the mark, so the next refresh (a minute on) would wipe every New tag while the
+   person is still reading. What was new when this page view first looked stays new for the view. */
+function keepNew(p, j) {
+  if (p.looked === undefined) p.looked = j.seenAt || null;
+  j.seenAt = p.looked;
+  const all = {};
+  ['people', 'needsYes', 'arrivals'].forEach((k) => j.piles[k].forEach((it) => {
+    if (it.isNew) p.fresh[it.link] = 1; else if (hasOwn(p.fresh, it.link)) it.isNew = true;
+    if (it.isNew) all[it.link] = 1;
+  }));
+  j.newCount = Object.keys(all).length;
 }
 /* Once per page view, after the piles have shown and For you is on screen: move this name's seen mark to
    when the piles were made. The New tags on screen stay; the next look starts from here. */
@@ -1781,6 +1793,7 @@ function maybeMarkSeen() {
   p.seenTimer = setTimeout(() => {
     p.seenTimer = null;
     if (p.seenFor === me || handleOf(state.name) !== me) return;
+    if (document.hidden || state.tab !== 'for-you') return;  /* left within the beat: the next paint tries again */
     p.seenFor = me;  /* once per page view, even if this one fails */
     loomApi.seen(me, at).catch(() => { /* quiet: the mark is a convenience */ });
   }, 600);

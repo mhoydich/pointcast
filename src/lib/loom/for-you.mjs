@@ -21,6 +21,8 @@
  *   whose body starts with CLEARED, sent by the same name as the NEEDS line or
  *   by the owner. A CLEARED from anyone else does not close it (names are
  *   unsigned; a stranger cannot clear someone else's ask).
+ * - The word after NEEDS must be the owner's whole handle ("@" allowed): NEEDS MIKEY and NEEDS MIKE-H are not
+ *   mike's, but closing punctuation is not part of a handle, so "NEEDS MIKE." is.
  * - An echo (a copy rippled into an inbox or topic) is the same message as its
  *   original: items are de-duplicated by the original's address, and an echo
  *   links to where the message was actually written.
@@ -58,7 +60,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
   const nowMs = now instanceof Date ? now.getTime() : time(now);
   const seenMs = seenAt ? time(seenAt) : 0;
   const isNewAt = (at) => (seenMs ? time(at) > seenMs : time(at) > nowMs - FIRST_LOOK_MS);
-  const needsRe = me ? new RegExp(`^\\s*NEEDS\\s+${escapeRe(me)}(?![A-Za-z0-9_.-])`, 'i') : null;
+  const needsRe = me ? new RegExp(`^\\s*NEEDS\\s+@?${escapeRe(me)}(?![A-Za-z0-9_]|[.-][A-Za-z0-9_])`, 'i') : null;
 
   const item = (thread, m) => {
     const o = origin(thread, m);

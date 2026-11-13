@@ -138,7 +138,7 @@ test('GET ?for=mike answers the three piles as JSON, bounded, cached briefly, an
   assert.equal(j.ok, true);
   assert.equal(j.owner, '@mike');
   assert.equal(j.seenAt, null);
-  assert.deepEqual(j.scanned, { logs: 3, window: '7d' });
+  assert.deepEqual(j.scanned, { logs: 3, window: '14d' });
   assert.deepEqual(j.piles.people.map((x) => x.snippet).sort(), ['hello mike', 'is anyone at the courts?']);
   assert.deepEqual(j.piles.needsYes.map((x) => x.link), [needs.address]);
   assert.deepEqual(j.piles.arrivals.map((x) => x.from.name).sort(), ['Ana', 'Build desk', 'Sam']);
@@ -265,6 +265,10 @@ async function page(kv, { name = 'tester', sent = null } = {}) {
     return api(kv, new URL(url, ORIGIN).href, rest);
   };
   w.HTMLElement.prototype.scrollIntoView = () => {};
+  // keep the page's own minute tick reachable, so a test can run it without waiting a minute
+  const every = w.setInterval.bind(w);
+  w.ticks = [];
+  w.setInterval = (fn, ms) => { w.ticks.push({ fn, ms }); return every(fn, ms); };
   w.eval(JS);
   await settle(w);
   return w;
@@ -336,4 +340,51 @@ test('page: if the for= read fails, today\'s lists show unfolded with no error n
   assert.equal(fy(w).querySelector('h2.sect').textContent, 'Waiting on you');
   assert.equal(fy(w).querySelector('details#fyMore'), null);
   assert.doesNotMatch(fy(w).textContent, /error|failed/i);
+});
+
+// ---- review fixes (OFF-45) ----
+
+test('NEEDS word: @ and closing punctuation are fine, a longer handle is someone else', () => {
+  const count = (body) => buildPiles({ owner: 'mike', now: NOW, threads: [thread('#d', 'kd', [msg(agent('Desk'), body, 1)])] }).piles.needsYes.length;
+  for (const body of ['NEEDS MIKE. look here', 'NEEDS @MIKE · x · here', 'NEEDS MIKE: x', 'NEEDS MIKE']) assert.equal(count(body), 1, body);
+  for (const body of ['NEEDS MIKEY · x', 'NEEDS MIKE-H · x', 'NEEDS MIKE.H x', 'NEEDS MIKE_2 x', 'NEEDSMIKE x']) assert.equal(count(body), 0, body);
+});
+
+test('an open NEEDS line 10 days old in a quiet thread is still read (14-day window), within the same 40 logs', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#quiet', from: agent('Build desk'), body: 'NEEDS MIKE · sign the form · here' }, { clock: () => new Date(NOW.getTime() - 10 * 86400000) });
+  await post(kv, { to: '#stale', from: agent('Build desk'), body: 'NEEDS MIKE · too old · here' }, { clock: () => new Date(NOW.getTime() - 20 * 86400000) });
+  const j = await (await getFor(kv, 'mike', { clock: () => NOW })).json();
+  assert.deepEqual(j.piles.needsYes.map((x) => x.snippet), ['NEEDS MIKE · sign the form · here']);
+  assert.equal(j.scanned.logs, 1);
+});
+
+test('seen: the name must be a string', async () => {
+  const kv = memoryKv();
+  for (const name of [{ a: 1 }, ['mike'], 7]) assert.equal((await post(kv, { action: 'seen', name })).error, 'seen_name_required');
+  assert.ok(![...kv.map.keys()].some((k) => k.startsWith('loom:seen:')));
+});
+
+test('/loom/for/NAME: a storage failure is a 503 that is not cached, not "Not a Loom name"', async () => {
+  const res = await serveFor(new Request('https://pointcast.xyz/loom/for/mike'), { get: async () => { throw new Error('down'); } }, 'mike');
+  assert.equal(res.status, 503);
+  assert.equal(res.headers.get('Cache-Control'), 'no-store');
+  assert.doesNotMatch(await res.text(), /Not a Loom name/);
+});
+
+test('page: New tags stay for the page view after its own seen mark and a refresh', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#court', from: human('Sam'), body: 'court is open' });
+  const w = await page(kv);
+  await settle(w, 900);
+  assert.equal(w.posts.filter((p) => p.action === 'seen').length, 1);
+  const news = () => fy(w).querySelectorAll('button[data-fy^="people|"] .tag.new').length;
+  assert.equal(news(), 1);
+  const real = w.Date.now;
+  w.Date.now = () => real() + 61000;  // a minute on: the page's tick refetches the piles
+  w.ticks.filter((t) => t.ms === 60000).forEach((t) => t.fn());
+  await settle(w, 300);
+  assert.equal(news(), 1, 'still New after the refresh');
+  assert.match(w.document.getElementById('fyNew').textContent, /^New since you last looked: 1 · last looked never$/);
+  assert.equal(w.posts.filter((p) => p.action === 'seen').length, 1);
 });
