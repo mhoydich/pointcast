@@ -76,13 +76,13 @@ export async function makeMagic(body, { from, now, drumCount } = {}) {
   const word = magicWord(body);
   if (!word) return null;
   const at = now ?? new Date().toISOString();
-  if (word === 'shout') return { word };
-  if (word === 'dice') return { word, value: rollDie(), source: 'the Loom server', at };
-  if (word === 'time') return { word, value: timeValue(new Date(at)), source: 'the Loom server clock', at };
-  if (word === 'drum') return { word, value: await readDrum(drumCount), source: 'the PointCast drum counter, read by the Loom server', at };
   try {
+    if (word === 'shout') return { word };
+    if (word === 'dice') return { word, value: rollDie(), source: 'the Loom server', at };
+    if (word === 'time') return { word, value: timeValue(new Date(at)), source: 'the Loom server clock', at };
+    if (word === 'drum') return { word, value: await readDrum(drumCount), source: 'the PointCast drum counter, read by the Loom server', at };
     return { word, value: await nounFor(from?.name), source: 'the Loom server, from the sender’s name', at };
-  } catch { return { word, value: null, source: 'the Loom server, from the sender’s name', at }; }
+  } catch { return word === 'shout' ? { word } : { word, value: null, source: 'the Loom server', at }; }
 }
 
 /** Fold helper: the magic still shows only while the first line still says its word. */

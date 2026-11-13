@@ -8,6 +8,7 @@ import { handleLoom } from '../src/lib/loom/service.mjs';
 import { magicWord, makeMagic, nounFor } from '../src/lib/loom/magic.mjs';
 import { NOUN_ACCESSORIES, NOUN_BODIES, NOUN_GLASSES, NOUN_HEADS } from '../src/lib/loom/noun-traits.mjs';
 import { renderPortrait } from '../src/lib/nouns-parts.mjs';
+import { nounPath, serveNoun } from '../src/lib/loom/noun-route.mjs';
 
 const imageData = JSON.parse(readFileSync(new URL('../public/images/nouns-money/source-100/sources/official-image-data.json', import.meta.url), 'utf8'));
 
@@ -131,6 +132,38 @@ async function page(kv, { magic } = {}) {
   return w;
 }
 const msg = (w, id) => w.document.getElementById(`msg-${id}`);
+
+test('/loom/noun draws only known trait names, with headers that keep it a picture', async () => {
+  const value = await nounFor('Ana');
+  const path = nounPath(value);
+  const res = serveNoun(new Request(new URL(path, ORIGIN)));
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('Content-Type'), 'image/svg+xml; charset=utf-8');
+  assert.match(res.headers.get('Cache-Control'), /^public, max-age=31536000/);
+  assert.equal(res.headers.get('X-Content-Type-Options'), 'nosniff');
+  assert.match(res.headers.get('Content-Security-Policy'), /default-src 'none'/);
+  const svg = await res.text();
+  assert.equal(svg, renderPortrait(value).svg);
+  assert.match(svg, /shape-rendering="crispEdges"/);
+  assert.ok(!/<script|onload=|href=/i.test(svg));
+  for (const bad of ['/loom/noun', path.replace('h=head-', 'h=nose-'), `${path}&h=%3Cscript%3E`.replace(/h=head-[^&]+&/, ''), path.replace(/b=(cool|warm)/, 'b=%22%3E%3Cscript%3E')]) {
+    const no = serveNoun(new Request(new URL(bad, ORIGIN)));
+    assert.equal(no.status, 400, bad);
+    assert.ok(!(await no.text()).includes('<'));
+  }
+  assert.equal(serveNoun(new Request(new URL(path, ORIGIN), { method: 'POST' })).status, 405);
+  assert.equal(nounPath({ ...value, head: 'head-nope' }), null);
+});
+
+test('the page shows the Noun picture beside its names, with the traits as alt text', async () => {
+  const kv = memoryKv();
+  const noun = await say(kv, 'noun');
+  const w = await page(kv);
+  const img = msg(w, noun.message.id).querySelector('.magic img.nounpic');
+  assert.ok(img);
+  assert.equal(img.getAttribute('src'), nounPath(noun.message.magic.value));
+  assert.match(img.getAttribute('alt'), /^A Noun: .+ head, .+ glasses, .+ body, .+ accessory, (cool|warm) background$/);
+});
 
 test('the page shows each fact as text, shout set large, body unchanged', async () => {
   const kv = memoryKv();

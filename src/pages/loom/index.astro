@@ -394,6 +394,7 @@ a { color: var(--signal); }
 .msg.shout .text { font: 600 clamp(22px, 6vw, 32px)/1.2 var(--f-body); }
 .magic { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 6px 0 0; font: 400 12px/1.4 var(--f-mono); color: var(--ink-2); }
 .magic .die { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 4px; border: 1px solid var(--rule); color: var(--ink); font: 600 14px/1 var(--f-mono); }
+.magic .nounpic { width: 64px; height: 64px; border: 1px solid var(--rule); image-rendering: pixelated; }
 .magic button.die::after { content: ""; position: absolute; inset: -8px; }
 .magic button.tapfx { position: relative; color: var(--signal); text-decoration: underline; text-underline-offset: 2px; font: inherit; }
 .magic button.tapfx::after { content: ""; position: absolute; inset: -12px -6px; }
@@ -1285,8 +1286,13 @@ function renderMagic(g) {
       h('span', { text: '· read by the Loom server at ' + magicClock(g.at) }));
   }
   const n = g.value, part = (x) => String(x || '').replace(/^(body|accessory|head|glasses)-/, '').replace(/-/g, ' ');
-  /* trait names only; drawing the pixels is a follow-up (a small server route over src/lib/nouns-parts.mjs) */
-  return h('p', { class: 'magic', 'data-magic': 'noun', text: 'noun: ' + [part(n.head) + ' head', part(n.glasses) + ' glasses', part(n.body) + ' body', part(n.accessory) + ' accessory', n.background + ' background'].join(', ') + ' · made from this name by the Loom server' });
+  const names = [part(n.head) + ' head', part(n.glasses) + ' glasses', part(n.body) + ' body', part(n.accessory) + ' accessory', n.background + ' background'].join(', ');
+  /* the picture is a still (no motion); /loom/noun checks every name against the official lists and refuses the rest */
+  const ok = ['background', 'body', 'accessory', 'head', 'glasses'].every((k) => /^[A-Za-z0-9-]{1,60}$/.test(n[k]));
+  const src = '/loom/noun?b=' + encodeURIComponent(n.background) + '&body=' + encodeURIComponent(n.body) + '&a=' + encodeURIComponent(n.accessory) + '&h=' + encodeURIComponent(n.head) + '&g=' + encodeURIComponent(n.glasses);
+  return h('p', { class: 'magic', 'data-magic': 'noun' },
+    ok && loomApi.mode === 'live' ? h('img', { class: 'nounpic', src, width: '64', height: '64', loading: 'lazy', alt: 'A Noun: ' + names }) : null,
+    h('span', { text: 'noun: ' + names + ' · made from this name by the Loom server' }));
 }
 const audioCtor = () => (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) || null;
 let magicAudio = null;
@@ -1304,6 +1310,7 @@ function playMagic(m, btn) {
   const g = liveMagic(m);
   if (!g || !state.magicOn) return;
   if (g.word === 'dice') {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     btn.classList.remove('rolling'); void btn.offsetWidth; btn.classList.add('rolling');
     btn.addEventListener('animationend', () => btn.classList.remove('rolling'), { once: true });
   } else if (g.word === 'drum') drumSound();

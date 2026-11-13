@@ -8,7 +8,7 @@ A message whose first line is one word alone (trimmed, any case, no punctuation)
 | dice | one fair roll 1–6 (`crypto.getRandomValues`, unbiased), source "the Loom server" | "rolled a 4 · by the Loom server, 11:42 AM"; a short roll only after a tap |
 | time | the server clock as New York time and UTC (the poster's zone is not known) | "11:42am in New York · 16:42 UTC · from the Loom server clock" |
 | drum | the drum's all-time count, read as `/api/drum` reads it (DrumCounter DO, then VISITS `drum:total`); null if out of reach | "77,317 drum hits · read by the Loom server at …"; a synthesized drum click only after a tap |
-| noun | trait names from sha-256 of the sender's normalized name (official CC0 lists in `noun-traits.mjs`), the same every time | the trait names as text; pixels are a follow-up (a small route over `renderPortrait()` in `src/lib/nouns-parts.mjs`) |
+| noun | trait names from sha-256 of the sender's normalized name (official CC0 lists in `noun-traits.mjs`), the same every time | the trait names as text, beside a 64px still from `GET /loom/noun?b=&body=&a=&h=&g=` (`src/lib/loom/noun-route.mjs` over `renderPortrait()`; every name is checked against the lists; the path has no `.svg` because `_routes.json` serves `*.svg` statically) |
 
 Rules kept: sound and motion only after a tap; one "Magic words: on/off" switch in the thread menu (stored as `loom.magic`, default on) turns every effect off, and prefers-reduced-motion stops animation. The fact line is not an effect: it shows as plain text either way. Fetch words say where the fact came from and when. One word per message, only the first line is read. A word never spends, mints, ships or approves, and never ripples further than the body already does.
 
