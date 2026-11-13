@@ -158,3 +158,11 @@ test('the unfurl planner keeps a thread card as the page image', async () => {
   const plan = planUnfurl({ pathname: '/loom/', search: '?to=%23officenoun-tasks', currentImage: card });
   assert.match(plan.image, /^https:\/\/pointcast\.xyz\/og\/loom\.png\?to=%23officenoun-tasks&s=70/);
 });
+
+test('a thread card keeps its seq when the page escaped the ampersand', async () => {
+  const { planUnfurl } = await import('../src/lib/unfurl/plan.mjs');
+  const plan = planUnfurl({ pathname: '/loom/', search: '?to=%23officenoun-tasks', currentImage: 'https://pointcast.xyz/og/loom.png?to=%23officenoun-tasks&amp;s=87' });
+  const url = new URL(plan.image);
+  assert.equal(url.searchParams.get('s'), '87');
+  assert.equal(url.searchParams.get('to'), '#officenoun-tasks');
+});
