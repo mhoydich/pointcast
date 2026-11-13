@@ -241,7 +241,9 @@ test('?as=NAME fills the name for this visit only, marked self-declared, never s
   const w = await page(memoryKv(), { path: '/loom?as=mike', name: '' });
   assert.equal(fy(w).querySelector('.card.wel'), null);
   assert.match(fy(w).querySelector('.visiting').textContent, /Visiting as mike \(self-declared, this visit only\)/);
-  assert.equal(fy(w).querySelector('h2.sect').textContent, 'Waiting on you');
+  await settle(w, 120);
+  // OFF-45: For you opens on the People pile; "Waiting on you" now lives inside "Everything else".
+  assert.equal(fy(w).querySelector('h2.sect').textContent, 'People');
   assert.equal(w.document.getElementById('asBtn').textContent, 'mike');
   assert.equal(w.localStorage.getItem('loom.name'), null);
   assert.equal(w.localStorage.getItem('loom.akind'), null);

@@ -20,6 +20,7 @@
  */
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
+import { ARRIVAL_MS, NEEDS_WINDOW_MS, buildPiles, forYouText, isCollator, normHandle } from './for-you.mjs';
 import { TASK_TOPIC, WELCOME_BUCKET, isDesk, normalName, pickOpenTask, skipsWelcome, welcomeMarkerKey, welcomeText } from './welcome.mjs';
 
 export const SPEC = 'pointcast.loom/v1';
@@ -181,6 +182,84 @@ function asRss(log) {
     <title>${xml(`${log.title || log.label} · the Loom`)}</title>
     <link>${xml(link)}</link>
     <description>${xml(`Everything appended to ${log.address} on the PointCast Loom.`)}</description>
+${items}
+  </channel>
+</rss>
+`;
+}
+
+/*
+ * For you (OFF-45): GET /api/loom?for=NAME[&format=json|text|rss] answers "what needs NAME" in one request.
+ * Reads are bounded: the board index, at most FOR_LOGS logs, newest first, updated in the last 14 days (the
+ * Needs your yes window; People and the rest keep their own 7 days; the owner's own inbox always among them), at most FOR_OUTBOXES sender outboxes to find first posts, and one seen mark.
+ * Nothing is written on GET.
+ *
+ * Alerts that leave the page (the "D" of OFF-45): email needs a mail service and key, web push needs VAPID
+ * keys stored as a secret plus a subscription store, a ping service needs an account. None of those exist
+ * yet, so the RSS format below is the first version: any feed reader that notifies on new items (many
+ * phone readers do) turns People + Needs your yes into an alert, with no keys, signups or spend.
+ * Next step for true push: docs/loom-for-you-alerts.md.
+ */
+const FOR_LOGS = 40;
+const FOR_OUTBOXES = 30;
+const FOR_CACHE = 'public, max-age=30';
+const FOR_HANDLE = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
+const seenKey = async (handle) => `loom:seen:${(await sha(handle)).slice(0, 32)}`;
+
+async function forYou(kv, owner, now) {
+  const nowMs = now.getTime();
+  const index = await readJson(kv, 'loom:index', []);
+  const inboxAddress = `@${owner}`;
+  const inboxKey = await addressKey(inboxAddress);
+  const recent = index.filter((e) => e && e.key && e.key !== inboxKey && Date.parse(e.updatedAt) >= nowMs - NEEDS_WINDOW_MS);
+  const inbox = await readJson(kv, `loom:log:${inboxKey}`, null);
+  const picked = recent.slice(0, inbox ? FOR_LOGS - 1 : FOR_LOGS);
+  const logs = [];
+  if (inbox) logs.push(inbox);
+  for (const e of picked) { const log = await readJson(kv, `loom:log:${e.key}`, null); if (log) logs.push(log); }
+  const threads = logs.map((log) => ({ address: log.address, key: log.key, label: log.label || log.address, title: log.title ?? null, messages: fold(log.ops).messages }));
+
+  // First posts: for each sender seen in the last 48h, their outbox's oldest record, if the outbox is not full.
+  const firstPosts = new Map();
+  const asked = new Set();
+  for (const t of threads) {
+    for (const m of t.messages) {
+      if (asked.size >= FOR_OUTBOXES) break;
+      if (m.via || !m.from?.name || isCollator(m.from) || Date.parse(m.at) < nowMs - ARRIVAL_MS) continue;
+      const box = outboxAddress(m.from);
+      if (asked.has(box)) continue;
+      asked.add(box);
+      const out = await readJson(kv, `loom:out:${await addressKey(box)}`, []);
+      if (!Array.isArray(out) || !out.length || out.length >= MAX_OUTBOX) continue;
+      const first = out[out.length - 1];
+      if (!first?.id || Date.parse(first.at) < nowMs - ARRIVAL_MS) continue;
+      const where = threads.find((x) => x.key === first.key);
+      firstPosts.set(normHandle(m.from.name) || box, { name: m.from.name, kind: m.from.kind, verified: !!m.from.verified, fromAddress: m.from.address ?? null,
+        address: first.to, key: first.key, id: first.id, at: first.at, body: first.body, label: where?.label ?? describe(first.to).label });
+    }
+  }
+  const mark = kv ? await kv.get(await seenKey(owner)) : null;
+  const seenAt = mark && Number.isFinite(Date.parse(mark)) ? mark : null;
+  return { ...buildPiles({ owner, threads, seenAt, now, firstPosts }), scanned: { logs: threads.length, window: '14d' } };
+}
+
+function forYouRss(result) {
+  const name = result.owner.replace(/^@/, '');
+  const items = [...result.piles.needsYes.map((it) => ({ it, yes: true })), ...result.piles.people.map((it) => ({ it, yes: false }))]
+    .sort((a, b) => Date.parse(b.it.at) - Date.parse(a.it.at))
+    .map(({ it, yes }) => `    <item>
+      <title>${xml(`${yes ? 'Needs your yes · ' : ''}${it.from.name}${it.from.kind === 'human' ? '' : ` (${it.from.kind})`} in ${it.label}: ${excerpt(it.snippet, 80)}`)}</title>
+      <link>${xml(`${SITE}/loom?to=${encodeURIComponent(it.address)}#${it.id}`)}</link>
+      <guid isPermaLink="false">${xml(it.link)}</guid>
+      <pubDate>${new Date(it.at).toUTCString()}</pubDate>
+      <description>${xml(it.snippet)}</description>
+    </item>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${xml(`What needs ${result.owner} · the Loom`)}</title>
+    <link>${xml(`${SITE}/loom/for/${name}`)}</link>
+    <description>${xml(`Posts from people and open NEEDS ${name.toUpperCase()} lines for ${result.owner} on the PointCast Loom. Names are self-declared.`)}</description>
 ${items}
   </channel>
 </rss>
@@ -382,6 +461,18 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     if (request.method === 'GET' || request.method === 'HEAD') {
       const to = url.searchParams.get('to');
       const from = url.searchParams.get('from');
+      if (url.searchParams.has('for')) {
+        const raw = String(url.searchParams.get('for') ?? '');
+        const owner = normHandle(raw);
+        if (!owner) return fail('for_name_required');
+        if (!FOR_HANDLE.test(owner)) return fail('for_name_invalid');
+        const now = clock();
+        const result = { ok: true, spec: SPEC, ...(await forYou(kv, owner, now)), generatedAt: now.toISOString() };
+        const format = url.searchParams.get('format');
+        if (format === 'rss') return new Response(forYouRss(result), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': FOR_CACHE } });
+        if (format === 'text') return new Response(forYouText(result, { generatedAt: result.generatedAt }), { headers: { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': FOR_CACHE } });
+        return json(result, 200, { 'Cache-Control': FOR_CACHE });
+      }
       if (to) {
         const target = parseAddress(to);
         const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
@@ -477,6 +568,29 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
       const { tokenHash, ...publicOp } = op;
       return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(hello ? { welcome: { id: hello.id } } : {}), ...(title ? { title } : {}), ...(truncated ? { truncated: true, bodyMax: BODY_MAX } : {}) }, 201);
+    }
+
+    if (action === 'seen') {
+      // "New since you last looked", kept on the server by name (a phone's in-app browser forgets localStorage).
+      // Names are unsigned on this board, so anyone can move anyone's mark forward. That is low-stakes: a mark
+      // only makes items look "not new"; it never hides an item from a pile. The mark only moves forward, and
+      // a future time is clamped to now.
+      const g = await gate(limit, 'loom:seen');
+      if (!g.allowed) return limited(g.retryAfter);
+      const owner = typeof body.name === 'string' ? normHandle(body.name.slice(0, 64)) : '';
+      if (!owner) return fail('seen_name_required');
+      if (!FOR_HANDLE.test(owner)) return fail('seen_name_invalid');
+      let at = now;
+      if (body.at !== undefined && body.at !== null && body.at !== '') {
+        const t = Date.parse(String(body.at));
+        if (!Number.isFinite(t)) return fail('seen_at_invalid');
+        at = new Date(Math.min(t, Date.parse(now))).toISOString();
+      }
+      const key = await seenKey(owner);
+      const prior = await kv.get(key);
+      const moved = !(Date.parse(prior) >= Date.parse(at));
+      if (moved) await kv.put(key, at);
+      return json({ ok: true, spec: SPEC, owner: `@${owner}`, seenAt: moved ? at : prior, moved });
     }
 
     const target = parseAddress(body.to);

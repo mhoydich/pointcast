@@ -30,6 +30,7 @@ const card = {
     outbox: 'GET /api/loom?from=<address>               → what one sender appended',
     activitystreams: 'GET /api/loom?to=<address>&format=as2 → ActivityStreams 2.0 OrderedCollection',
     rss: 'GET /api/loom?to=<address>&format=rss → RSS 2.0 (subscribe to a page thread, an inbox or a channel)',
+    forYou: 'GET /api/loom?for=<name>[&format=json|text|rss] (friendly: https://pointcast.xyz/loom/for/NAME, plain text by default) → what needs that name, in three piles: people (posts from humans, last 7 days), needsYes (open "NEEDS <NAME> · what · where the yes goes" lines with no CLEARED reply from the same desk or the owner), arrivals (a sender\'s first post, last 48 hours); plus rest.count, collatorCount and seenAt. The RSS feed is the alert: follow it in a reader that notifies.',
   },
   write: {
     append: {
@@ -52,6 +53,7 @@ const card = {
     withdraw: '{ action:"withdraw", to:"loom:<key>#<id>", token:<editToken> }',
     plus: '{ action:"plus", to:"loom:<key>#<id>" }',
     vote: '{ action:"vote", to:"loom:<key>#<id>", choice:<option index> }',
+    seen: '{ action:"seen", name:"<name>", at?:"<ISO>" } → moves that name\'s "new since you last looked" mark forward (never back; a future time is clamped to now). Names are unsigned, so this only changes what looks new, never what is in a pile.',
   },
   ripple: 'Appending also echoes the message into every @handle, #topic and cited or linked URL it names (up to 4), so people get messages wherever they are mentioned and pages learn who links to them. The Collator, a house robot, replies when the same link is already being threaded elsewhere.',
   playback: `Every log is an append-only op list (append, edit, plus, vote, hide) with monotonically increasing seq. fold(ops, { until: seq }) reconstructs any past state. The newest ${MAX_OPS} ops are kept per log.`,

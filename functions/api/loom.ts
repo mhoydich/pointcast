@@ -27,6 +27,8 @@ const LIMITS: Record<string, { windowSec: number; maxRequests: number }> = {
   // Board-wide ceiling on automatic first-hello replies (OFF-36), so a wave of new names cannot flood.
   'loom:welcome': { windowSec: 600, maxRequests: 12 },
   'loom:plus': { windowSec: 600, maxRequests: 60 },
+  // For you seen mark (OFF-45): "new since you last looked", moved forward only.
+  'loom:seen': { windowSec: 600, maxRequests: 30 },
 };
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
