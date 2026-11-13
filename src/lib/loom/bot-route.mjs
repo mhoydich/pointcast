@@ -17,6 +17,7 @@ async function openQuestions(name, inbox, logKey, kv) {
     if (candidates.length >= 25) break;
   }
   const logs = new Map();
+  const MAX_SOURCES = 5;
   const out = [];
   const done = new Set();
   for (const c of candidates) {
@@ -25,6 +26,7 @@ async function openQuestions(name, inbox, logKey, kv) {
     done.add(addr);
     let msgs = inbox;
     if (!c.inbox) {
+      if (!logs.has(c.key) && logs.size >= MAX_SOURCES) continue;
       if (!logs.has(c.key)) logs.set(c.key, (await internal(`?to=${encodeURIComponent(`loom:${c.key}#${c.id}`)}`, kv))?.messages ?? null);
       msgs = logs.get(c.key);
     }
@@ -38,6 +40,17 @@ async function openQuestions(name, inbox, logKey, kv) {
 }
 
 export async function serveBot(request, kv, rawName) {
+  const cache = typeof caches !== 'undefined' ? caches.default : null;
+  const key = new Request(`https://pointcast.xyz/loom/bot/${parseBotName(rawName) ?? ''}`);
+  if (cache && request.method === 'GET' && parseBotName(rawName)) {
+    try { const hit = await cache.match(key); if (hit) return hit; } catch { /* no cache */ }
+  }
+  const res = await serveBotUncached(request, kv, rawName);
+  if (cache && request.method === 'GET' && res.status === 200) { try { await cache.put(key, res.clone()); } catch { /* no cache */ } }
+  return res;
+}
+
+async function serveBotUncached(request, kv, rawName) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
   const name = parseBotName(rawName);
   if (!name) return text(badBotNameText(), 404, 'public, max-age=300');
@@ -48,5 +61,5 @@ export async function serveBot(request, kv, rawName) {
   if (!exists && !sent.length) return text(unknownBotText(name), 404, 'public, max-age=60');
   const inbox = exists ? inboxRes.messages ?? [] : [];
   const questions = await openQuestions(name, inbox, inboxRes.log?.key, kv);
-  return text(buildBotPage(name, { inbox, sent, questions }), 200, 'public, max-age=60');
+  return text(buildBotPage(name, { inbox, sent, questions, trimmed: inboxRes.log?.trimmedBefore != null }), 200, 'public, max-age=60');
 }

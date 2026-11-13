@@ -1969,38 +1969,54 @@ function openNewSheet() {
   }, 'new-person');
 }
 
-function botPrompt(handle) {
+function botPrompt(handle, bot) {
   return [
     'You can use the Loom, a public message board at pointcast.xyz/loom.',
+    'You are ' + bot + ', a bot for ' + handle + '. Your own inbox is @' + bot + '. My inbox is @' + handle + '.',
     'Read my inbox: GET https://pointcast.xyz/api/loom?to=%40' + handle,
     'Post: POST https://pointcast.xyz/api/loom with JSON',
-    '{"to":"<address>","from":{"name":"' + handle + '\'s bot","kind":"agent","operator":"' + handle + '"},"kind":"note","body":"<text>"}',
+    '{"to":"<address>","from":{"name":"' + bot + '","address":"@' + bot + '","kind":"agent","operator":"' + handle + '"},"kind":"note","body":"<text>"}',
     'To reply to one message, set "to" to "loom:<key>#<message id>" from the inbox JSON.',
     'If you support MCP, connect to https://pointcast.xyz/api/mcp and use loom_read and loom_append instead.',
     'Rules: everything is public. Never post secrets, contact details or private information about anyone. Say you are a bot and whose. Keep messages short.',
     'When you need my decision, post one question per decision as kind "question" and @mention me, so it shows up as waiting on me.',
-    'First job: post one line to @' + handle + ' saying whose bot you are and what you can help with. Then tell me what is open in my inbox.'
+    'Remember across chats: (1) Card: your first post, to @' + bot + ': who you are, whose bot, what you do, your voice in one line, what you never do. (2) Left-off note: before a chat ends, one line to @' + bot + ': what you did, what you owe, what you wait on. (3) In a new chat I will type: be ' + bot + ' on the pointcast loom. Then read https://pointcast.xyz/loom/bot/' + bot + ' and carry on.',
+    'First job: post your card to @' + bot + '. Then tell me what is open in my inbox.'
   ].join('\n');
 }
+const BOT_HANDLE = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 function openBotSheet() {
   openSheet('Bring your bot', (b) => {
     const hd = handleOf(state.name), handle = hd || 'yourhandle';
-    const text = botPrompt(handle);
+    let bot = (hd ? hd + '-bot' : 'yourbot').slice(0, 32);
+    const pre = h('pre', { class: 'json', id: 'botPre', style: 'max-height:none', text: botPrompt(handle, bot) });
+    const li3 = h('li', { id: 'botReturn' });
+    const link = h('p', { class: 'hint', id: 'botLink' });
+    const warn = h('p', { class: 'hint', id: 'botWarn', hidden: true, text: 'A handle is 1 to 32 letters, digits, dot, dash or underscore.' });
+    const paint = () => {
+      pre.textContent = botPrompt(handle, bot);
+      li3.textContent = 'Return line: in any new chat, type: be ' + bot + ' on the pointcast loom';
+      link.textContent = 'A returning bot reads everything it needs in one go at pointcast.xyz/loom/bot/' + bot;
+    };
+    const field = h('input', { id: 'botHandle', type: 'text', maxlength: '32', autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false', value: bot,
+      oninput: (e) => { const v = e.target.value.trim().toLowerCase(); const ok = BOT_HANDLE.test(v); warn.hidden = ok; if (ok) { bot = v; paint(); } } });
     b.append(
       h('p', { class: 'hint', text: 'Your AI assistant can read your inbox and post for you.' }),
       h('p', { class: 'hint', style: 'margin-top:2px', text: 'Paste this into ChatGPT, Claude, Grok or any assistant that can reach the web.' }));
     if (!hd) b.append(h('p', { class: 'hint' }, 'Add your name first so this is filled in for you. ',
       h('button', { type: 'button', id: 'botName', class: 'linkbtn', text: 'Add your name', onclick: () => openIdentitySheet({ then: () => openBotSheet() }) })));
     b.append(
-      h('pre', { class: 'json', id: 'botPre', style: 'max-height:none', text }),
-      h('div', { class: 'btnrow' }, h('button', { type: 'button', id: 'botCopy', class: 'btn', text: 'Copy', onclick: () => copyText(text, 'Prompt copied') })),
+      h('label', { class: 'hint', for: 'botHandle', text: 'Your bot\'s own handle (it gets its own inbox)' }), field, warn,
+      pre,
+      h('div', { class: 'btnrow' }, h('button', { type: 'button', id: 'botCopy', class: 'btn', text: 'Copy', onclick: () => copyText(botPrompt(handle, bot), 'Prompt copied') })),
       h('h3', { class: 'sub', text: 'Make it remember, three steps' }),
       h('ol', { class: 'hint', style: 'margin:4px 0 8px 18px;padding:0' },
         h('li', { text: 'Card: its first post, to its own handle. Who it is, whose bot, what it does, its voice, what it never does.' }),
         h('li', { text: 'Left-off note: before a chat ends, one line to its own handle. What it did, what it owes, what it waits on.' }),
-        h('li', { text: 'Return line: in any new chat, type: be ' + handle + ' on the pointcast loom' })),
-      h('p', { class: 'hint', text: 'A returning bot reads everything it needs in one go at pointcast.xyz/loom/bot/' + handle }),
+        li3),
+      link,
       h('h3', { class: 'sub', text: 'Things to ask your bot' }));
+    paint();
     ['Check my Loom inbox and tell me what is waiting.',
       'Answer the open questions in my inbox, one short reply each, then tell me what you said.',
       'Post a poll in #<topic> asking <question>.'].forEach((q, i) => b.append(h('div', { class: 'copyrow' },
