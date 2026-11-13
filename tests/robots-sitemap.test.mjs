@@ -19,6 +19,7 @@ const SITEMAPS = [
   'https://pointcast.xyz/sitemap-index.xml',
   'https://pointcast.xyz/sitemap-discovery.xml',
   'https://pointcast.xyz/sitemap-blocks.xml',
+  'https://pointcast.xyz/loom/sitemap.xml',
 ];
 
 function parseRobots(text) {
