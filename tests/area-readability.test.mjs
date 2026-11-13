@@ -14,9 +14,9 @@ test('the audit finds no failures on any public page', () => {
   assert.deepEqual(result.failures.map((f) => `[${f.check}] ${f.path}: ${f.detail}`), []);
 });
 
-test('every index.html in the four folders is audited, and there are fifty-three public pages', () => {
+test('every index.html in the four folders is audited, and there are fifty-four public pages', () => {
   const pages = scopePages(ROOT);
-  assert.equal(pages.filter((p) => !p.private).length, 53);
+  assert.equal(pages.filter((p) => !p.private).length, 54);
   assert.equal(result.pages.length, pages.length);
   for (const a of AREAS) assert.ok(pages.some((p) => p.path === a.hub), `${a.hub} is audited`);
 });

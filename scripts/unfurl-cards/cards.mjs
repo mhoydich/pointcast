@@ -106,6 +106,13 @@ export const CARDS = [
     description: seoFor('/baby-bonfire/prayer/').description,
     alt: 'Prayer Fire. A small copper and dark stone hearth with a lit flame in its arched opening, on a linen-covered table in warm brown light.',
   },
+  // Hearth Kit shows the same fire as Prayer Fire: the poster photograph, with the kit's words.
+  {
+    path: '/baby-bonfire/hearth-kit/', area: BB, motif: 'photo', photo: 'public/baby-bonfire/prayer/media/hearth-poster.jpg',
+    headline: ['Hearth Kit'], line: ['One tag puts the fire on a page.', 'Sound comes on a tap.'],
+    description: seoFor('/baby-bonfire/hearth-kit/').description,
+    alt: 'Hearth Kit. A small copper and dark stone hearth with a lit flame in its arched opening, on a linen-covered table in warm brown light.',
+  },
   // A Higher Purpose is a 3D place, so its card draws the island itself in square tiles.
   {
     path: '/baby-bonfire/higher-purpose/', area: BB, kicker: 'BABY BONFIRE', motif: 'island', ld: 'CreativeWork',
