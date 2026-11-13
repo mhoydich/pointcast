@@ -9,7 +9,7 @@ function memoryKv() {
   return { map, get: async (k) => map.get(k) ?? null, put: async (k, v) => { map.set(k, v); } };
 }
 const base = 'https://pointcast.xyz/api/loom';
-const post = (kv, body, opts = {}) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), { kv, ...opts });
+const post = (kv, body, opts = {}) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), { kv, firstHelloEnabled: false, ...opts }); // first-hello is covered in loom-welcome.test.mjs
 const get = async (kv, query) => (await handleLoom(new Request(`${base}${query}`), { kv })).json();
 
 test('addresses canonicalise so spellings of one thing share a log', () => {

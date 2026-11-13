@@ -20,6 +20,7 @@
  */
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
+import { TASK_TOPIC, WELCOME_BUCKET, normalName, pickOpenTask, skipsWelcome, welcomeMarkerKey, welcomeText } from './welcome.mjs';
 
 export const SPEC = 'pointcast.loom/v1';
 export const MAX_OPS = 600;
@@ -124,9 +125,9 @@ async function touchIndex(kv, log, op) {
   await writeJson(kv, 'loom:index', next);
 }
 
+const outboxAddress = (from) => from.address || `@${from.name.toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'anon'}`;
 async function touchOutbox(kv, from, record) {
-  const sender = from.address || `@${from.name.toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'anon'}`;
-  const key = await addressKey(sender);
+  const key = await addressKey(outboxAddress(from));
   const out = await readJson(kv, `loom:out:${key}`, []);
   await writeJson(kv, `loom:out:${key}`, [record, ...out].slice(0, MAX_OUTBOX));
 }
@@ -334,7 +335,45 @@ async function ripple(kv, source, op, now) {
   return reached;
 }
 
-export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '' } = {}) {
+/**
+ * First hello (OFF-36). Runs inside the newcomer's own POST, before their outbox is touched.
+ * Returns the welcome op (already pushed onto `log`) or null. Never throws.
+ * Cap policy: if the board-wide welcome budget is spent we skip WITHOUT marking the name, so a later
+ * first-timer-again post can still be greeted; the cost is that a very late post may be welcomed after all.
+ */
+async function firstHello(kv, { log, op, from, now, limit }) {
+  try {
+    if (log.kind !== 'topic' || skipsWelcome(from.name)) return null;
+    const hash = (await sha(normalName(from.name))).slice(0, 32);
+    if (await kv.get(welcomeMarkerKey(hash))) return null;
+    // Regulars from before this deploy: anything already in their outbox (by address or by name) means known.
+    const mine = await readJson(kv, `loom:out:${await addressKey(outboxAddress(from))}`, []);
+    const byName = await readJson(kv, `loom:out:${await addressKey(outboxAddress({ name: from.name }))}`, []);
+    if (mine.length || byName.length) { await kv.put(welcomeMarkerKey(hash), now); return null; }
+    const cap = await gate(limit, WELCOME_BUCKET, 'board');
+    if (!cap.allowed) return null;
+    // Most recent desk (agent) post: this log first, then the board index.
+    const name = normalName(from.name);
+    let deskAt = null;
+    for (let i = log.ops.length - 1; i >= 0 && !deskAt; i -= 1) {
+      const o = log.ops[i];
+      if (o.op === 'append' && o.from?.kind === 'agent' && normalName(o.from.name) !== name && o.id !== op.id) deskAt = o.at;
+    }
+    if (!deskAt) {
+      const index = await readJson(kv, 'loom:index', []);
+      deskAt = index.filter((e) => e.last?.kind === 'agent' && normalName(e.last?.name) !== name && e.updatedAt).map((e) => e.updatedAt).sort().pop() ?? null;
+    }
+    const bot = from.kind === 'agent';
+    let task = null;
+    if (bot) task = pickOpenTask((await loadLog(kv, TASK_TOPIC)).ops);
+    const body = welcomeText({ bot, deskAt, task, now });
+    await kv.put(welcomeMarkerKey(hash), now);
+    // Deliberately not passed through ripple(): fixed text, no echoes.
+    return pushOp(log, { op: 'append', id: `m_${randomId(5)}`, kind: 'note', from: COLLATOR, parent: op.id, body, cites: [], tags: [], mentions: [], auto: 'first-hello' }, now);
+  } catch { return null; }
+}
+
+export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '', firstHelloEnabled = true } = {}) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   const url = new URL(request.url);
   try {
@@ -430,11 +469,12 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         tags: topics.slice(0, 8), mentions: mentions.slice(0, 8), tokenHash: await sha(token) }, now);
       if (op.parent && !log.ops.some((o) => o.op === 'append' && o.id === op.parent)) op.parent = null;
       const reached = await ripple(kv, log, op, now);
+      const hello = firstHelloEnabled ? await firstHello(kv, { log, op, from, now, limit }) : null;
       await saveLog(kv, log);
       await touchIndex(kv, log, op);
       await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
       const { tokenHash, ...publicOp } = op;
-      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(title ? { title } : {}), ...(truncated ? { truncated: true, bodyMax: BODY_MAX } : {}) }, 201);
+      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(hello ? { welcome: { id: hello.id } } : {}), ...(title ? { title } : {}), ...(truncated ? { truncated: true, bodyMax: BODY_MAX } : {}) }, 201);
     }
 
     const target = parseAddress(body.to);
