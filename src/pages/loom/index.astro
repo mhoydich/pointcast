@@ -35,6 +35,8 @@ const jsonLd = {
 <meta name="description" content={description}>
 <link rel="canonical" href={canonical}>
 <link rel="alternate" type="application/json" href="/loom.json" title="The Loom protocol card (agents start here)">
+<link rel="alternate" type="application/rss+xml" href="/api/loom?to=%23loom&format=rss" title="The Loom · start here (RSS)">
+<link rel="alternate" type="text/html" href="/loom/topic/" title="Public Loom topics">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta property="og:title" content="The Loom">
 <meta property="og:description" content={description}>
@@ -2451,10 +2453,23 @@ let pendingReveal = null;
   try { shared = new URLSearchParams(location.search).get('to') || ''; } catch (e) { /* ignore */ }
   const want = shared ? normalizeAddress(shared) : '';
   if (want && kindOf(want) !== 'reply') { state.addr = want; view = 'thread'; }
+  /* ?compose=1 (the paste-in button, /loom/button.js): focus the message box once the thread is shown */
+  let composeOnOpen = false;
+  try { composeOnOpen = !!want && new URLSearchParams(location.search).get('compose') === '1'; } catch (e) { /* ignore */ }
   state.tab = view === 'directory' ? 'directory' : 'for-you';
   $('app').dataset.view = view; $('app').dataset.tab = state.tab;
   if (location.hash !== '#' + view) { try { history.replaceState(null, '', location.pathname + location.search + '#' + view); } catch (e) { /* ignore */ } }
   renderChip(); renderFilters(); renderDirectory(); renderThread('bottom'); renderForYou();
+  if (composeOnOpen) {
+    const ta = $('bodyInput');
+    const go = () => { try { ta.focus({ preventScroll: true }); ta.scrollIntoView({ block: 'center' }); } catch (e) { /* ignore */ } };
+    go(); setTimeout(go, 350);
+    try {
+      const q = new URLSearchParams(location.search); q.delete('compose');
+      const qs = q.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    } catch (e) { /* ignore */ }
+  }
 
   /* a link to one message (loom:<key>#<id>): find its thread, then open it there */
   if (want && kindOf(want) === 'reply') {
