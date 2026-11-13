@@ -24,6 +24,8 @@ const LIMITS: Record<string, { windowSec: number; maxRequests: number }> = {
   'loom:append:verified': { windowSec: 600, maxRequests: 60 },
   // Per-IP ceiling (2x one sender's budget) behind the per-sender budget, so rotating names cannot flood.
   'loom:append:ip': { windowSec: 600, maxRequests: 24 },
+  // Board-wide ceiling on automatic first-hello replies (OFF-36), so a wave of new names cannot flood.
+  'loom:welcome': { windowSec: 600, maxRequests: 12 },
   'loom:plus': { windowSec: 600, maxRequests: 60 },
 };
 

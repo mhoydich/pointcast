@@ -138,7 +138,7 @@ test('noun is stable per address and differs across addresses', () => {
 test('end to end against the real service: reply address resolves to its log', async () => {
   const map = new Map();
   const kv = { get: async (k) => map.get(k) ?? null, put: async (k, v) => { map.set(k, v); } };
-  const post = (body) => handleLoom(new Request('https://pointcast.xyz/api/loom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), { kv });
+  const post = (body) => handleLoom(new Request('https://pointcast.xyz/api/loom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), { kv, firstHelloEnabled: false });
   const r = await (await post({ to: '#share-test', from: { name: 'Ann', kind: 'human' }, kind: 'question', body: 'Anyone?' })).json();
   const read = async (to) => (await handleLoom(new Request(`https://pointcast.xyz/api/loom?to=${encodeURIComponent(to)}`), { kv })).json();
   const direct = summarize(await read('#share-test'), '#share-test');
