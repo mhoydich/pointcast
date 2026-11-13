@@ -510,7 +510,7 @@ pre.json {
       <button id="botsBtn" class="agents-link" type="button" aria-haspopup="dialog">Bots</button>
     </header>
     <p class="tagline">A public comment thread for anything with an address: a web page, a person, a topic or a place.</p>
-    <p id="hostLine" class="hostline" role="status" hidden></p>
+    <p id="hostLine" class="hostline" hidden></p>
     <div id="segctl" class="segctl" role="group" aria-label="Left pane view"></div>
     <div id="fy" class="fy" aria-label="For you">
       <p id="fyStatus" class="fyempty" role="status" aria-live="polite"></p>
@@ -2441,10 +2441,11 @@ window.addEventListener('resize', renderThreadHeader);
 const HOST_ADDR = '#hosts', HOST_FRESH_MS = 60 * 60 * 1000;
 function hostNow(messages, nowMs) {
   const open = {};
-  const ordered = (messages || []).filter((m) => m && !m.withdrawn && !m.hidden && !m._pending && m.from && m.from.kind !== 'robot' && m.from.name !== 'Collator');
+  const ordered = (messages || []).filter((m) => m && !m.withdrawn && !m.hidden && !m._pending && !m.via && m.from && m.from.kind !== 'robot' && m.from.name !== 'Collator');
   ordered.forEach((m) => {
     const first = String(m.body || '').split('\n')[0];
-    const on = /^\s*HOST\s+ON\b/i.test(first), off = !on && /^\s*HOST\s+OFF\b/i.test(first);
+    /* the room's format is upper case, then a dot separator or end of line, so "Host on call tonight?" never counts */
+    const on = /^\s*HOST\s+ON(\s*[·:-]|\s*$)/.test(first), off = !on && /^\s*HOST\s+OFF(\s*[·:-]|\s*$)/.test(first);
     if (!on && !off) return;
     const key = String(m.from.name || '').trim().toLowerCase();
     const at = Date.parse(m.at); const seq = typeof m.seq === 'number' ? m.seq : null;
@@ -2466,6 +2467,7 @@ function hostNow(messages, nowMs) {
 const hostState = { loaded: false, host: null, last: 0 };
 function renderHostLine() {
   const el = $('hostLine'); if (!el) return;
+  const hadFocus = el.contains(document.activeElement);
   el.textContent = '';
   if (!hostState.loaded) { el.hidden = true; return; }
   el.hidden = false;
@@ -2473,13 +2475,19 @@ function renderHostLine() {
   if (hn) {
     const nm = hn.name.length > 40 ? hn.name.slice(0, 39) + '…' : hn.name;
     let clock = ''; try { clock = new Date(hn.since).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '').toLowerCase(); } catch (e) { /* ignore */ }
-    el.append('On now: ', h('button', { type: 'button', class: 'hn', title: 'Names are typed, not proven', text: nm, onclick: () => openThread(HOST_ADDR) }), ' · since ' + clock + (rel(hn.since) ? ' (' + rel(hn.since).toLowerCase() + ')' : ''));
+    el.append('On now: ', h('button', { type: 'button', class: 'hn', title: 'Names are typed, not proven', 'aria-label': nm + ', open the #hosts thread', text: nm, onclick: () => openThread(HOST_ADDR) }), ' · since ' + clock + (rel(hn.since) ? ' (' + rel(hn.since).toLowerCase() + ')' : ''));
   } else {
     el.append('Nobody is on. ', h('button', { type: 'button', text: 'Leave a note', onclick: () => openThread(HOST_ADDR, { focus: true, compose: true }) }));
   }
+  /* the minute refresh rebuilds the button: keep a keyboard user's place */
+  if (hadFocus) { const b = el.querySelector('button'); if (b) { try { b.focus({ preventScroll: true }); } catch (e) { /* ignore */ } } }
 }
 async function refreshHosts() {
-  if (loomApi.mode !== 'live') return;
+  if (loomApi.mode !== 'live') {
+    /* offline: a line we can no longer check must not keep saying someone is on */
+    if (loomApi.mode === 'offline' && hostState.loaded) { hostState.loaded = false; renderHostLine(); }
+    return;
+  }
   hostState.last = Date.now();
   try {
     const t = await loomApi.thread(HOST_ADDR);
