@@ -17,7 +17,30 @@ type Env = {
   PC_RATES_KV?: KVNamespace;
   AUTH_DB?: D1Database;
   LOOM_ADMIN_KEY?: string;
+  DRUM_COUNTER?: DurableObjectNamespace;
 };
+
+/**
+ * The drum's all-time count for the "drum" magic word (OFF-49), read the same way /api/drum's GET
+ * reads it (functions/api/drum.ts): the DrumCounter Durable Object first, then the legacy
+ * VISITS `drum:total` key. Read-only; null when neither answers.
+ */
+async function drumCount(env: Env): Promise<number | null> {
+  if (env.DRUM_COUNTER) {
+    try {
+      const res = await env.DRUM_COUNTER.get(env.DRUM_COUNTER.idFromName('global')).fetch('https://drum-counter.internal/', { method: 'GET' });
+      if (res.ok) {
+        const data = (await res.json()) as { globalTotal?: unknown };
+        if (typeof data.globalTotal === 'number' && Number.isFinite(data.globalTotal)) return data.globalTotal;
+      }
+    } catch { /* fall through to KV */ }
+  }
+  if (env.VISITS) {
+    const raw = await env.VISITS.get('drum:total');
+    if (raw !== null && Number.isFinite(Number(raw))) return Number(raw);
+  }
+  return null;
+}
 
 const LIMITS: Record<string, { windowSec: number; maxRequests: number }> = {
   'loom:append': { windowSec: 600, maxRequests: 12 },
@@ -44,6 +67,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     kv: env.PC_LOOM_KV ?? env.VISITS ?? null,
     verifiedAgent,
     adminKey: env.LOOM_ADMIN_KEY ?? '',
+    drumCount: () => drumCount(env),
     // Full result ({ allowed, retryAfter }) so refusals can say when to retry; clientId keys the per-sender budget.
     limit: async (bucket: string, clientId?: string) => rateLimit(request, env, { bucket, clientId, ...(LIMITS[bucket] ?? { windowSec: 600, maxRequests: 30 }) }),
   });

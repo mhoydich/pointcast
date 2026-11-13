@@ -390,6 +390,17 @@ a { color: var(--signal); }
 .msg .kindword, .msg time, .msg .edited { font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); }
 .msg time { margin-left: auto; }
 .msg .text { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* magic words (OFF-49): the fact line is plain text; effects wait for a tap and obey the one switch */
+.msg.shout .text { font: 600 clamp(22px, 6vw, 32px)/1.2 var(--f-body); }
+.magic { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 6px 0 0; font: 400 12px/1.4 var(--f-mono); color: var(--ink-2); }
+.magic .die { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 4px; border: 1px solid var(--rule); color: var(--ink); font: 600 14px/1 var(--f-mono); }
+.magic button.die::after { content: ""; position: absolute; inset: -8px; }
+.magic button.tapfx { position: relative; color: var(--signal); text-decoration: underline; text-underline-offset: 2px; font: inherit; }
+.magic button.tapfx::after { content: ""; position: absolute; inset: -12px -6px; }
+@media (prefers-reduced-motion: no-preference) {
+  .magic .die.rolling { animation: roll .5s ease-out; }
+  @keyframes roll { 0% { transform: rotate(0); } 60% { transform: rotate(300deg) scale(1.15); } 100% { transform: rotate(360deg); } }
+}
 .msg .via { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
 .msg .via .linkbtn { position: relative; }
 .msg .via .linkbtn::after { content: ""; position: absolute; inset: -12px -4px; }
@@ -704,9 +715,27 @@ function normMsg(m) {
     via: m.via || null, plus: m.plus || 0, depth: m.depth || 0, replies: m.replies || 0, parent: m.parent || null,
     edited: !!(m.edited || m.editedAt), withdrawn: !!(m.withdrawn || m.withdrawnAt),
     poll: m.poll ? normPoll(m.poll, m.body) : null,
-    media: m.media && typeof m.media === 'object' ? { url: String(m.media.url || ''), alt: String(m.media.alt || '') } : null
+    media: m.media && typeof m.media === 'object' ? { url: String(m.media.url || ''), alt: String(m.media.alt || '') } : null,
+    magic: normMagic(m.magic)
   };
 }
+/* magic (OFF-49): only the server sets it; keep only the shape each word is known to have */
+const MAGIC_WORDS = ['shout', 'dice', 'time', 'drum', 'noun'];
+const mstr = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+function normMagic(g) {
+  if (!g || typeof g !== 'object' || MAGIC_WORDS.indexOf(g.word) < 0) return null;
+  const v = g.value, at = mstr(g.at, 40);
+  if (g.word === 'shout') return { word: 'shout' };
+  if (g.word === 'dice') return Number.isInteger(v) && v >= 1 && v <= 6 ? { word: 'dice', value: v, at } : null;
+  if (g.word === 'drum') return { word: 'drum', value: typeof v === 'number' && isFinite(v) && v >= 0 ? Math.floor(v) : null, at };
+  if (g.word === 'time') return v && typeof v === 'object' && mstr(v.newYork, 12) ? { word: 'time', value: { newYork: mstr(v.newYork, 12), utc: mstr(v.utc, 8) }, at } : null;
+  if (!v || typeof v !== 'object') return null;
+  const n = {}; ['background', 'body', 'accessory', 'head', 'glasses'].forEach((k) => { n[k] = mstr(v[k], 60); });
+  return n.head ? { word: 'noun', value: n, at } : null;
+}
+/* same rule as the server: the first line, trimmed and lowercased, is the word alone */
+const magicWordOf = (body) => { const w = String(body || '').split('\n')[0].trim().toLowerCase(); return MAGIC_WORDS.indexOf(w) >= 0 ? w : null; };
+const liveMagic = (m) => (m.magic && magicWordOf(m.body) === m.magic.word ? m.magic : null);
 function normThread(j, addr) {
   const log = j.log || {};
   if (typeof log.address === 'string' && log.address && normalizeAddress(log.address) === log.address) addr = log.address;
@@ -819,6 +848,7 @@ const state = {
   waitingCount: 0,
   expanded: {},
   hideEchoes: false,
+  magicOn: true,      // Magic words: effects on (facts always show)
   playN: null,       // replay: show only the first N messages (null = all)
   filter: 'all',
   openOnly: false,
@@ -846,6 +876,7 @@ const state = {
     Object.keys(classic).forEach((id) => { if (/^m_[0-9a-z]+$/.test(id) && typeof classic[id] === 'string' && !hasOwn(state.sent, id)) state.sent[id] = classic[id]; });
   } catch (e) { /* ignore */ }
   state.hideEchoes = store.get('hideEchoes') === '1';
+  state.magicOn = store.get('magic') !== '0';
   try { state.voted = JSON.parse(store.get('voted') || '{}') || {}; } catch (e) { state.voted = {}; }
 })();
 const persistSent = () => { if (loomApi.mode === 'live') store.set('sent', JSON.stringify(state.sent)); };
@@ -1199,8 +1230,9 @@ function renderMessage(t, m) {
   }
   const long = !m.poll && (m.body.length > 480 || m.body.split('\n').length > 8);
   const collapsed = long && !state.expanded[m.id] && !m._pending;
+  const magic = liveMagic(m);
   return h('article', {
-    class: 'msg' + (m.depth >= 1 ? ' d1' : '') + (qs ? ' q' : '') + (m._pending ? ' pending' : ''),
+    class: 'msg' + (m.depth >= 1 ? ' d1' : '') + (qs ? ' q' : '') + (m._pending ? ' pending' : '') + (magic && magic.word === 'shout' && state.magicOn ? ' shout' : ''),
     id: 'msg-' + m.id, 'data-id': m.id
   },
     h('div', { class: 'mh' },
@@ -1215,6 +1247,7 @@ function renderMessage(t, m) {
     m.poll ? renderPoll(m) : h('p', { class: 'text' + (collapsed ? ' clamp' : '') }, linkify(m.body)),
     long ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'expand', 'aria-expanded': String(!collapsed), text: collapsed ? 'Show more' : 'Show less' }) : null,
     m.media && m.media.url ? renderMedia(m.media) : null,
+    magic ? renderMagic(magic) : null,
     (qs === 'open' && state.addr[0] === '@' && Date.now() - Date.parse(m.at) > 1800000 && !m._pending)
       ? h('p', { class: 'via carry' }, 'No answer yet. ', h('button', { type: 'button', class: 'linkbtn', 'data-act': 'carry', text: 'Carry it over' })) : null,
     h('div', { class: 'acts' },
@@ -1225,6 +1258,55 @@ function renderMessage(t, m) {
 function renderMedia(md) {
   if (loomApi.mode === 'live' && /^https:\/\//i.test(md.url)) return h('img', { class: 'mimg', src: md.url, alt: md.alt, loading: 'lazy', referrerpolicy: 'no-referrer' });
   return h('div', { class: 'imgph' }, h('span', { class: 'tag', text: 'Image' }), md.alt);
+}
+/* The fact line is plain text and always shows; the die and the drum count become tap targets
+   only while Magic words is on. Nothing moves or sounds until the reader taps. */
+function magicClock(iso) {
+  const d = new Date(iso);
+  if (!iso || isNaN(d)) return 'just now';
+  try { return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return d.toISOString().slice(11, 16) + ' UTC'; }
+}
+function renderMagic(g) {
+  const fx = state.magicOn;
+  if (g.word === 'shout') return null;
+  if (g.word === 'dice') {
+    const face = fx ? h('button', { type: 'button', class: 'die', 'data-act': 'magic', 'aria-label': 'Rolled a ' + g.value + '. Tap to see it roll', text: String(g.value) })
+      : h('span', { class: 'die', 'aria-hidden': 'true', text: String(g.value) });
+    return h('p', { class: 'magic', 'data-magic': 'dice' }, face, h('span', { text: 'rolled a ' + g.value + ' · by the Loom server, ' + magicClock(g.at) }));
+  }
+  if (g.word === 'time') {
+    return h('p', { class: 'magic', 'data-magic': 'time', text: g.value.newYork + ' in New York · ' + (g.value.utc ? g.value.utc + ' UTC · ' : '') + 'from the Loom server clock' });
+  }
+  if (g.word === 'drum') {
+    if (g.value == null) return h('p', { class: 'magic', 'data-magic': 'drum', text: 'the drum’s count was out of reach · ' + magicClock(g.at) });
+    const count = g.value.toLocaleString('en-US') + ' drum hits';
+    return h('p', { class: 'magic', 'data-magic': 'drum' },
+      fx && audioCtor() ? h('button', { type: 'button', class: 'tapfx', 'data-act': 'magic', 'aria-label': count + '. Tap for a drum sound', text: count }) : h('span', { text: count }),
+      h('span', { text: '· read by the Loom server at ' + magicClock(g.at) }));
+  }
+  const n = g.value, part = (x) => String(x || '').replace(/^(body|accessory|head|glasses)-/, '').replace(/-/g, ' ');
+  /* trait names only; drawing the pixels is a follow-up (a small server route over src/lib/nouns-parts.mjs) */
+  return h('p', { class: 'magic', 'data-magic': 'noun', text: 'noun: ' + [part(n.head) + ' head', part(n.glasses) + ' glasses', part(n.body) + ' body', part(n.accessory) + ' accessory', n.background + ' background'].join(', ') + ' · made from this name by the Loom server' });
+}
+const audioCtor = () => (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) || null;
+let magicAudio = null;
+function drumSound() {
+  const C = audioCtor(); if (!C) return;
+  try {
+    magicAudio = magicAudio || new C();
+    const ctx = magicAudio, t0 = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.setValueAtTime(160, t0); osc.frequency.exponentialRampToValueAtTime(48, t0 + 0.14);
+    gain.gain.setValueAtTime(0.5, t0); gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+    osc.connect(gain); gain.connect(ctx.destination); osc.start(t0); osc.stop(t0 + 0.2);
+  } catch (e) { /* no sound is fine; the count is the fact */ }
+}
+function playMagic(m, btn) {
+  const g = liveMagic(m);
+  if (!g || !state.magicOn) return;
+  if (g.word === 'dice') {
+    btn.classList.remove('rolling'); void btn.offsetWidth; btn.classList.add('rolling');
+    btn.addEventListener('animationend', () => btn.classList.remove('rolling'), { once: true });
+  } else if (g.word === 'drum') drumSound();
 }
 function renderPoll(m) {
   const p = m.poll;
@@ -1391,6 +1473,8 @@ function openThreadMenu() {
       h('button', { type: 'button', class: 'opt', text: 'Who is here', onclick: () => openWhoSheet() }),
       h('button', { type: 'button', class: 'opt', 'aria-pressed': String(state.hideEchoes), text: 'Hide echoes',
         onclick: () => { state.hideEchoes = !state.hideEchoes; store.set('hideEchoes', state.hideEchoes ? '1' : '0'); closeSheet(); renderThread('keep'); } }),
+      h('button', { type: 'button', class: 'opt', id: 'magicSwitch', 'aria-pressed': String(state.magicOn), text: 'Magic words: ' + (state.magicOn ? 'on' : 'off'),
+        onclick: () => { state.magicOn = !state.magicOn; store.set('magic', state.magicOn ? '1' : '0'); closeSheet(); renderThread('keep'); } }),
       h('a', { class: 'opt', href: base, target: '_blank', rel: 'noopener noreferrer', text: 'JSON' }),
       h('a', { class: 'opt', href: base + '&format=rss', target: '_blank', rel: 'noopener noreferrer', text: 'RSS' }),
       h('a', { class: 'opt', href: base + '&format=as2', target: '_blank', rel: 'noopener noreferrer', text: 'ActivityStreams' }),
@@ -2369,6 +2453,7 @@ $('msgs').addEventListener('click', (e) => {
   else if (act === 'more') openMessageSheet(m);
   else if (act === 'carry') copyText(carryText(t, m), t.addr.toLowerCase() === myHandle() ? 'Copied. Paste it into your assistant.' : 'Copied. Paste it into the assistant for ' + t.addr + '.');
   else if (act === 'expand') { state.expanded[m.id] = !state.expanded[m.id]; renderThread('keep'); }
+  else if (act === 'magic') playMagic(m, btn);
 });
 $('backBtn').addEventListener('click', () => { setView(state.tab); focusCurrentRow(); });
 $('playBtn').addEventListener('click', () => { if (playTimer) { stopPlay(); state.playN = null; renderMessages('bottom'); renderPlaybar(); } else startPlay(); });
