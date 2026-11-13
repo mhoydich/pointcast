@@ -7,8 +7,11 @@
  */
 import { loomShareResponse, type LoomShareEnv } from '../_lib/loom-share';
 
-export const onRequestGet: PagesFunction<LoomShareEnv> = async ({ request, env, next }) => {
+const handle: PagesFunction<LoomShareEnv> = async ({ request, env, next }) => {
   const page = await next();
   if (!new URL(request.url).searchParams.has('to')) return page;
   return loomShareResponse(page, request, env);
 };
+
+export const onRequestGet = handle;
+export const onRequestHead = handle;

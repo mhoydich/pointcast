@@ -43,17 +43,23 @@ export async function loomShareResponse(page: Response, request: Request, env: L
       .on('head', {
         element(e) {
           e.onEndTag((end) => {
-            end.before([
-              `<meta property="og:image" content="${attr(m.image)}">`,
-              `<meta property="og:image:width" content="${m.imageWidth}">`,
-              `<meta property="og:image:height" content="${m.imageHeight}">`,
-              `<meta property="og:image:alt" content="${attr(m.imageAlt)}">`,
+            const tags = [
               `<meta name="twitter:title" content="${attr(m.title)}">`,
               `<meta name="twitter:description" content="${attr(m.description)}">`,
-              `<meta name="twitter:image" content="${attr(m.image)}">`,
-              `<meta name="twitter:image:alt" content="${attr(m.imageAlt)}">`,
-              `<link rel="alternate" type="application/rss+xml" href="${attr(m.rss)}" title="${attr(m.rssTitle)}">`,
-            ].join(''), { html: true });
+            ];
+            if (m.image) {
+              tags.push(
+                `<meta property="og:image" content="${attr(m.image)}">`,
+                `<meta property="og:image:width" content="${m.imageWidth}">`,
+                `<meta property="og:image:height" content="${m.imageHeight}">`,
+                `<meta property="og:image:alt" content="${attr(m.imageAlt)}">`,
+                `<meta name="twitter:image" content="${attr(m.image)}">`,
+                `<meta name="twitter:image:alt" content="${attr(m.imageAlt)}">`,
+              );
+            }
+            if (m.noindex) tags.push('<meta name="robots" content="noindex">');
+            else tags.push(`<link rel="alternate" type="application/rss+xml" href="${attr(m.rss)}" title="${attr(m.rssTitle)}">`);
+            end.before(tags.join(''), { html: true });
           });
         },
       })

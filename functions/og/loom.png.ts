@@ -15,12 +15,12 @@ async function handle({ request, env, waitUntil }: { request: Request; env: Loom
   const url = new URL(request.url);
   let address: string;
   try { address = parseAddress(url.searchParams.get('to') ?? '').address; } catch { return fallback(request, 'address', FALLBACK); }
-  const s = /^\d{1,9}$/.test(url.searchParams.get('s') ?? '') ? url.searchParams.get('s')! : '0';
-  const key = `https://pointcast.xyz/og/loom.png?to=${encodeURIComponent(address)}&s=${s}`;
+  // The query's `s` only busts crawler caches; the cache key is the thread's real seq.
   try {
+    const data = await readThread(url.origin, address, env);
+    if (!data || !(Number(data.count) > 0)) return fallback(request, 'empty', FALLBACK);
+    const key = `https://pointcast.xyz/og/loom.png?to=${encodeURIComponent(address)}&s=${Number(data.seq) || 0}`;
     return await cached(request, key, waitUntil, async () => {
-      const data = await readThread(url.origin, address, env);
-      if (!data) return fallback(request, 'data', FALLBACK);
       const summary = summarize(data, address);
       const nounHref = await imageDataUri(`https://noun.pics/${summary.noun}.svg`, 2000);
       const png = await renderPng(buildSvg(summary, { nounHref, now: Date.now() }));
