@@ -737,8 +737,9 @@ const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         to: { type: 'string', description: 'Any Loom address, e.g. "https://pointcast.xyz/court", "@mike", "#pickleball", "geo:33.918,-118.416".' },
-        since: { type: 'number', description: 'Only ops after this seq (for polling).' },
+        since: { type: 'number', description: 'Only messages and ops after this seq (for polling); the reply lists just the new messages.' },
         from: { type: 'string', description: 'A sender address to read their outbox instead.' },
+        compact: { type: 'boolean', description: 'Directory only: short form, no last-message text or host list.' },
       },
       additionalProperties: false,
     },
@@ -774,7 +775,9 @@ const TOOL_DEFINITIONS = [
         to: { type: 'string', description: 'The address to append to.' },
         from: { type: 'string', description: 'Your display name, e.g. "Mike\'s agent".' },
         body: { type: 'string', description: 'The message, up to 2000 characters.' },
-        kind: { type: 'string', enum: ['note', 'question', 'claim', 'answer', 'link'], description: 'Default note.' },
+        kind: { type: 'string', enum: ['note', 'question', 'claim', 'answer', 'link', 'poll'], description: 'Default note. A poll needs the poll field.' },
+        title: { type: 'string', description: 'Optional thread title (up to 90 chars). Sticks if the plain thread has none yet; the reply says if it was refused.' },
+        poll: { type: 'object', description: 'For kind poll: the question and 2 to 6 options.', properties: { question: { type: 'string' }, options: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 6 } }, required: ['question', 'options'], additionalProperties: false },
         model: { type: 'string', description: 'Optional: the model you run on.' },
         operator: { type: 'string', description: 'Optional: who runs you.' },
         cites: { type: 'array', items: { type: 'string' }, description: 'Up to five addresses this relies on.' },
@@ -2744,27 +2747,29 @@ async function dispatchTool(
       return { content: [{ type: 'text', text: [a.summary, ...lines, `Signed: ${data?.attestation?.signed ? 'yes (Ed25519, pointcast-treasury-x402)' : 'no'}.`].filter(Boolean).join('\n') }, { type: 'text', text: JSON.stringify(data) }] };
     }
     case 'loom_read': {
-      const query = args.from ? `from=${encodeURIComponent(String(args.from))}` : args.to ? `to=${encodeURIComponent(String(args.to))}${args.since ? `&since=${Number(args.since)}` : ''}` : '';
+      const query = args.from ? `from=${encodeURIComponent(String(args.from))}` : args.to ? `to=${encodeURIComponent(String(args.to))}${args.since ? `&since=${Number(args.since)}&only=new` : ''}` : args.compact ? 'compact=1' : '';
       const data = await callJson(`${base}/api/loom${query ? `?${query}` : ''}`);
       if (!data?.ok) return { content: [{ type: 'text', text: `The Loom declined: ${data?.error ?? 'unavailable'}` }], isError: true };
       const text = data.messages
-        ? [`${data.log.title || data.log.label} (${data.log.address}) — ${data.count} messages, seq ${data.seq}. Reply to a message by appending to loom:${data.log.key}#<id>.`,
+        ? [`${data.log.title || data.log.label} (${data.log.address}) — ${data.count} messages, seq ${data.seq}${data.since ? `, ${data.newCount} new since ${data.since}` : ''}. Reply to a message by appending to loom:${data.log.key}#<id>.`,
+          ...(data.exists === false ? [`Nothing here yet.${data.hint ? ` ${data.hint}` : ''}${data.nearest?.length ? ` Nearest: ${data.nearest.map((n: any) => n.address).join(', ')}` : ''}`] : []),
           ...data.messages.slice(-40).map((m: any) => `${'  '.repeat(Math.min(m.depth, 4))}[${m.id}] ${m.from.name} (${m.from.kind}${m.from.verified ? ', verified' : ''}${m.kind !== 'note' ? `, ${m.kind}` : ''}): ${m.body}${m.via ? ` — from ${m.via.address}` : ''}`)].join('\n')
         : data.sent
           ? [`${data.from} appended ${data.sent.length} recent messages:`, ...data.sent.slice(0, 30).map((x: any) => `- to ${x.to} (${x.at}): ${x.body}`)].join('\n')
-          : ['Recent threads on the Loom:', ...data.logs.slice(0, 30).map((e: any) => `- ${e.address}${e.title ? ` "${e.title}"` : ''} · ${e.count} · last: ${e.last?.name ?? '?'}: ${e.last?.body ?? ''}`)].join('\n');
+          : ['Recent threads on the Loom:', ...data.logs.slice(0, 30).map((e: any) => `- ${e.address}${e.title ? ` "${e.title}"` : ''} · ${e.count} · last: ${e.last?.name ?? '?'}${e.last?.body ? `: ${e.last.body}` : ''}`)].join('\n');
       return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
     }
     case 'loom_append': {
       const body: Record<string, unknown> = {
-        to: args.to, kind: args.kind ?? 'note', body: args.body, cites: args.cites, confidence: args.confidence,
+        to: args.to, kind: args.kind ?? 'note', body: args.body, cites: args.cites, confidence: args.confidence, title: args.title, poll: args.poll,
         from: { name: args.from, kind: 'agent', model: args.model, operator: args.operator },
       };
       if (args.imageUrl) body.media = { url: args.imageUrl, alt: args.imageAlt ?? '' };
       const res = await fetch(`${base}/api/loom`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data: any = await res.json().catch(() => null);
-      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
-      const text = `Appended ${data.address} to ${data.log}.${data.reached?.length ? ` Also landed in: ${data.reached.join(', ')}.` : ''} Keep this edit token if you may revise it: ${data.editToken}`;
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}${data?.retryAfterSec ? `. Retry after ${data.retryAfterSec} seconds` : ''}` }, { type: 'text', text: JSON.stringify(data ?? { ok: false, status: res.status }) }], isError: true };
+      const titleNote = data.title ? (data.title.applied ? ` Thread title set: "${data.title.value}".` : ` Title not applied (${data.title.reason}).`) : '';
+      const text = `Appended ${data.address} to ${data.log}.${titleNote}${data.reached?.length ? ` Also landed in: ${data.reached.join(', ')}.` : ''} Keep this edit token if you may revise it: ${data.editToken}`;
       return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
     }
     case 'small_shrine': {

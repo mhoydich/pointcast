@@ -165,3 +165,105 @@ test('whole-thread reads may be cached briefly; live polls never are', async () 
   assert.equal(full.headers.get('cache-control'), 'public, max-age=10');
   assert.equal(poll.headers.get('cache-control'), 'no-store');
 });
+
+const alice = { name: 'Ana', kind: 'human' };
+// A counting limiter shaped like functions/api/loom.ts: per (bucket, clientId) fixed budget.
+const countingLimit = (max, ipMax = 1000) => { const seen = new Map(); return async (bucket, clientId = 'ip') => {
+  const k = `${bucket}:${clientId}`; const n = (seen.get(k) ?? 0) + 1; seen.set(k, n);
+  return { allowed: n <= (bucket === 'loom:append:ip' ? ipMax : max), retryAfter: 42 };
+}; };
+
+test('A: a refused append says when to retry, in the body and in Retry-After', async () => {
+  const kv = memoryKv();
+  const res = await post(kv, { to: '#t', from: alice, body: 'x' }, { limit: async () => ({ allowed: false, retryAfter: 37 }) });
+  assert.equal(res.status, 429);
+  assert.equal(res.headers.get('retry-after'), '37');
+  assert.equal((await res.json()).retryAfterSec, 37);
+  const legacy = await post(kv, { to: '#t', from: alice, body: 'x' }, { limit: async () => false });
+  assert.equal((await legacy.json()).retryAfterSec, 60);
+});
+
+test('B: budgets are per sender; one sender hits its own limit, another is untouched', async () => {
+  const kv = memoryKv();
+  const limit = countingLimit(2);
+  const as = (name, operator) => post(kv, { to: '#t', from: { name, kind: 'agent', operator }, body: 'hi' }, { limit });
+  assert.equal((await as('Bot A', 'op')).status, 201);
+  assert.equal((await as('bot a', 'OP')).status, 201); // same sender, case-insensitive
+  assert.equal((await as('Bot A', 'op')).status, 429);
+  assert.equal((await as('Bot B', 'op')).status, 201);
+  // rotating names still hits the per-IP ceiling
+  const flood = countingLimit(99, 2);
+  const names = [];
+  for (const n of ['x1', 'x2', 'x3']) names.push((await post(kv, { to: '#t', from: { name: n, kind: 'human' }, body: 'hi' }, { limit: flood })).status);
+  assert.deepEqual(names, [201, 201, 429]);
+  // verified agents are keyed on their id
+  const seen = [];
+  await post(kv, { to: '#t', from: alice, body: 'v' }, { verifiedAgent: 'pci_x', limit: async (b, c) => { seen.push([b, c]); return true; } });
+  assert.deepEqual(seen, [['loom:append:verified', 'pci_x']]);
+});
+
+test('C: a late title sticks on an untitled log; otherwise it is refused with a reason', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#late', from: alice, body: 'first' });
+  const late = await (await post(kv, { to: '#late', from: alice, body: 'second', title: 'Named late' })).json();
+  assert.deepEqual(late.title, { applied: true, value: 'Named late' });
+  assert.equal((await get(kv, '?to=%23late')).log.title, 'Named late');
+  const again = await (await post(kv, { to: '#late', from: alice, body: 'third', title: 'Other' })).json();
+  assert.deepEqual(again.title, { applied: false, reason: 'title_already_set' });
+  const reply = await (await post(kv, { to: late.address, from: alice, body: 'r', title: 'On reply' })).json();
+  assert.deepEqual(reply.title, { applied: false, reason: 'title_on_reply' });
+  const seed = await (await post(kv, { to: '#loom', from: alice, body: 's', title: 'Mine' })).json();
+  assert.equal(seed.title.applied, false);
+  assert.equal((await get(kv, '?to=%23loom')).log.title, 'The Loom — start here');
+  assert.equal((await (await post(kv, { to: '#none', from: alice, body: 'n' })).json()).title, undefined);
+});
+
+test('D: a question with an image stays a question and keeps the image', async () => {
+  const kv = memoryKv();
+  const media = { url: 'https://pointcast.xyz/a.png', alt: 'a court' };
+  const q = await (await post(kv, { to: '#t', from: alice, kind: 'question', body: 'Is this court open?', media })).json();
+  assert.equal(q.message.kind, 'question');
+  assert.equal(q.message.media.url, media.url);
+  assert.equal((await (await post(kv, { to: '#t', from: alice, kind: 'note', body: 'look', media })).json()).message.kind, 'image');
+  assert.equal((await (await post(kv, { to: '#t', from: alice, body: 'look', media })).json()).message.kind, 'image');
+});
+
+test('E: reading a never-written address says so and offers nearest real names', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: 'https://pointcast.xyz/court', from: alice, body: 'dry' });
+  await post(kv, { to: '@court', from: alice, body: 'inbox' });
+  await post(kv, { to: '#courts', from: alice, body: 'topic' });
+  const miss = await get(kv, `?to=${encodeURIComponent('https://pointcast.xyz/courts')}`);
+  assert.equal(miss.exists, false);
+  assert.equal(miss.count, 0);
+  assert.equal(miss.nearest[0].address, 'https://pointcast.xyz/court');
+  assert.ok(miss.nearest.every((n) => n.kind !== 'handle'));
+  assert.ok(miss.hint);
+  const handle = await get(kv, '?to=%40courts');
+  assert.deepEqual(handle.nearest.map((n) => n.address), ['@court']);
+  const hit = await get(kv, `?to=${encodeURIComponent('https://pointcast.xyz/court')}`);
+  assert.equal(hit.exists, true);
+  assert.equal(hit.nearest, undefined);
+  assert.equal((await get(kv, '?to=%23loom')).exists, true);
+});
+
+test('G: only=new returns just newer messages; plain since keeps the whole thread; compact directory', async () => {
+  const kv = memoryKv();
+  for (const b of ['one', 'two', 'three']) await post(kv, { to: 'https://example.com/p', from: alice, body: `${b} http://example.org/x` });
+  const q = `?to=${encodeURIComponent('https://example.com/p')}`;
+  const full = await get(kv, `${q}&since=1`);
+  assert.equal(full.messages.length, 3); // page contract: whole folded thread
+  assert.equal(full.since, 1);
+  const only = await get(kv, `${q}&since=1&only=new`);
+  assert.deepEqual(only.messages.map((m) => m.body.split(' ')[0]), ['two', 'three']);
+  assert.equal(only.count, 3);
+  assert.equal(only.newCount, 2);
+  const dir = await get(kv, '?compact=1');
+  assert.ok(dir.logs.length > 0 && dir.logs.every((e) => !e.last || e.last.body === undefined));
+  assert.equal(dir.network.hosts, undefined);
+  const short = await get(kv, '?short=1');
+  assert.equal(short.network.hosts, undefined);
+  const normal = await get(kv, '');
+  assert.ok(normal.network.hosts.length > 0);
+  assert.ok(normal.logs.some((e) => e.last?.body));
+});
