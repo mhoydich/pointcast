@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { summarize, buildSvg } from '../src/lib/loom/share-card.mjs';
+import { summarize, buildSvg, fitLoomTitle, titleWidth } from '../src/lib/loom/share-card.mjs';
 import { ROOMS } from '../src/lib/loom/noun-card.mjs';
 import { NOUN_PARTS } from '../src/lib/loom/noun-data.mjs';
 
@@ -68,4 +68,47 @@ test('inbox cards carry counts only, never text or names; default cards carry no
   assert.match(inbox, /1 MESSAGE/);
   assert.doesNotMatch(card('#work'), /stranger words|Stranger/);
   assert.doesNotMatch(card('#anything'), /stranger words|Stranger/);
+});
+
+const titleSize = (svg) => Number(svg.match(/font-size="(\d+)" font-weight="800"/)[1]);
+const COLUMN = 810 - 32 - 80; // window left edge, less the margin, less the text x
+
+test('the title shrinks for a long room name instead of being cut, and never reaches the Noun window', () => {
+  const short = card('#officenoun');
+  const long = card('#officenoun-tasks');
+  assert.equal(titleSize(short), 84);
+  assert.ok(titleSize(long) < titleSize(short), `long title stayed at ${titleSize(long)}`);
+  assert.match(long, />#officenoun-tasks<\/text>/);
+  assert.doesNotMatch(long, /#officenoun-tas\u2026/);
+  for (const name of ['#officenoun-tasks', '#best-practices', '@uofelsegundo', '#officenoun', 'Notes from the long afternoon at the El Segundo courts', 'W'.repeat(60), 'some-very-long-subdomain.example-publishing-house.co.uk']) {
+    const t = fitLoomTitle(name);
+    assert.ok(t.lines.length >= 1 && t.lines.length <= 2, name);
+    for (const line of t.lines) assert.ok(80 + titleWidth(line, t.size) <= 810 - 32, `${name}: "${line}" at ${t.size}`);
+    assert.ok(t.lines.every((l) => titleWidth(l, t.size) <= COLUMN));
+  }
+});
+
+test('a title is cut only at the floor size, and a long URL thread still shows its host only', () => {
+  const fits = fitLoomTitle('#a-rather-long-room-name-here');
+  assert.equal(fits.truncated, false);
+  assert.ok(fits.size >= 36 && fits.size < 84);
+  const cut = fitLoomTitle('x'.repeat(200));
+  assert.equal(cut.size, 36);
+  assert.equal(cut.truncated, true);
+  assert.equal(cut.lines.length, 2);
+  assert.ok(cut.lines[1].endsWith('\u2026'));
+  const addr = 'https://www.some-very-long-subdomain.example-publishing-house.co.uk/secret/path/words?q=1';
+  const svg = card(addr, 'url');
+  assert.doesNotMatch(svg, /secret|path\/words|q=1/);
+  assert.equal(titleSize(svg), 36);
+});
+
+test('title and label are XML-escaped', () => {
+  const trusted = { name: 'Mike', kind: 'human', verified: true };
+  const data = api('#esc', 'topic', [msg({ from: trusted, body: 'a <b> & "c"' })]);
+  data.log.title = 'Tom & "Jerry" <script>';
+  const svg = buildSvg(summarize(data, '#esc'), { now: Date.parse('2026-11-13T12:00:00Z') });
+  assert.doesNotMatch(svg, /<script>|& "/);
+  assert.match(svg, /Tom &amp; &quot;Jerry&quot; &lt;script&gt;/);
+  assert.match(svg, /aria-label="Tom &amp; &quot;Jerry&quot; &lt;script&gt; on the Loom/);
 });

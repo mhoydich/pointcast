@@ -11,7 +11,7 @@
  * the thread title: log.title is typed by whoever posted first, so it is used
  * only when that first poster is trusted; otherwise the address label stands.
  */
-import { clean, esc, fitTitle, heavy, wrap } from '../unfurl/cards.mjs';
+import { clean, esc, heavy, wrap } from '../unfurl/cards.mjs';
 import { nounForPath } from '../unfurl/rooms.mjs';
 import { parseAddress } from './address.mjs';
 import { nounBackground, nounRecipe, nounRects } from './noun-card.mjs';
@@ -141,6 +141,81 @@ export function summarize(apiJson, address) {
 
 const enc = encodeURIComponent;
 
+// The text column: x=80 up to the Noun window's left edge (810) less a margin. Nothing in it may pass TEXT_RIGHT.
+const TEXT_X = 80;
+const WINDOW_X = 810;
+const TEXT_RIGHT = WINDOW_X - 32;
+const TITLE_SIZES = [84, 76, 68, 60, 54, 48, 42, 36];
+const TITLE_FLOOR = TITLE_SIZES.at(-1);
+const TITLE_TWO_LINE_MAX = 60; // two lines above this push the last-post line into the dry line at the foot
+
+/** Advance of one glyph in em, Inter, rounded up so the estimate errs wide. */
+function glyphEm(ch) {
+  if (ch === '\u2026') return 0.9;
+  if (/[iIjl.,:;'|!\u2019\u00B7 ]/.test(ch)) return 0.32;
+  if (/[frt()\-\u2013/\\]/.test(ch)) return 0.42;
+  if (/[mwMW@%\u2014\u00C6\u00E6\u0152\u0153]/.test(ch)) return 1;
+  if (/[0-9#$+=~_?<>&]/.test(ch)) return 0.68;
+  if (ch !== ch.toLowerCase()) return 0.78; // capitals, accented ones included
+  return 0.62;
+}
+
+/** Estimated drawn width in px of a title line at `size` (letter-spacing -2, plus the heavy stroke). */
+export function titleWidth(text, size) {
+  let em = 0;
+  for (const ch of String(text)) em += glyphEm(ch);
+  return Math.max(0, em * size - 2 * [...String(text)].length + size * 0.045);
+}
+
+/** Greedy wrap by estimated width. Returns null when a single word is wider than the column. */
+function wrapTitle(words, size, maxW) {
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    if (titleWidth(w, size) > maxW) return null;
+    if (!line) line = w;
+    else if (titleWidth(`${line} ${w}`, size) <= maxW) line += ` ${w}`;
+    else { lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/**
+ * Fit the title to its column: step the size down until it fits whole (one line, or two at the smaller sizes);
+ * only at the floor size is it cut, and then it runs on to a second line before the ellipsis.
+ */
+export function fitLoomTitle(text, maxW = TEXT_RIGHT - TEXT_X) {
+  const title = clean(text, 'thread');
+  const words = title.split(' ').filter(Boolean);
+  for (const size of TITLE_SIZES) {
+    const lines = wrapTitle(words, size, maxW);
+    if (lines && (lines.length === 1 || (lines.length === 2 && size <= TITLE_TWO_LINE_MAX))) return { size, lines, truncated: false };
+  }
+  const size = TITLE_FLOOR;
+  const lines = [''];
+  let truncated = false;
+  for (const ch of title) {
+    const cur = lines.at(-1);
+    if (ch === ' ' && !cur) continue;
+    if (titleWidth(cur + ch, size) <= maxW) { lines[lines.length - 1] = cur + ch; continue; }
+    if (lines.length < 2) {
+      // Prefer to break at the last space; a word with none (a host, a long handle) is split where it stands.
+      const sp = cur.lastIndexOf(' ');
+      if (ch === ' ') lines.push('');
+      else if (sp > 0) { lines[0] = cur.slice(0, sp); lines.push(cur.slice(sp + 1) + ch); }
+      else lines.push(ch);
+      continue;
+    }
+    truncated = true;
+    let cut = cur.replace(/\s+$/, '');
+    while (cut && titleWidth(`${cut}\u2026`, size) > maxW) cut = cut.slice(0, -1);
+    lines[1] = `${cut}\u2026`;
+    break;
+  }
+  return { size, lines: lines.filter(Boolean), truncated };
+}
+
 /**
  * Tag values for the page head. Empty threads keep the generic /loom canonical, add noindex and no image.
  * A reply address keeps its own og:url; the image and counts are the parent thread's.
@@ -178,13 +253,13 @@ function ago(iso, now) {
 
 const compact = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : String(n));
 
-/** 1200x630 Office Noun card. `now` stamps the date and the "live" line. `nounHref` is ignored (the Noun is drawn from bundled trait data). */
+/** 1200x630 Office Noun card. `now` stamps the date and the "live" line. The Noun is drawn from bundled trait data; nothing is fetched. */
 export function buildSvg(summary, { now = Date.now() } = {}) {
   const recipe = nounRecipe(summary);
   const bgc = nounBackground(recipe.bg);
   const date = new Date(now).toISOString().slice(0, 10);
-  const textW = 700;
-  const t = fitTitle(summary.name, textW, 2);
+  const textW = TEXT_RIGHT - TEXT_X;
+  const t = fitLoomTitle(summary.name, textW);
   const titleY = 218 + t.size;
   const titleSvg = t.lines.map((line, i) => `<text x="80" y="${Math.round(titleY + i * t.size * 1.05)}" font-family="${SANS}" font-size="${t.size}" font-weight="800" letter-spacing="-2" fill="${INK}"${heavy(t.size, INK, 800)}>${esc(line)}</text>`).join('');
   const afterTitle = Math.round(titleY + (t.lines.length - 1) * t.size * 1.05);

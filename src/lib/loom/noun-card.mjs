@@ -28,7 +28,6 @@ export function nounRecipe(summary) {
   if (ROOMS[addr]) return ROOMS[addr];
   const h = hashString(`noun-card:${addr}`);
   const parts = ORDER.map((k, i) => NOUN_POOL[k][Math.floor(h / 16 ** i) % NOUN_POOL[k].length]);
-  parts[3] = NOUN_POOL.glasses[Math.floor(h / 16 ** 3) % NOUN_POOL.glasses.length];
   return { room: null, kicker: 'A LOOM THREAD', parts, bg: (h >>> 20) % 2 ? 'warm' : 'cool', line: '' };
 }
 
