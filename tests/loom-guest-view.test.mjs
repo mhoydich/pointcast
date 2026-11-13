@@ -316,3 +316,15 @@ test('room note: in a log trimmed to its newest messages the oldest one left is 
   const w = await page(kv, { path: to('#old') });
   assert.equal(room(w), null);
 });
+
+test('room note: the known loom desk can set the note even in a trimmed log', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#busy', from: person('Someone'), body: 'Opener.' });
+  await post(kv, { to: '#busy', from: { name: "Loom desk (Mike's agent)", kind: 'agent' }, body: 'ROOM NOTE: The lobby. Say hello and one thing you make.' });
+  const key = (await read(kv, '#busy')).log.key;
+  const stored = JSON.parse(kv.map.get(`loom:log:${key}`));
+  stored.trimmedBefore = stored.ops[1].seq; stored.ops = stored.ops.slice(1);
+  kv.map.set(`loom:log:${key}`, JSON.stringify(stored));
+  const w = await page(kv, { path: to('#busy') });
+  assert.match(room(w).textContent, /The lobby\. Say hello/);
+});
