@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAddress, extractAddresses, addressKey } from '../src/lib/loom/address.mjs';
 import { fold } from '../src/lib/loom/fold.mjs';
-import { handleLoom } from '../src/lib/loom/service.mjs';
+import { handleLoom, MAX_ROOMS } from '../src/lib/loom/service.mjs';
 
 function memoryKv() {
   const map = new Map();
@@ -393,4 +393,16 @@ test('C8 review: a withdrawn message leaves the directory excerpt in both lists'
   const row = (await get(kv, '')).logs.find((e) => e.address === '#quiet');
   assert.equal(row.count, 1);
   assert.equal(row.last.body, 'kept line');
+});
+
+test('C8: over the room cap, a flood of new inboxes never pushes a topic out', async () => {
+  const kv = memoryKv();
+  const entry = (address, kind, at) => ({ address, key: `k${address}`, kind, label: address, updatedAt: at, count: 2 });
+  const handles = Array.from({ length: MAX_ROOMS }, (_, i) => entry(`@h${i}`, 'handle', `2026-11-13T10:${String(i % 60).padStart(2, '0')}:00Z`));
+  kv.map.set('loom:rooms', JSON.stringify([entry('#quiet', 'topic', '2026-11-01T00:00:00Z'), ...handles.slice(0, MAX_ROOMS - 1)]));
+  await post(kv, { to: '@newcomer', from: { name: 'someone', kind: 'human' }, body: 'hi' });
+  const rooms = JSON.parse(kv.map.get('loom:rooms'));
+  assert.equal(rooms.length, MAX_ROOMS);
+  assert.ok(rooms.some((e) => e.address === '#quiet'));
+  assert.ok(rooms.some((e) => e.address === '@newcomer'));
 });

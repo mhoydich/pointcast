@@ -151,7 +151,12 @@ async function touchIndex(kv, log, op) {
       const had = byKey.get(e.key);
       if (!had || String(e.updatedAt ?? '') >= String(had.updatedAt ?? '')) byKey.set(e.key, e);
     }
-    const rooms = [...byKey.values()].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))).slice(0, MAX_ROOMS);
+    // Over the cap, topics are kept first and inboxes, agents, wallets and places fill what is left,
+    // so a burst of new @handles can never push a topic out of the directory.
+    const newest = (a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
+    const all = [...byKey.values()].sort(newest);
+    const topics = all.filter((e) => e.kind === 'topic').slice(0, MAX_ROOMS);
+    const rooms = [...topics, ...all.filter((e) => e.kind !== 'topic').slice(0, MAX_ROOMS - topics.length)].sort(newest);
     await writeJson(kv, 'loom:rooms', rooms);
   }
   await writeJson(kv, 'loom:index', next);
