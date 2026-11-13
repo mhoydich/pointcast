@@ -13,6 +13,7 @@
  * Storage (KV, prefix `loom:`):
  *   loom:log:<key>   { address, kind, label, title, seq, ops[] }   capped at MAX_OPS
  *   loom:index       recent logs, newest first                      capped at MAX_INDEX
+ *   loom:rooms       topic/inbox/agent/wallet/geo logs only          capped at MAX_ROOMS
  *   loom:out:<key>   what one sender appended, newest first         capped at MAX_OUTBOX
  * KV is read-modify-write; two writes to one log inside the same second can
  * race and the later one wins. Fine for a v1 commons; a Durable Object per log
@@ -26,6 +27,10 @@ import { TASK_TOPIC, WELCOME_BUCKET, isDesk, normalName, pickOpenTask, skipsWelc
 export const SPEC = 'pointcast.loom/v1';
 export const MAX_OPS = 600;
 export const MAX_INDEX = 300;
+export const MAX_ROOMS = 400;
+export const MAX_WINDOW = 120; // recent non-room threads the default directory shows
+export const MAX_LINKS = 300;  // link threads the links view returns
+const ROOM_KINDS = new Set(['topic', 'handle', 'agent', 'wallet', 'geo']);
 export const MAX_OUTBOX = 200;
 export const BODY_MAX = 2000;
 const KINDS = new Set(['note', 'question', 'claim', 'answer', 'image', 'poll', 'link']);
@@ -117,13 +122,58 @@ function pushOp(log, op, now) {
 }
 const excerpt = (s, n = 140) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
+// Rooms (topics, inboxes, ...) live in their own list so link threads, which
+// every URL in a post opens, can't push them out of the 300-entry recent index.
+// Backfill: the first time loom:rooms reads empty it is seeded from the current
+// loom:index (bounded by MAX_INDEX). Rooms that were already dropped from the
+// index before this list existed can't be recovered; they reappear on their next post.
+const roomsOf = (index) => index.filter((e) => ROOM_KINDS.has(e.kind)).slice(0, MAX_ROOMS);
+async function loadRooms(kv, index) {
+  const stored = await readJson(kv, 'loom:rooms', null);
+  if (Array.isArray(stored)) return stored;
+  const seeded = roomsOf(index);
+  if (kv && seeded.length) { try { await writeJson(kv, 'loom:rooms', seeded); } catch { /* best effort */ } }
+  return seeded;
+}
+
 async function touchIndex(kv, log, op) {
   const index = await readJson(kv, 'loom:index', []);
   const folded = fold(log.ops);
   const entry = { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, updatedAt: log.updatedAt, count: folded.count,
     last: { name: op.from?.name, kind: op.from?.kind, verified: !!op.from?.verified, body: excerpt(op.body, 120) } };
   const next = [entry, ...index.filter((e) => e.key !== log.key)].slice(0, MAX_INDEX);
+  // Link threads (most appends) skip the room list: one read-modify-write, as before.
+  if (ROOM_KINDS.has(log.kind)) {
+    // One read, one write. Rooms still in the recent index are folded back in (newest copy wins),
+    // so an entry lost to a concurrent write of this list heals on the next room post.
+    const stored = await readJson(kv, 'loom:rooms', null);
+    const byKey = new Map();
+    for (const e of [...(Array.isArray(stored) ? stored : []), ...roomsOf(next)]) {
+      const had = byKey.get(e.key);
+      if (!had || String(e.updatedAt ?? '') >= String(had.updatedAt ?? '')) byKey.set(e.key, e);
+    }
+    // Over the cap, topics are kept first and inboxes, agents, wallets and places fill what is left,
+    // so a burst of new @handles can never push a topic out of the directory.
+    const newest = (a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
+    const all = [...byKey.values()].sort(newest);
+    const topics = all.filter((e) => e.kind === 'topic').slice(0, MAX_ROOMS);
+    const rooms = [...topics, ...all.filter((e) => e.kind !== 'topic').slice(0, MAX_ROOMS - topics.length)].sort(newest);
+    await writeJson(kv, 'loom:rooms', rooms);
+  }
   await writeJson(kv, 'loom:index', next);
+}
+
+// After an edit, withdraw or moderation hide: the directory excerpt and count must not keep
+// showing the old text. Updates the log's entry in place (no reordering) in both lists.
+async function retouchIndex(kv, log) {
+  const folded = fold(log.ops);
+  const latest = [...folded.messages].sort((a, b) => a.seq - b.seq).at(-1);
+  const last = latest ? { name: latest.from?.name, kind: latest.from?.kind, verified: !!latest.from?.verified, body: excerpt(latest.body, 120) } : null;
+  for (const name of ['loom:index', 'loom:rooms']) {
+    const list = await readJson(kv, name, null);
+    if (!Array.isArray(list) || !list.some((e) => e.key === log.key)) continue;
+    await writeJson(kv, name, list.map((e) => (e.key === log.key ? { ...e, count: folded.count, last } : e)));
+  }
 }
 
 const outboxAddress = (from) => from.address || `@${from.name.toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'anon'}`;
@@ -500,7 +550,12 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         const out = await readJson(kv, `loom:out:${await addressKey(sender.address)}`, []);
         return json({ ok: true, spec: SPEC, kvBound: !!kv, from: sender.address, sent: out });
       }
-      const stored = await readJson(kv, 'loom:index', []);
+      const recent = await readJson(kv, 'loom:index', []);
+      const rooms = await loadRooms(kv, recent);
+      // Union of the recent window and the room list, one entry per key, newest first.
+      const seen = new Set();
+      const stored = [...recent, ...rooms].filter((e) => !seen.has(e.key) && seen.add(e.key))
+        .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
       const seeds = [];
       for (const address of Object.keys(SEEDS)) {
         const key = await addressKey(address);
@@ -508,16 +563,31 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       }
       const q = clean(url.searchParams.get('q'), 60).toLowerCase();
       const kind = url.searchParams.get('kind');
-      let logs = [...stored, ...seeds];
-      if (kind) logs = logs.filter((e) => e.kind === kind);
+      const wantLinks = kind === 'url' || url.searchParams.get('view') === 'links';
+      let logs = [...stored, ...seeds].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+      const linkAll = stored.filter((e) => e.kind === 'url');
+      const linksHidden = linkAll.filter((e) => (e.count ?? 0) < 2).length;
+      if (wantLinks) logs = logs.filter((e) => e.kind === 'url');
+      else if (kind) logs = logs.filter((e) => e.kind === kind);
+      else {
+        // Default: every room, plus the recent window of other threads; one-message link threads stay out.
+        let others = 0;
+        logs = logs.filter((e) => {
+          if (ROOM_KINDS.has(e.kind)) return true;
+          if (q) return true; // a search looks through everything, one-message links included
+          if (e.kind === 'url' && (e.count ?? 0) < 2) return false;
+          return (others += 1) <= MAX_WINDOW;
+        });
+      }
       if (q) logs = logs.filter((e) => `${e.address} ${e.title ?? ''} ${e.last?.body ?? ''}`.toLowerCase().includes(q));
       const kinds = {};
       for (const e of stored) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
       // compact=1 (alias short=1): no last.body, no network.hosts, for callers that only need the list.
       const compact = ['compact', 'short'].some((k) => ['1', 'true'].includes(url.searchParams.get(k)));
-      const shown = logs.slice(0, 120).map((e) => (compact ? { ...e, last: e.last ? { name: e.last.name, kind: e.last.kind } : e.last } : e));
+      const roomCount = stored.filter((e) => ROOM_KINDS.has(e.kind)).length + seeds.length;
+      const shown = logs.slice(0, wantLinks ? MAX_LINKS : MAX_ROOMS + MAX_WINDOW).map((e) => (compact ? { ...e, last: e.last ? { name: e.last.name, kind: e.last.kind } : e.last } : e));
       const hosts = compact ? undefined : [...new Set(stored.filter((e) => e.kind === 'url').map((e) => new URL(e.address).hostname))].slice(0, 40);
-      return json({ ok: true, spec: SPEC, kvBound: !!kv, logs: shown, network: { logs: stored.length, kinds, ...(hosts ? { hosts } : {}) } });
+      return json({ ok: true, spec: SPEC, kvBound: !!kv, logs: shown, views: { rooms: roomCount, links: linkAll.length, linksHidden }, network: { logs: stored.length, kinds, ...(hosts ? { hosts } : {}) } });
     }
 
     if (request.method !== 'POST') return fail('method_not_allowed', 405, {});
@@ -622,6 +692,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       pushOp(log, { op: 'hide', id, reason: clean(body.reason, 80) || 'moderated' }, now);
     } else return fail('action_unknown');
     await saveLog(kv, log);
+    if (action !== 'plus' && action !== 'vote') { try { await retouchIndex(kv, log); } catch { /* the log is saved; the excerpt refreshes on the next post */ } }
     const view = publicView(log);
     return json({ ok: true, spec: SPEC, seq: log.seq, message: view.messages.find((m) => m.id === id) ?? null });
   } catch (error) {

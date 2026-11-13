@@ -7,9 +7,9 @@
  */
 const SITE = 'https://pointcast.xyz';
 export const MAX_MESSAGES = 20;
-// The Loom directory (handleLoom, ?kind=topic) returns at most 120 entries, so the
-// sitemap and index can never list more than that. Keep this equal to that cap.
-export const SITEMAP_CAP = 120;
+// The Loom directory (handleLoom, ?kind=topic) returns every room it keeps (MAX_ROOMS, 400),
+// so the sitemap and index can never list more than that. Keep this equal to that cap.
+export const SITEMAP_CAP = 400;
 /** Topics with fewer visible messages than this are noindex and left out of the sitemap. */
 export const MIN_INDEXABLE = 3;
 // Same grammar as TOPIC in address.mjs, but lowercase only: one spelling, one URL.

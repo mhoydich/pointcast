@@ -290,3 +290,22 @@ test('saving a name in the sheet ends the visit banner and stores that name', as
   assert.equal(fy(w).querySelector('.visiting'), null);
   assert.equal(w.localStorage.getItem('loom.name'), 'sam');
 });
+
+test('C8: the Links chip lists one-message link threads; the default list hides them', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#c8room', from: { name: 'a', kind: 'human' }, body: 'room' });
+  await post(kv, { to: 'https://example.com/single', from: { name: 'a', kind: 'human' }, body: 'one' });
+  await post(kv, { to: 'https://example.com/double', from: { name: 'a', kind: 'human' }, body: 'one' });
+  await post(kv, { to: 'https://example.com/double', from: { name: 'b', kind: 'human' }, body: 'two' });
+  const w = await page(kv);
+  const labels = () => texts(w, '#dirList .row .label');
+  assert.ok(labels().includes('#c8room'));
+  assert.ok(!labels().some((l) => /single/.test(l)));
+  assert.ok(labels().some((l) => /double/.test(l)));
+  const chip = w.document.querySelector('[data-f="url"]');
+  assert.match(chip.textContent, /^Links \d+/);
+  chip.dispatchEvent(new w.Event('click', { bubbles: true }));
+  await settle(w, 120);
+  assert.ok(labels().some((l) => /single/.test(l)));
+  assert.ok(!labels().includes('#c8room'));
+});

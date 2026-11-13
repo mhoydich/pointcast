@@ -94,9 +94,9 @@ test('sitemap lists /loom, /loom/topic/ and topics with messages only', () => {
   assert.ok(xml.includes('<loc>https://pointcast.xyz/loom</loc><lastmod>2026-11-12</lastmod>'));
 });
 
-test('sitemap caps at the directory size (120) and skips thin topics', () => {
+test('sitemap caps at the directory size (400) and skips thin topics', () => {
   const logs = Array.from({ length: 800 }, (_, i) => ({ address: `#t${i}`, kind: 'topic', count: 3, updatedAt: '2026-11-12T00:00:00.000Z' }));
-  assert.equal((buildSitemap({ logs }).match(/<loc>/g) ?? []).length, 122); // directory cap is 120
+  assert.equal((buildSitemap({ logs }).match(/<loc>/g) ?? []).length, 402); // directory cap is 400 (MAX_ROOMS)
 });
 
 test('topic index escapes titles and skips non-topics', () => {

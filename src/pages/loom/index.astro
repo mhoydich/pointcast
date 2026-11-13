@@ -657,17 +657,27 @@ const loomApi = {
   },
 
   /* Read the live directory. Returns normalised rows, or null when the API can't be reached. */
+  _rows(j) {
+    return j.logs.map((l) => ({
+      address: l.address, kind: l.kind, label: l.label || shortLabel(l.address), title: l.title,
+      count: l.count || 0, updatedAt: l.updatedAt, openQuestions: l.openQuestions || 0, key: l.key,
+      last: l.last || null
+    }));
+  },
   async probe() {
     try {
       const j = await this._json(API_BASE);
       if (!j || !Array.isArray(j.logs)) throw new Error('bad shape');
       this.mode = 'live';
-      return j.logs.map((l) => ({
-        address: l.address, kind: l.kind, label: l.label || shortLabel(l.address), title: l.title,
-        count: l.count || 0, updatedAt: l.updatedAt, openQuestions: l.openQuestions || 0, key: l.key,
-        last: l.last || null
-      }));
+      state.linkCount = j.views && typeof j.views.links === 'number' ? j.views.links : null;
+      return this._rows(j);
     } catch (e) { this.mode = 'offline'; return null; }
+  },
+  /* Every link thread, one-message ones included (the default list leaves those out). */
+  async links() {
+    const j = await this._json(API_BASE + '?view=links');
+    if (!j || !Array.isArray(j.logs)) throw new Error('bad shape');
+    return this._rows(j);
   },
 
   _offline() { const e = new Error('offline'); e.offline = true; return e; },
@@ -1098,7 +1108,7 @@ function keepFocus(box, keyOf, render, fallback) {
 const cssStr = (v) => '"' + String(v).replace(/["\\]/g, '\\$&') + '"';
 
 /* ---- directory ---- */
-const FILTERS = [['all', 'All'], ['url', 'Pages'], ['people', 'People'], ['topic', 'Topics'], ['place', 'Places']];
+const FILTERS = [['all', 'All'], ['url', 'Links'], ['people', 'People'], ['topic', 'Topics'], ['place', 'Places']];
 function matchFilter(a) {
   const k = kindOf(a);
   switch (state.filter) {
@@ -1111,7 +1121,7 @@ function matchFilter(a) {
   return true;
 }
 /* "No {filter} threads yet." */
-const FILTER_WORD = { url: 'page', people: 'people', topic: 'topic', place: 'place' };
+const FILTER_WORD = { url: 'link', people: 'people', topic: 'topic', place: 'place' };
 function renderFilters() {
   const box = $('filters');
   keepFocus(box, (a) => a.dataset.f ? '[data-f=' + cssStr(a.dataset.f) + ']' : null, () => {
@@ -1124,8 +1134,9 @@ function renderFilters() {
     }));
     box.append(h('span', { class: 'sep', 'aria-hidden': 'true' }));
     FILTERS.forEach(([k, label]) => box.append(h('button', {
-      type: 'button', class: 'chip', 'data-f': k, 'aria-pressed': String(state.filter === k), text: label,
-      onclick: () => { state.filter = k; renderFilters(); renderDirectory(); }
+      type: 'button', class: 'chip', 'data-f': k, 'aria-pressed': String(state.filter === k),
+      text: k === 'url' && state.linkCount != null ? label + ' ' + state.linkCount : label,
+      onclick: () => { state.filter = k; renderFilters(); renderDirectory(); if (k === 'url') loadLinks(); }
     })));
   });
 }
@@ -1133,9 +1144,26 @@ function renderDirectory() {
   const list = $('dirList');
   keepFocus(list, (a) => a.getAttribute('data-open') ? '[data-open=' + cssStr(a.getAttribute('data-open')) + ']' : (a.dataset.empty ? '[data-empty]' : null), () => drawDirectory(list));
 }
+/* Default list: rooms plus link threads that have a second message. The Links chip
+   adds the one-message ones from the server's links view. */
+async function loadLinks() {
+  if (loomApi.mode !== 'live') return;
+  try {
+    state.linkDir = await loomApi.links();
+    state.linkCount = state.linkDir.length;
+    renderFilters(); renderDirectory();
+  } catch (e) { /* keep what we have */ }
+}
+function dirRows() {
+  if (state.filter === 'url') {
+    const seen = {};
+    return state.dir.concat(state.linkDir || []).filter((r) => kindOf(r.address) === 'url' && !seen[r.address] && (seen[r.address] = true));
+  }
+  return state.dir.filter((r) => !(kindOf(r.address) === 'url' && (r.count || 0) < 2 && r.address !== state.addr));
+}
 function drawDirectory(list) {
   list.textContent = '';
-  const rows = state.dir
+  const rows = dirRows()
     .filter((r) => matchFilter(r.address) && (!state.openOnly || (r.openQuestions || 0) > 0))
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   const foot = h('p', { class: 'foot', text: 'Everything on Loom is public. Anyone can read what you post here.' });
@@ -2817,6 +2845,7 @@ async function connect() {
     }
     state.dir = rows;
     renderFilters(); renderDirectory(); renderForYou();
+    if (state.filter === 'url') loadLinks();
     const addr = state.addr;
     if (!state.threads[addr]) {
       state.loading = true; state.loadError = false; renderThread('keep');
