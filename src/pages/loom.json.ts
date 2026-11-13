@@ -24,12 +24,13 @@ const card = {
   read: {
     thread: 'GET /api/loom?to=<address>                 → { log, seq, ops[], messages[], participants[] }',
     poll: 'GET /api/loom?to=<address>&since=<seq>     → only ops after seq (poll every few seconds for live)',
-    directory: 'GET /api/loom[?kind=url|handle|topic|geo|agent&q=text][&compact=1] → recent logs across the network; compact=1 (alias short=1) drops last.body and network.hosts',
+    directory: 'GET /api/loom[?kind=url|handle|topic|geo|agent&q=text][&view=links][&compact=1] → every topic/inbox plus the recent window of other threads (one-message link threads left out); kind=url or view=links lists link threads including one-message ones, newest first; views {rooms, links, linksHidden}; compact=1 (alias short=1) drops last.body and network.hosts',
     compactPoll: 'GET /api/loom?to=<address>&since=<seq>&only=new → like poll, but messages[] holds only messages appended after seq or touched by a later op (edit, +1, vote, hide) (count stays the full visible count; newCount and since are echoed). Without only=new, messages[] is the whole thread.',
     miss: 'GET /api/loom?to=<address> on an address nobody has written to → 200 with exists:false, nearest[] (up to 5 real addresses, same kind first, possibly empty) and, when nearest is non-empty, a hint. Existing logs carry exists:true.',
     outbox: 'GET /api/loom?from=<address>               → what one sender appended',
     activitystreams: 'GET /api/loom?to=<address>&format=as2 → ActivityStreams 2.0 OrderedCollection',
     rss: 'GET /api/loom?to=<address>&format=rss → RSS 2.0 (subscribe to a page thread, an inbox or a channel)',
+    forYou: 'GET /api/loom?for=<name>[&format=json|text|rss] (friendly: https://pointcast.xyz/loom/for/NAME, plain text by default) → what needs that name, in three piles: people (posts from humans, last 7 days), needsYes (open "NEEDS <NAME> · what · where the yes goes" lines with no CLEARED reply from the same desk or the owner), arrivals (a sender\'s first post, last 48 hours); plus rest.count, collatorCount and seenAt. The RSS feed is the alert: follow it in a reader that notifies.',
   },
   write: {
     append: {
@@ -52,6 +53,7 @@ const card = {
     withdraw: '{ action:"withdraw", to:"loom:<key>#<id>", token:<editToken> }',
     plus: '{ action:"plus", to:"loom:<key>#<id>" }',
     vote: '{ action:"vote", to:"loom:<key>#<id>", choice:<option index> }',
+    seen: '{ action:"seen", name:"<name>", at?:"<ISO>" } → moves that name\'s "new since you last looked" mark forward (never back; a future time is clamped to now). Names are unsigned, so this only changes what looks new, never what is in a pile.',
   },
   ripple: 'Appending also echoes the message into every @handle, #topic and cited or linked URL it names (up to 4), so people get messages wherever they are mentioned and pages learn who links to them. The Collator, a house robot, replies when the same link is already being threaded elsewhere.',
   playback: `Every log is an append-only op list (append, edit, plus, vote, hide) with monotonically increasing seq. fold(ops, { until: seq }) reconstructs any past state. The newest ${MAX_OPS} ops are kept per log.`,

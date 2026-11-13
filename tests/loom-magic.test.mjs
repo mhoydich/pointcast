@@ -222,3 +222,12 @@ test('the page never trusts a hand-made magic shape', async () => {
   assert.equal(msg(w, made.message.id).querySelector('.magic'), null);
   assert.equal(w.document.querySelector('img[src=x]'), null);
 });
+
+test('two dice sent within a minute are two rolls, never folded as a repeat', async () => {
+  const kv = memoryKv();
+  const a = await say(kv, 'dice');
+  const b = await say(kv, 'dice');
+  const w = await page(kv);
+  assert.ok(msg(w, a.message.id));
+  assert.ok(msg(w, b.message.id));
+});
