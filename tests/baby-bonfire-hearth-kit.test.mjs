@@ -81,7 +81,7 @@ test('sound starts only from light() or ring(), never on load, connect or sight'
 });
 
 test('the fallbacks are there: generated fire, bowl and gong, and the poster with reduced motion', () => {
-  assert.match(body('light'), /\(\) => \{ if \(this\._lit\) \{ this\._gen = true; this\._stops\.push\(hush\(this\._bed\)\)/);
+  assert.match(body('light'), /\(\) => \{ if \(this\._lit && this\._tok === tok\) \{ this\._gen = true; this\._stops\.push\(hush\(this\._bed\)\)/);
   assert.match(body('ring'), /chime\(this\._fx, 392/);
   assert.match(body('ring'), /gongMade\(this\._fx/);
   assert.match(src, /prefers-reduced-motion: reduce/);
@@ -139,4 +139,11 @@ test('the live Prayer Fire page is byte-identical to origin/main', (t) => {
   try { main = execFileSync('git', ['show', 'origin/main:public/baby-bonfire/prayer/index.html'], { cwd: root, maxBuffer: 1 << 24 }); }
   catch { t.skip('origin/main is not available in this checkout'); return; }
   assert.ok(readFileSync(at('public/baby-bonfire/prayer/index.html')).equals(main));
+});
+
+test('sound="off" really hides the built-in button, and quiet then light stops the fading bed', () => {
+  const src = readFileSync(at(MODULE), 'utf8');
+  assert.match(src, /button\[hidden\]\{display:none\}/, 'the button rule must not beat [hidden]');
+  assert.match(src, /this\._fading \|\| \[\]\)\.forEach/, 'light() stops what quiet() left fading');
+  assert.match(src, /this\._tok === tok/, 'a late fetch from an earlier light() adds nothing');
 });

@@ -54,7 +54,7 @@ function buffer(url) {
   if (!bufs.has(url)) {
     bufs.set(url, fetch(url).then((r) => { if (!r.ok) throw new Error(url); return r.arrayBuffer(); })
       .then((ab) => new Promise((res, rej) => { const p = ctx.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); })));
-    bufs.get(url).catch(() => {});
+    bufs.get(url).catch(() => { bufs.delete(url); }); // a failed fetch can be tried again later
   }
   return bufs.get(url);
 }
@@ -124,6 +124,7 @@ video{display:block;width:100%;height:100%;object-fit:cover;background:transpare
 button{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 13px;border:1px solid rgba(241,230,214,.4);border-radius:18px;background:rgba(21,16,12,.72);color:#f1e6d6;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
 button:hover{border-color:#ffd27a}button:focus-visible{outline:2px solid #ffd27a;outline-offset:2px}
 button i{width:8px;height:8px;border-radius:50%;background:#6b4f3a}
+button[hidden]{display:none}
 button[aria-pressed=true] i{background:#ffb24d;box-shadow:0 0 8px #ffb24d}`;
 
 export class HearthFire extends HTMLElement {
@@ -143,7 +144,10 @@ export class HearthFire extends HTMLElement {
   get lit() { return this._lit; }
   get media() { const m = this.getAttribute('media') || DEFAULT_MEDIA; return m.endsWith('/') ? m : m + '/'; }
   get volume() { const v = parseFloat(this.getAttribute('volume')); return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.8; }
-  _url(k) { return new URL(FILES[k], new URL(this.media, document.baseURI)).href; }
+  _url(k) {
+    try { return new URL(FILES[k], new URL(this.media, document.baseURI)).href; }
+    catch (e) { return new URL(FILES[k], new URL(DEFAULT_MEDIA, document.baseURI)).href; } // a bad media attribute falls back
+  }
 
   connectedCallback() {
     this._apply();
@@ -195,10 +199,13 @@ export class HearthFire extends HTMLElement {
     if (!ctx) return Promise.resolve(false);
     if (!this._lit) {
       this._lit = true; this._chain(); clearTimeout(this._end);
+      // Stop whatever a quiet() still had fading, and anything left from before, so beds never stack.
+      (this._fading || []).forEach((s) => s()); this._fading = null;
       this._stops.forEach((s) => s()); this._stops = [];
       this._gen = false;
-      buffer(this._url('fire')).then((b) => { if (this._lit) this._stops.push(looper(b, this._bed, 2)); },
-        () => { if (this._lit) { this._gen = true; this._stops.push(hush(this._bed)); } });
+      const tok = (this._tok = (this._tok || 0) + 1); // a late fetch from an earlier light() adds nothing
+      buffer(this._url('fire')).then((b) => { if (this._lit && this._tok === tok) this._stops.push(looper(b, this._bed, 2)); },
+        () => { if (this._lit && this._tok === tok) { this._gen = true; this._stops.push(hush(this._bed)); } });
       buffer(this._url('bowl')); buffer(this._url('gong'));
       this._bed.gain.cancelScheduledValues(ctx.currentTime);
       this._bed.gain.setTargetAtTime(0.9, ctx.currentTime + 0.1, 1.2);
@@ -218,7 +225,8 @@ export class HearthFire extends HTMLElement {
       this._bed.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);
     }
     const stops = this._stops; this._stops = [];
-    this._end = setTimeout(() => stops.forEach((s) => s()), 1800);
+    this._fading = stops;
+    this._end = setTimeout(() => { stops.forEach((s) => s()); if (this._fading === stops) this._fading = null; }, 1800);
     this._b.setAttribute('aria-pressed', 'false');
     this.dispatchEvent(new CustomEvent('hearth-quiet', { bubbles: true, composed: true }));
   }
