@@ -347,6 +347,21 @@ a { color: var(--signal); }
 .msg .text.clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .msg .more-txt { position: relative; margin-top: 2px; min-height: 32px; font: 500 13px/1 var(--f-mono); color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
 .msg .more-txt::after { content: ""; position: absolute; inset: -6px -8px; }
+.roomnote { margin: 10px 0 4px; padding: 10px 12px; border: 1px solid var(--rule); border-left: 3px solid var(--signal); background: var(--surface); }
+.roomnote .rn-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.roomnote .rn-t { font: 400 12px/1.2 var(--f-pix); letter-spacing: .1em; text-transform: uppercase; color: var(--signal); }
+.roomnote .rn-from { font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); overflow-wrap: anywhere; }
+.roomnote .rn-body { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; }
+.roomnote .rn-body.clamp3, .roomnote .rn-body.clamp1 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.roomnote .rn-body.clamp3 { -webkit-line-clamp: 3; }
+.roomnote .rn-body.clamp1 { -webkit-line-clamp: 1; }
+.roomnote .more-txt { position: relative; margin-top: 4px; min-height: 32px; font: 500 13px/1 var(--f-mono); color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
+.msg .also { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
+.msg .also-btn { position: relative; min-height: 32px; color: var(--ink-2); }
+.msg .also-list { margin: 2px 0 4px; padding: 0 0 0 14px; }
+.msg .also-list li { margin: 2px 0; }
+.msg .also-list .linkbtn { min-height: 32px; }
+.msg .dupnote { font: 400 12px/1.3 var(--f-mono); }
 .msg.echo .one { margin: 4px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); font-size: 15px; }
 .msg.echo .via { margin-bottom: 8px; }
 .mimg { display: block; max-width: 100%; max-height: 320px; margin-top: 6px; border: 1px solid var(--rule); }
@@ -702,6 +717,7 @@ function normMsg(m) {
     id: m.id, seq: m.seq, at: m.at, kind: m.kind || 'note', body: String(m.body == null ? '' : m.body),
     from: Object.assign({ name: 'anonymous', kind: 'human', verified: false }, m.from || {}),
     via: m.via || null, plus: m.plus || 0, depth: m.depth || 0, replies: m.replies || 0, parent: m.parent || null,
+    cites: Array.isArray(m.cites) ? m.cites.filter((c) => typeof c === 'string') : [],
     edited: !!(m.edited || m.editedAt), withdrawn: !!(m.withdrawn || m.withdrawnAt),
     poll: m.poll ? normPoll(m.poll, m.body) : null,
     media: m.media && typeof m.media === 'object' ? { url: String(m.media.url || ''), alt: String(m.media.alt || '') } : null
@@ -819,6 +835,11 @@ const state = {
   waitingCount: 0,
   expanded: {},
   hideEchoes: false,
+  recommended: true,  // guest view: shorten long link lists, show repeats once, fold Collator echoes
+  echoOpen: {},       // message id -> its "also in N other threads" list is open
+  sheetOpen: {},      // message id -> a shortened link sheet is shown in full
+  roomFirst: {},      // topic -> this is the first visit (decided once per page load)
+  roomFull: {},       // topic -> the room note is shown in full
   playN: null,       // replay: show only the first N messages (null = all)
   filter: 'all',
   openOnly: false,
@@ -846,6 +867,7 @@ const state = {
     Object.keys(classic).forEach((id) => { if (/^m_[0-9a-z]+$/.test(id) && typeof classic[id] === 'string' && !hasOwn(state.sent, id)) state.sent[id] = classic[id]; });
   } catch (e) { /* ignore */ }
   state.hideEchoes = store.get('hideEchoes') === '1';
+  state.recommended = store.get('recommended') !== '0';
   try { state.voted = JSON.parse(store.get('voted') || '{}') || {}; } catch (e) { state.voted = {}; }
 })();
 const persistSent = () => { if (loomApi.mode === 'live') store.set('sent', JSON.stringify(state.sent)); };
@@ -1179,7 +1201,90 @@ function renderComposerBar() {
   $('sendBtn').disabled = state.sending || !!state.checking;
   $('sendBtn').textContent = state.sending ? 'Sending…' : 'Send';
 }
-function renderMessage(t, m) {
+/* ---- guest view (OFF-39): a room note on topics, folded Collator echoes, short link sheets, repeats once.
+   Display only: the API and the raw feed keep every message as sent. ---- */
+const URL_RE = /https?:\/\/[^\s<>"']+/g;
+const nameKey = (n) => String(n || '').trim().replace(/^@+/, '').replace(/\s+/g, ' ').toLowerCase();
+const bodyLines = (s) => String(s).split('\n').filter((l) => l.trim());
+/* "Also threaded elsewhere — …": the Collator line ripple() writes under a message whose link is threaded in other rooms */
+function isCollatorEcho(m) {
+  return m.from.name === 'Collator' && m.from.kind === 'robot' && (!m.from.address || m.from.address === '@collator')
+    && m.kind === 'link' && !!m.parent && /^Also threaded elsewhere/.test(m.body) && (m.cites || []).length > 0;
+}
+/* The room note: the newest top-level "ROOM NOTE" from the room's desk (the opener's name) or a verified sender,
+   else the opener itself. Names are typed, not proven; the card says whose words they are. */
+function roomNote(t) {
+  if (!t || t.partial || kindOf(t.addr) !== 'topic') return null;
+  const tops = t.messages.filter((m) => !m.parent && !(m.depth >= 1) && !m._pending && !m.via)
+    .sort((a, b) => (a.seq || 0) - (b.seq || 0));
+  const opener = tops[0];
+  if (!opener) return null;
+  let note = null;
+  tops.forEach((m) => {
+    if (m.withdrawn || !/^room note(?![a-z])/i.test((m.body.split('\n')[0] || '').trim())) return;
+    if (m.from.verified || nameKey(m.from.name) === nameKey(opener.from.name)) note = m;
+  });
+  let text;
+  if (note) {
+    const lines = note.body.trim().split('\n');
+    lines[0] = lines[0].trim().replace(/^room note[\s:.\-–—]*/i, '');
+    if (!lines[0].trim()) lines.shift();
+    text = lines.join('\n').trim();
+  } else if (!opener.withdrawn) { note = opener; text = opener.body.trim(); }
+  return note && text ? { m: note, text } : null;
+}
+function renderRoomNote(t) {
+  const n = roomNote(t);
+  if (!n) return null;
+  const a = t.addr;
+  if (!hasOwn(state.roomFirst, a)) { state.roomFirst[a] = !store.get('roomSeen.' + a); store.set('roomSeen.' + a, '1'); }
+  const first = state.roomFirst[a], full = !!state.roomFull[a];
+  const lines = n.text.split('\n').length;
+  const long = first ? (lines > 3 || n.text.length > 240) : (lines > 1 || n.text.length > 70);
+  return h('section', { class: 'roomnote', 'aria-label': 'About this room' },
+    h('div', { class: 'rn-h' },
+      h('span', { class: 'rn-t', text: 'About this room' }),
+      h('span', { class: 'rn-from', text: 'from ' + n.m.from.name })),
+    h('p', { class: 'rn-body' + (long && !full ? (first ? ' clamp3' : ' clamp1') : ''), text: n.text }),
+    long ? h('button', { type: 'button', class: 'more-txt rn-more', 'aria-expanded': String(full), text: full ? 'Show less' : 'Show all',
+      onclick: () => { state.roomFull[a] = !full; renderThread('keep'); } }) : null);
+}
+/* What the recommended view folds in this thread: { skip: ids not drawn, echoes: id -> other addresses, sent: id -> times sent } */
+function guestPlan(t) {
+  const plan = { skip: new Set(), echoes: {}, sent: {} };
+  if (!state.recommended) return plan;
+  const byId = {}, kids = {}, allKids = {};
+  t.messages.forEach((m) => {
+    byId[m.id] = m;
+    if (!m.parent) return;
+    allKids[m.parent] = (allKids[m.parent] || 0) + 1;
+    if (!isCollatorEcho(m)) kids[m.parent] = (kids[m.parent] || 0) + 1;
+  });
+  /* exact repeats: same name, kind, parent and body within a minute of the kept (first) one; never one with replies */
+  const kept = {}, dupOf = {};
+  t.messages.filter((m) => !m.withdrawn && !m._pending && !m.via && !m.poll && !isCollatorEcho(m))
+    .sort((a, b) => (a.seq || 0) - (b.seq || 0))
+    .forEach((m) => {
+      const key = [nameKey(m.from.name), m.kind, m.parent || '', (m.media && m.media.url) || '', m.body.trim()].join('\u0000');
+      const k = kept[key], at = Date.parse(m.at);
+      const gap = k ? at - Date.parse(k.at) : NaN;
+      if (!(gap >= 0 && gap <= 60000)) { kept[key] = m; return; }
+      if (kids[m.id] || m.replies > (allKids[m.id] || 0)) return;
+      dupOf[m.id] = k.id; plan.skip.add(m.id); plan.sent[k.id] = (plan.sent[k.id] || 1) + 1;
+    });
+  /* Collator echoes fold into their parent (or the kept copy of a folded repeat); an echo whose parent is gone stays */
+  t.messages.forEach((m) => {
+    if (!isCollatorEcho(m)) return;
+    const pid = dupOf[m.parent] || m.parent, p = byId[pid];
+    if (!p || p.withdrawn || p.via) return;
+    plan.skip.add(m.id);
+    const list = plan.echoes[pid] || (plan.echoes[pid] = []);
+    m.cites.forEach((c) => { if (c !== t.addr && list.indexOf(c) < 0) list.push(c); });
+  });
+  return plan;
+}
+function renderMessage(t, m, g) {
+  g = g || {};
   const qs = questionStatus(t, m);
   const pressed = !!state.plused[m.id];
   const TAG = { human: 'HUMAN', agent: 'AGENT', robot: 'ROBOT' };
@@ -1197,8 +1302,12 @@ function renderMessage(t, m) {
       h('p', { class: 'one', text: oneLine(m.body) }),
       h('p', { class: 'via' }, h('button', { type: 'button', class: 'linkbtn', 'data-open': m.via.address, text: 'Open in ' + (m.via.label || m.via.address) })));
   }
-  const long = !m.poll && (m.body.length > 480 || m.body.split('\n').length > 8);
+  const nLinks = state.recommended && !m.poll ? (m.body.match(URL_RE) || []).length : 0;
+  const sheet = nLinks >= 4 && bodyLines(m.body).length > 4 && !m._pending;
+  const sheetShort = sheet && !state.sheetOpen[m.id];
+  const long = !sheet && !m.poll && (m.body.length > 480 || m.body.split('\n').length > 8);
   const collapsed = long && !state.expanded[m.id] && !m._pending;
+  const echoes = g.echoes || [];
   return h('article', {
     class: 'msg' + (m.depth >= 1 ? ' d1' : '') + (qs ? ' q' : '') + (m._pending ? ' pending' : ''),
     id: 'msg-' + m.id, 'data-id': m.id
@@ -1212,8 +1321,13 @@ function renderMessage(t, m) {
       (m.kind !== 'note' && m.kind !== 'question' && m.kind !== 'answer') ? h('span', { class: 'kindword', text: m.kind }) : null,
       m.edited ? h('span', { class: 'edited', text: 'edited' }) : null,
       h('time', { datetime: m.at, title: m.at, text: rel(m.at) })),
-    m.poll ? renderPoll(m) : h('p', { class: 'text' + (collapsed ? ' clamp' : '') }, linkify(m.body)),
+    m.poll ? renderPoll(m) : h('p', { class: 'text' + (collapsed ? ' clamp' : '') }, linkify(sheetShort ? bodyLines(m.body).slice(0, 2).join('\n') : m.body)),
     long ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'expand', 'aria-expanded': String(!collapsed), text: collapsed ? 'Show more' : 'Show less' }) : null,
+    sheet ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'sheet', 'aria-expanded': String(!sheetShort), text: sheetShort ? 'Show all · ' + nLinks + ' links' : 'Show less' }) : null,
+    g.sent > 1 ? h('p', { class: 'via dupnote', text: 'sent ' + g.sent + ' times' }) : null,
+    echoes.length ? h('div', { class: 'also' },
+      h('button', { type: 'button', class: 'linkbtn also-btn', 'data-act': 'echoes', 'aria-expanded': String(!!state.echoOpen[m.id]), text: 'also in ' + plural(echoes.length, 'other thread') }),
+      state.echoOpen[m.id] ? h('ul', { class: 'also-list' }, echoes.map((a) => h('li', null, h('button', { type: 'button', class: 'linkbtn', 'data-open': a, text: a })))) : null) : null,
     m.media && m.media.url ? renderMedia(m.media) : null,
     (qs === 'open' && state.addr[0] === '@' && Date.now() - Date.parse(m.at) > 1800000 && !m._pending)
       ? h('p', { class: 'via carry' }, 'No answer yet. ', h('button', { type: 'button', class: 'linkbtn', 'data-act': 'carry', text: 'Carry it over' })) : null,
@@ -1250,6 +1364,7 @@ function renderMessages(scroll) {
     const art = a.closest('.msg');
     if (art && a.dataset.act) return '[data-id=' + cssStr(art.getAttribute('data-id')) + '] [data-act=' + cssStr(a.dataset.act) + ']';
     if (art && a.dataset.vote != null) return '[data-id=' + cssStr(art.getAttribute('data-id')) + '] [data-vote=' + cssStr(a.dataset.vote) + ']';
+    if (a.classList.contains('rn-more')) return '.rn-more';
     return a.classList.contains('retry') ? '.retry' : null;
   }, () => drawMessages(box, scroll), () => $('bodyInput'));
 }
@@ -1264,6 +1379,8 @@ function drawMessages(box, scroll) {
     return;
   }
   if (!t) { box.append(h('div', { class: 'thread-empty', text: 'Loading…' })); return; }
+  const roomCard = renderRoomNote(t);
+  if (roomCard) box.append(roomCard);
   if (t.partial) {
     let note = 'Preview shows the latest message only.';
     if (t.hiddenOpen) note += ' ' + plural(t.hiddenOpen, 'open question') + ' in this thread ' + (t.hiddenOpen === 1 ? 'is' : 'are') + ' not shown.';
@@ -1274,12 +1391,20 @@ function drawMessages(box, scroll) {
     box.append(h('div', { class: 'thread-empty', text: 'No messages yet. Write the first one below.' }));
   } else {
     let shown = 0;
-    t.messages.forEach((m, i) => { if (state.playN != null && i >= state.playN) return; if (!(state.hideEchoes && m.via)) { box.append(renderMessage(t, m)); shown++; } });
+    const plan = guestPlan(t);
+    t.messages.forEach((m, i) => {
+      if (state.playN != null && i >= state.playN) return;
+      if ((state.hideEchoes && m.via) || plan.skip.has(m.id)) return;
+      box.append(renderMessage(t, m, { echoes: plan.echoes[m.id], sent: plan.sent[m.id] })); shown++;
+    });
     if (!shown) box.append(h('div', { class: 'thread-empty' }, h('div', { text: 'Every message here is an echo, and echoes are hidden.' }),
       h('button', { type: 'button', class: 'btn ghost retry', text: 'Show echoes', onclick: () => { state.hideEchoes = false; store.set('hideEchoes', '0'); renderThread('keep'); } })));
     /* a long message that fits anyway (wide screens) needs no Show more */
     if (box.offsetParent !== null) box.querySelectorAll('.text.clamp').forEach((p) => {
       if (p.scrollHeight <= p.clientHeight + 2) { p.classList.remove('clamp'); const b2 = p.parentNode.querySelector('.more-txt'); if (b2) b2.remove(); }
+    });
+    if (box.offsetParent !== null) box.querySelectorAll('.rn-body.clamp1, .rn-body.clamp3').forEach((p) => {
+      if (p.scrollHeight <= p.clientHeight + 2) { p.classList.remove('clamp1', 'clamp3'); const b2 = p.parentNode.querySelector('.rn-more'); if (b2) b2.remove(); }
     });
   }
   if (scroll === 'bottom') box.scrollTop = box.scrollHeight; else box.scrollTop = prev;
@@ -1389,6 +1514,12 @@ function openThreadMenu() {
       h('button', { type: 'button', class: 'opt', text: 'Copy address', onclick: () => { copyText(state.addr); closeSheet(); } }),
       h('button', { type: 'button', class: 'opt', text: 'Copy link', onclick: () => { copyText(loomLink(state.addr), 'Link copied'); closeSheet(); } }),
       h('button', { type: 'button', class: 'opt', text: 'Who is here', onclick: () => openWhoSheet() }),
+      h('button', { type: 'button', class: 'opt', 'aria-pressed': String(state.recommended), 'data-opt': 'recommended',
+        onclick: () => { state.recommended = !state.recommended; store.set('recommended', state.recommended ? '1' : '0'); closeSheet(); renderThread('keep'); } },
+        h('span', null, 'Recommended view: ' + (state.recommended ? 'on' : 'off'),
+          h('small', { text: state.recommended
+            ? 'Long link lists are shortened, repeats are shown once and echo lines are folded. Turn off to see every message as sent.'
+            : 'Every message is shown as sent. Turn on to shorten long link lists, show repeats once and fold echo lines.' }))),
       h('button', { type: 'button', class: 'opt', 'aria-pressed': String(state.hideEchoes), text: 'Hide echoes',
         onclick: () => { state.hideEchoes = !state.hideEchoes; store.set('hideEchoes', state.hideEchoes ? '1' : '0'); closeSheet(); renderThread('keep'); } }),
       h('a', { class: 'opt', href: base, target: '_blank', rel: 'noopener noreferrer', text: 'JSON' }),
@@ -2369,6 +2500,8 @@ $('msgs').addEventListener('click', (e) => {
   else if (act === 'more') openMessageSheet(m);
   else if (act === 'carry') copyText(carryText(t, m), t.addr.toLowerCase() === myHandle() ? 'Copied. Paste it into your assistant.' : 'Copied. Paste it into the assistant for ' + t.addr + '.');
   else if (act === 'expand') { state.expanded[m.id] = !state.expanded[m.id]; renderThread('keep'); }
+  else if (act === 'sheet') { state.sheetOpen[m.id] = !state.sheetOpen[m.id]; renderThread('keep'); }
+  else if (act === 'echoes') { state.echoOpen[m.id] = !state.echoOpen[m.id]; renderThread('keep'); }
 });
 $('backBtn').addEventListener('click', () => { setView(state.tab); focusCurrentRow(); });
 $('playBtn').addEventListener('click', () => { if (playTimer) { stopPlay(); state.playN = null; renderMessages('bottom'); renderPlaybar(); } else startPlay(); });
