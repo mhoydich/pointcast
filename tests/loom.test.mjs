@@ -320,3 +320,39 @@ test('review 9: over-long appends are flagged truncated, over-long edits refused
   assert.equal((await edit.json()).error, 'body_too_long');
   assert.equal((await (await post(kv, { to: '#t', from: alice, body: 'ok' })).json()).truncated, undefined);
 });
+
+test('C8: link threads cannot push topics and inboxes out of the directory', async () => {
+  const kv = memoryKv();
+  const clock = (() => { let t = Date.parse('2026-11-01T00:00:00Z'); return () => new Date((t += 1000)); })();
+  const p = (to, body) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, from: { name: `bot${to.length}`, kind: 'agent' }, body, clientId: 'c8' }) }), { kv, clock, firstHelloEnabled: false, limit: async () => true });
+  for (let i = 0; i < 10; i += 1) assert.equal((await p(`#room-${i}`, `hello ${i}`)).status, 201);
+  for (let i = 0; i < 5; i += 1) assert.equal((await p(`@inbox${i}`, `hi ${i}`)).status, 201);
+  for (let i = 0; i < 130; i += 1) assert.equal((await p(`https://example.com/p${i}`, `note ${i}`)).status, 201);
+  assert.equal((await p('https://example.com/p7', 'second')).status, 201);
+  const d = await get(kv, '');
+  const addrs = d.logs.map((e) => e.address);
+  for (let i = 0; i < 10; i += 1) assert.ok(addrs.includes(`#room-${i}`), `#room-${i}`);
+  for (let i = 0; i < 5; i += 1) assert.ok(addrs.includes(`@inbox${i}`), `@inbox${i}`);
+  assert.ok(addrs.includes('https://example.com/p7'));
+  assert.ok(!addrs.includes('https://example.com/p8'));
+  assert.equal(d.logs.filter((e) => e.kind === 'url').length, 1);
+  assert.equal(d.views.links, 130);
+  assert.ok(d.views.linksHidden >= 100);
+  const links = await get(kv, '?kind=url');
+  assert.ok(links.logs.some((e) => e.address === 'https://example.com/p8' && e.count === 1));
+  assert.equal(links.logs[0].address, 'https://example.com/p7');
+  const links2 = await get(kv, '?view=links');
+  assert.ok(links2.logs.length >= 100 && links2.logs.every((e) => e.kind === 'url'));
+  const topics = await get(kv, '?kind=topic');
+  for (let i = 0; i < 10; i += 1) assert.ok(topics.logs.some((e) => e.address === `#room-${i}`));
+  assert.ok(topics.logs.every((e) => e.kind === 'topic'));
+});
+
+test('C8: loom:rooms backfills once from the recent index', async () => {
+  const kv = memoryKv();
+  const entry = (address, kind) => ({ address, key: `k${address}`, kind, label: address, updatedAt: '2026-11-01T00:00:00Z', count: 1 });
+  kv.map.set('loom:index', JSON.stringify([entry('#old', 'topic'), entry('https://a.example/x', 'url')]));
+  const d = await get(kv, '');
+  assert.ok(d.logs.some((e) => e.address === '#old'));
+  assert.ok(JSON.parse(kv.map.get('loom:rooms')).some((e) => e.address === '#old'));
+});

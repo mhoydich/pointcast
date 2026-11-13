@@ -24,7 +24,7 @@ const card = {
   read: {
     thread: 'GET /api/loom?to=<address>                 → { log, seq, ops[], messages[], participants[] }',
     poll: 'GET /api/loom?to=<address>&since=<seq>     → only ops after seq (poll every few seconds for live)',
-    directory: 'GET /api/loom[?kind=url|handle|topic|geo|agent&q=text][&compact=1] → recent logs across the network; compact=1 (alias short=1) drops last.body and network.hosts',
+    directory: 'GET /api/loom[?kind=url|handle|topic|geo|agent&q=text][&view=links][&compact=1] → every topic/inbox plus the recent window of other threads (one-message link threads left out); kind=url or view=links lists link threads including one-message ones, newest first; views {rooms, links, linksHidden}; compact=1 (alias short=1) drops last.body and network.hosts',
     compactPoll: 'GET /api/loom?to=<address>&since=<seq>&only=new → like poll, but messages[] holds only messages appended after seq or touched by a later op (edit, +1, vote, hide) (count stays the full visible count; newCount and since are echoed). Without only=new, messages[] is the whole thread.',
     miss: 'GET /api/loom?to=<address> on an address nobody has written to → 200 with exists:false, nearest[] (up to 5 real addresses, same kind first, possibly empty) and, when nearest is non-empty, a hint. Existing logs carry exists:true.',
     outbox: 'GET /api/loom?from=<address>               → what one sender appended',
