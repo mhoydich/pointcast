@@ -250,9 +250,9 @@ const api = (kv, path, init) => handleLoom(new Request(new URL(path, ORIGIN), in
 const open = [];
 test.afterEach(() => { while (open.length) open.pop().close(); });
 
-async function page(kv, { name = 'tester', sent = null } = {}) {
+async function page(kv, { name = 'tester', sent = null, path = '/loom' } = {}) {
   const dom = new JSDOM(`<!doctype html><html><head><style>${CSS}</style></head><body>${BODY}</body></html>`, {
-    url: ORIGIN + '/loom', runScripts: 'outside-only', pretendToBeVisual: true,
+    url: ORIGIN + path, runScripts: 'outside-only', pretendToBeVisual: true,
   });
   const w = dom.window;
   open.push(w);
@@ -387,4 +387,11 @@ test('page: New tags stay for the page view after its own seen mark and a refres
   assert.equal(news(), 1, 'still New after the refresh');
   assert.match(w.document.getElementById('fyNew').textContent, /^New since you last looked: 1 · last looked never$/);
   assert.equal(w.posts.filter((p) => p.action === 'seen').length, 1);
+});
+
+test('a ?as=NAME visit name never moves that name\'s server seen mark', async () => {
+  const kv = memoryKv();
+  const w = await page(kv, { name: null, path: '/loom?as=mike' });
+  await settle(w, 900);
+  assert.equal(w.posts.filter((p) => p.action === 'seen').length, 0);
 });
