@@ -267,3 +267,56 @@ test('G: only=new returns just newer messages; plain since keeps the whole threa
   assert.ok(normal.network.hosts.length > 0);
   assert.ok(normal.logs.some((e) => e.last?.body));
 });
+
+test('review 1: unsigned budget is per IP+name, so another IP cannot lock a name out', async () => {
+  const kv = memoryKv();
+  const limit = countingLimit(1);
+  const as = (ip) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip }, body: JSON.stringify({ to: '#t', from: alice, body: 'x' }) }), { kv, limit });
+  assert.equal((await as('1.1.1.1')).status, 201);
+  assert.equal((await as('1.1.1.1')).status, 429);
+  assert.equal((await as('2.2.2.2')).status, 201);
+});
+
+test('review 2: late titles only stick on topics', async () => {
+  const kv = memoryKv();
+  for (const to of ['https://example.com/p', '@someone']) {
+    await post(kv, { to, from: alice, body: 'first' });
+    const r = await (await post(kv, { to, from: alice, body: 'second', title: 'Hijack' })).json();
+    assert.deepEqual(r.title, { applied: false, reason: 'title_after_first_post' });
+  }
+  assert.equal((await (await post(kv, { to: 'https://example.com/new', from: alice, body: 'a', title: 'First time' })).json()).title.applied, true);
+});
+
+test('review 4: misses get the short read cache and skip hopeless candidates', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#a', from: alice, body: 'x' });
+  await post(kv, { to: 'https://pointcast.xyz/court', from: alice, body: 'x' });
+  const res = await handleLoom(new Request(`${base}?to=${encodeURIComponent('https://pointcast.xyz/courts')}`), { kv });
+  assert.equal(res.headers.get('cache-control'), 'public, max-age=10');
+  assert.deepEqual((await res.json()).nearest.map((n) => n.address), ['https://pointcast.xyz/court']);
+});
+
+test('review 5: only=new includes older messages touched by edits and plus', async () => {
+  const kv = memoryKv();
+  const a = await (await post(kv, { to: '#t', from: alice, body: 'old' })).json();
+  await post(kv, { to: '#t', from: alice, body: 'mid' });
+  await post(kv, { action: 'plus', to: a.address, clientId: 'c' });
+  await post(kv, { action: 'edit', to: a.address, token: a.editToken, body: 'old, edited' });
+  const r = await get(kv, '?to=%23t&since=2&only=new');
+  assert.deepEqual(r.messages.map((m) => m.body), ['old, edited']);
+  assert.equal(r.messages[0].plus, 1);
+  assert.equal((await get(kv, '?to=%23t&since=2')).messages.length, 2);
+});
+
+test('review 9: over-long appends are flagged truncated, over-long edits refused', async () => {
+  const kv = memoryKv();
+  const made = await (await post(kv, { to: '#t', from: alice, body: 'y'.repeat(2500) })).json();
+  assert.equal(made.truncated, true);
+  assert.equal(made.bodyMax, 2000);
+  assert.equal(made.message.body.length, 2000);
+  assert.equal(made.message.truncated, undefined);
+  const edit = await post(kv, { action: 'edit', to: made.address, token: made.editToken, body: 'z'.repeat(2500) });
+  assert.equal(edit.status, 400);
+  assert.equal((await edit.json()).error, 'body_too_long');
+  assert.equal((await (await post(kv, { to: '#t', from: alice, body: 'ok' })).json()).truncated, undefined);
+});

@@ -134,7 +134,9 @@ async function touchOutbox(kv, from, record) {
 function publicView(log, { since = 0, onlyNew = false } = {}) {
   const folded = fold(log.ops);
   const ops = log.ops.filter((op) => op.seq > since).map(({ tokenHash, ...op }) => op);
-  const newer = folded.messages.filter((m) => m.seq > since); // fold stamps each message with its append seq
+  // "New" = appended after since, or touched by any later op (edit, +1, vote, hide), so only=new misses nothing.
+  const touched = new Set(log.ops.filter((op) => op.seq > since).map((op) => op.id));
+  const newer = folded.messages.filter((m) => m.seq > since || touched.has(m.id));
   return {
     log: { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, createdAt: log.createdAt, updatedAt: log.updatedAt,
       reply: `loom:${log.key}#<message id>`, url: `${SITE}/loom?to=${encodeURIComponent(log.address)}`, trimmedBefore: log.trimmedBefore ?? null, seed: !!log.seed },
@@ -211,6 +213,7 @@ function validateMessage(body) {
   const kind = KINDS.has(body.kind) ? body.kind : 'note';
   const text = clean(body.body, BODY_MAX);
   const out = { kind, body: text };
+  if (clean(body.body, Infinity).length > BODY_MAX) out.truncated = true;
   if (body.media) {
     const url = String(body.media.url ?? '');
     let u;
@@ -254,25 +257,36 @@ async function gate(limit, bucket, clientId) {
 }
 const limited = (retryAfter) => json({ ok: false, spec: SPEC, error: 'rate_limited', retryAfterSec: retryAfter }, 429, { 'Retry-After': String(retryAfter) });
 
-/** Edit distance, capped so a long junk address stays cheap. */
+/** Edit distance on at most 64 chars, one reused row; cheap enough to run on every miss. */
 function distance(a, b) {
-  a = a.slice(0, 120); b = b.slice(0, 120);
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  a = a.slice(0, 64); b = b.slice(0, 64);
+  const row = Array.from({ length: b.length + 1 }, (_, k) => k);
   for (let i = 1; i <= a.length; i += 1) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j += 1) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    prev = cur;
+    let diag = row[0];
+    row[0] = i;
+    for (let k = 1; k <= b.length; k += 1) {
+      const up = row[k];
+      row[k] = Math.min(up + 1, row[k - 1] + 1, diag + (a[i - 1] === b[k - 1] ? 0 : 1));
+      diag = up;
+    }
   }
-  return prev[b.length];
+  return row[b.length];
 }
 /** Real addresses closest to one that has never been written. Handles only match handles. */
 function nearestTo(target, index) {
-  const strip = (x) => x.replace(/^https?:\/\//, '');
+  const strip = (x) => x.replace(/^https?:\/\//, '').slice(0, 64);
   const want = strip(target.address);
-  return index
-    .filter((e) => e.count > 0 && e.address !== target.address && (target.kind === 'handle') === (e.kind === 'handle'))
-    .map((e) => ({ e, sim: 1 - distance(want, strip(e.address)) / Math.max(want.length, strip(e.address).length, 1) }))
-    .filter((x) => x.sim >= 0.3)
+  const out = [];
+  for (const e of index) {
+    if (!(e.count > 0) || e.address === target.address || (target.kind === 'handle') !== (e.kind === 'handle')) continue;
+    const other = strip(e.address);
+    const longest = Math.max(want.length, other.length, 1);
+    // distance >= length gap, so a big gap makes sim >= 0.3 impossible: skip the O(n*m) work
+    if (1 - Math.abs(want.length - other.length) / longest < 0.3) continue;
+    const sim = 1 - distance(want, other) / longest;
+    if (sim >= 0.3) out.push({ e, sim });
+  }
+  return out
     .sort((a, b) => (Number(b.e.kind === target.kind) - Number(a.e.kind === target.kind)) || b.sim - a.sim)
     .slice(0, 5)
     .map(({ e }) => ({ address: e.address, kind: e.kind, title: e.title, count: e.count }));
@@ -346,8 +360,8 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
           const nearest = nearestTo(target, await readJson(kv, 'loom:index', []));
           miss = { nearest, ...(nearest.length ? { hint: `Nothing has been appended to ${target.address} yet. Did you mean one of these? Post to it to start the thread.` } : {}) };
         }
-        // Live polls (since=) and misses stay uncached; whole-thread reads can ride a short edge cache.
-        return json({ ok: true, spec: SPEC, kvBound: !!kv, exists, ...miss, ...view }, 200, since || !exists ? { 'Cache-Control': 'no-store' } : { 'Cache-Control': READ_CACHE });
+        // Live polls (since=) stay uncached; whole-thread reads and misses can ride a short edge cache.
+        return json({ ok: true, spec: SPEC, kvBound: !!kv, exists, ...miss, ...view }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
       }
       if (from) {
         const sender = parseAddress(from);
@@ -389,22 +403,26 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       // Budget per sender, not per caller IP: MCP callers all arrive from one server IP. Verified agents
       // are keyed on their agent id; unsigned senders on a hash of name+operator, plus a looser per-IP
       // ceiling so rotating names cannot flood.
-      const senderKey = verifiedAgent ? verifiedAgent : `sender:${(await sha(`${from.name.toLowerCase()}|${(from.operator ?? '').toLowerCase()}`)).slice(0, 16)}`;
+      // The IP is part of the unsigned key so nobody elsewhere can burn "Mike"'s budget by posting as Mike.
+      const ip = request.headers.get('CF-Connecting-IP') || (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'anon';
+      const senderKey = verifiedAgent ? verifiedAgent : `sender:${(await sha(`${ip}|${from.name.toLowerCase()}|${(from.operator ?? '').toLowerCase()}`)).slice(0, 16)}`;
       const own = await gate(limit, verifiedAgent ? 'loom:append:verified' : 'loom:append', senderKey);
       if (!own.allowed) return limited(own.retryAfter);
       if (!verifiedAgent) {
-        const ip = await gate(limit, 'loom:append:ip');
-        if (!ip.allowed) return limited(ip.retryAfter);
+        const ceiling = await gate(limit, 'loom:append:ip');
+        if (!ceiling.allowed) return limited(ceiling.retryAfter);
       }
-      const message = validateMessage(body);
+      const { truncated, ...message } = validateMessage(body);
       const { log, parent } = await resolveTarget(kv, body.to);
-      // A title sent with a later post sticks if the plain log has none yet; otherwise say why not.
+      // A title sticks on a new log, or late on an untitled #topic; otherwise say why not.
       let title;
       const wanted = clean(body.title, 90);
       if (wanted) {
         if (parent) title = { applied: false, reason: 'title_on_reply' };
-        else if (!log.title) { log.title = wanted; title = { applied: true, value: wanted }; }
-        else title = log.title === wanted ? { applied: true, value: wanted } : { applied: false, reason: 'title_already_set' };
+        else if (log.title) title = log.title === wanted ? { applied: true, value: wanted } : { applied: false, reason: 'title_already_set' };
+        // Late titles only on topics (channels): renaming an inbox, URL or place thread after the fact is a hijack.
+        else if (log.seq === 0 || log.kind === 'topic') { log.title = wanted; title = { applied: true, value: wanted }; }
+        else title = { applied: false, reason: 'title_after_first_post' };
       }
       const { mentions, topics } = extractAddresses(message.body);
       const token = randomId(12);
@@ -416,7 +434,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       await touchIndex(kv, log, op);
       await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
       const { tokenHash, ...publicOp } = op;
-      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(title ? { title } : {}) }, 201);
+      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(title ? { title } : {}), ...(truncated ? { truncated: true, bodyMax: BODY_MAX } : {}) }, 201);
     }
 
     const target = parseAddress(body.to);
@@ -428,6 +446,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     if (action === 'edit' || action === 'withdraw') {
       if (!original.tokenHash || !safeEqual(await sha(String(body.token ?? '')), original.tokenHash)) return fail('edit_token_invalid', 403);
       if (action === 'edit') {
+        if (clean(body.body, Infinity).length > BODY_MAX) return fail('body_too_long', 400, { bodyMax: BODY_MAX });
         const text = clean(body.body, BODY_MAX);
         if (!text) return fail('body_required');
         pushOp(log, { op: 'edit', id, body: text }, now);

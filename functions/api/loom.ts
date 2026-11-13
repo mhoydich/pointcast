@@ -22,8 +22,8 @@ type Env = {
 const LIMITS: Record<string, { windowSec: number; maxRequests: number }> = {
   'loom:append': { windowSec: 600, maxRequests: 12 },
   'loom:append:verified': { windowSec: 600, maxRequests: 60 },
-  // Looser per-IP ceiling behind the per-sender budget, so rotating names cannot flood.
-  'loom:append:ip': { windowSec: 600, maxRequests: 60 },
+  // Per-IP ceiling (2x one sender's budget) behind the per-sender budget, so rotating names cannot flood.
+  'loom:append:ip': { windowSec: 600, maxRequests: 24 },
   'loom:plus': { windowSec: 600, maxRequests: 60 },
 };
 

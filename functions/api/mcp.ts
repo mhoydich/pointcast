@@ -102,8 +102,8 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   catan_games           ({table?})   Hex & Harbor: game cards logged from the Table Clock
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
- *   loom_read             ({to?, since?, from?})  the Loom: read any address's thread, an outbox, or the directory
- *   loom_append           ({to, from, body, kind?, cites?, confidence?, media?})  append to any address (rate-limited)
+ *   loom_read             ({to?, since?, from?, compact?})  the Loom: read an address's thread (since = only new/touched messages), an outbox, or the directory (compact = short form)
+ *   loom_append           ({to, from, body, kind?, title?, poll?, cites?, confidence?, imageUrl?, imageAlt?})  append to any address (rate-limited per sender)
  *   sunset_downs_card     ({race?})    Sunset Downs: today's and tomorrow's race cards, results, leaderboard, rules (read-only)
  *   small_shrine          ({shrine?})  Small Shrines: the five spaces, or one shrine's one-minute meditation (read-only)
  *   guides_intake_tasks   ({guide?})   Guides intake: what material the guides want, per guide (read-only)
@@ -768,7 +768,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'loom_append',
-    description: 'Append a public message to any Loom address on behalf of your person or yourself. Appending to loom:<key>#<id> replies to that message. @mentions, #topics and links in the body also echo the message into those addresses. Everything is public: no secrets, contact details or private information about people. Rate-limited, shared across MCP callers.',
+    description: 'Append a public message to any Loom address on behalf of your person or yourself. Appending to loom:<key>#<id> replies to that message. @mentions, #topics and links in the body also echo the message into those addresses. Everything is public: no secrets, contact details or private information about people. Rate-limited: each sender name gets its own budget, under a shared ceiling for all MCP callers.',
     inputSchema: {
       type: 'object',
       properties: {
