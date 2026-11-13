@@ -30,7 +30,7 @@ const SCENES = ['light-the-hearth', 'the-shelf', 'pieces-roam', 'the-rounds', 't
 test('every page that was asked for has a card: the hubs, the street\'s scenes, the studies', () => {
   const want = [
     '/baby-bonfire/', ...SCENES.map((s) => `/baby-bonfire/${s}/`),
-    ...['open-spec', 'open-mesh', 'barter-board', 'make-a-piece', 'first-place', 'prayer', 'higher-purpose', 'room', 'ar'].map((s) => `/baby-bonfire/${s}/`),
+    ...['open-spec', 'open-mesh', 'barter-board', 'make-a-piece', 'first-place', 'prayer', 'hearth-kit', 'higher-purpose', 'room', 'ar'].map((s) => `/baby-bonfire/${s}/`),
     '/coast-commons/', '/coast-commons/el-segundo/', '/coast-commons/pattern/', '/coast-commons/sb-surf-house/', '/coast-commons/fresh-milk/',
     ...['malibu', 'santa-monica', 'venice', 'marina-del-rey', 'playa-del-rey', 'manhattan-beach', 'hermosa-beach', 'redondo-beach', 'torrance', 'palos-verdes-estates', 'rancho-palos-verdes', 'san-pedro', 'long-beach', 'seal-beach'].map((s) => `/coast-commons/${s}/`),
     '/house/', '/house/about/',
