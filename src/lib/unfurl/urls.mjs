@@ -57,7 +57,7 @@ export function gardenCardUrl(beat = 0, bucket = '', origin = SITE) {
 export function isGeneratedCard(href) {
   try {
     const { pathname } = new URL(href, SITE);
-    return pathname === '/og/page.png' || pathname === '/og/quartet.png' || pathname === '/og/garden.png' || pathname.startsWith('/og/live/');
+    return pathname === '/og/page.png' || pathname === '/og/quartet.png' || pathname === '/og/garden.png' || pathname === '/og/loom.png' || pathname.startsWith('/og/live/');
   } catch {
     return false;
   }
