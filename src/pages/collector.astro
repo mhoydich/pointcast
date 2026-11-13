@@ -1,0 +1,252 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import snap from '../data/collector.json';
+
+const toTez = (m: number) => (m / 1_000_000).toFixed(6).replace(/\.?0+$/, '') || '0';
+const shortAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const ipfs = (u?: string) => (u && u.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${u.slice(7)}` : u || '');
+const cleanName = (s: string) => s.replace(/\\u0000/g, '').replace(/[^\x20-\x7E -￿]/g, '').replace(/[�]/g, '').trim();
+const fmtTime = (iso: string) => iso.replace('T', ' ').replace(/:\d\dZ$/, ' UTC');
+const asOfDay = snap.asOf.slice(0, 10);
+
+const holdings = snap.holdings.map((h) => ({
+  ...h,
+  name: cleanName(h.name) || `Token ${h.tokenId}`,
+  img: ipfs(h.image),
+}));
+---
+
+<BlockLayout
+  title="The Collector"
+  description="An agent wallet that collects on its own. Every action is on chain and linked."
+>
+  <div class="cl">
+    <a class="cl-back" href="/">&larr; PointCast</a>
+
+    <header class="cl-head">
+      <p class="cl-kicker">Collector</p>
+      <h1>The Collector</h1>
+      <p class="cl-dek">An agent wallet that collects on its own. Every action is on chain and linked.</p>
+      <p class="cl-fresh" id="cl-fresh" aria-live="polite">Snapshot from {asOfDay}</p>
+    </header>
+
+    <section aria-labelledby="cl-wallet">
+      <h2 id="cl-wallet">Wallet</h2>
+      <dl class="cl-stats">
+        <div class="cl-stat cl-stat--wide">
+          <dt>Address</dt>
+          <dd>
+            <a href={`https://tzkt.io/${snap.address}`} rel="noopener" title={snap.address}><code>{shortAddr(snap.address)}</code></a>
+            <button type="button" class="cl-copy" id="cl-copy" data-addr={snap.address}>Copy full address</button>
+          </dd>
+        </div>
+        <div class="cl-stat"><dt>Balance</dt><dd><span id="cl-balance">{toTez(snap.balanceMutez)}</span> tez</dd></div>
+        <div class="cl-stat"><dt>Pieces held</dt><dd id="cl-held">{holdings.length}</dd></div>
+        <div class="cl-stat"><dt>Operations</dt><dd id="cl-ops">{snap.ledger.length}</dd></div>
+      </dl>
+    </section>
+
+    <section aria-labelledby="cl-shelf">
+      <h2 id="cl-shelf">Shelf</h2>
+      <ul class="cl-grid" id="cl-grid">
+        {holdings.map((h) => (
+          <li class="cl-tile">
+            <a href={`https://objkt.com/tokens/${h.contract}/${h.tokenId}`} rel="noopener">
+              <div class="cl-img">
+                {h.img ? <img src={h.img} alt={h.name} loading="lazy" decoding="async" referrerpolicy="no-referrer" /> : <span class="cl-ph" aria-hidden="true"></span>}
+              </div>
+              <span class="cl-name">{h.name}</span>
+              <span class="cl-meta">{shortAddr(h.contract)} · #{h.tokenId}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section aria-labelledby="cl-ledger">
+      <h2 id="cl-ledger">Ledger</h2>
+      <ol class="cl-ledger" id="cl-ledger-list">
+        {snap.ledger.map((l) => (
+          <li>
+            <time datetime={l.time}>{fmtTime(l.time)}</time>
+            <span class="cl-act">{l.action}</span>
+            <span class="cl-cost">{toTez(l.costMutez)} tez</span>
+            <a href={`https://tzkt.io/${l.hash}`} rel="noopener">{l.hash.slice(0, 8)}…</a>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section aria-labelledby="cl-bench">
+      <h2 id="cl-bench">Benchmarks</h2>
+      <ol class="cl-bench">
+        {snap.benchmarks.map((b) => (
+          <li class={b.done ? 'is-done' : 'is-todo'}>
+            <span class="cl-state">{b.done ? 'Done' : 'Not yet'}</span>
+            <span>{b.label}{b.note ? <small> ({b.note})</small> : null}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section aria-labelledby="cl-how">
+      <h2 id="cl-how">How it works</h2>
+      <p>A person funds the wallet once. Each action is capped under 1 tez. Nothing here is financial advice or a sale.</p>
+    </section>
+  </div>
+
+  <style is:global>
+    .cl { max-width: 52rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; color: var(--pc-ink); }
+    .cl-back { font: 0.7rem var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; }
+    .cl-head { margin: 1.5rem 0 2rem; }
+    .cl-kicker { font: 0.7rem var(--pc-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 0 0 .5rem; }
+    .cl h1 { font-size: clamp(1.9rem, 6vw, 2.8rem); line-height: 1.1; margin: 0 0 .6rem; font-weight: 600; letter-spacing: -.02em; }
+    .cl h2 { font-size: 1.15rem; margin: 2.5rem 0 .9rem; padding-top: 1rem; border-top: 1px solid var(--pc-rule); font-weight: 600; }
+    .cl-dek { font-size: 1.05rem; color: var(--pc-ink-soft); margin: 0 0 .6rem; max-width: 34rem; }
+    .cl-fresh { font: 0.7rem var(--pc-font-mono); color: var(--pc-ink-muted); margin: 0; }
+    .cl-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin: 0; }
+    .cl-stat { border: 1px solid var(--pc-rule-soft); padding: .75rem .9rem; min-width: 0; }
+    .cl-stat--wide { grid-column: 1 / -1; }
+    .cl-stat dt { font: 0.65rem var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--pc-ink-muted); margin-bottom: .25rem; }
+    .cl-stat dd { margin: 0; font-size: 1.15rem; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; overflow-wrap: anywhere; }
+    .cl-copy { font: 0.7rem var(--pc-font-mono); border: 1px solid var(--pc-rule); background: transparent; color: var(--pc-ink); padding: .4rem .7rem; min-height: 2.25rem; cursor: pointer; }
+    .cl-copy:hover { border-color: var(--pc-ink); }
+    .cl a:focus-visible, .cl button:focus-visible { outline: 2px solid var(--pc-accent); outline-offset: 2px; }
+    .cl-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 1rem; }
+    .cl-tile a { display: block; color: inherit; }
+    .cl-img { aspect-ratio: 1 / 1; background: var(--pc-rule-soft); overflow: hidden; }
+    .cl-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .cl-ph { display: block; width: 100%; height: 100%; }
+    .cl-name { display: block; margin-top: .4rem; font-size: .9rem; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+    .cl-meta { display: block; font: 0.65rem var(--pc-font-mono); color: var(--pc-ink-muted); }
+    .cl-tile a:hover .cl-name { color: var(--pc-accent); }
+    .cl-ledger, .cl-bench { list-style: none; margin: 0; padding: 0; }
+    .cl-ledger li { display: grid; grid-template-columns: 9.5rem 1fr auto auto; gap: .25rem .9rem; padding: .7rem 0; border-bottom: 1px solid var(--pc-rule-soft); align-items: baseline; }
+    .cl-ledger time, .cl-cost, .cl-ledger a { font: 0.75rem var(--pc-font-mono); }
+    .cl-ledger time { color: var(--pc-ink-muted); }
+    .cl-bench li { display: grid; grid-template-columns: 5.5rem 1fr; gap: .9rem; padding: .55rem 0; border-bottom: 1px solid var(--pc-rule-soft); }
+    .cl-bench small { color: var(--pc-ink-muted); }
+    .cl-state { font: 0.7rem var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+    .cl-bench .is-done .cl-state { color: var(--pc-accent); font-weight: 700; }
+    .cl-bench .is-todo .cl-state { color: var(--pc-ink-muted); }
+    .cl p { line-height: 1.6; color: var(--pc-ink-soft); }
+    @media (max-width: 560px) {
+      .cl-stats { grid-template-columns: 1fr 1fr; }
+      .cl-stat--wide { grid-column: 1 / -1; }
+      .cl-ledger li { grid-template-columns: 1fr auto; }
+      .cl-ledger time { grid-column: 1 / -1; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .cl-copy, .cl-tile .cl-name { transition: color .15s, border-color .15s; }
+    }
+  </style>
+
+  <script is:inline data-astro-rerun>
+    (function () {
+      var ADDR = "tz1UWibBbQXvuSkThsLUGAaL4R5j7X3PSCKj";
+      var API = "https://api.tzkt.io/v1";
+      var $ = function (id) { return document.getElementById(id); };
+      var grid = $("cl-grid");
+      if (!grid) return;
+      var copy = $("cl-copy");
+      if (copy) copy.addEventListener("click", function () {
+        var done = function () { copy.textContent = "Copied"; setTimeout(function () { copy.textContent = "Copy full address"; }, 1500); };
+        if (navigator.clipboard) navigator.clipboard.writeText(copy.dataset.addr).then(done, function () {});
+      });
+
+      var short = function (a) { return a.slice(0, 6) + "…" + a.slice(-4); };
+      var tez = function (m) { return (m / 1e6).toFixed(6).replace(/\.?0+$/, "") || "0"; };
+      var clean = function (s) {
+        return String(s || "").replace(/\\u0000/g, "").replace(/[^\x20-\x7E -￼]/g, "").trim();
+      };
+      var ipfs = function (u) { return u && u.indexOf("ipfs://") === 0 ? "https://ipfs.io/ipfs/" + u.slice(7) : (u || ""); };
+      var el = function (tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+      var get = function (path) {
+        return fetch(API + path).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+      };
+
+      var known = {};
+      document.querySelectorAll("#cl-ledger-list a").forEach(function (a) {
+        var h = a.href.split("/").pop();
+        var li = a.closest("li");
+        known[h] = li.querySelector(".cl-act").textContent;
+      });
+
+      function plain(entry) {
+        var ep = entry.ep || "";
+        if (/mint/i.test(ep)) return "Minted a token";
+        if (ep === "fulfill_ask" || /collect/i.test(ep)) return "Collected a piece on objkt";
+        if (ep === "ask") return "Listed a piece for sale on objkt";
+        return "Called " + (ep || "a contract") + " on " + short(entry.target || "");
+      }
+
+      Promise.all([
+        get("/accounts/" + ADDR + "/balance"),
+        get("/tokens/balances?account=" + ADDR + "&balance.gt=0&limit=100"),
+        get("/accounts/" + ADDR + "/operations?type=transaction&limit=50&sort.desc=id")
+      ]).then(function (res) {
+        var bal = res[0], toks = res[1], ops = res[2];
+        if (typeof bal !== "number" || !Array.isArray(toks) || !Array.isArray(ops)) throw new Error("shape");
+
+        $("cl-balance").textContent = tez(bal);
+        $("cl-held").textContent = toks.length;
+
+        // Only show collections the wallet chose to collect; ignore unsolicited airdrops.
+        var ALLOW = { "KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh": 1, "KT1Qc77qoVQadgwCqrqscWsgQ75aa3Rt1MrP": 1, "KT1Tf6uETqyQGvhomgmycy5SLsiybQ5niiQ3": 1, "KT1XaCf6gkjFnKg3QmPfn6gep53moMvjkj1E": 1, "KT1GV95CzgnkgoQ6W63J9d3c6ngGthJNFrXr": 1, "KT1WYHMqK2MSHz4RgV7sQ1Gb2YuF35zbqdGg": 1 };
+        toks = toks.filter(function (b) { return ALLOW[((b.token || {}).contract || {}).address || ""]; });
+        $("cl-held").textContent = toks.length;
+
+        var tiles = toks.map(function (b) {
+          var t = b.token || {}, m = t.metadata || {}, c = (t.contract || {}).address || "";
+          var name = clean(m.name);
+          var img = ipfs(m.displayUri || m.thumbnailUri || m.artifactUri);
+          if (c === "KT1LP1oTBuudRubAYQDErH7i7mSwazVdohxh") {
+            name = "Noun " + t.tokenId;
+            img = "https://noun.pics/" + t.tokenId + ".svg";
+          }
+          if (!name) name = "Token " + t.tokenId;
+          var li = el("li", "cl-tile");
+          var a = el("a");
+          a.href = "https://objkt.com/tokens/" + c + "/" + t.tokenId;
+          a.rel = "noopener";
+          var box = el("div", "cl-img");
+          if (img) {
+            var im = el("img"); im.src = img; im.alt = name; im.loading = "lazy"; im.decoding = "async"; im.referrerPolicy = "no-referrer";
+            box.appendChild(im);
+          } else { var ph = el("span", "cl-ph"); ph.setAttribute("aria-hidden", "true"); box.appendChild(ph); }
+          a.appendChild(box);
+          a.appendChild(el("span", "cl-name", name));
+          a.appendChild(el("span", "cl-meta", short(c) + " · #" + t.tokenId));
+          li.appendChild(a);
+          return li;
+        });
+        if (tiles.length) { grid.replaceChildren.apply(grid, tiles); }
+
+        var groups = {}, order = [];
+        ops.forEach(function (o) {
+          var h = o.hash;
+          if (!groups[h]) { groups[h] = { hash: h, time: o.timestamp, cost: 0, ep: "", target: "" }; order.push(h); }
+          var g = groups[h];
+          g.cost += (o.bakerFee || 0) + (o.storageFee || 0) + (o.allocationFee || 0) + (o.initiator ? 0 : (o.amount || 0));
+          if (!o.initiator && o.parameter) { g.ep = o.parameter.entrypoint; g.target = (o.target || {}).address || ""; }
+        });
+        $("cl-ops").textContent = order.length;
+        var list = $("cl-ledger-list");
+        var rows = order.map(function (h) {
+          var g = groups[h];
+          var li = el("li");
+          var tm = el("time", null, g.time.replace("T", " ").replace(/:\d\dZ$/, " UTC")); tm.dateTime = g.time;
+          li.appendChild(tm);
+          li.appendChild(el("span", "cl-act", known[h] || plain(g)));
+          li.appendChild(el("span", "cl-cost", tez(g.cost) + " tez"));
+          var a = el("a", null, h.slice(0, 8) + "…"); a.href = "https://tzkt.io/" + h; a.rel = "noopener";
+          li.appendChild(a);
+          return li;
+        });
+        if (rows.length) list.replaceChildren.apply(list, rows);
+
+        $("cl-fresh").textContent = "Live from tzkt, " + new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+      }).catch(function () { /* keep the baked snapshot */ });
+    })();
+  </script>
+</BlockLayout>
