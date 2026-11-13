@@ -2,16 +2,20 @@
    display only: shows what a Tezos wallet holds (its collection), read from the public
    TzKT indexer. no wallet connect, no sign-in, no keys, no write calls, no tracking.
    <div data-office-shelf data-wallet="tz1..."></div>
+   optional: data-title, data-limit (1-48, default 12), data-snapshot (id of a json script),
+   data-api (api.tzkt.io or api.ghostnet.tzkt.io only), data-include="all" (keep the wallet's
+   own mints), data-images="any" (allow any https image host; default is ipfs.io only).
    token names and urls are untrusted: everything is built with createElement and
    textContent, and urls are only used after they parse as https:. */
 (function () {
   "use strict";
 
-  var VERSION = "1.0.0";
+  var VERSION = "1.1.0";
   var ADDRESS = /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/;
   var CONTRACT = /^KT1[1-9A-HJ-NP-Za-km-z]{33}$/;
   var TOKEN_ID = /^\d{1,20}$/;
   var DEFAULT_API = "https://api.tzkt.io";
+  var API_HOSTS = ["api.tzkt.io", "api.ghostnet.tzkt.io"];
   var NAME_MAX = 80;
   var ALIAS_MAX = 40;
   var MAX_COUNT = 1e9;
@@ -57,11 +61,21 @@
     return ipfsOnly ? "" : safeHttps(uri);
   }
 
+  // strips control, format and bidi characters; truncates by code point, never mid-pair.
   function cleanText(value, max, fallback) {
-    var text = typeof value === "string" ? value : "";
-    text = text.replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g, " ").replace(/\s+/g, " ").trim();
+    var text = typeof value === "string" ? value.slice(0, max * 4) : "";
+    text = text.replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u206f\ufeff]/g, " ").replace(/\s+/g, " ").trim();
     if (!text) return fallback;
-    return text.length > max ? text.slice(0, max - 1) + "…" : text;
+    var chars = Array.from(text);
+    return chars.length > max ? chars.slice(0, max - 1).join("") + "\u2026" : text;
+  }
+
+  // the indexer must be TzKT (mainnet or ghostnet) over https; anything else falls back to the default.
+  function apiBase(value) {
+    var href = safeHttps(typeof value === "string" ? value.trim() : "");
+    if (!href) return DEFAULT_API;
+    var url = new URL(href);
+    return API_HOSTS.indexOf(url.hostname) === -1 || url.port || url.username || url.password ? DEFAULT_API : "https://" + url.hostname;
   }
 
   // returns a whole number in [0, MAX_COUNT), or null.
@@ -72,7 +86,7 @@
   }
 
   function shortAddress(address) {
-    return address.slice(0, 6) + "…" + address.slice(-4);
+    return address.slice(0, 6) + "\u2026" + address.slice(-4);
   }
 
   function formatTime(iso) {
@@ -82,7 +96,7 @@
   }
 
   function formatNumber(n) {
-    if (n === null || n === undefined) return "—";
+    if (n === null || n === undefined) return "\u2014";
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
@@ -108,6 +122,8 @@
     if (!token) return null;
     var contract = token.contract && typeof token.contract === "object" ? token.contract : {};
     var meta = token.metadata && typeof token.metadata === "object" ? token.metadata : {};
+    var decimals = Number(meta.decimals);
+    if (Number.isFinite(decimals) && decimals > 0) return null; // fungible tokens are not shelf pieces
     return {
       contract: typeof contract.address === "string" ? contract.address : "",
       alias: typeof contract.alias === "string" ? contract.alias : "",
@@ -125,7 +141,7 @@
     return {
       wallet: wallet,
       at: typeof raw.at === "string" ? raw.at : "",
-      held: toCount(raw.held),
+      collected: toCount(raw.collected),
       items: items.filter(function (t) { return t && typeof t === "object"; }).map(function (t) {
         return {
           contract: typeof t.contract === "string" ? t.contract : "",
@@ -140,12 +156,14 @@
   }
 
   // the only two urls the shelf ever requests. both are GET reads of public data.
+  // the list asks for a few extra rows because fungible tokens are dropped after the fact.
   function requestUrls(api, wallet, limit, includeOwn) {
-    var base = api + "/v1";
-    var list = base + "/tokens/balances?account=" + wallet + "&balance.gt=0" +
-      (includeOwn ? "" : "&token.firstMinter.ne=" + wallet) +
-      "&sort.desc=lastTime&limit=" + limit + "&select=balance,lastTime,token";
-    return { account: base + "/accounts/" + wallet, list: list };
+    var filter = "?account=" + wallet + "&balance.gt=0" + (includeOwn ? "" : "&token.firstMinter.ne=" + wallet);
+    var base = api + "/v1/tokens/balances";
+    return {
+      count: base + "/count" + filter,
+      list: base + filter + "&sort.desc=lastTime&limit=" + Math.min(100, limit + 12) + "&select=balance,lastTime,token"
+    };
   }
 
   function getJson(url, signal) {
@@ -169,17 +187,16 @@
         reject(new Error("timeout"));
       }, TIMEOUT_MS);
     });
-    var work = Promise.all([getJson(urls.account, signal), getJson(urls.list, signal)]);
+    var work = Promise.all([getJson(urls.count, signal), getJson(urls.list, signal)]);
     work.then(function () { clearTimeout(timer); }, function () { clearTimeout(timer); });
     return Promise.race([work, timeout]).then(function (parts) {
-      var account = parts[0] && typeof parts[0] === "object" ? parts[0] : {};
       var rows = Array.isArray(parts[1]) ? parts[1] : [];
       var items = [];
       rows.forEach(function (row) {
         var item = fromBalance(row, config.ipfsOnly);
         if (item) items.push(item);
       });
-      return { wallet: config.wallet, at: new Date().toISOString(), held: toCount(account.activeTokensCount), items: items };
+      return { wallet: config.wallet, at: new Date().toISOString(), collected: toCount(parts[0]), items: items };
     });
   }
 
@@ -219,9 +236,13 @@
       frame.setAttribute("class", "td-frame td-frame-empty");
     }
     box.appendChild(frame);
-    box.appendChild(el("span", "td-name", cleanText(item.name, NAME_MAX, "untitled")));
+    var name = el("span", "td-name", cleanText(item.name, NAME_MAX, "untitled"));
+    name.setAttribute("dir", "auto");
+    box.appendChild(name);
     var from = cleanText(item.alias, ALIAS_MAX, "");
-    box.appendChild(el("span", "td-meta", "×" + formatNumber(item.balance) + (from ? " · " + from : "")));
+    var meta = el("span", "td-meta", formatNumber(item.balance) + " held" + (from ? " \u00b7 " + from : ""));
+    meta.setAttribute("dir", "auto");
+    box.appendChild(meta);
     li.appendChild(box);
     return li;
   }
@@ -240,8 +261,8 @@
 
     if (data) {
       var stats = el("dl", "td-stats");
-      stats.appendChild(stat("held", formatNumber(data.held)));
-      stats.appendChild(stat("on the shelf", formatNumber(Math.min(data.items.length, config.limit))));
+      stats.appendChild(stat("collected", formatNumber(data.collected)));
+      stats.appendChild(stat("shown", formatNumber(Math.min(data.items.length, config.limit))));
       content.appendChild(stats);
 
       if (data.items.length) {
@@ -291,13 +312,14 @@
       return;
     }
 
-    var apiAttr = (root.getAttribute("data-api") || "").trim();
     var config = {
       wallet: wallet,
       title: cleanText(root.getAttribute("data-title"), 80, "the shelf"),
       limit: clampLimit(root.getAttribute("data-limit")),
-      api: (safeHttps(apiAttr) || DEFAULT_API).replace(/\/+$/, ""),
-      ipfsOnly: (root.getAttribute("data-images") || "").trim().toLowerCase() === "ipfs",
+      api: apiBase(root.getAttribute("data-api")),
+      // images load only through ipfs.io unless the page opts in with data-images="any",
+      // so a token's creator can't log visitors from their own image host.
+      ipfsOnly: (root.getAttribute("data-images") || "").trim().toLowerCase() !== "any",
       includeOwn: (root.getAttribute("data-include") || "").trim().toLowerCase() === "all",
       status: el("p", "td-status")
     };
@@ -331,7 +353,7 @@
   window.OfficeShelf = {
     mount: mount,
     version: VERSION,
-    _test: { safeHttps: safeHttps, ipfsUrl: ipfsUrl, resolveImage: resolveImage, cleanText: cleanText, toCount: toCount, fromBalance: fromBalance, normalise: normalise, requestUrls: requestUrls, clampLimit: clampLimit }
+    _test: { safeHttps: safeHttps, ipfsUrl: ipfsUrl, resolveImage: resolveImage, cleanText: cleanText, toCount: toCount, fromBalance: fromBalance, normalise: normalise, requestUrls: requestUrls, clampLimit: clampLimit, apiBase: apiBase }
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mountAll);

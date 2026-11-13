@@ -35,11 +35,12 @@ class Node {
   querySelectorAll(sel) { const m = /^\[([\w-]+)\]$/.exec(sel); return m ? this.all().filter((n) => n.getAttribute(m[1]) !== null) : []; }
 }
 
-function harness({ attrs = {}, respond }) {
+function harness({ attrs = {}, respond, snapshot }) {
   const root = new Node("div");
   Object.assign(root.attrs, { "data-office-shelf": "", ...attrs });
   const body = new Node("body");
   body.appendChild(root);
+  if (snapshot) { const snap = new Node("script"); snap.attrs.id = snapshot.id; snap._text = snapshot.text; body.appendChild(snap); }
   const calls = [];
   const document = {
     readyState: "complete",
@@ -71,7 +72,7 @@ const ROWS = [
 ];
 
 test("only GET reads of public TzKT data, no credentials, no referrer", async () => {
-  const { calls } = harness({ attrs: { "data-wallet": WALLET }, respond: (u) => (u.includes("/accounts/") ? { activeTokensCount: 37 } : ROWS) });
+  const { calls } = harness({ attrs: { "data-wallet": WALLET }, respond: (u) => (u.includes("/count") ? 37 : ROWS) });
   await settle();
   assert.equal(calls.length, 2);
   for (const c of calls) {
@@ -85,7 +86,7 @@ test("only GET reads of public TzKT data, no credentials, no referrer", async ()
 });
 
 test("renders the collection, untrusted metadata only as text, unsafe links dropped", async () => {
-  const { root } = harness({ attrs: { "data-wallet": WALLET }, respond: (u) => (u.includes("/accounts/") ? { activeTokensCount: 37 } : ROWS) });
+  const { root } = harness({ attrs: { "data-wallet": WALLET }, respond: (u) => (u.includes("/count") ? 37 : ROWS) });
   await settle();
   const cards = root.all().filter((n) => n.getAttribute("data-td-key") !== null);
   assert.equal(cards.length, 3);
@@ -104,7 +105,7 @@ test("renders the collection, untrusted metadata only as text, unsafe links drop
 });
 
 test("no connect, no sign-in, no forms or buttons anywhere", async () => {
-  const { root } = harness({ attrs: { "data-wallet": WALLET }, respond: (u) => (u.includes("/accounts/") ? {} : ROWS) });
+  const { root } = harness({ attrs: { "data-wallet": WALLET }, respond: (u) => (u.includes("/count") ? 3 : ROWS) });
   await settle();
   for (const tag of ["button", "form", "input", "iframe", "script"]) assert.equal(find(root, tag).length, 0, tag);
   assert.ok(!/connect|sign in|sign-in/i.test(root.textContent));
@@ -125,11 +126,11 @@ test("bad wallet attribute: no requests at all", async () => {
   assert.ok(root.textContent.includes("no wallet set."));
 });
 
-test("data-api must be https, data-limit is clamped, data-include=all keeps own mints", async () => {
-  const { calls } = harness({ attrs: { "data-wallet": WALLET, "data-api": "http://evil.example", "data-limit": "999", "data-include": "all" }, respond: (u) => (u.includes("/accounts/") ? {} : []) });
+test("data-api must be TzKT over https, data-limit is clamped, data-include=all keeps own mints", async () => {
+  const { calls } = harness({ attrs: { "data-wallet": WALLET, "data-api": "http://evil.example", "data-limit": "999", "data-include": "all" }, respond: (u) => (u.includes("/count") ? 0 : []) });
   await settle();
   assert.ok(calls.every((c) => c.url.startsWith("https://api.tzkt.io/")));
-  assert.ok(calls[1].url.includes("limit=48"));
+  assert.ok(calls[1].url.includes("limit=60"), "48 shown plus headroom for dropped fungibles");
   assert.ok(!calls[1].url.includes("firstMinter"));
 });
 
@@ -141,4 +142,61 @@ test("helpers", () => {
   assert.equal(t.toCount("1e12"), null);
   assert.equal(t.toCount("-1"), null);
   assert.equal(t.clampLimit("0"), 1);
+});
+
+test("never writes markup: no innerHTML, outerHTML, insertAdjacentHTML or document.write", () => {
+  assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/.test(source));
+  assert.ok(!/[^\x00-\x7f]/.test(source), "source is plain ascii, so no hidden bidi characters");
+});
+
+test("an https host that is not TzKT is refused for data-api", async () => {
+  const { calls, shelf } = harness({ attrs: { "data-wallet": WALLET, "data-api": "https://evil.example" }, respond: (u) => (u.includes("/count") ? 0 : []) });
+  await settle();
+  assert.ok(calls.every((c) => c.url.startsWith("https://api.tzkt.io/v1/tokens/balances")));
+  assert.equal(shelf._test.apiBase("https://api.ghostnet.tzkt.io/"), "https://api.ghostnet.tzkt.io");
+  assert.equal(shelf._test.apiBase("https://api.tzkt.io:8443"), "https://api.tzkt.io");
+  assert.equal(shelf._test.apiBase("https://user@api.tzkt.io"), "https://api.tzkt.io");
+});
+
+test("images: ipfs.io only by default, any https host only with data-images=any", async () => {
+  const rows = [{ balance: "1", token: { contract: { address: KT }, tokenId: "5", metadata: { name: "x", displayUri: "https://tracker.example/pixel.png" } } }];
+  const a = harness({ attrs: { "data-wallet": WALLET }, respond: (u) => (u.includes("/count") ? 1 : rows) });
+  await settle();
+  assert.equal(find(a.root, "img").length, 0);
+  const b = harness({ attrs: { "data-wallet": WALLET, "data-images": "any" }, respond: (u) => (u.includes("/count") ? 1 : rows) });
+  await settle();
+  assert.equal(find(b.root, "img")[0].getAttribute("src"), "https://tracker.example/pixel.png");
+});
+
+test("fungible tokens are left off; counts are labelled collected and shown", async () => {
+  const rows = [
+    { balance: "1500000", token: { contract: { address: KT }, tokenId: "0", metadata: { name: "coin", decimals: "6" } } },
+    { balance: "2", token: { contract: { address: KT }, tokenId: "7", metadata: { name: "art", decimals: "0" } } }
+  ];
+  const { root } = harness({ attrs: { "data-wallet": WALLET }, respond: (u) => (u.includes("/count") ? 2 : rows) });
+  await settle();
+  const cards = root.all().filter((n) => n.getAttribute("data-td-key") !== null);
+  assert.equal(cards.length, 1);
+  assert.ok(root.textContent.includes("2 held"));
+  assert.ok(root.textContent.includes("collected") && root.textContent.includes("shown"));
+  assert.ok(!root.textContent.includes("1,500,000"));
+});
+
+test("names and aliases: bidi and zero-width characters stripped, truncation keeps surrogate pairs whole", () => {
+  const { shelf } = harness({ attrs: {}, respond: () => [] });
+  const t = shelf._test;
+  assert.equal(t.cleanText("a⁧b​c﻿d؜e", 80, ""), "a b c d e");
+  const long = "\u{1F438}".repeat(100);
+  const out = t.cleanText(long, 10, "");
+  assert.equal(Array.from(out).length, 10);
+  assert.ok(!/[\ud800-\udbff]$/.test(out.slice(0, -1)), "no lone high surrogate before the ellipsis");
+});
+
+test("snapshot is drawn first and kept when the chain is down", async () => {
+  const text = JSON.stringify({ wallet: WALLET, at: "2026-11-13T00:00:00Z", collected: 9, items: [{ contract: KT, tokenId: "3", name: "snap piece", image: "", balance: 1 }] });
+  const { root } = harness({ attrs: { "data-wallet": WALLET, "data-snapshot": "snap" }, respond: () => undefined, snapshot: { id: "snap", text } });
+  assert.ok(root.textContent.includes("snap piece"), "drawn before any network answer");
+  await settle();
+  assert.ok(root.textContent.includes("snap piece"));
+  assert.ok(root.textContent.includes("showing the snapshot from 2026-11-13 00:00 utc"));
 });
