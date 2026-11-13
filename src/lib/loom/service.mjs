@@ -126,10 +126,11 @@ const excerpt = (s, n = 140) => { const t = String(s ?? '').replace(/\s+/g, ' ')
 // Backfill: the first time loom:rooms reads empty it is seeded from the current
 // loom:index (bounded by MAX_INDEX). Rooms that were already dropped from the
 // index before this list existed can't be recovered; they reappear on their next post.
+const roomsOf = (index) => index.filter((e) => ROOM_KINDS.has(e.kind)).slice(0, MAX_ROOMS);
 async function loadRooms(kv, index) {
   const stored = await readJson(kv, 'loom:rooms', null);
-  if (stored) return stored;
-  const seeded = index.filter((e) => ROOM_KINDS.has(e.kind)).slice(0, MAX_ROOMS);
+  if (Array.isArray(stored)) return stored;
+  const seeded = roomsOf(index);
   if (kv && seeded.length) { try { await writeJson(kv, 'loom:rooms', seeded); } catch { /* best effort */ } }
   return seeded;
 }
@@ -140,11 +141,33 @@ async function touchIndex(kv, log, op) {
   const entry = { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, updatedAt: log.updatedAt, count: folded.count,
     last: { name: op.from?.name, kind: op.from?.kind, verified: !!op.from?.verified, body: excerpt(op.body, 120) } };
   const next = [entry, ...index.filter((e) => e.key !== log.key)].slice(0, MAX_INDEX);
+  // Link threads (most appends) skip the room list: one read-modify-write, as before.
   if (ROOM_KINDS.has(log.kind)) {
-    const rooms = await loadRooms(kv, index);
-    await writeJson(kv, 'loom:rooms', [entry, ...rooms.filter((e) => e.key !== log.key)].slice(0, MAX_ROOMS));
+    // One read, one write. Rooms still in the recent index are folded back in (newest copy wins),
+    // so an entry lost to a concurrent write of this list heals on the next room post.
+    const stored = await readJson(kv, 'loom:rooms', null);
+    const byKey = new Map();
+    for (const e of [...(Array.isArray(stored) ? stored : []), ...roomsOf(next)]) {
+      const had = byKey.get(e.key);
+      if (!had || String(e.updatedAt ?? '') >= String(had.updatedAt ?? '')) byKey.set(e.key, e);
+    }
+    const rooms = [...byKey.values()].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''))).slice(0, MAX_ROOMS);
+    await writeJson(kv, 'loom:rooms', rooms);
   }
   await writeJson(kv, 'loom:index', next);
+}
+
+// After an edit, withdraw or moderation hide: the directory excerpt and count must not keep
+// showing the old text. Updates the log's entry in place (no reordering) in both lists.
+async function retouchIndex(kv, log) {
+  const folded = fold(log.ops);
+  const latest = [...folded.messages].sort((a, b) => a.seq - b.seq).at(-1);
+  const last = latest ? { name: latest.from?.name, kind: latest.from?.kind, verified: !!latest.from?.verified, body: excerpt(latest.body, 120) } : null;
+  for (const name of ['loom:index', 'loom:rooms']) {
+    const list = await readJson(kv, name, null);
+    if (!Array.isArray(list) || !list.some((e) => e.key === log.key)) continue;
+    await writeJson(kv, name, list.map((e) => (e.key === log.key ? { ...e, count: folded.count, last } : e)));
+  }
 }
 
 const outboxAddress = (from) => from.address || `@${from.name.toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'anon'}`;
@@ -455,6 +478,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         let others = 0;
         logs = logs.filter((e) => {
           if (ROOM_KINDS.has(e.kind)) return true;
+          if (q) return true; // a search looks through everything, one-message links included
           if (e.kind === 'url' && (e.count ?? 0) < 2) return false;
           return (others += 1) <= MAX_WINDOW;
         });
@@ -549,6 +573,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       pushOp(log, { op: 'hide', id, reason: clean(body.reason, 80) || 'moderated' }, now);
     } else return fail('action_unknown');
     await saveLog(kv, log);
+    if (action !== 'plus' && action !== 'vote') { try { await retouchIndex(kv, log); } catch { /* the log is saved; the excerpt refreshes on the next post */ } }
     const view = publicView(log);
     return json({ ok: true, spec: SPEC, seq: log.seq, message: view.messages.find((m) => m.id === id) ?? null });
   } catch (error) {

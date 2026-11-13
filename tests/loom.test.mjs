@@ -356,3 +356,41 @@ test('C8: loom:rooms backfills once from the recent index', async () => {
   assert.ok(d.logs.some((e) => e.address === '#old'));
   assert.ok(JSON.parse(kv.map.get('loom:rooms')).some((e) => e.address === '#old'));
 });
+
+test('C8 review: a room survives more link threads than the recent index holds; search still finds one-message links', async () => {
+  const kv = memoryKv();
+  const clock = (() => { let t = Date.parse('2026-11-01T00:00:00Z'); return () => new Date((t += 1000)); })();
+  const p = (to, body) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, from: { name: 'bot', kind: 'agent' }, body, clientId: 'c8r' }) }), { kv, clock, firstHelloEnabled: false, limit: async () => true });
+  await p('#keeper', 'first');
+  await p('@keeper', 'hi');
+  for (let i = 0; i < 310; i += 1) assert.equal((await p(`https://example.com/q${i}`, `note ${i}`)).status, 201);
+  assert.ok(!JSON.parse(kv.map.get('loom:index')).some((e) => e.address === '#keeper'), 'the recent index really dropped the room');
+  const d = await get(kv, '');
+  assert.ok(d.logs.some((e) => e.address === '#keeper'));
+  assert.ok(d.logs.some((e) => e.address === '@keeper'));
+  assert.ok((await get(kv, '?kind=topic')).logs.some((e) => e.address === '#keeper'));
+  const found = await get(kv, '?q=q309');
+  assert.ok(found.logs.some((e) => e.address === 'https://example.com/q309'));
+  // A room entry lost from loom:rooms (concurrent write) heals from the recent index on the next room post.
+  await p('#second', 'x');
+  kv.map.set('loom:rooms', JSON.stringify(JSON.parse(kv.map.get('loom:rooms')).filter((e) => e.address !== '#second')));
+  await p('#third', 'y');
+  const rooms = JSON.parse(kv.map.get('loom:rooms')).map((e) => e.address);
+  assert.deepEqual(rooms.slice(0, 2), ['#third', '#second']);
+  assert.ok(rooms.includes('#keeper'));
+});
+
+test('C8 review: a withdrawn message leaves the directory excerpt in both lists', async () => {
+  const kv = memoryKv();
+  const alice = { name: 'alice', kind: 'human' };
+  await post(kv, { to: '#quiet', from: alice, body: 'kept line' });
+  const made = await (await post(kv, { to: '#quiet', from: alice, body: 'secret oops' })).json();
+  assert.match(JSON.stringify((await get(kv, '')).logs), /secret oops/);
+  const res = await post(kv, { action: 'withdraw', to: '#quiet', id: made.message.id, token: made.editToken });
+  assert.equal(res.status, 200);
+  assert.doesNotMatch(kv.map.get('loom:index'), /secret oops/);
+  assert.doesNotMatch(kv.map.get('loom:rooms'), /secret oops/);
+  const row = (await get(kv, '')).logs.find((e) => e.address === '#quiet');
+  assert.equal(row.count, 1);
+  assert.equal(row.last.body, 'kept line');
+});
