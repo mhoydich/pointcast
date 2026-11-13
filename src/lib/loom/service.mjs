@@ -27,6 +27,7 @@ export const MAX_INDEX = 300;
 export const MAX_OUTBOX = 200;
 export const BODY_MAX = 2000;
 const KINDS = new Set(['note', 'question', 'claim', 'answer', 'image', 'poll', 'link']);
+const KEEP_WITH_MEDIA = new Set(['question', 'claim', 'answer', 'link', 'poll']);
 const SENDER_KINDS = new Set(['human', 'agent']);
 const RIPPLE_MAX = 4;
 const READ_CACHE = 'public, max-age=10';
@@ -130,13 +131,17 @@ async function touchOutbox(kv, from, record) {
   await writeJson(kv, `loom:out:${key}`, [record, ...out].slice(0, MAX_OUTBOX));
 }
 
-function publicView(log, { since = 0 } = {}) {
+function publicView(log, { since = 0, onlyNew = false } = {}) {
   const folded = fold(log.ops);
   const ops = log.ops.filter((op) => op.seq > since).map(({ tokenHash, ...op }) => op);
+  // "New" = appended after since, or touched by any later op (edit, +1, vote, hide), so only=new misses nothing.
+  const touched = new Set(log.ops.filter((op) => op.seq > since).map((op) => op.id));
+  const newer = folded.messages.filter((m) => m.seq > since || touched.has(m.id));
   return {
     log: { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, createdAt: log.createdAt, updatedAt: log.updatedAt,
       reply: `loom:${log.key}#<message id>`, url: `${SITE}/loom?to=${encodeURIComponent(log.address)}`, trimmedBefore: log.trimmedBefore ?? null, seed: !!log.seed },
-    seq: log.seq, ops, messages: folded.messages, count: folded.count, participants: folded.participants,
+    seq: log.seq, ops, messages: onlyNew ? newer : folded.messages, count: folded.count, participants: folded.participants,
+    ...(since ? { since, newCount: newer.length } : {}),
   };
 }
 
@@ -208,6 +213,7 @@ function validateMessage(body) {
   const kind = KINDS.has(body.kind) ? body.kind : 'note';
   const text = clean(body.body, BODY_MAX);
   const out = { kind, body: text };
+  if (clean(body.body, Infinity).length > BODY_MAX) out.truncated = true;
   if (body.media) {
     const url = String(body.media.url ?? '');
     let u;
@@ -215,7 +221,8 @@ function validateMessage(body) {
     if (u.protocol !== 'https:' || url.length > 600) throw new AddressError('media_url_invalid');
     out.media = { url: u.toString(), alt: clean(body.media.alt, 200) };
     if (!text && !out.media.alt) throw new AddressError('media_alt_required');
-    out.kind = body.kind === 'poll' ? 'poll' : 'image';
+    // A question/claim/answer/link with a picture is still that kind; the picture is its attachment.
+    out.kind = KEEP_WITH_MEDIA.has(kind) ? kind : 'image';
   }
   if (body.poll || kind === 'poll') {
     const question = clean(body.poll?.question ?? text, 140);
@@ -240,6 +247,49 @@ function validateMessage(body) {
 async function clientTag(request, body) {
   const seed = clean(body.clientId, 64) || request.headers.get('CF-Connecting-IP') || 'anon';
   return `c_${(await sha(`loom:${seed}`)).slice(0, 12)}`;
+}
+
+/** `limit` may answer a boolean (old contract) or { allowed, retryAfter }. */
+async function gate(limit, bucket, clientId) {
+  const r = await limit(bucket, clientId);
+  if (r && typeof r === 'object') return { allowed: !!r.allowed, retryAfter: Math.max(1, Math.ceil(Number(r.retryAfter) || 60)) };
+  return { allowed: !!r, retryAfter: 60 };
+}
+const limited = (retryAfter) => json({ ok: false, spec: SPEC, error: 'rate_limited', retryAfterSec: retryAfter }, 429, { 'Retry-After': String(retryAfter) });
+
+/** Edit distance on at most 64 chars, one reused row; cheap enough to run on every miss. */
+function distance(a, b) {
+  a = a.slice(0, 64); b = b.slice(0, 64);
+  const row = Array.from({ length: b.length + 1 }, (_, k) => k);
+  for (let i = 1; i <= a.length; i += 1) {
+    let diag = row[0];
+    row[0] = i;
+    for (let k = 1; k <= b.length; k += 1) {
+      const up = row[k];
+      row[k] = Math.min(up + 1, row[k - 1] + 1, diag + (a[i - 1] === b[k - 1] ? 0 : 1));
+      diag = up;
+    }
+  }
+  return row[b.length];
+}
+/** Real addresses closest to one that has never been written. Handles only match handles. */
+function nearestTo(target, index) {
+  const strip = (x) => x.replace(/^https?:\/\//, '').slice(0, 64);
+  const want = strip(target.address);
+  const out = [];
+  for (const e of index) {
+    if (!(e.count > 0) || e.address === target.address || (target.kind === 'handle') !== (e.kind === 'handle')) continue;
+    const other = strip(e.address);
+    const longest = Math.max(want.length, other.length, 1);
+    // distance >= length gap, so a big gap makes sim >= 0.3 impossible: skip the O(n*m) work
+    if (1 - Math.abs(want.length - other.length) / longest < 0.3) continue;
+    const sim = 1 - distance(want, other) / longest;
+    if (sim >= 0.3) out.push({ e, sim });
+  }
+  return out
+    .sort((a, b) => (Number(b.e.kind === target.kind) - Number(a.e.kind === target.kind)) || b.sim - a.sim)
+    .slice(0, 5)
+    .map(({ e }) => ({ address: e.address, kind: e.kind, title: e.title, count: e.count }));
 }
 
 async function resolveTarget(kv, to) {
@@ -299,8 +349,19 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         if (format === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8', 'Cache-Control': READ_CACHE });
         if (format === 'rss') return new Response(asRss(log), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
         const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
-        // Live polls (since=) stay uncached; whole-thread reads can ride a short edge cache.
-        return json({ ok: true, spec: SPEC, kvBound: !!kv, ...publicView(log, { since }) }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
+        // since= alone keeps the whole folded thread in `messages` (the /loom page patches from it);
+        // only=new (what the MCP tool sends) trims `messages` to seq > since.
+        const onlyNew = since > 0 && url.searchParams.get('only') === 'new';
+        const view = publicView(log, { since, onlyNew });
+        // A never-written address still opens (people post first), but says so and offers real neighbours.
+        const exists = !!log.createdAt;
+        let miss = {};
+        if (!exists && target.kind !== 'reply') {
+          const nearest = nearestTo(target, await readJson(kv, 'loom:index', []));
+          miss = { nearest, ...(nearest.length ? { hint: `Nothing has been appended to ${target.address} yet. Did you mean one of these? Post to it to start the thread.` } : {}) };
+        }
+        // Live polls (since=) stay uncached; whole-thread reads and misses can ride a short edge cache.
+        return json({ ok: true, spec: SPEC, kvBound: !!kv, exists, ...miss, ...view }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
       }
       if (from) {
         const sender = parseAddress(from);
@@ -320,7 +381,11 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       if (q) logs = logs.filter((e) => `${e.address} ${e.title ?? ''} ${e.last?.body ?? ''}`.toLowerCase().includes(q));
       const kinds = {};
       for (const e of stored) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
-      return json({ ok: true, spec: SPEC, kvBound: !!kv, logs: logs.slice(0, 120), network: { logs: stored.length, kinds, hosts: [...new Set(stored.filter((e) => e.kind === 'url').map((e) => new URL(e.address).hostname))].slice(0, 40) } });
+      // compact=1 (alias short=1): no last.body, no network.hosts, for callers that only need the list.
+      const compact = ['compact', 'short'].some((k) => ['1', 'true'].includes(url.searchParams.get(k)));
+      const shown = logs.slice(0, 120).map((e) => (compact ? { ...e, last: e.last ? { name: e.last.name, kind: e.last.kind } : e.last } : e));
+      const hosts = compact ? undefined : [...new Set(stored.filter((e) => e.kind === 'url').map((e) => new URL(e.address).hostname))].slice(0, 40);
+      return json({ ok: true, spec: SPEC, kvBound: !!kv, logs: shown, network: { logs: stored.length, kinds, ...(hosts ? { hosts } : {}) } });
     }
 
     if (request.method !== 'POST') return fail('method_not_allowed', 405, {});
@@ -334,11 +399,31 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     const now = clock().toISOString();
 
     if (action === 'append') {
-      if (!await limit(verifiedAgent ? 'loom:append:verified' : 'loom:append')) return fail('rate_limited', 429);
       const from = validateFrom(body.from, verifiedAgent);
-      const message = validateMessage(body);
+      // Budget per sender, not per caller IP: MCP callers all arrive from one server IP. Verified agents
+      // are keyed on their agent id; unsigned senders on a hash of name+operator, plus a looser per-IP
+      // ceiling so rotating names cannot flood.
+      // The IP is part of the unsigned key so nobody elsewhere can burn "Mike"'s budget by posting as Mike.
+      const ip = request.headers.get('CF-Connecting-IP') || (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'anon';
+      const senderKey = verifiedAgent ? verifiedAgent : `sender:${(await sha(`${ip}|${from.name.toLowerCase()}|${(from.operator ?? '').toLowerCase()}`)).slice(0, 16)}`;
+      const own = await gate(limit, verifiedAgent ? 'loom:append:verified' : 'loom:append', senderKey);
+      if (!own.allowed) return limited(own.retryAfter);
+      if (!verifiedAgent) {
+        const ceiling = await gate(limit, 'loom:append:ip');
+        if (!ceiling.allowed) return limited(ceiling.retryAfter);
+      }
+      const { truncated, ...message } = validateMessage(body);
       const { log, parent } = await resolveTarget(kv, body.to);
-      if (body.title && !log.title && log.seq === 0) log.title = clean(body.title, 90) || null;
+      // A title sticks on a new log, or late on an untitled #topic; otherwise say why not.
+      let title;
+      const wanted = clean(body.title, 90);
+      if (wanted) {
+        if (parent) title = { applied: false, reason: 'title_on_reply' };
+        else if (log.title) title = log.title === wanted ? { applied: true, value: wanted } : { applied: false, reason: 'title_already_set' };
+        // Late titles only on topics (channels): renaming an inbox, URL or place thread after the fact is a hijack.
+        else if (log.seq === 0 || log.kind === 'topic') { log.title = wanted; title = { applied: true, value: wanted }; }
+        else title = { applied: false, reason: 'title_after_first_post' };
+      }
       const { mentions, topics } = extractAddresses(message.body);
       const token = randomId(12);
       const op = pushOp(log, { op: 'append', id: `m_${randomId(5)}`, from, parent: parent ?? (typeof body.parent === 'string' ? body.parent : null), ...message,
@@ -349,7 +434,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       await touchIndex(kv, log, op);
       await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
       const { tokenHash, ...publicOp } = op;
-      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached }, 201);
+      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(title ? { title } : {}), ...(truncated ? { truncated: true, bodyMax: BODY_MAX } : {}) }, 201);
     }
 
     const target = parseAddress(body.to);
@@ -361,15 +446,18 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     if (action === 'edit' || action === 'withdraw') {
       if (!original.tokenHash || !safeEqual(await sha(String(body.token ?? '')), original.tokenHash)) return fail('edit_token_invalid', 403);
       if (action === 'edit') {
+        if (clean(body.body, Infinity).length > BODY_MAX) return fail('body_too_long', 400, { bodyMax: BODY_MAX });
         const text = clean(body.body, BODY_MAX);
         if (!text) return fail('body_required');
         pushOp(log, { op: 'edit', id, body: text }, now);
       } else pushOp(log, { op: 'hide', id, reason: 'withdrawn' }, now);
     } else if (action === 'plus') {
-      if (!await limit('loom:plus')) return fail('rate_limited', 429);
+      const g = await gate(limit, 'loom:plus');
+      if (!g.allowed) return limited(g.retryAfter);
       pushOp(log, { op: 'plus', id, by: await clientTag(request, body) }, now);
     } else if (action === 'vote') {
-      if (!await limit('loom:plus')) return fail('rate_limited', 429);
+      const g = await gate(limit, 'loom:plus');
+      if (!g.allowed) return limited(g.retryAfter);
       const choice = Number(body.choice);
       if (!original.poll || !Number.isInteger(choice) || !original.poll.options[choice]) return fail('vote_invalid');
       pushOp(log, { op: 'vote', id, choice, by: await clientTag(request, body) }, now);

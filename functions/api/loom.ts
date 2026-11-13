@@ -22,6 +22,8 @@ type Env = {
 const LIMITS: Record<string, { windowSec: number; maxRequests: number }> = {
   'loom:append': { windowSec: 600, maxRequests: 12 },
   'loom:append:verified': { windowSec: 600, maxRequests: 60 },
+  // Per-IP ceiling (2x one sender's budget) behind the per-sender budget, so rotating names cannot flood.
+  'loom:append:ip': { windowSec: 600, maxRequests: 24 },
   'loom:plus': { windowSec: 600, maxRequests: 60 },
 };
 
@@ -40,6 +42,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     kv: env.PC_LOOM_KV ?? env.VISITS ?? null,
     verifiedAgent,
     adminKey: env.LOOM_ADMIN_KEY ?? '',
-    limit: async (bucket: string) => (await rateLimit(request, env, { bucket, ...(LIMITS[bucket] ?? { windowSec: 600, maxRequests: 30 }) })).allowed,
+    // Full result ({ allowed, retryAfter }) so refusals can say when to retry; clientId keys the per-sender budget.
+    limit: async (bucket: string, clientId?: string) => rateLimit(request, env, { bucket, clientId, ...(LIMITS[bucket] ?? { windowSec: 600, maxRequests: 30 }) }),
   });
 };
