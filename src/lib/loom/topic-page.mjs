@@ -7,9 +7,21 @@
  */
 const SITE = 'https://pointcast.xyz';
 export const MAX_MESSAGES = 20;
-export const SITEMAP_CAP = 500;
+// The Loom directory (handleLoom, ?kind=topic) returns at most 120 entries, so the
+// sitemap and index can never list more than that. Keep this equal to that cap.
+export const SITEMAP_CAP = 120;
+/** Topics with fewer visible messages than this are noindex and left out of the sitemap. */
+export const MIN_INDEXABLE = 3;
 // Same grammar as TOPIC in address.mjs, but lowercase only: one spelling, one URL.
 const TOPIC_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** Like parseTopicName, but forgives a leading '#' and upper case; returns the lowercase name or null. */
+export function canonicalTopicName(raw) {
+  let s;
+  try { s = decodeURIComponent(String(raw ?? '')); } catch { return null; }
+  s = s.replace(/\/+$/, '').replace(/^#/, '').toLowerCase();
+  return TOPIC_NAME.test(s) ? s : null;
+}
 
 /** Returns the lowercase topic name (without '#') or null when it is not a valid public topic. */
 export function parseTopicName(raw) {
@@ -61,7 +73,6 @@ ${noindex ? '<meta name="robots" content="noindex, follow">\n' : ''}<link rel="a
 <meta property="og:url" content="${esc(canonical)}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="PointCast">
-<meta name="twitter:card" content="summary">
 <meta name="pc-agents-manifest" content="${SITE}/agents.json">
 <meta name="pc-llms" content="${SITE}/llms.txt">
 ${extra}<style>${CSS}</style>
@@ -79,7 +90,8 @@ function renderMessage(m) {
     const label = String(m.media.alt || '').trim() || 'image';
     media = url ? `<p><a href="${esc(url)}" rel="nofollow ugc noopener">${esc(`Image: ${label}`)}</a></p>` : `<p>${esc(`Image: ${label}`)}</p>`;
   }
-  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
+  const ver = from.verified ? '<span class="k">verified</span>' : '';
+  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
 }
 
 /**
@@ -91,13 +103,17 @@ export function buildTopicPage(api, { name }) {
   const all = Array.isArray(api?.messages) ? api.messages : [];
   const count = Number(api?.count ?? all.length) || 0;
   const empty = count === 0;
-  const recent = all.slice(-MAX_MESSAGES);
+  // Newest twenty by time posted (seq), not by thread order: a new reply to an old root must not be cut.
+  const recent = [...all].sort((a, b) => (a?.seq ?? 0) - (b?.seq ?? 0)).slice(-MAX_MESSAGES);
+  const thin = count < MIN_INDEXABLE;
+  const peopleSet = new Set();
+  for (const m of all) if (m?.from && m.from.kind !== 'robot') peopleSet.add(m.from.address || m.from.name);
   const canonical = `${SITE}/loom/topic/${name}`;
   const rss = `/api/loom?to=%23${name}&format=rss`;
   const live = `/loom?to=%23${name}#thread`;
   const set = typeof log.title === 'string' ? log.title.trim() : '';
   const title = set ? (/loom/i.test(set) ? `${set} · PointCast` : `${set} · the Loom · PointCast`) : `#${name} · the Loom · PointCast`;
-  const people = Array.isArray(api?.participants) ? api.participants.length : 0;
+  const people = peopleSet.size;
   const updated = log.updatedAt ? day(log.updatedAt) : '';
   const description = empty
     ? `#${name} is an open channel on the PointCast Loom. Nothing has been posted here yet; anyone, person or AI agent, can start it.`
@@ -130,7 +146,7 @@ export function buildTopicPage(api, { name }) {
 <p><a class="cta" href="${esc(live)}">Open live thread</a><a class="cta" href="${esc(rss)}">RSS feed</a></p>
 ${empty
     ? `<div class="empty"><p>Nothing here yet. Be the first to append something to #${esc(name)}: open the live thread, pick a name, write a line.</p></div>`
-    : `<p class="meta">${count > recent.length ? `The latest ${recent.length} of ${count} messages, oldest first.` : 'Oldest first.'} All text is posted by the public and unverified.</p>
+    : `<p class="meta">${count > recent.length ? `The latest ${recent.length} of ${count} messages` : 'Messages'}, oldest first by time posted. Posted by the public: only senders marked verified carry a signed PointCast agent key; everything else is unchecked.</p>
 <ol>
 ${recent.map(renderMessage).join('\n')}
 </ol>`}
@@ -139,15 +155,15 @@ ${recent.map(renderMessage).join('\n')}
 </body>
 </html>
 `;
-  return head({ title, description, canonical, noindex: empty, rss, extra }) + body;
+  return head({ title, description, canonical, noindex: thin, rss, extra }) + body;
 }
 
 /** Public topics with at least one message, newest first. */
-function liveTopics(directory) {
+function liveTopics(directory, min = 1) {
   const logs = Array.isArray(directory?.logs) ? directory.logs : [];
   const out = [];
   for (const e of logs) {
-    if (e?.kind !== 'topic' || !(Number(e.count) > 0)) continue;
+    if (e?.kind !== 'topic' || !(Number(e.count) >= min)) continue;
     const name = parseTopicName(String(e.address ?? '').replace(/^#/, ''));
     if (name) out.push({ name, title: e.title || null, count: Number(e.count), updatedAt: e.updatedAt || null, last: e.last || null });
   }
@@ -162,7 +178,7 @@ export function buildTopicIndex(directory) {
   const description = topics.length
     ? `${plural(topics.length, 'public topic')} on the PointCast Loom, open to people and AI agents. Each has its own page, live thread and RSS feed.`
     : 'Public topics on the PointCast Loom. None have been started yet.';
-  const items = topics.map((t) => `<li><a class="who" href="/loom/topic/${esc(t.name)}">#${esc(t.name)}</a>${t.title ? ` <span>${esc(t.title)}</span>` : ''} <span class="meta">${esc(plural(t.count, 'message'))}${t.updatedAt ? ` · ${esc(day(t.updatedAt))}` : ''}</span>${t.last?.body ? `<p>${esc(t.last.body)}</p>` : ''}</li>`).join('\n');
+  const items = topics.map((t) => `<li><a class="who" href="/loom/topic/${esc(t.name)}">#${esc(t.name)}</a>${t.title ? ` <span>${esc(t.title)}</span>` : ''} <span class="meta">${esc(plural(t.count, 'message'))}${t.updatedAt ? ` · ${esc(day(t.updatedAt))}` : ''}</span></li>`).join('\n');
   return head({ title, description, canonical, noindex: topics.length === 0, rss: '/api/loom?to=%23loom&format=rss' }) + `<body>
 <main>
 <p class="crumb"><a href="/loom">the Loom</a> / topics</p>
@@ -181,7 +197,7 @@ const xmlEsc = (s) => String(s ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;',
 
 /** /loom/sitemap.xml — /loom, /loom/topic/ and every topic with messages (cap 500). */
 export function buildSitemap(directory) {
-  const topics = liveTopics(directory).slice(0, SITEMAP_CAP);
+  const topics = liveTopics(directory, MIN_INDEXABLE).slice(0, SITEMAP_CAP);
   const newest = topics.map((t) => t.updatedAt).filter(Boolean).sort().at(-1);
   const url = (loc, lastmod) => `  <url><loc>${xmlEsc(loc)}</loc>${lastmod && day(lastmod) ? `<lastmod>${day(lastmod)}</lastmod>` : ''}</url>`;
   return `<?xml version="1.0" encoding="UTF-8"?>

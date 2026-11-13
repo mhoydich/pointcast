@@ -590,9 +590,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       // Clone headers so we can add the X-Agent-Mode signal.
       const headers = new Headers(transformed.headers);
       headers.set('X-Agent-Mode', `stripped · ${type}`);
-      headers.set('X-Robots-Tag', 'index, follow');
+      // Respect a noindex the route set itself (e.g. thin Loom topic pages).
+      const routeSetRobots = headers.has('X-Robots-Tag');
+      if (!routeSetRobots) headers.set('X-Robots-Tag', 'index, follow');
       // Cache: same body per UA-class, safe to cache briefly at CDN.
-      if (url.pathname !== '/') headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+      if (url.pathname !== '/' && !routeSetRobots) headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
       return new Response(transformed.body, {
         status: transformed.status,
         statusText: transformed.statusText,

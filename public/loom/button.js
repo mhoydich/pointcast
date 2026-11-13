@@ -3,7 +3,7 @@
  *
  *   <script src="https://pointcast.xyz/loom/button.js" data-to="#officenoun" async></script>
  *
- * data-to     optional Loom address (#topic, @handle, a URL). Default: this page's URL.
+ * data-to     optional Loom address (#topic, @handle, a URL). Default: the page's canonical link, else its origin + path (never the query or hash).
  * data-label  optional button text. Default: "Post to the Loom".
  *
  * Renders a small link button beside the script tag (shadow root, textContent
@@ -16,7 +16,12 @@
   const clean = (s, n) => String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n);
   let to = clean(script.getAttribute('data-to'), 420);
   if (!to) {
-    try { const u = new URL(location.href); u.hash = ''; to = u.toString(); } catch { to = location.href.split('#')[0]; }
+    // Never the query string or hash: prefer the page's canonical link, else origin + path.
+    try {
+      const c = document.querySelector('link[rel~="canonical"]');
+      const u = new URL((c && c.getAttribute('href')) || location.href, location.href);
+      to = u.origin + u.pathname;
+    } catch { to = location.origin + location.pathname; }
   }
   const label = clean(script.getAttribute('data-label'), 40) || 'Post to the Loom';
   const host = document.createElement('span');
