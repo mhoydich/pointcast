@@ -26,7 +26,7 @@ const read = async (kv, to) => (await api(kv, `/api/loom?to=${encodeURIComponent
 const open = [];
 test.afterEach(() => { while (open.length) open.pop().close(); });
 
-async function page(kv, { path = '/loom', name = 'tester' } = {}) {
+async function page(kv, { path = '/loom', name = 'tester', small = false } = {}) {
   const dom = new JSDOM(`<!doctype html><html><head><style>${CSS}</style></head><body>${BODY}</body></html>`, {
     url: ORIGIN + path, runScripts: 'outside-only', pretendToBeVisual: true,
   });
@@ -38,6 +38,7 @@ async function page(kv, { path = '/loom', name = 'tester' } = {}) {
     return api(kv, new URL(url, ORIGIN).href, rest);
   };
   w.HTMLElement.prototype.scrollIntoView = () => {};
+  if (small) w.matchMedia = (q) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} });
   w.eval(JS);
   await settle(w);
   return w;
@@ -204,9 +205,16 @@ test('no name, plain visit: compact welcome card markup, one-line "Waiting on yo
   const card = fy(w).querySelector('.card.wel');
   assert.ok(card, 'card shows for a new visitor');
   const tog = card.querySelector('#welToggle');
-  assert.equal(tog.tagName, 'BUTTON');
-  assert.equal(tog.textContent, 'What this is');
-  assert.ok(tog.hasAttribute('aria-expanded') && tog.getAttribute('aria-controls') === 'welBody');
+  assert.equal(tog.tagName, 'SPAN', 'inert plain heading text above 640px');
+  assert.equal(tog.hasAttribute('aria-expanded'), false);
+  const ws = await page(memoryKv(), { name: '', small: true });
+  const t2 = fy(ws).querySelector('#welToggle');
+  assert.equal(t2.tagName, 'BUTTON');
+  assert.equal(t2.getAttribute('aria-expanded'), 'false');
+  assert.equal(t2.getAttribute('aria-controls'), 'welBody');
+  t2.click();
+  assert.equal(fy(ws).querySelector('#welToggle').getAttribute('aria-expanded'), 'true');
+  assert.ok(fy(ws).querySelector('.card.wel').hasAttribute('data-open'));
   assert.ok(card.querySelector('#welStart') && card.querySelector('#welBots'));
   assert.equal(fy(w).querySelector('h2.sect'), null, 'no heading + sentence + big button');
   const link = fy(w).querySelector('#fyName');
@@ -260,4 +268,23 @@ test('posting while visiting via ?as= uses that self-declared name and persists 
   const log = await read(kv, '#loom');
   assert.ok(log.messages.some((m) => m.body === 'hello from a visit' && m.from.name === 'mike'));
   assert.equal(w.localStorage.getItem('loom.name'), null);
+});
+
+test('?as= is stripped from the address bar (other params kept); the name stays for the visit', async () => {
+  const w = await page(memoryKv(), { path: '/loom?as=mike&to=%23court', name: '' });
+  assert.doesNotMatch(w.location.search, /as=/);
+  assert.match(w.location.search, /to=%23court/);
+  assert.equal(w.document.getElementById('asBtn').textContent, 'mike');
+});
+
+test('saving a name in the sheet ends the visit banner and stores that name', async () => {
+  const w = await page(memoryKv(), { path: '/loom?as=mike', name: '' });
+  assert.ok(fy(w).querySelector('.visiting'));
+  w.document.getElementById('asBtn').click();
+  await settle(w);
+  w.document.getElementById('nameInput').value = 'sam';
+  [...w.document.querySelectorAll('button')].find((b) => b.textContent === 'Save name').click();
+  await settle(w);
+  assert.equal(fy(w).querySelector('.visiting'), null);
+  assert.equal(w.localStorage.getItem('loom.name'), 'sam');
 });

@@ -321,7 +321,7 @@ a { color: var(--signal); }
   .card.wel .ch { flex: 1 1 auto; margin: 0; }
   .card.wel .welt { pointer-events: auto; min-height: 44px; padding: 0 2px; color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
   .card.wel .btnrow { flex: none; flex-wrap: nowrap; margin: 0; gap: 6px; }
-  .card.wel .btnrow .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 13px; }
+  .card.wel .btnrow .btn { flex: none; min-height: 40px; padding: 0 9px; font-size: 13px; }
   .card.wel:not([data-open]) .welbody, .card.wel:not([data-open]) .x { display: none; }
   .card.wel[data-open] { padding-bottom: 12px; }
   .card.wel[data-open] .welbody { order: 3; flex: 1 1 100%; }
@@ -1477,7 +1477,7 @@ function openIdentitySheet(opts) {
     const save = () => {
       const name = input.value.trim();
       if (!name) { err.textContent = 'Add a name to post.'; input.focus(); return; }
-      state.name = name; state.akind = akind;
+      state.name = name; state.akind = akind; state.visitName = false;
       store.set('name', name); store.set('akind', akind);
       closeSheet(); renderComposerBar(); renderForYou();
       if (opts && opts.then) opts.then();
@@ -1740,13 +1740,16 @@ function renderForYou() {
     () => drawForYou(box, f), () => $('newBtn'));
 }
 const smallMq = () => { try { return window.matchMedia('(max-width: 640px)'); } catch (e) { return null; } };
+try { const mq0 = smallMq(); if (mq0 && mq0.addEventListener) mq0.addEventListener('change', () => { if ($('fyDyn') && $('fyDyn').querySelector('.card.wel')) renderForYou(); }); } catch (e) { /* ignore */ }
 function welcomeCard(primary) {
   const mq = smallMq(), small = !!(mq && mq.matches), open = !small || state.welOpen;
   return h('section', { class: 'card wel', 'aria-labelledby': 'welH', 'data-open': open && small ? '' : null },
     h('div', { class: 'ch' },
       h('h3', { id: 'welH' },
-        h('button', { type: 'button', id: 'welToggle', class: 'linkbtn welt', 'aria-expanded': String(open), 'aria-controls': 'welBody', text: 'What this is',
-          onclick: () => { state.welOpen = !state.welOpen; renderForYou(); } })),
+        small
+          ? h('button', { type: 'button', id: 'welToggle', class: 'linkbtn welt', 'aria-expanded': String(open), 'aria-controls': 'welBody', text: 'What this is',
+              onclick: () => { state.welOpen = !state.welOpen; renderForYou(); } })
+          : h('span', { id: 'welToggle', class: 'welt', text: 'What this is' })),
       h('button', { type: 'button', id: 'welGot', class: 'x', 'data-fyact': 'dismiss', 'aria-label': 'Got it, hide this card', text: 'Got it',
         onclick: () => { state.welcomeGone = true; store.set('welcome', '1'); renderForYou(); } })),
     h('div', { id: 'welBody', class: 'welbody' },
@@ -2482,6 +2485,9 @@ let pendingReveal = null;
     state.hasTo = !!(q0.get('to') || '').trim();
     const asName = cleanVisitName(q0.get('as') || '');
     if (asName && !state.name) { state.name = asName; state.visitName = true; }
+    /* strip as= from the address bar so a copied link never carries someone's identity.
+       Accepted trade-off: a refresh drops the visit name (it lives in memory only). */
+    if (q0.has('as')) { q0.delete('as'); const qs0 = q0.toString(); history.replaceState(null, '', location.pathname + (qs0 ? '?' + qs0 : '') + location.hash); }
   } catch (e) { /* ignore */ }
   buildTabs();
   state.sentOnce = !!store.get('sent1');
