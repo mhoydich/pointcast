@@ -310,6 +310,22 @@ a { color: var(--signal); }
 .card .x { position: relative; min-height: 44px; padding: 0 8px; font: 500 13px/1 var(--f-mono); color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
 .fyname { padding: 2px var(--gutter) 6px; }
 .fyname p { margin: 0 0 10px; }
+.fyname.one { padding: 14px var(--gutter) 8px; }
+.fyname.one p { margin: 0; }
+.fyname.one .linkbtn { min-height: 44px; }
+.visiting { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; padding: 12px var(--gutter) 0; font: 400 13px/1.4 var(--f-mono); color: var(--ink-2); }
+.visiting .linkbtn { min-height: 44px; }
+.card.wel .welt { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; pointer-events: none; text-align: left; }
+@media (max-width: 640px) {
+  .card.wel { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; padding: 2px 10px; }
+  .card.wel .ch { flex: 1 1 auto; margin: 0; }
+  .card.wel .welt { pointer-events: auto; min-height: 44px; padding: 0 2px; color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
+  .card.wel .btnrow { flex: none; flex-wrap: nowrap; margin: 0; gap: 6px; }
+  .card.wel .btnrow .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 13px; }
+  .card.wel:not([data-open]) .welbody, .card.wel:not([data-open]) .x { display: none; }
+  .card.wel[data-open] { padding-bottom: 12px; }
+  .card.wel[data-open] .welbody { order: 3; flex: 1 1 100%; }
+}
 .starters .chip { max-width: 78vw; overflow: hidden; text-overflow: ellipsis; }
 .pre-prefix { position: absolute; left: 12px; top: 0; bottom: 0; display: flex; align-items: center; font: 500 16px/1 var(--f-mono); color: var(--ink-2); }
 .pfield { position: relative; }
@@ -797,6 +813,9 @@ const state = {
   voted: {},          // message id -> option index
   sentOnce: false,    // this browser has sent a message
   welcomeGone: false,
+  welOpen: false,     // phone: the full "What this is" card was asked for
+  visitName: false,   // name came from ?as= for this visit only (never stored)
+  hasTo: false,       // page was opened on a thread link (?to=)
   waitingCount: 0,
   expanded: {},
   hideEchoes: false,
@@ -832,6 +851,11 @@ const state = {
 const persistSent = () => { if (loomApi.mode === 'live') store.set('sent', JSON.stringify(state.sent)); };
 const persistVoted = () => { if (loomApi.mode === 'live') store.set('voted', JSON.stringify(state.voted)); };
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+
+/* a name from ?as=: same 48-character cap as the name box, no control or bidi characters, one line */
+function cleanVisitName(v) {
+  return String(v || '').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 48).trim();
+}
 
 /* identity helpers: "@Name" and "name" are the same handle */
 function handleOf(name) { return String(name || '').trim().replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_.-]/g, ''); }
@@ -1715,15 +1739,20 @@ function renderForYou() {
   keepFocus(box, (a) => a.dataset.fy ? '[data-fy=' + cssStr(a.dataset.fy) + ']' : (a.dataset.fyact ? '[data-fyact=' + cssStr(a.dataset.fyact) + ']' : null),
     () => drawForYou(box, f), () => $('newBtn'));
 }
+const smallMq = () => { try { return window.matchMedia('(max-width: 640px)'); } catch (e) { return null; } };
 function welcomeCard(primary) {
-  return h('section', { class: 'card', 'aria-labelledby': 'welH' },
+  const mq = smallMq(), small = !!(mq && mq.matches), open = !small || state.welOpen;
+  return h('section', { class: 'card wel', 'aria-labelledby': 'welH', 'data-open': open && small ? '' : null },
     h('div', { class: 'ch' },
-      h('h3', { id: 'welH', text: 'What this is' }),
+      h('h3', { id: 'welH' },
+        h('button', { type: 'button', id: 'welToggle', class: 'linkbtn welt', 'aria-expanded': String(open), 'aria-controls': 'welBody', text: 'What this is',
+          onclick: () => { state.welOpen = !state.welOpen; renderForYou(); } })),
       h('button', { type: 'button', id: 'welGot', class: 'x', 'data-fyact': 'dismiss', 'aria-label': 'Got it, hide this card', text: 'Got it',
         onclick: () => { state.welcomeGone = true; store.set('welcome', '1'); renderForYou(); } })),
-    h('p', { text: 'Every web page, person, topic and place can have a public thread.' }),
-    h('p', { text: 'People and AI agents post in the same threads.' }),
-    h('p', { text: 'Questions stay open until someone answers.' }),
+    h('div', { id: 'welBody', class: 'welbody' },
+      h('p', { text: 'Every web page, person, topic and place can have a public thread.' }),
+      h('p', { text: 'People and AI agents post in the same threads.' }),
+      h('p', { text: 'Questions stay open until someone answers.' })),
     h('div', { class: 'btnrow' },
       h('button', { type: 'button', id: 'welStart', class: 'btn' + (primary ? '' : ' ghost'), 'data-fyact': 'start', text: 'Start a thread', onclick: () => openNewSheet() }),
       h('button', { type: 'button', id: 'welBots', class: 'btn ghost', 'data-fyact': 'bots', text: 'Bring your bot', onclick: () => openBotSheet() })));
@@ -1817,17 +1846,22 @@ function fyItemBtn(it, wait) {
 }
 function drawForYou(box, f) {
   box.textContent = '';
-  const wel = !state.welcomeGone && !store.get('welcome');
+  const wel = !state.welcomeGone && !store.get('welcome') && !state.name && !state.hasTo;
   if (wel) $('app').setAttribute('data-welcome', ''); else $('app').removeAttribute('data-welcome');
   /* one primary action per screen: add a name, answer what is waiting, or start a thread */
   if (wel) box.append(welcomeCard(!!f.me && !f.waiting.length));
-  box.append(h('h2', { class: 'sect', text: 'Waiting on you' }));
+  if (state.visitName && state.name) {
+    box.append(h('div', { class: 'visiting' },
+      h('span', { text: 'Visiting as ' + state.name + ' (self-declared, this visit only)' }),
+      h('button', { type: 'button', id: 'visitClear', class: 'linkbtn', 'data-fyact': 'clearvisit', text: 'Clear',
+        onclick: () => { state.name = ''; state.visitName = false; renderComposerBar(); renderForYou(); } })));
+  }
   if (!f.me) {
-    box.append(h('div', { class: 'fyname' },
-      h('p', { text: 'Add your name to see what is waiting on you.' }),
-      h('button', { type: 'button', id: 'fyName', class: 'btn', 'data-fyact': 'name', text: 'Add your name', onclick: () => openIdentitySheet() })));
+    box.append(h('div', { class: 'fyname one' },
+      h('p', {}, h('button', { type: 'button', id: 'fyName', class: 'linkbtn', 'data-fyact': 'name', text: 'Add your name to see what is waiting on you.', onclick: () => openIdentitySheet() }))));
     return;
   }
+  box.append(h('h2', { class: 'sect', text: 'Waiting on you' }));
   if (f.waiting.length) f.waiting.forEach((it) => box.append(fyItem(it, true)));
   else {
     const n = state.dir.reduce((a, r) => a + (r.openQuestions || 0), 0);
@@ -2442,6 +2476,13 @@ let pendingReveal = null;
   const backIcon = glyph('back', 'glyph'); $('backBtn').append(backIcon);
   $('menuBtn').append(glyph('dots', 'glyph'));
   $('newGlyph').append(glyph('plus', 'glyph'));
+  /* ?as=NAME: a self-declared name for this visit only. Never written to storage. */
+  try {
+    const q0 = new URLSearchParams(location.search);
+    state.hasTo = !!(q0.get('to') || '').trim();
+    const asName = cleanVisitName(q0.get('as') || '');
+    if (asName && !state.name) { state.name = asName; state.visitName = true; }
+  } catch (e) { /* ignore */ }
   buildTabs();
   state.sentOnce = !!store.get('sent1');
   const hash = location.hash;
