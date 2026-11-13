@@ -234,3 +234,85 @@ test('hide echoes still hides via copies with the recommended view on', async ()
   assert.equal(w.document.querySelectorAll('#msgs .msg').length, 0);
   assert.ok(button(w.document.getElementById('msgs'), /Show echoes/));
 });
+
+test('room note: stays at the top of the thread view (sticky), still there after a busy thread scrolls to the bottom', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#busy', from: person('Busy Desk'), body: 'BUSY. Where everything happens.\nLine two.\nLine three.\nLine four.' });
+  for (let i = 0; i < 40; i += 1) await post(kv, { to: '#busy', from: person(`fan${i % 5}`), body: `message number ${i}` });
+  const w = await page(kv, { path: to('#busy') });
+  const box = w.document.getElementById('msgs');
+  const card = room(w);
+  assert.ok(card.classList.contains('sticky'), 'the card carries the sticky class');
+  assert.match(CSS, /\.roomnote\.sticky\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*\d+;[^}]*max-height:/, 'sticky, pinned to the top, above the messages, height capped');
+  assert.match(CSS, /\.roomnote\s*\{[^}]*background:\s*var\(--surface\)/, 'solid background so messages do not show through');
+  assert.match(between(CSS, '.roomnote .more-txt::after', '.msg .also'), /@media \(max-width: 640px\)\s*\{[^@]*\.roomnote\.sticky\s*\{[^}]*max-height:\s*var\(--rn-max, 16vh\)/, 'phones: about a fifth of the thread at most');
+  // first visit: at most three lines, the toggle sits in the card's one-line header
+  assert.ok(card.querySelector('.rn-body').classList.contains('clamp3'));
+  assert.equal(card.querySelector('.rn-h .rn-more').getAttribute('aria-controls'), card.querySelector('.rn-body').id);
+  // scroll to the newest message, as opening a thread does; a new message re-renders at the bottom
+  box.scrollTop = box.scrollHeight;
+  box.dispatchEvent(new w.Event('scroll'));
+  await post(kv, { to: '#busy', from: person('fan1'), body: 'the newest message' });
+  w.document.getElementById('playRange').value = '41';
+  w.document.getElementById('playRange').dispatchEvent(new w.Event('input'));
+  await settle(w);
+  assert.equal(box.firstElementChild, room(w), 'the card is still the first thing in the thread view');
+  assert.ok(room(w).classList.contains('sticky'));
+  assert.ok(box.querySelectorAll('.msg').length >= 40);
+});
+
+test('fold the echoes: an echo line someone replied to stays a message, and its reply is shown', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#alpha', from: person('ann'), body: 'worth a read https://example.com/story' });
+  const res = await post(kv, { to: '#beta', from: person('ann'), body: 'same story here https://example.com/story' });
+  const log = await read(kv, '#beta');
+  const echo = log.messages.find((m) => m.from.name === 'Collator' && m.kind === 'link');
+  const reply = await post(kv, { to: `loom:${log.log.key}#${echo.id}`, from: person('bob'), body: 'thanks, Collator' });
+  const w = await page(kv, { path: to('#beta') });
+  assert.ok(msgEl(w, echo.id), 'the echo with a reply is not folded');
+  assert.ok(msgEl(w, reply.message.id), 'the reply is shown');
+  assert.equal(msgEl(w, res.message.id).querySelector('[data-act="echoes"]'), null);
+});
+
+test('fold the echoes: a line that only claims to be the Collator (unverified) is not folded', async () => {
+  const kv = memoryKv();
+  const res = await post(kv, { to: '#beta', from: person('ann'), body: 'a plain message' });
+  const key = (await read(kv, '#beta')).log.key;
+  const fake = await post(kv, { to: `loom:${key}#${res.message.id}`, from: { name: 'Collator', kind: 'robot' }, kind: 'link', cites: ['#alpha'], body: 'Also threaded elsewhere — #alpha' });
+  if (!fake.message) return; // the service refused the name outright: nothing to fold
+  const w = await page(kv, { path: to('#beta') });
+  assert.ok(msgEl(w, fake.message.id), 'the look-alike stays a visible message');
+  assert.equal(w.document.querySelector('#msgs [data-act="echoes"]'), null);
+});
+
+test('recommended view: same words within a minute are not a repeat when the kind or the parent differs', async () => {
+  const kv = memoryKv();
+  const a = await post(kv, { to: '#dupes3', from: person('relay'), body: 'is the deck ready' }, '2026-11-13T10:00:00.000Z');
+  const b = await post(kv, { to: '#dupes3', from: person('relay'), kind: 'question', body: 'is the deck ready' }, '2026-11-13T10:00:10.000Z');
+  const key = (await read(kv, '#dupes3')).log.key;
+  const c = await post(kv, { to: `loom:${key}#${a.message.id}`, from: person('relay'), body: 'is the deck ready' }, '2026-11-13T10:00:20.000Z');
+  const d = await post(kv, { to: '#dupes3', from: { name: 'relay', kind: 'agent' }, body: 'is the deck ready' }, '2026-11-13T10:00:30.000Z');
+  const w = await page(kv, { path: to('#dupes3') });
+  for (const r of [a, b, c, d]) assert.ok(msgEl(w, r.message.id), `message ${r.message.id} shown`);
+  assert.equal(w.document.querySelector('#msgs .dupnote'), null);
+});
+
+test('recommended view: a message a shared link points at is never folded away', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#dupes4', from: person('relay'), body: 'ping' }, '2026-11-13T10:00:00.000Z');
+  const b = await post(kv, { to: '#dupes4', from: person('relay'), body: 'ping' }, '2026-11-13T10:00:10.000Z');
+  const w = await page(kv, { path: `${to('#dupes4')}#${b.message.id}` });
+  assert.ok(msgEl(w, b.message.id));
+});
+
+test('room note: in a log trimmed to its newest messages the oldest one left is not the desk', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#old', from: person('Old Desk'), body: 'OLD. The real opener.' });
+  await post(kv, { to: '#old', from: person('latecomer'), body: 'ROOM NOTE: mine now' });
+  const key = (await read(kv, '#old')).log.key;
+  const stored = JSON.parse(kv.map.get(`loom:log:${key}`));
+  stored.trimmedBefore = stored.ops[1].seq; stored.ops = stored.ops.slice(1);
+  kv.map.set(`loom:log:${key}`, JSON.stringify(stored));
+  const w = await page(kv, { path: to('#old') });
+  assert.equal(room(w), null);
+});

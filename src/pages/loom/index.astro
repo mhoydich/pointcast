@@ -347,15 +347,24 @@ a { color: var(--signal); }
 .msg .text.clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .msg .more-txt { position: relative; margin-top: 2px; min-height: 32px; font: 500 13px/1 var(--f-mono); color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
 .msg .more-txt::after { content: ""; position: absolute; inset: -6px -8px; }
-.roomnote { margin: 10px 0 4px; padding: 10px 12px; border: 1px solid var(--rule); border-left: 3px solid var(--signal); background: var(--surface); }
-.roomnote .rn-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+/* the room note stays at the top of the thread view while the messages scroll under it */
+.roomnote { margin: 0 0 6px; padding: 6px 12px 8px; border: 1px solid var(--rule); border-left: 3px solid var(--signal); background: var(--surface); }
+.roomnote.sticky { position: sticky; top: 0; z-index: 3; max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 -6px 0 var(--surface), 0 6px 8px -6px rgba(0, 0, 0, .35); }
+.roomnote .rn-h { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; min-height: 32px; }
+.roomnote .rn-more { margin: 0 0 0 auto; }
+.roomnote .more-txt::after { content: ""; position: absolute; inset: -6px -8px; }
+@media (max-width: 640px) {
+  /* never more than about a fifth of the thread (--rn-max is set from the thread's height) */
+  .roomnote.sticky { max-height: var(--rn-max, 16vh); padding: 2px 10px 6px; }
+  .roomnote .rn-body { font-size: 14px; line-height: 1.4; }
+}
 .roomnote .rn-t { font: 400 12px/1.2 var(--f-pix); letter-spacing: .1em; text-transform: uppercase; color: var(--signal); }
 .roomnote .rn-from { font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); overflow-wrap: anywhere; }
-.roomnote .rn-body { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; }
+.roomnote .rn-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; }
 .roomnote .rn-body.clamp3, .roomnote .rn-body.clamp1 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
 .roomnote .rn-body.clamp3 { -webkit-line-clamp: 3; }
 .roomnote .rn-body.clamp1 { -webkit-line-clamp: 1; }
-.roomnote .more-txt { position: relative; margin-top: 4px; min-height: 32px; font: 500 13px/1 var(--f-mono); color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
+.roomnote .more-txt { position: relative; min-height: 32px; font: 500 13px/1 var(--f-mono); color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
 .msg .also { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
 .msg .also-btn { position: relative; min-height: 32px; color: var(--ink-2); }
 .msg .also-list { margin: 2px 0 4px; padding: 0 0 0 14px; }
@@ -726,7 +735,7 @@ function normMsg(m) {
 function normThread(j, addr) {
   const log = j.log || {};
   if (typeof log.address === 'string' && log.address && normalizeAddress(log.address) === log.address) addr = log.address;
-  return { addr, key: log.key || null, label: log.label || shortLabel(addr), seq: j.seq || 0, partial: false,
+  return { addr, key: log.key || null, label: log.label || shortLabel(addr), seq: j.seq || 0, partial: false, trimmed: log.trimmedBefore != null,
            messages: (j.messages || []).map(normMsg) };
 }
 function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
@@ -840,6 +849,7 @@ const state = {
   sheetOpen: {},      // message id -> a shortened link sheet is shown in full
   roomFirst: {},      // topic -> this is the first visit (decided once per page load)
   roomFull: {},       // topic -> the room note is shown in full
+  keepId: null,       // a message a shared link points at: never folded away
   playN: null,       // replay: show only the first N messages (null = all)
   filter: 'all',
   openOnly: false,
@@ -1208,11 +1218,13 @@ const nameKey = (n) => String(n || '').trim().replace(/^@+/, '').replace(/\s+/g,
 const bodyLines = (s) => String(s).split('\n').filter((l) => l.trim());
 /* "Also threaded elsewhere — …": the Collator line ripple() writes under a message whose link is threaded in other rooms */
 function isCollatorEcho(m) {
-  return m.from.name === 'Collator' && m.from.kind === 'robot' && (!m.from.address || m.from.address === '@collator')
+  return m.from.name === 'Collator' && m.from.kind === 'robot' && m.from.verified === true && (!m.from.address || m.from.address === '@collator')
     && m.kind === 'link' && !!m.parent && /^Also threaded elsewhere/.test(m.body) && (m.cites || []).length > 0;
 }
 /* The room note: the newest top-level "ROOM NOTE" from the room's desk (the opener's name) or a verified sender,
-   else the opener itself. Names are typed, not proven; the card says whose words they are. */
+   else the opener itself. Names are typed, not proven; the card says whose words they are.
+   A log trimmed to its newest messages has lost its opener: the oldest message left is not the desk,
+   so there only a verified sender's ROOM NOTE counts. */
 function roomNote(t) {
   if (!t || t.partial || kindOf(t.addr) !== 'topic') return null;
   const tops = t.messages.filter((m) => !m.parent && !(m.depth >= 1) && !m._pending && !m.via)
@@ -1222,7 +1234,7 @@ function roomNote(t) {
   let note = null;
   tops.forEach((m) => {
     if (m.withdrawn || !/^room note(?![a-z])/i.test((m.body.split('\n')[0] || '').trim())) return;
-    if (m.from.verified || nameKey(m.from.name) === nameKey(opener.from.name)) note = m;
+    if (m.from.verified || (!t.trimmed && nameKey(m.from.name) === nameKey(opener.from.name))) note = m;
   });
   let text;
   if (note) {
@@ -1230,7 +1242,7 @@ function roomNote(t) {
     lines[0] = lines[0].trim().replace(/^room note[\s:.\-–—]*/i, '');
     if (!lines[0].trim()) lines.shift();
     text = lines.join('\n').trim();
-  } else if (!opener.withdrawn) { note = opener; text = opener.body.trim(); }
+  } else if (!opener.withdrawn && !t.trimmed) { note = opener; text = opener.body.trim(); }
   return note && text ? { m: note, text } : null;
 }
 function renderRoomNote(t) {
@@ -1241,20 +1253,21 @@ function renderRoomNote(t) {
   const first = state.roomFirst[a], full = !!state.roomFull[a];
   const lines = n.text.split('\n').length;
   const long = first ? (lines > 3 || n.text.length > 240) : (lines > 1 || n.text.length > 70);
-  return h('section', { class: 'roomnote', 'aria-label': 'About this room' },
+  return h('section', { class: 'roomnote sticky', 'aria-label': 'About this room' },
     h('div', { class: 'rn-h' },
       h('span', { class: 'rn-t', text: 'About this room' }),
-      h('span', { class: 'rn-from', text: 'from ' + n.m.from.name })),
-    h('p', { class: 'rn-body' + (long && !full ? (first ? ' clamp3' : ' clamp1') : ''), text: n.text }),
-    long ? h('button', { type: 'button', class: 'more-txt rn-more', 'aria-expanded': String(full), text: full ? 'Show less' : 'Show all',
-      onclick: () => { state.roomFull[a] = !full; renderThread('keep'); } }) : null);
+      h('span', { class: 'rn-from', text: 'from ' + n.m.from.name }),
+      long ? h('button', { type: 'button', class: 'more-txt rn-more', 'aria-expanded': String(full), 'aria-controls': 'roomNoteBody', text: full ? 'Show less' : 'Show all',
+        onclick: () => { state.roomFull[a] = !full; renderThread('keep'); } }) : null),
+    h('p', { id: 'roomNoteBody', class: 'rn-body' + (long && !full ? (first ? ' clamp3' : ' clamp1') : ''), text: n.text }));
 }
 /* What the recommended view folds in this thread: { skip: ids not drawn, echoes: id -> other addresses, sent: id -> times sent } */
-function guestPlan(t) {
+function guestPlan(t, msgs) {
   const plan = { skip: new Set(), echoes: {}, sent: {} };
   if (!state.recommended) return plan;
+  msgs = msgs || t.messages;   // during a replay: only what has been "sent" so far
   const byId = {}, kids = {}, allKids = {};
-  t.messages.forEach((m) => {
+  msgs.forEach((m) => {
     byId[m.id] = m;
     if (!m.parent) return;
     allKids[m.parent] = (allKids[m.parent] || 0) + 1;
@@ -1262,24 +1275,27 @@ function guestPlan(t) {
   });
   /* exact repeats: same name, kind, parent and body within a minute of the kept (first) one; never one with replies */
   const kept = {}, dupOf = {};
-  t.messages.filter((m) => !m.withdrawn && !m._pending && !m.via && !m.poll && !isCollatorEcho(m))
+  msgs.filter((m) => !m.withdrawn && !m._pending && !m.via && !m.poll && !isCollatorEcho(m))
     .sort((a, b) => (a.seq || 0) - (b.seq || 0))
     .forEach((m) => {
-      const key = [nameKey(m.from.name), m.kind, m.parent || '', (m.media && m.media.url) || '', m.body.trim()].join('\u0000');
+      const key = [nameKey(m.from.name), m.from.kind, m.from.address || '', m.from.verified ? 1 : 0, m.kind, m.parent || '', (m.media && m.media.url) || '', m.body.trim()].join('\u0000');
       const k = kept[key], at = Date.parse(m.at);
       const gap = k ? at - Date.parse(k.at) : NaN;
       if (!(gap >= 0 && gap <= 60000)) { kept[key] = m; return; }
-      if (kids[m.id] || m.replies > (allKids[m.id] || 0)) return;
+      if (kids[m.id] || m.replies > (allKids[m.id] || 0) || m.id === state.keepId) return;
       dupOf[m.id] = k.id; plan.skip.add(m.id); plan.sent[k.id] = (plan.sent[k.id] || 1) + 1;
     });
   /* Collator echoes fold into their parent (or the kept copy of a folded repeat); an echo whose parent is gone stays */
-  t.messages.forEach((m) => {
+  msgs.forEach((m) => {
     if (!isCollatorEcho(m)) return;
     const pid = dupOf[m.parent] || m.parent, p = byId[pid];
     if (!p || p.withdrawn || p.via) return;
+    /* an echo someone replied to, one a shared link points at, or one naming no other thread stays a message */
+    const others = m.cites.filter((c) => c !== t.addr);
+    if (allKids[m.id] || m.replies > 0 || m.id === state.keepId || !others.length) return;
     plan.skip.add(m.id);
     const list = plan.echoes[pid] || (plan.echoes[pid] = []);
-    m.cites.forEach((c) => { if (c !== t.addr && list.indexOf(c) < 0) list.push(c); });
+    others.forEach((c) => { if (list.indexOf(c) < 0) list.push(c); });
   });
   return plan;
 }
@@ -1391,7 +1407,7 @@ function drawMessages(box, scroll) {
     box.append(h('div', { class: 'thread-empty', text: 'No messages yet. Write the first one below.' }));
   } else {
     let shown = 0;
-    const plan = guestPlan(t);
+    const plan = guestPlan(t, state.playN != null ? t.messages.slice(0, state.playN) : null);
     t.messages.forEach((m, i) => {
       if (state.playN != null && i >= state.playN) return;
       if ((state.hideEchoes && m.via) || plan.skip.has(m.id)) return;
@@ -1407,7 +1423,14 @@ function drawMessages(box, scroll) {
       if (p.scrollHeight <= p.clientHeight + 2) { p.classList.remove('clamp1', 'clamp3'); const b2 = p.parentNode.querySelector('.rn-more'); if (b2) b2.remove(); }
     });
   }
+  sizeRoomNote(box);
   if (scroll === 'bottom') box.scrollTop = box.scrollHeight; else box.scrollTop = prev;
+}
+/* the sticky room note: on phones at most about a fifth of the thread; messages brought into view stop below it */
+function sizeRoomNote(box) {
+  if (box.clientHeight > 0) box.style.setProperty('--rn-max', Math.max(64, Math.round(box.clientHeight / 5)) + 'px');
+  const card = box.querySelector('.roomnote.sticky');
+  box.style.scrollPaddingTop = card && card.offsetHeight ? (card.offsetHeight + 6) + 'px' : '';
 }
 function renderPlaybar() {
   const t = thread(), n = t && !state.loading && !state.loadError ? t.messages.length : 0;
@@ -2451,7 +2474,7 @@ $('msgs').addEventListener('scroll', () => {
   const b = $('msgs'); stickBottom = b.scrollHeight - b.scrollTop - b.clientHeight < 24;
 }, { passive: true });
 try {
-  new ResizeObserver(() => { if (stickBottom) { const b = $('msgs'); b.scrollTop = b.scrollHeight; } }).observe($('msgs'));
+  new ResizeObserver(() => { const b = $('msgs'); sizeRoomNote(b); if (stickBottom) b.scrollTop = b.scrollHeight; }).observe($('msgs'));
 } catch (e) { /* older browsers: the bottom scroll on send still applies */ }
 
 /* events */
@@ -2648,7 +2671,7 @@ let pendingReveal = null;
   state.sentOnce = !!store.get('sent1');
   const hash = location.hash;
   /* RSS items link to /loom?to=<address>#<message id> */
-  if (/^#m_[A-Za-z0-9]+$/.test(hash)) pendingReveal = hash.slice(1);
+  if (/^#m_[A-Za-z0-9]+$/.test(hash)) state.keepId = pendingReveal = hash.slice(1);
   let view = hash === '#thread' || pendingReveal ? 'thread' : hash === '#directory' ? 'directory' : 'for-you';
   /* a shared link: /loom?to=<address> opens that thread */
   let shared = '';
@@ -2678,7 +2701,7 @@ let pendingReveal = null;
     const id = want.slice(want.lastIndexOf('#') + 1);
     try {
       const home = await loomApi.locate(want);
-      if (home) { state.addr = home; pendingReveal = /^m_[A-Za-z0-9]+$/.test(id) ? id : null; setView('thread'); try { history.replaceState(null, '', LOOM_PATH + '?to=' + encodeURIComponent(home) + '#thread'); } catch (e) { /* ignore */ } }
+      if (home) { state.addr = home; state.keepId = pendingReveal = /^m_[A-Za-z0-9]+$/.test(id) ? id : null; setView('thread'); try { history.replaceState(null, '', LOOM_PATH + '?to=' + encodeURIComponent(home) + '#thread'); } catch (e) { /* ignore */ } }
     } catch (e) { /* fall back to the saved thread */ }
   }
   connect();
