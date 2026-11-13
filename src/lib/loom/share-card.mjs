@@ -14,16 +14,14 @@
 import { clean, esc, fitTitle, heavy, wrap } from '../unfurl/cards.mjs';
 import { nounForPath } from '../unfurl/rooms.mjs';
 import { parseAddress } from './address.mjs';
+import { nounBackground, nounRecipe, nounRects } from './noun-card.mjs';
 
 export const SITE = 'https://pointcast.xyz';
 const INBOX_KINDS = new Set(['handle', 'agent', 'wallet', 'did']);
 const EXCERPT = 90;
 
-const PAPER = '#f4f5f2';
 const INK = '#101214';
 const INK2 = '#5b6168';
-const SIGNAL = '#1f4fd8';
-const HAIR = '#d6d9d2';
 const SANS = 'Inter, system-ui, sans-serif';
 const MONO = 'JetBrains Mono, ui-monospace, Menlo, monospace';
 
@@ -180,63 +178,60 @@ function ago(iso, now) {
 
 const compact = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : String(n));
 
-const chip = (x, y, text, { fill = 'none', stroke = INK, color = INK } = {}) => {
-  const w = Math.round(text.length * 12.6 + 32);
-  return { w, svg: `<rect x="${x}" y="${y}" width="${w}" height="44" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/><text x="${x + 16}" y="${y + 29}" font-family="${MONO}" font-size="20" font-weight="700" letter-spacing="1" fill="${color}"${heavy(20, color, 700)}>${esc(text)}</text>` };
-};
-
-/** 1200x630 card. `nounHref` is a data: URI the route fetched (optional); `now` stamps the "live" line. */
-export function buildSvg(summary, { nounHref = '', now = Date.now() } = {}) {
-  const textW = nounHref ? 760 : 1040;
+/** 1200x630 Office Noun card. `now` stamps the date and the "live" line. `nounHref` is ignored (the Noun is drawn from bundled trait data). */
+export function buildSvg(summary, { now = Date.now() } = {}) {
+  const recipe = nounRecipe(summary);
+  const bgc = nounBackground(recipe.bg);
+  const date = new Date(now).toISOString().slice(0, 10);
+  const textW = 700;
   const t = fitTitle(summary.name, textW, 2);
-  const titleY = 190 + t.size;
-  const titleSvg = t.lines.map((line, i) => `<text x="64" y="${titleY + i * t.size * 1.05}" font-family="${SANS}" font-size="${t.size}" font-weight="800" letter-spacing="-2" fill="${INK}"${heavy(t.size, INK, 800)}>${esc(line)}</text>`).join('');
-  const afterTitle = titleY + (t.lines.length - 1) * t.size * 1.05;
+  const titleY = 218 + t.size;
+  const titleSvg = t.lines.map((line, i) => `<text x="80" y="${Math.round(titleY + i * t.size * 1.05)}" font-family="${SANS}" font-size="${t.size}" font-weight="800" letter-spacing="-2" fill="${INK}"${heavy(t.size, INK, 800)}>${esc(line)}</text>`).join('');
+  const afterTitle = Math.round(titleY + (t.lines.length - 1) * t.size * 1.05);
 
   const c = summary.counts;
-  const labels = summary.empty ? [] : [plural(c.messages, 'message'), c.people ? plural(c.people, 'person', 'people') : '', c.agents ? plural(c.agents, 'agent') : ''].filter(Boolean)
-    .map((l) => l.replace(/^\d+/, (d) => compact(Number(d))));
-  const chipsOf = summary.openLabel ? [...labels.map((l) => ({ l })), { l: summary.openLabel.replace(/^\d+/, (d) => compact(Number(d))), open: true }] : labels.map((l) => ({ l }));
-  let x = 64, row = 0;
-  const maxX = 64 + textW;
-  let chips = '';
-  for (const { l, open } of chipsOf) {
-    const w = Math.round(l.length * 12.6 + 32);
-    if (x + w > maxX && x > 64) { x = 64; row += 1; }
-    const y = afterTitle + 36 + row * 56;
-    const ch = open ? chip(x, y, l.toUpperCase(), { fill: SIGNAL, stroke: SIGNAL, color: '#ffffff' }) : chip(x, y, l.toUpperCase());
-    chips += ch.svg; x += ch.w + 12;
+  const bits = summary.empty ? ['NO MESSAGES YET'] : [plural(c.messages, 'message'), c.people ? plural(c.people, 'person', 'people') : '', c.agents ? plural(c.agents, 'agent') : ''].filter(Boolean)
+    .map((l) => l.replace(/^\d+/, (d) => compact(Number(d))).toUpperCase());
+  const countsY = afterTitle + 44;
+  const counts = `<text x="80" y="${countsY}" font-family="${MONO}" font-size="21" font-weight="700" letter-spacing="1" fill="${INK}"${heavy(21, INK, 700)}>${esc(bits.join(' \u00B7 '))}</text>`;
+  let chipSvg = '';
+  let chipBottom = countsY + 14;
+  if (summary.openLabel) {
+    const label = summary.openLabel.replace(/^\d+/, (d) => compact(Number(d))).toUpperCase();
+    const w = Math.round(label.length * 12.6 + 32);
+    chipSvg = `<rect x="80" y="${countsY + 18}" width="${w}" height="44" fill="${INK}"/><text x="96" y="${countsY + 47}" font-family="${MONO}" font-size="20" font-weight="700" letter-spacing="1" fill="#ffffff"${heavy(20, '#ffffff', 700)}>${esc(label)}</text>`;
+    chipBottom = countsY + 62;
   }
-  const chipsBottom = afterTitle + 36 + row * 56 + 44;
 
   let lastSvg = '';
-  const lastY = chipsBottom + 56;
+  const lastY = chipBottom + 40;
   if (summary.last) {
     const who = summary.last.name ? `${summary.last.name} \u00B7 ${summary.last.kind}` : 'someone';
     const when = ago(summary.last.at, now);
-    lastSvg += `<text x="64" y="${lastY}" font-family="${MONO}" font-size="17" font-weight="700" letter-spacing="1" fill="${INK2}"${heavy(17, INK2, 700)}>${esc(`LAST POST \u00B7 ${who}${when ? ` \u00B7 ${when}` : ''}`.toUpperCase())}</text>`;
+    lastSvg += `<text x="80" y="${lastY}" font-family="${MONO}" font-size="15" font-weight="700" letter-spacing="1" fill="${INK2}"${heavy(15, INK2, 700)}>${esc(`LAST POST \u00B7 ${who}${when ? ` \u00B7 ${when}` : ''}`.toUpperCase())}</text>`;
     const line = summary.last.text
-      ? wrap(summary.last.name === 'Collator' && summary.last.kind === 'robot' ? summary.last.text : `\u201C${summary.last.text}\u201D`, { size: 26, width: textW, k: 0.52, maxLines: 2 })
+      ? wrap(summary.last.name === 'Collator' && summary.last.kind === 'robot' ? summary.last.text : `\u201C${summary.last.text}\u201D`, { size: 22, width: textW, k: 0.52, maxLines: 1 })
       : ['Someone posted \u00B7 open the thread to read it'];
-    lastSvg += line.map((l, i) => `<text x="64" y="${lastY + 40 + i * 34}" font-family="${SANS}" font-size="26" fill="${summary.last.text ? INK : INK2}">${esc(l)}</text>`).join('');
+    lastSvg += line.map((l, i) => `<text x="80" y="${lastY + 30 + i * 30}" font-family="${SANS}" font-size="22" fill="${summary.last.text ? INK : INK2}">${esc(l)}</text>`).join('');
   } else if (summary.empty) {
-    lastSvg = `<text x="64" y="${lastY}" font-family="${SANS}" font-size="26" fill="${INK2}">${esc('Nothing here yet \u00B7 be the first to append')}</text>`;
+    lastSvg = `<text x="80" y="${lastY}" font-family="${SANS}" font-size="22" fill="${INK2}">${esc('Nothing here yet \u00B7 be the first to append')}</text>`;
   }
+  const dry = recipe.line ? `<text x="80" y="548" font-family="${MONO}" font-size="18" font-weight="700" fill="${INK2}"${heavy(18, INK2, 700)}>${esc(recipe.line)}</text>` : '';
 
-  const noun = nounHref
-    ? `<rect x="896" y="186" width="240" height="240" fill="${SIGNAL}" transform="translate(8 8)"/><rect x="896" y="186" width="240" height="240" fill="#ffffff" stroke="${INK}" stroke-width="3"/><image x="899" y="189" width="234" height="234" href="${nounHref}" xlink:href="${nounHref}" preserveAspectRatio="xMidYMid slice"/>`
-    : '';
-  const live = `LIVE AT SHARE TIME · ${new Date(now).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  const nounSvg = `<g data-noun-pixels="1" transform="translate(810 130)" shape-rendering="crispEdges">${nounRects(recipe.parts)}</g>`;
+  const windowSvg = `<rect x="810" y="130" width="320" height="320" fill="${bgc}"/>${nounSvg}`
+    + `<rect x="810" y="390" width="320" height="60" fill="#8b5a2b"/><rect x="810" y="390" width="320" height="10" fill="#a8743d"/>`
+    + `<rect x="808" y="128" width="324" height="324" fill="none" stroke="${INK}" stroke-width="4"/>`;
+  const live = 'LIVE AT SHARE TIME';
   const label = `${summary.name} on the Loom: ${summary.description}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${esc(clean(label))}">
-<rect width="1200" height="630" fill="${PAPER}"/>
-<rect x="24" y="24" width="1152" height="582" fill="none" stroke="${INK}" stroke-width="3"/>
-<text x="64" y="86" font-family="${SANS}" font-size="30" font-weight="800" fill="${INK}"${heavy(30, INK, 800)}>The Loom</text>
-<text x="1136" y="86" text-anchor="end" font-family="${MONO}" font-size="18" font-weight="700" letter-spacing="1" fill="${INK2}">POINTCAST.XYZ/LOOM</text>
-<line x1="64" y1="110" x2="1136" y2="110" stroke="${HAIR}" stroke-width="2"/>
-${titleSvg}${noun}${chips}${lastSvg}
-<line x1="64" y1="560" x2="1136" y2="560" stroke="${HAIR}" stroke-width="2"/>
-<circle cx="72" cy="582" r="6" fill="${SIGNAL}"/>
-<text x="90" y="588" font-family="${MONO}" font-size="16" font-weight="700" letter-spacing="1" fill="${INK2}">${esc(live)}</text>
+  const strip = (x, text, anchor = 'start') => `<text x="${x}" y="42" text-anchor="${anchor}" font-family="${MONO}" font-size="17" font-weight="700" letter-spacing="2" fill="${INK}"${heavy(17, INK, 700)}>${text}</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="${esc(clean(label))}" data-noun="${recipe.parts.join(',')}" data-room="${esc(recipe.room ?? '')}">
+<rect width="1200" height="630" fill="${bgc}"/>
+${strip(40, 'OFFICE NOUN')}${strip(250, 'THE BOARD')}${strip(470, date)}${strip(1160, live, 'end')}
+<rect x="50" y="82" width="1120" height="520" fill="#9a9a9a"/>
+<rect x="40" y="72" width="1120" height="520" fill="#ffffff" stroke="${INK}" stroke-width="4"/>
+<text x="80" y="136" font-family="${MONO}" font-size="18" font-weight="700" letter-spacing="2" fill="${INK2}"${heavy(18, INK2, 700)}>${esc(recipe.kicker)}</text>
+${titleSvg}${counts}${chipSvg}${lastSvg}${dry}
+${windowSvg}
 </svg>`;
 }

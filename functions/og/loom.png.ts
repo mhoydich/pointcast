@@ -6,7 +6,7 @@
  */
 import { parseAddress } from '../../src/lib/loom/address.mjs';
 import { buildSvg, summarize } from '../../src/lib/loom/share-card.mjs';
-import { cached, fallback, imageDataUri, pngResponse, renderPng } from '../_lib/og-render';
+import { cached, fallback, pngResponse, renderPng } from '../_lib/og-render';
 import { readThread, type LoomShareEnv } from '../_lib/loom-share';
 
 const FALLBACK = '/images/og/og-home-v5.png';
@@ -22,8 +22,7 @@ async function handle({ request, env, waitUntil }: { request: Request; env: Loom
     const key = `https://pointcast.xyz/og/loom.png?to=${encodeURIComponent(address)}&s=${Number(data.seq) || 0}`;
     return await cached(request, key, waitUntil, async () => {
       const summary = summarize(data, address);
-      const nounHref = await imageDataUri(`https://noun.pics/${summary.noun}.svg`, 2000);
-      const png = await renderPng(buildSvg(summary, { nounHref, now: Date.now() }));
+      const png = await renderPng(buildSvg(summary, { now: Date.now() }));
       return pngResponse(png, 300, { 'X-PointCast-Card': 'loom' });
     });
   } catch {
