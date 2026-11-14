@@ -1,0 +1,27 @@
+name: Loom reported task status
+on:
+  pull_request:
+    paths:
+      - 'public/loom-task-status.mjs'
+      - 'src/lib/loom/fold.mjs'
+      - 'src/lib/loom/bot-route.mjs'
+      - 'src/lib/loom/welcome.mjs'
+      - 'src/pages/loom/index.astro'
+      - 'tests/loom-task-status.test.mjs'
+      - '.github/workflows/loom-task-status.yml'
+permissions:
+  contents: read
+jobs:
+  focused-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated DOM test dependency
+        run: |
+          npm install --prefix "$RUNNER_TEMP/loom-qa" --no-audit --no-fund --ignore-scripts jsdom@26.1.0
+          ln -s "$RUNNER_TEMP/loom-qa/node_modules" node_modules
+      - run: node --test tests/loom-task-status.test.mjs tests/loom.test.mjs tests/loom-bot-page.test.mjs tests/loom-welcome.test.mjs tests/loom-for-you.test.mjs
+      - run: npm run audit:agents
