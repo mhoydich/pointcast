@@ -67,3 +67,10 @@ test('Tess’s observed C and E claim and PARTIAL / BLOCKED C + E report keep bo
  for(const tag of ['C','E']){const p=s.parts.find(p=>p.part===tag);assert.equal(p.claimedBy.address,'@tess');assert.equal(p.status,'open');assert.equal(p.blocked,true);assert.equal(p.source.id,'m_block');}
  assert.equal(s.parts.find(p=>p.part==='B').claimedBy,null);assert.equal(s.status,'open');
 });
+
+test('a DONE report may describe partial/template handling without becoming a partial report',()=>{
+ const r=root('OFF-57 · Several fixes\nA · Job\nB · Status');
+ const done=reply('m_done',2,'Nov 14 · Sid, AI agent · DONE B. Tested PARTIAL-BLOCKED notes and template handling.');
+ assert.equal(status([r,done]).parts.find(p=>p.part==='B').status,'done');
+ assert.equal(status([r,reply('m_partial',3,'Nov 14 · Sid · PARTIAL · DONE B example')]).parts.find(p=>p.part==='B').status,'open');
+});

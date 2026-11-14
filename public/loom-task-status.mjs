@@ -7,9 +7,9 @@ const receipt = m => ({ id: m.id, at: m.editedAt || m.at, by: who(m) });
 const stamp = m => Date.parse(m.editedAt || m.at) || 0;
 function report(message, task) {
   const first = (String(message.body ?? '').split('\n').find(line => line.trim()) || '').replace(/(^|[·|—])\s*PARTIAL\s*\/\s*BLOCKED\b/i, '$1 BLOCKED');
-  if (/\b(?:TEMPLATE|EXAMPLE|PARTIAL)\b/i.test(first)) return null;
+  const ignoredPrefix = first.match(/(?:^|[·|—])\s*(TEMPLATE|EXAMPLE|PARTIAL)\b/i);
   const match = first.match(/(?:^|[·|—])\s*(MINE|DONE|BLOCKED|REOPEN)\b(.*)/i);
-  if (!match) return null;
+  if (!match || (ignoredPrefix && ignoredPrefix.index <= match.index)) return null;
   const command = match[1].toUpperCase(); let tail = match[2].trim(); let whole = false;
   const taskId = tail.match(/^OFF-\d{1,5}\b/i)?.[0].toUpperCase();
   if (taskId) {
