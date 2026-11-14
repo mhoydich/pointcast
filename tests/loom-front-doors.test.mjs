@@ -53,6 +53,36 @@ test('topic page: canonical, links, no robots block when it has messages', () =>
   assert.ok(html.includes('3 messages from 3 participants'));
 });
 
+test('forum data uses only rendered messages, real dates, safe media and fragment URLs', () => {
+  const messages = Array.from({ length: 22 }, (_, i) => msg(i + 1, `post ${i + 1}`));
+  messages[21] = msg(22, '</script><script>bad()</script>', {
+    parent: 'm_1', editedAt: '2026-11-13T10:00:00.000Z',
+    from: { name: 'A desk', kind: 'agent' }, media: { url: 'javascript:bad()' },
+  });
+  const html = buildTopicPage({ log: {}, count: 22, messages }, { name: 'start' });
+  const raw = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1];
+  const ld = JSON.parse(raw);
+  const posts = ld.mainEntity.itemListElement.map((x) => x.item);
+  assert.equal(posts.length, 20);
+  assert.equal(posts[0].identifier, 'm_3');
+  for (const p of posts) {
+    assert.equal(p['@type'], 'DiscussionForumPosting');
+    assert.ok(html.includes(`<li id="${p.identifier}">`));
+    assert.equal(p.url, `https://pointcast.xyz/loom/topic/start#${p.identifier}`);
+    assert.equal(p['@id'], p.url);
+    assert.equal(p.datePublished, messages.find((m) => m.id === p.identifier).at);
+  }
+  assert.equal(posts[0].author['@type'], 'Person');
+  const reply = posts.at(-1);
+  assert.equal(reply.author['@type'], 'Organization');
+  assert.equal(reply.dateModified, messages[21].editedAt);
+  assert.equal(reply.isPartOf['@id'], 'https://pointcast.xyz/loom/topic/start#m_1');
+  assert.equal(reply.image, undefined);
+  assert.equal(reply.text, messages[21].body);
+  assert.ok(!raw.includes('<'));
+  assert.ok(!html.includes('<script>bad()'));
+});
+
 test('empty topic is noindex with a nothing-here line', () => {
   const html = buildTopicPage({ ok: true, log: {}, messages: [], count: 0, participants: [] }, { name: 'quiet' });
   assert.ok(html.includes('<meta name="robots" content="noindex, follow">'));
@@ -88,10 +118,10 @@ const dir = { ok: true, logs: [
 test('sitemap lists /loom, /loom/topic/ and topics with messages only', () => {
   const xml = buildSitemap(dir);
   const locs = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m) => m[1]);
-  assert.deepEqual(locs, ['https://pointcast.xyz/loom', 'https://pointcast.xyz/loom/topic/', 'https://pointcast.xyz/loom/topic/a', 'https://pointcast.xyz/loom/topic/b']);
+  assert.deepEqual(locs, ['https://pointcast.xyz/loom/', 'https://pointcast.xyz/loom/topic/', 'https://pointcast.xyz/loom/topic/a', 'https://pointcast.xyz/loom/topic/b']);
   assert.ok(!xml.includes('/topic/thin'));
   assert.ok(xml.includes('<loc>https://pointcast.xyz/loom/topic/a</loc><lastmod>2026-11-10</lastmod>'));
-  assert.ok(xml.includes('<loc>https://pointcast.xyz/loom</loc><lastmod>2026-11-12</lastmod>'));
+  assert.ok(xml.includes('<loc>https://pointcast.xyz/loom/</loc><lastmod>2026-11-12</lastmod>'));
 });
 
 test('sitemap caps at the directory size (400) and skips thin topics', () => {
