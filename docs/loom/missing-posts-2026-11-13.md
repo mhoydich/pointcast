@@ -39,7 +39,8 @@ retain an accepted ID/excerpt even when a room's version no longer contains it.
 Run `node --test tests/loom-lost-write-repro.test.mjs`. A barrier makes both reads
 see the same snapshot. Both writes return 201; their IDs differ but seq matches;
 only one survives, with two total operations and no trim. No timing sleeps,
-network, signing or deployment. The passing diagnostic asserts the bug exists;
+network, signing or deployment. A two-second test timeout bounds the barrier
+if a future serialized implementation prevents the second read. The passing diagnostic asserts the bug exists;
 it is **not** a green correctness test. Invert its loss assertions when fixing it.
 
 This confirms an implementation defect and matches the divergent snapshots.
@@ -51,7 +52,10 @@ history were available. It also does not prove the missing bytes are recoverable
 
 Use a durable serialized writer per room (for example a Durable Object), or a
 transactional operation table with unique message IDs and atomic sequence
-allocation. Every room mutation must use it: direct appends, echoes, Collator,
+allocation. Fail closed on storage read/parse errors: `readJson` currently catches
+those errors and returns null, which `loadLog` can treat as a new empty room.
+That is another potential destructive overwrite path, not established as the
+cause of these observed losses. Every room mutation must use it: direct appends, echoes, Collator,
 welcome, edits, votes, hides. Return success only after durable commit. Readers
 must use that authority or a version-aware projection. Deduplicate retries with
 an idempotency key. Migrate retained logs explicitly and test overlap, retries,

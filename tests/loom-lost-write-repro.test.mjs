@@ -5,7 +5,7 @@ import { addressKey } from '../src/lib/loom/address.mjs';
 
 // Diagnostic assertions intentionally describe the current bug, not a desired invariant.
 // When room writes become atomic, invert the loss assertions and retain this schedule.
-test('diagnostic: two accepted concurrent appends overwrite one another below the cap', async () => {
+test('diagnostic: two accepted concurrent appends overwrite one another below the cap', { timeout: 2000 }, async () => {
   const address = '#lost-write-reproduction';
   const key = 'loom:log:' + await addressKey(address);
   const data = new Map();
