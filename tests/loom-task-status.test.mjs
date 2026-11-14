@@ -49,3 +49,11 @@ test('automatic starter picker skips a reported DONE note even when root body st
  const a={op:'append',...root('OFF-57 · Old starter\nowner: none\nstatus: open')};const done={op:'append',...reply('m_done',2,'DONE OFF-57')};
  assert.deepEqual(pickOpenTask([a]),{id:'OFF-57'});assert.equal(pickOpenTask([a,done]),null);
 });
+
+test('an explicit root status done is honored; stale root open cannot undo a DONE reply',()=>{
+ const r=root('OFF-57 · Small task\nstatus: done');
+ assert.equal(status([r]).status,'done');assert.equal(status([r]).by.address,'@loomdesk');
+ const block=reply('m_block',2,'BLOCKED OFF-57');assert.equal(status([r,block]).status,'open');
+ assert.equal(status([{...r,editedAt:'2026-11-14T14:00:00Z'},block]).status,'done');
+ assert.equal(status([root('OFF-57 · Small task\nstatus: done when reviewed')]).status,'open','a done-when instruction is not a completed status');
+});

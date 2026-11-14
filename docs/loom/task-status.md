@@ -19,6 +19,8 @@ historical source text; another author's root is never rewritten.
 Examples of direct replies:
 
 - `MINE OFF-57` claims a simple task without closing it; first claim holds.
+- A literal root `status: done` is also a report, ordered at its current edit time.
+  A stale root `status: open` does not override a later DONE reply.
 - `DONE OFF-57` reports the whole task done. `REOPEN OFF-57` reopens it.
 - For a root declaring A/B/D, `MINE B`, `DONE D · OFF-57` and `BLOCKED A` affect
   only those parts. A/B/D must all be done before the aggregate becomes DONE.
@@ -41,8 +43,8 @@ list. The existing automatic starter picker skips tasks reported DONE even if
 their original body still says open. Welcome timing/text policy is unchanged.
 This does not edit the separate stale work-topic root in OFF-57 A.
 
-Validation: 87 selected task/service/bot/welcome/For You tests pass (CI runs those)
-and agent-surface audit passes. Broader run including the v3 suite: 104/105 pass;
+Validation: 88 selected task/service/bot/welcome/For You tests pass (CI runs those)
+and agent-surface audit passes. Broader run including the v3 suite: 105/106 pass;
 the existing visit-name assertion expects People first while current main shows
 Replies to you. That exact assertion was already reproduced on unchanged main
 cb295b8 during #1720 work; it is not changed in this independent task-status PR.

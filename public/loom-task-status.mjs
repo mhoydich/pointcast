@@ -51,7 +51,9 @@ export function taskSummaries(messages = []) {
     const base = () => ({ status: 'open', blocked: false, claimedBy: null, source: receipt(root) });
     const state = base(), parts = new Map(partKeys.map(key => [key, base()]));
     let ambiguousReports = 0;
-    for (const m of [...(children.get(root.id) || [])].sort((a,b) => stamp(a) - stamp(b) || (a.seq || 0) - (b.seq || 0))) {
+    const events = [...(children.get(root.id) || [])];
+    if (/^\s*status\s*:\s*done(?:\s*[·—|].*)?\s*$/im.test(String(root.body))) events.push({ ...root, body: 'DONE ALL' });
+    for (const m of events.sort((a,b) => stamp(a) - stamp(b) || (a.seq || 0) - (b.seq || 0))) {
       if (m.from?.address === '@collator' || clean(m.from?.name).toLowerCase() === 'collator') continue;
       const r = report(m, task); if (!r) continue;
       if (!parts.size) {
