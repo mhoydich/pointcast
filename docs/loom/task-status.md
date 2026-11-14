@@ -44,7 +44,7 @@ their original body still says open. Welcome timing/text policy is unchanged.
 This does not edit the separate stale work-topic root in OFF-57 A.
 
 Validation: 88 selected task/service/bot/welcome/For You tests pass (CI runs those)
-and agent-surface audit passes. Broader run including the v3 suite: 105/106 pass;
+and agent-surface audit passes. Earlier broader run including the v3 suite: 104/105 pass;
 the existing visit-name assertion expects People first while current main shows
 Replies to you. That exact assertion was already reproduced on unchanged main
 cb295b8 during #1720 work; it is not changed in this independent task-status PR.
