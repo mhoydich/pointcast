@@ -51,6 +51,7 @@ const jsonLd = {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen&display=swap">
 <style is:inline>
+.task-status { font-size:13px; font-weight:600; overflow-wrap:anywhere; margin:8px 0; }
 /* ==========================================================================
    TOKENS
    ========================================================================== */
@@ -769,6 +770,7 @@ function normMsg(m) {
   return {
     id: m.id, seq: m.seq, at: m.at, kind: m.kind || 'note', body: String(m.body == null ? '' : m.body),
     from: Object.assign({ name: 'anonymous', kind: 'human', verified: false }, m.from || {}),
+    taskStatus: m.taskStatus && typeof m.taskStatus.line === 'string' ? m.taskStatus : null,
     via: m.via || null, plus: m.plus || 0, depth: m.depth || 0, replies: m.replies || 0, parent: m.parent || null,
     cites: Array.isArray(m.cites) ? m.cites.filter((c) => typeof c === 'string') : [],
     edited: !!(m.edited || m.editedAt), withdrawn: !!(m.withdrawn || m.withdrawnAt),
@@ -1069,6 +1071,8 @@ function linkify(text) {
 
 /* question status: 'open' | 'answered' | null */
 function questionStatus(t, m) {
+  const task = currentTaskStatus(t, m);
+  if (task) return task.status === 'done' ? 'answered' : 'open';
   if (m.kind !== 'question') return null;
   if (m.withdrawn) return null;
   let lastTop = null, answered = false, seenChild = false;
@@ -1386,9 +1390,17 @@ function guestPlan(t, msgs) {
   });
   return plan;
 }
+let taskTools = null;
+import('/loom-task-status.mjs').then(tools => { taskTools = tools; renderThread('keep'); }).catch(() => {});
+let taskProjection = new Map();
+function currentTaskStatus(t, m) {
+  if (state.playN == null) return taskProjection.get(m.id) || m.taskStatus || null;
+  return taskTools ? taskProjection.get(m.id) || null : null;
+}
 function renderMessage(t, m, g) {
   g = g || {};
   const qs = questionStatus(t, m);
+  const reportedTask = currentTaskStatus(t, m);
   const pressed = !!state.plused[m.id];
   const TAG = { human: 'HUMAN', agent: 'AGENT', robot: 'ROBOT' };
   if (m.withdrawn) {
@@ -1425,6 +1437,7 @@ function renderMessage(t, m, g) {
       (m.kind !== 'note' && m.kind !== 'question' && m.kind !== 'answer') ? h('span', { class: 'kindword', text: m.kind }) : null,
       m.edited ? h('span', { class: 'edited', text: 'edited' }) : null,
       h('time', { datetime: m.at, title: m.at, text: rel(m.at) })),
+    reportedTask ? h('p', { class: 'task-status', text: reportedTask.line, title: 'Reported from public posts, not verified completion or approval.' }) : null,
     m.poll ? renderPoll(m) : h('p', { class: 'text' + (collapsed ? ' clamp' : '') }, linkify(sheetShort ? bodyLines(m.body).slice(0, 2).join('\n') : m.body)),
     long ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'expand', 'aria-expanded': String(!collapsed), text: collapsed ? 'Show more' : 'Show less' }) : null,
     sheet ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'sheet', 'aria-expanded': String(!sheetShort), text: sheetShort ? 'Show all · ' + nLinks + ' links' : 'Show less' }) : null,
@@ -1539,6 +1552,7 @@ function drawMessages(box, scroll) {
     return;
   }
   if (!t) { box.append(h('div', { class: 'thread-empty', text: 'Loading…' })); return; }
+  taskProjection = taskTools ? taskTools.taskSummaries(state.playN == null ? t.messages : t.messages.slice(0, state.playN)) : new Map();
   const roomCard = renderRoomNote(t);
   if (roomCard) box.append(roomCard);
   if (t.partial) {

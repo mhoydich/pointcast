@@ -31,8 +31,8 @@ async function openQuestions(name, inbox, logKey, kv) {
       msgs = logs.get(c.key);
     }
     const q = msgs?.find((m) => m.id === c.id);
-    if (!q || q.hidden || q.kind !== 'question') continue;
-    if (msgs.some((m) => m.parent === q.id && m.kind === 'answer' && !m.hidden)) continue;
+    if (!q || q.hidden || q.kind !== 'question' || q.taskStatus?.status === 'done') continue;
+    if (!q.taskStatus && msgs.some((m) => m.parent === q.id && m.kind === 'answer' && !m.hidden)) continue;
     out.push({ address: addr, body: q.body, from: q.from?.name });
     if (out.length >= 10) break;
   }
