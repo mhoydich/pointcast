@@ -4,6 +4,11 @@
 
 ---
 
+## UFOGP OFF-53 A (2026-11-13)
+
+- [x] (X) Ada: SmartPy Seat, Doubloon and record-only DAO under `contracts/ufogp`, simulation tests, written origination handoff and cost estimate — draft PR; simulation only
+- [ ] (X) Lou: independent part-D control/token review of the draft — queued; no chain action
+
 ## Readability: Baby Bonfire, Coast Commons, House Channel, Light Companion (2026-11-11)
 
 Every public page in the four areas meets one head standard, and a test keeps it that way. No Block.
