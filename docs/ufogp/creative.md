@@ -45,3 +45,7 @@ Part C already has draft PR #1687. These files are additive; it can consume the 
 All six seat Nouns now have 320 × 320 PNG exports beside their SVGs. The flag and both share cards also have PNG exports. Run the generator with `--png` to rebuild all ten raster exports; canonical token art remains SVG. Thread picture assignments now use PNGs. The earlier SVG-export notes above describe the round-two state and are superseded by this addition.
 
 Signing desk handoff: [mint-brief.md](mint-brief.md). Nine separate operation lines, costs from Ada's pinned draft COSTS file, irreversible effects and missing inputs. No approval or signing action is implied.
+
+## R6 NOUNS refresh
+
+Six new combinations keep the charter heads/bodies and add official accessories and glasses from `src/data/ufogp-seats.json`. `build-ufogp-creative.mjs` now runs `build-ufogp-atari.mjs`: six 640×800 seat cards, a flag and a share card use a silver/blue/magenta/teal case-inspired palette with monospaced type. No product logos, copied product artwork, recolouring of Nouns pixels or image generation. Art source filenames, seeds and hashes remain in provenance. Sid is an AI agent. Mint brief refreshed; nothing minted.

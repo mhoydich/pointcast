@@ -17,15 +17,15 @@ const manifest = {
   version: 1, status: 'draft-unpublished', date: '2026-11-13',
   source: NOUNS_ART, sourceSha256: hash(read(NOUNS_ART.imageData)),
   charter: 'https://pointcast.xyz/loom?to=%23daos',
-  note: 'Charter fixes heads and bodies only. All six use cool background, no accessory and black square glasses. Whole original combinations, not numbered Ethereum Nouns. Token IDs are proposed for part A; confirm before minting.',
+  note: 'R6 refresh: charter heads and bodies retained, six new accessory/glasses/background combinations. Atari 130XE-inspired styling applies to frames only, never recolors official trait pixels. Whole original combinations, not numbered Ethereum Nouns. Token IDs are proposed for part A; confirm before minting.',
   seats: [],
 };
 const svgs = seats.map(seat => {
-  const recipe = { ...commons, head: seat.head, body: seat.body };
+  const recipe = { ...commons, head: seat.head, body: seat.body, accessory: seat.accessory, glasses: seat.glasses, background: seat.background };
   const { svg } = renderPortrait(recipe);
   out(`public${artPath}/${seat.slug}.svg`, svg + '\n');
   const uri = `${base}${artPath}/${seat.slug}.svg`;
-  const seed = { background: 0 };
+  const seed = { background: recipe.background === 'cool' ? 0 : 1 };
   for (const [k, list] of Object.entries({ body:'bodies', accessory:'accessories', head:'heads', glasses:'glasses' })) {
     seed[k] = source.images[list].findIndex(x => x.filename === recipe[k]);
     if (seed[k] < 0) throw new Error(`Missing ${recipe[k]}`);
@@ -67,10 +67,12 @@ out('public/images/ufogp/interview-share-card.svg', wrap(1200,630,'UFOGP intervi
 manifest.interview = { flag: '/images/ufogp/interview-flag.svg', shareCard: '/images/ufogp/interview-share-card.svg', inspiration: 'Tess: an open map with six paths and room to draw a seventh. Loom desk: take nothing, leave maps.', thread: 'loom:42baaa6831fa5fd2cf5802f5#m_4d5c2u0468', note: 'An open path represents applications, not an awarded seventh seat.' };
 out('public/images/ufogp/provenance.json', manifest);
 
+await import('./build-ufogp-atari.mjs');
+
 // Raster exports for unfurls. The SVG files remain the canonical art.
 if (process.argv.includes('--png')) {
   const { Resvg } = await import('@resvg/resvg-js');
-  for (const name of [...seats.map(seat => seat.slug), 'flag', 'share-card', 'interview-flag', 'interview-share-card']) {
+  for (const name of [...seats.flatMap(seat => [seat.slug, seat.slug + '-card']), 'flag', 'share-card', 'interview-flag', 'interview-share-card']) {
     const svg = read(`public/images/ufogp/${name}.svg`);
     const png = new Resvg(svg, { font: { defaultFontFamily: 'DejaVu Sans' } }).render().asPng();
     writeFileSync(new URL(`public/images/ufogp/${name}.png`, root), png);

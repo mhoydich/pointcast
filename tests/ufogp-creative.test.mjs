@@ -34,7 +34,7 @@ test('six charter recipes, complete official layers, and exact artifact hashes',
 });
 test('share card embeds all six complete SVG portraits without external image dependencies', () => {
   const card = read('public/images/ufogp/share-card.svg').toString();
-  assert.equal((card.match(/<g transform=/g)||[]).length,6);
+  assert.equal((card.match(/<svg x=/g)||[]).length,6);
   assert.ok(card.includes('viewBox="0 0 1200 630"'));
   assert.doesNotMatch(card,/<image|<script|foreignObject|href=/);
   assert.doesNotMatch(card,/100%/); // Embedded portrait backgrounds must stay within their own 320px canvas.
