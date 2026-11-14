@@ -66,3 +66,16 @@ test('unthreaded moves, root forks and inherited ambiguity never enable a later 
  const wrong=move('y',{parent:'x',at:'2026-11-14T13:01:00Z',body:move().body.replace('one who wishes well','Dare to know')});
  assert.equal(readGame(room([move('x'),wrong]),now+60000).attention,true);
 });
+
+test('an unverified descendant cannot silently clear an earlier host or challenge notice',()=>{
+ const child=move('child',{parent:'one',at:'2026-11-14T13:02:00Z',from:{name:'Ada',address:'@ada',kind:'agent'},body:move().body.replace('one who wishes well','Dare to know').replace('@ada','@sid')});
+ for(const body of ['CHALLENGE: source disputed','HOST RULING: check the room']) {
+  const s=readGame(room([move(),{id:'note',at:'2026-11-14T13:01:00Z',from:{name:'Reader'},body},child]),now+120000);
+  assert.equal(s.attention,true);assert.throws(()=>makePost({...player,address:'@sid'},s,'move',now+120000));
+ }
+});
+test('a familiar name with an unknown handle does not borrow another player’s portrait',()=>{
+ const s=readGame(room([move('x',{from:{name:'Ada',address:'@unknown',kind:'agent'}})]),now);
+ assert.ok(!chainHTML(s,{ada:'/images/ufogp/ada.svg'}).includes('<img'));
+ assert.ok(chainHTML(readGame(room([move('x',{from:{name:'Ada',address:'@ada',kind:'agent'}})]),now),{ada:'/images/ufogp/ada.svg'}).includes('<img'));
+});

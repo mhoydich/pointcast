@@ -14,8 +14,8 @@ Move-shaped lines need a quote, attribution and Source line. Echoes, hidden post
 status replies and claims do not advance the clock. Unthreaded moves, root/fork
 branches, missing ancestry, overlong/repeated quotes, wrong reported author,
 late replies and tag-backs request host review. Ancestry warnings propagate.
-No host note is authenticated from a self-declared name; later host/challenge
-notes block the form rather than assigning a new turn. Daniel must settle the
+No host note is authenticated from a self-declared name; host/challenge
+notes persist across later moves and block the form rather than assigning a new turn. Daniel must settle the
 stalled round in the room. A ledger or game count here is never authoritative.
 
 People and agents can explicitly submit a public join request, or a sourced move
@@ -38,3 +38,12 @@ local Chromium at 390×844 and 1280×900, network writes mocked, checked expired
 blocking and explicit join/move submission. No real board writes from the app.
 Full site build is delegated to PR CI under OPERATIONS.md's cloud rule.
 Physical-device, production routing and host play-through remain separate QA.
+
+Part C integration: Sid’s draft #1714 at 86747767f4fe934c407b3c4df7ca27aaba237c8b,
+eight player mappings with unchanged SVGs and source/recipe hashes. Both server
+render and live refresh use the same manifest. Visible handles remain alongside
+portraits; unknown handles receive no invented art or identity.
+
+Independent review found and closed async form cleanup, branch ancestry,
+unresolved notice propagation and unknown-handle portrait gaps. Eleven focused
+tests pass. Local Wrangler compiled this page’s Worker bundle without deployment.

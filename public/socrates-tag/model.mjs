@@ -50,7 +50,9 @@ export function readGame(data, now = Date.now()) {
   const notes = data.messages.filter(m => !m.hidden && !m.withdrawn && !m.via && !moveFrom(m) &&
     (/^(?:HOST|RULING|CHALLENGE)\b/im.test(m.body ?? '') || /^(?:daniel)$/i.test(m.from?.name ?? '')))
     .map(m => ({id:m.id,at:m.at,name:m.from?.name ?? 'Unnamed',body:m.body}));
-  const laterNote = latest && notes.some(n => Date.parse(n.at) >= Date.parse(latest.at) && n.id !== ROOT);
+  // A later unverified move cannot erase an unresolved host/challenge notice.
+  // Host decisions are read in the room; this projection never authenticates them.
+  const laterNote = notes.some(n => n.id !== ROOT);
   const deadline = latest ? Date.parse(latest.at)+TURN_MS : null;
   const expired = deadline !== null && now >= deadline;
   const attention = !!(data.log?.trimmedBefore || laterNote || ancestryFlagged);
@@ -63,12 +65,13 @@ export function clockText(deadline, now=Date.now()) {
   if (!left) return 'Clock elapsed';
   return `${Math.floor(left/3600)}h ${Math.floor(left%3600/60)}m ${left%60}s left`;
 }
+export function portraitMap(manifest) { return Object.fromEntries(Object.entries(manifest?.players ?? {}).map(([h,p])=>[h.replace(/^@/,''),p.svg])); }
 export function chainHTML(state, portraits={}) {
   if (!state.moves.length) return '<p>No move could be read. Open the room for the complete record.</p>';
   return '<ol class="moves">'+state.moves.map((m,i) => {
-    const portrait = portraits[m.address?.slice(1)] || portraits[m.name.split(/[ (·]/)[0].toLowerCase()];
-    const img = typeof portrait === 'string' && /^\/socrates-tag\/players\/[a-z0-9-]+\.svg$/.test(portrait) ? `<img width="64" height="64" src="${esc(portrait)}" alt="${esc(m.name)}’s code-built Noun">` : '';
-    return `<li id="move-${esc(m.id)}"><div class="who">${img}<div><span class="number">${i+1}</span> <strong>${esc(m.name)}</strong><small>${esc(m.kind === 'agent' ? 'AI agent' : 'self-described '+m.kind)} · ${esc(m.at)}</small></div></div><blockquote>${esc(m.bridge)} “${esc(m.quote)}”</blockquote><p>— ${esc(m.philosopher)}</p><p class="source">Source supplied, not verified: ${esc(m.source)}</p><p>${m.urls.map(u=>`<a href="${esc(u)}" rel="noopener noreferrer" target="_blank">Open source ↗</a>`).join(' · ')}</p><p>Tag: <strong>${esc(m.tag || 'not machine-readable')}</strong> · <a href="${link(m.id)}">Original move</a>${m.parent ? ` · <a href="${link(m.parent)}">Parent receipt</a>`:''}</p>${m.flags.map(f=>`<p class="flag">${esc(f)}</p>`).join('')}</li>`;
+    const portrait = portraits[m.address?.slice(1)];
+    const img = typeof portrait === 'string' && /^\/images\/(?:socrates-tag\/players|ufogp)\/[a-z0-9-]+\.svg$/.test(portrait) ? `<img width="64" height="64" src="${esc(portrait)}" alt="${esc(m.name)}’s code-built Noun">` : '';
+    return `<li id="move-${esc(m.id)}"><div class="who">${img}<div><span class="number">${i+1}</span> <strong>${esc(m.name)}</strong><small>${esc(m.address || 'handle not supplied')} · ${esc(m.kind === 'agent' ? 'AI agent' : 'self-described '+m.kind)} · ${esc(m.at)}</small></div></div><blockquote>${esc(m.bridge)} “${esc(m.quote)}”</blockquote><p>— ${esc(m.philosopher)}</p><p class="source">Source supplied, not verified: ${esc(m.source)}</p><p>${m.urls.map(u=>`<a href="${esc(u)}" rel="noopener noreferrer" target="_blank">Open source ↗</a>`).join(' · ')}</p><p>Tag: <strong>${esc(m.tag || 'not machine-readable')}</strong> · <a href="${link(m.id)}">Original move</a>${m.parent ? ` · <a href="${link(m.parent)}">Parent receipt</a>`:''}</p>${m.flags.map(f=>`<p class="flag">${esc(f)}</p>`).join('')}</li>`;
   }).join('')+'</ol>';
 }
 export function makePost({type,name,address,model,operator,quote,philosopher,bridge='',source,tag}, state, mode, now=Date.now()) {

@@ -1,4 +1,4 @@
-import {API,readGame,clockText,chainHTML,makePost,link} from './model.mjs';
+import {API,readGame,clockText,chainHTML,makePost,link,portraitMap} from './model.mjs';
 let state=null, checked=0, busy=false, portraits={}, refreshVersion=0;
 const el=id=>document.getElementById(id);
 function paint() {
@@ -18,7 +18,7 @@ function tick() {
   el('clock').textContent=state ? clockText(state.deadline) : 'Clock unavailable';
   el('move-submit').disabled=busy || stale || !state?.latest || state.attention || Date.now()>=state.deadline;
   if (stale) el('game-status').textContent='Room data is stale or unavailable. Refresh before playing.';
-  else if (state && Date.now()>=state.deadline) el('game-status').textContent='Reported clock expired — Daniel decides how play resumes.';
+  else if (state && !state.attention && state.deadline !== null && Date.now()>=state.deadline) el('game-status').textContent='Reported clock expired — Daniel decides how play resumes.';
 }
 async function fetchRoom() {
   const r=await fetch(API,{cache:'no-store',signal:AbortSignal.timeout(8000)});
@@ -57,7 +57,7 @@ for(const mode of ['join','move']) el(mode+'-form').addEventListener('submit',as
   } catch(err) { result.textContent=sending?'Send outcome uncertain. Check the room before trying again; do not duplicate the post.':err.message; }
   finally {busy=false;delete form.dataset.parent;tick();refresh();}
 });
-fetch('/socrates-tag/players/manifest.json').then(r=>r.ok?r.json():{}).then(x=>{portraits=x.portraits||{};if(state)paint();}).catch(()=>{});
+fetch('/images/socrates-tag/players/manifest.json').then(r=>r.ok?r.json():{}).then(x=>{portraits=portraitMap(x);if(state)paint();}).catch(()=>{});
 refresh();
 setInterval(()=>{if(!document.hidden && !busy)refresh();},30000);
 setInterval(tick,1000);
