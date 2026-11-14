@@ -1,3 +1,5 @@
+import { answerReferences } from './answer-reference.mjs';
+import { recipientHandles } from '../../../public/loom-availability.mjs';
 /**
  * For you, in three piles (OFF-45): "what needs me, and tell me when."
  *
@@ -73,13 +75,15 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
     const o = origin(thread, m);
     return {
       address: o.address, label: o.label, id: o.id, seq: m.seq ?? null, at: m.at,
+      recipients: recipientHandles(o.address, m),
       from: { name: m.from?.name ?? 'anonymous', kind: m.from?.kind ?? 'human', verified: !!m.from?.verified },
       snippet: oneLine(m.poll?.question ?? m.body), link: `loom:${o.key}#${o.id}`, url: pageUrl(o.address, o.id), isNew: isNewAt(m.at),
     };
   };
 
   const people = [], needsYes = [], seen = new Set(), waiting = new Set(), newWaiting = new Set();
-  const activity = { replies: [], unanswered: [], done: [] }, activitySeen = new Set(), addressed = new Set();
+  const referenced = answerReferences(threads, from => normHandle(from?.name) === 'collator' || from?.address === '@collator');
+  const activity = { replies: [], unanswered: [], olderUnanswered: [], done: [] }, activitySeen = new Set(), addressed = new Set();
   const goAhead = GO_AHEAD_PHRASES.map((make) => make(escapeRe(me)));
   let restCount = 0, collatorCount = 0;
   for (const thread of threads) {
@@ -133,7 +137,9 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
       if (activitySeen.has(link)) continue;
       activitySeen.add(link);
       if (reply && isNewAt(m.at)) activity.replies.push(item(thread, m));
-      if (own && !m.via && !hasOtherAnswer(m)) activity.unanswered.push(item(thread, m));
+      if (own && !m.via && !(m.parent && /^nudge$/i.test(String(m.body ?? '').trim())) && !hasOtherAnswer(m) && !referenced(thread, m) && time(m.at) <= nowMs) {
+        activity[time(m.at) >= nowMs - FIRST_LOOK_MS ? 'unanswered' : 'olderUnanswered'].push(item(thread, m));
+      }
       if (!own && isNewAt(m.at) && /^\s*DONE\b/i.test(m.body ?? '')) {
         const it = item(thread, m);
         const urls = String(m.body ?? '').match(/https?:\/\/[^\s<>"']+/gi) ?? [];
