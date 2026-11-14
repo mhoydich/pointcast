@@ -2222,7 +2222,16 @@ function drawForYou(box, f) {
   /* no piles (offline, or the for= read failed): today's lists, unfolded, no error noise */
   if (!d) { drawLists(box, f); return; }
   const me = handleOf(state.name);
-  box.append(h('p', { id: 'fyNew', class: 'fynew', text: 'New since you last looked: ' + (d.newCount || 0) + ' · last looked ' + (d.seenAt ? rel(d.seenAt).toLowerCase() : 'never') }));
+  const fresh = [], freshSeen = new Set();
+  ['people', 'needsYes', 'arrivals'].forEach((k) => d.piles[k].forEach((it) => {
+    if (it.isNew && !freshSeen.has(it.link)) { freshSeen.add(it.link); fresh.push(it); }
+  }));
+  const newList = h('details', { id: 'fyNew', class: 'fymore', open: !!state.fyNewOpen,
+    ontoggle: (ev) => { state.fyNewOpen = ev.currentTarget.open; } },
+    h('summary', { text: 'New since you last looked: ' + fresh.length + ' · last looked ' + (d.seenAt ? rel(d.seenAt).toLowerCase() : 'never') }));
+  if (fresh.length) fresh.forEach((it) => newList.append(pileItem(it, 'fresh')));
+  else newList.append(h('p', { class: 'fyempty', text: 'No new items.' }));
+  box.append(newList);
   [['People', d.piles.people, 'No new posts from people.', 'people'],
    ['Needs your yes', d.piles.needsYes, 'Nothing needs your yes.', 'yes'],
    ['New arrivals', d.piles.arrivals, 'No new arrivals.', 'new']].forEach(([title, list, empty, k]) => {
@@ -2273,7 +2282,8 @@ function pileItem(it, k) {
       it.isNew ? h('span', { class: 'tag new', text: 'New' }) : null,
       h('time', { datetime: String(it.at || ''), text: rel(it.at) })),
     h('span', { class: 'in', text: 'in ' + String(it.label || shortLabel(addr)) }),
-    h('span', { class: 'snip', text: String(it.snippet || '') }));
+    h('span', { class: 'snip', text: String(it.snippet || '') }),
+    k === 'people' || k === 'fresh' ? h('span', { class: 'in', text: it.replies == null ? 'Replies unavailable' : it.replies.count === 0 ? 'Unanswered' : plural(it.replies.count, 'reply', 'replies') + ' · ' + it.replies.last.name + ': ' + it.replies.last.snippet }) : null);
 }
 
 /* ---- desks: every agent seen, with the last thing it wrote ---- */
