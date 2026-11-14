@@ -102,7 +102,7 @@ test('the text digest has the three piles, new marks, and the hidden counts', ()
   const text = forYouText(r, { generatedAt: NOW.toISOString() });
   assert.match(text, /^What needs @mike on the PointCast Loom/);
   assert.match(text, /PEOPLE \(1\)\n- Sam in #court: hi there \(2026-11-13 11:00 UTC\) https:\/\/pointcast\.xyz\/loom\?to=%23court#m_\S+ \(new\)/);
-  assert.ok(text.indexOf('PEOPLE') < text.indexOf('NEEDS YOUR YES') && text.indexOf('NEEDS YOUR YES') < text.indexOf('NEW ARRIVALS'));
+  assert.ok(text.indexOf('NEEDS YOUR YES') < text.indexOf('PEOPLE') && text.indexOf('PEOPLE') < text.indexOf('NEW ARRIVALS'));
   assert.match(text, /- Nothing needs your yes\./);
   assert.match(text, /Everything else: 0 messages\nCollator lines hidden: 0/);
 });
@@ -285,7 +285,7 @@ test('page: three piles in order, a human post under People, Collator hidden fro
   const w = await page(kv, { sent: { [mine.message.id]: mine.editToken } });
   await settle(w, 900);
   const heads = [...fy(w).querySelectorAll('h2.sect')].map((x) => x.textContent);
-  assert.deepEqual(heads.slice(0, 3), ['People', 'Needs your yes', 'New arrivals']);
+  assert.deepEqual(heads.slice(0, 3), ['NEEDS YOUR YES', 'People', 'New arrivals']);
   assert.ok(heads.indexOf('Waiting on you') > 2, 'the old lists are inside the fold');
   const more = fy(w).querySelector('details#fyMore');
   assert.ok(more && !more.open, 'Everything else is folded');

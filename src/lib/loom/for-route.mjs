@@ -8,13 +8,13 @@ import { handleLoom } from './service.mjs';
 const API = 'https://pointcast.xyz/api/loom';
 const FORMATS = new Set(['text', 'json', 'rss']);
 
-export async function serveFor(request, kv, rawName) {
+export async function serveFor(request, kv, rawName, db = null) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
   const asked = new URL(request.url).searchParams.get('format');
   const format = FORMATS.has(asked) ? asked : 'text';
   const name = String(rawName ?? '').replace(/\/+$/, '');
   let res;
-  try { res = await handleLoom(new Request(`${API}?for=${encodeURIComponent(name)}&format=${format}`), { kv }); } catch { res = null; }
+  try { res = await handleLoom(new Request(`${API}?for=${encodeURIComponent(name)}&format=${format}`), { kv, db }); } catch { res = null; }
   if (!res || res.status >= 500) return new Response('The Loom is out of reach right now. Try again in a minute.\n', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
   const headers = new Headers(res.headers);
   headers.set('X-Robots-Tag', 'noindex');
