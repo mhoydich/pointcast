@@ -51,6 +51,7 @@ const jsonLd = {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen&display=swap">
 <style is:inline>
+.availability { display:block; margin:6px 0; color:var(--muted, #666); font-size:12px; }
 /* ==========================================================================
    TOKENS
    ========================================================================== */
@@ -767,7 +768,7 @@ function normPoll(p, body) {
 }
 function normMsg(m) {
   return {
-    id: m.id, seq: m.seq, at: m.at, kind: m.kind || 'note', body: String(m.body == null ? '' : m.body),
+    id: m.id, seq: m.seq, at: m.at, editedAt: m.editedAt || null, hidden: !!m.hidden, kind: m.kind || 'note', body: String(m.body == null ? '' : m.body),
     from: Object.assign({ name: 'anonymous', kind: 'human', verified: false }, m.from || {}),
     via: m.via || null, plus: m.plus || 0, depth: m.depth || 0, replies: m.replies || 0, parent: m.parent || null,
     cites: Array.isArray(m.cites) ? m.cites.filter((c) => typeof c === 'string') : [],
@@ -1255,6 +1256,45 @@ function participantsText(t) {
   if (seen.robot.size) parts.push(plural(seen.robot.size, 'robot'));
   return parts.join(', ');
 }
+/* Availability is an explicit public declaration, never an activity timer. */
+let availabilityTools = null;
+const recipientAvailability = new Map();
+import('/loom-availability.mjs').then(tools => { availabilityTools = tools; renderThread('keep'); }).catch(() => { /* unknown, never online */ });
+function recipientBadges(t, m) {
+  if (!availabilityTools || state.playN != null) return null;
+  return availabilityTools.recipientHandles(t.addr, m).map(handle => {
+    const record = recipientAvailability.get(handle);
+    const value = record && Date.now() - record.at < 60000 ? record.value : null;
+    if (value?.state !== 'away') return null;
+    return h('a', { class: 'via availability', href: '/loom?to=' + encodeURIComponent(handle) + '#' + value.id,
+      title: availabilityTools.AWAY_EXPLANATION + ' Source: ' + value.at,
+      text: handle + ': ' + availabilityTools.AWAY_LABEL + ' (self-reported)' });
+  });
+}
+function refreshRecipientAvailability(t) {
+  if (!availabilityTools || !t || loomApi.mode !== 'live' || state.playN != null) return;
+  const handles = [];
+  for (const m of [...t.messages].reverse()) {
+    for (const handle of availabilityTools.recipientHandles(t.addr, m)) if (!handles.includes(handle) && handles.length < 8) handles.push(handle);
+  }
+  for (const handle of handles) {
+    const old = recipientAvailability.get(handle);
+    if (handle === t.addr) {
+      recipientAvailability.set(handle, { at: Date.now(), value: availabilityTools.availabilityFromMessages(handle, t.messages) });
+      continue;
+    }
+    if (old && (old.loading || Date.now() - old.at < 60000)) continue;
+    if (recipientAvailability.size >= 64) recipientAvailability.delete(recipientAvailability.keys().next().value);
+    const record = { at: Date.now(), value: null, loading: true };
+    recipientAvailability.set(handle, record);
+    loomApi.thread(handle).then(inbox => {
+      record.value = availabilityTools.availabilityFromMessages(handle, inbox.messages);
+    }).catch(() => { record.value = null; }).finally(() => {
+      record.loading = false; record.at = Date.now();
+      if (state.addr === t.addr) renderMessages('keep');
+    });
+  }
+}
 function renderThreadHeader() {
   const t = thread();
   const max = window.innerWidth < 600 ? 30 : 52;
@@ -1425,6 +1465,7 @@ function renderMessage(t, m, g) {
       (m.kind !== 'note' && m.kind !== 'question' && m.kind !== 'answer') ? h('span', { class: 'kindword', text: m.kind }) : null,
       m.edited ? h('span', { class: 'edited', text: 'edited' }) : null,
       h('time', { datetime: m.at, title: m.at, text: rel(m.at) })),
+    recipientBadges(t, m),
     m.poll ? renderPoll(m) : h('p', { class: 'text' + (collapsed ? ' clamp' : '') }, linkify(sheetShort ? bodyLines(m.body).slice(0, 2).join('\n') : m.body)),
     long ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'expand', 'aria-expanded': String(!collapsed), text: collapsed ? 'Show more' : 'Show less' }) : null,
     sheet ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'sheet', 'aria-expanded': String(!sheetShort), text: sheetShort ? 'Show all · ' + nLinks + ' links' : 'Show less' }) : null,
@@ -1598,6 +1639,7 @@ function startPlay() {
   renderPlaybar();
 }
 function renderThread(scroll) {
+  refreshRecipientAvailability(thread());
   renderThreadHeader(); renderComposerBar(); renderMessages(scroll || 'keep'); renderPlaybar();
 }
 function flash(id) {
@@ -2977,7 +3019,7 @@ async function poll() {
 setInterval(poll, 15000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); if (Date.now() - hostState.last > 60000) refreshHosts(); } });
 setInterval(() => { if (!document.hidden) refreshHosts(); }, 60000);
-setInterval(() => { if (!sheetEl) { renderDirectory(); renderForYou(); } }, 60000);
+setInterval(() => { if (!sheetEl) { renderDirectory(); renderForYou(); if (!document.hidden) renderThread('keep'); } }, 60000);
 
 /* ==========================================================================
    5. BOOT: paint the empty shell, then read the live Loom
