@@ -395,3 +395,28 @@ test('a ?as=NAME visit name never moves that name\'s server seen mark', async ()
   await settle(w, 900);
   assert.equal(w.posts.filter((p) => p.action === 'seen').length, 0);
 });
+
+test('recent top-level agent relays asking for a yes are open until a later owner reply or clearance', () => {
+  const phrases = ["It needs Mike's yes", 'Needs your yes before release', 'Please get his yes', 'Relay not his signature'];
+  const asks = phrases.map((body) => msg(agent('Desk'), body, 3));
+  const old = msg(agent('Desk'), 'Needs your yes', 25);
+  const reply = msg(agent('Desk'), 'Needs your yes', 2, { parent: asks[0].id });
+  const humanAsk = msg(human('Sam'), 'Needs your yes', 2);
+  const closed = msg(agent('Desk'), 'Needs your yes', 4);
+  const owner = msg(human('Mike'), 'I saw this', 1, { parent: closed.id });
+  const cleared = msg(agent('Desk'), 'Get his yes', 4);
+  const clear = msg(agent('Other'), 'CLEARED', 1, { parent: cleared.id });
+  const result = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#work', 'k', [...asks, old, reply, humanAsk, closed, owner, cleared, clear])] });
+  assert.deepEqual(new Set(result.piles.needsYes.map((x) => x.id)), new Set(asks.map((x) => x.id)));
+});
+
+test('new count includes unanswered inbox notes and deduplicates items also in a pile', () => {
+  const a = msg(agent('Desk'), 'Please look', 1);
+  const b = msg(human('Sam'), 'Hello', 2);
+  const answered = msg(agent('Desk'), 'Already answered', 3);
+  const answer = msg(human('Mike'), 'Done', 1, { parent: answered.id });
+  const r = buildPiles({ owner: 'mike', now: NOW, threads: [thread('@mike', 'inbox', [a, b, answered, answer])] });
+  assert.equal(r.newCount, 2);
+  assert.equal(r.newWaiting.length, 2);
+  assert.match(forYouText(r, { generatedAt: NOW.toISOString() }), /New since then: 2/);
+});

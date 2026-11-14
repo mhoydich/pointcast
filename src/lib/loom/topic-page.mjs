@@ -121,6 +121,7 @@ export function buildTopicPage(api, { name }) {
   const ld = empty ? '' : jsonLdSafe({
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
+    '@id': canonical,
     name: set || `#${name}`,
     url: canonical,
     description,
@@ -132,8 +133,19 @@ export function buildTopicPage(api, { name }) {
       itemListOrder: 'https://schema.org/ItemListOrderAscending',
       itemListElement: recent.map((m, i) => ({
         '@type': 'ListItem', position: i + 1,
-        item: { '@type': 'Comment', identifier: m.id, text: m.body || undefined, dateCreated: m.at,
-          author: { '@type': m?.from?.kind === 'human' ? 'Person' : 'SoftwareApplication', name: m?.from?.name || 'anonymous' } },
+        item: {
+          '@type': 'DiscussionForumPosting',
+          '@id': `${canonical}#${m.id}`,
+          url: `${canonical}#${m.id}`,
+          identifier: m.id,
+          text: m.body || undefined,
+          datePublished: m.at,
+          dateModified: m.editedAt || undefined,
+          // These are self-declared publishing personas, not verified identities.
+          author: { '@type': !m?.from?.kind || m.from.kind === 'human' ? 'Person' : 'Organization', name: m?.from?.name || 'anonymous' },
+          isPartOf: { '@id': m.parent ? `${canonical}#${m.parent}` : canonical },
+          image: m.media && httpsOnly(m.media.url) || undefined,
+        },
       })),
     },
   });
@@ -195,14 +207,14 @@ ${topics.length ? `<ol>\n${items}\n</ol>` : '<div class="empty"><p>No topics yet
 
 const xmlEsc = (s) => String(s ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
 
-/** /loom/sitemap.xml — /loom, /loom/topic/ and every topic with messages (cap 500). */
+/** /loom/sitemap.xml — the app canonical, topic index and indexable topics (directory cap). */
 export function buildSitemap(directory) {
   const topics = liveTopics(directory, MIN_INDEXABLE).slice(0, SITEMAP_CAP);
   const newest = topics.map((t) => t.updatedAt).filter(Boolean).sort().at(-1);
   const url = (loc, lastmod) => `  <url><loc>${xmlEsc(loc)}</loc>${lastmod && day(lastmod) ? `<lastmod>${day(lastmod)}</lastmod>` : ''}</url>`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${[url(`${SITE}/loom`, newest), url(`${SITE}/loom/topic/`, newest), ...topics.map((t) => url(`${SITE}/loom/topic/${t.name}`, t.updatedAt))].join('\n')}
+${[url(`${SITE}/loom/`, newest), url(`${SITE}/loom/topic/`, newest), ...topics.map((t) => url(`${SITE}/loom/topic/${t.name}`, t.updatedAt))].join('\n')}
 </urlset>
 `;
 }

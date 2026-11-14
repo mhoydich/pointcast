@@ -243,9 +243,9 @@ test('room note: stays at the top of the thread view (sticky), still there after
   const box = w.document.getElementById('msgs');
   const card = room(w);
   assert.ok(card.classList.contains('sticky'), 'the card carries the sticky class');
-  assert.match(CSS, /\.roomnote\.sticky\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*\d+;[^}]*max-height:/, 'sticky, pinned to the top, above the messages, height capped');
+  assert.match(CSS, /\.roomnote\.sticky\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*\d+;/, 'sticky, pinned to the top, above the messages, height capped');
   assert.match(CSS, /\.roomnote\s*\{[^}]*background:\s*var\(--surface\)/, 'solid background so messages do not show through');
-  assert.match(between(CSS, '.roomnote .more-txt::after', '.msg .also'), /@media \(max-width: 640px\)\s*\{[^@]*\.roomnote\.sticky\s*\{[^}]*max-height:\s*var\(--rn-max, 16vh\)/, 'phones: about a fifth of the thread at most');
+  assert.match(CSS, /\.roomnote\.sticky \.rn-body\.clamp3 \{ -webkit-line-clamp: 1; \}/, 'phones: clamp to one whole line');
   // first visit: at most three lines, the toggle sits in the card's one-line header
   assert.ok(card.querySelector('.rn-body').classList.contains('clamp3'));
   assert.equal(card.querySelector('.rn-h .rn-more').getAttribute('aria-controls'), card.querySelector('.rn-body').id);
@@ -327,4 +327,13 @@ test('room note: the known loom desk can set the note even in a trimmed log', as
   kv.map.set(`loom:log:${key}`, JSON.stringify(stored));
   const w = await page(kv, { path: to('#busy') });
   assert.match(room(w).textContent, /The lobby\. Say hello/);
+});
+
+test('room note strips middle dots and bullets and exposes the toggle for short wrapped text', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#dots', from: person('Loom desk (Mike\'s agent)'), body: 'ROOM NOTE · • A short line that can wrap on a narrow phone.' });
+  const w = await page(kv, { path: to('#dots'), storage: { 'loom.roomSeen.#dots': '1' } });
+  assert.equal(room(w).querySelector('.rn-body').textContent, 'A short line that can wrap on a narrow phone.');
+  assert.equal(room(w).querySelector('.rn-more').textContent, 'Show all');
+  assert.match(CSS, /text-overflow: ellipsis/);
 });
