@@ -64,10 +64,22 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
 
   const item = (thread, m) => {
     const o = origin(thread, m);
+    const original = m.via ? threads.find(t => t.key === o.key) : thread;
+    let replies = null;
+    if (original && (original.messages || []).some(x => x.id === o.id && !x.hidden && !x.withdrawn)) {
+      const visible = (original.messages || []).filter(x => x && !x.hidden && !x.withdrawn);
+      const descendants = new Set([o.id]);
+      let changed = true;
+      while (changed) { changed = false; for (const x of visible) if (x.parent && descendants.has(x.parent) && !descendants.has(x.id)) { descendants.add(x.id); changed = true; } }
+      const answers = visible.filter(x => x.id !== o.id && descendants.has(x.id) && !isCollator(x.from) && x.kind !== 'link');
+      answers.sort((a,b) => time(b.at) - time(a.at) || (b.seq ?? 0) - (a.seq ?? 0));
+      const last = answers[0];
+      replies = { count: answers.length, last: last ? {name:last.from?.name ?? 'anonymous', snippet:oneLine(firstLine(last.body))} : null };
+    }
     return {
       address: o.address, label: o.label, id: o.id, seq: m.seq ?? null, at: m.at,
       from: { name: m.from?.name ?? 'anonymous', kind: m.from?.kind ?? 'human', verified: !!m.from?.verified },
-      snippet: oneLine(m.poll?.question ?? m.body), link: `loom:${o.key}#${o.id}`, url: pageUrl(o.address, o.id), isNew: isNewAt(m.at),
+      replies, snippet: oneLine(m.poll?.question ?? m.body), link: `loom:${o.key}#${o.id}`, url: pageUrl(o.address, o.id), isNew: isNewAt(m.at),
     };
   };
 
