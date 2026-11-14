@@ -132,3 +132,29 @@ def edges():
     s.verify(seat.balance == sp.mutez(0))
     s.verify(coin.balance == sp.mutez(0))
     s.verify(dao.balance == sp.mutez(0))
+
+@sp.add_test()
+def metadata_bounds_and_atomicity():
+    s = sp.test_scenario('ufogp_bounds', [fa2.t, fa2.main, m])
+    seat = m.Seat(ADMIN, META)
+    coin = m.Doubloon(ADMIN, META, INFO)
+    s += seat
+    s += coin
+    seat.mint(holder=ALICE, token_info={str(i): sp.bytes('0x') for i in range(17)}, _sender=ADMIN, _valid=False, _exception='TOO_MANY_METADATA_FIELDS')
+    seat.mint(holder=ALICE, token_info={'': sp.bytes('0x'+'61'*4097)}, _sender=ADMIN, _valid=False, _exception='METADATA_TOO_LARGE')
+    s.verify(seat.data.next_token_id == 0)
+    s.verify(~seat.data.holders.contains(ALICE))
+    seat.mint(holder=ALICE, token_info={'': sp.bytes('0x'+'61'*4096)}, _sender=ADMIN)
+    s.verify(seat.data.ledger[0] == ALICE)
+    seat.mint(holder=BOB, token_info={str(i): sp.bytes('0x') for i in range(16)}, _sender=ADMIN)
+    s.verify(seat.data.next_token_id == 2)
+    coin.mint_done(job='one', holder=ALICE, amount=2**256, evidence='done', _sender=ADMIN)
+    coin.mint_done(job='one', holder=BOB, amount=1, evidence='done', _sender=ADMIN, _valid=False, _exception='JOB_ALREADY_REWARDED')
+    s.verify(coin.data.supply[0] == 2**256)
+    s.verify(coin.data.ledger[(ALICE, 0)] == coin.data.supply[0])
+    s.verify(~coin.data.ledger.contains((BOB, 0)))
+    dao = m.DAO(seat.address, ADMIN, META)
+    s += dao
+    for options in [['A'], [str(i) for i in range(17)], ['A', 'B'*129]]:
+        dao.propose(seat=0, text='test', options=options, _sender=ALICE, _valid=False)
+    s.verify(dao.data.next_proposal == 0)

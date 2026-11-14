@@ -12,7 +12,8 @@ Nothing here is an approval to originate, mint, spend, merge or deploy.
 - **Seat**: admin mints consecutive NFT IDs starting at 0, one unit per ID,
   one distinct holder address per seat. No transfers, operators, burns,
   revocations or reassignments. `token_info` accepts Sid's TZIP-12 metadata
-  map (including an empty-string URI). `owner(seat)` and `seat_count()` are
+  map (including an empty-string URI), at most 16 fields and 4,096 total
+  key/value bytes. `owner(seat)` and `seat_count()` are
   on-chain views used by DAO. Do not substitute an untrusted Seat contract.
 - **Doubloon**: fungible FA2 token ID 0, decimals 0. Admin attests that a job
   is DONE through `mint_done(job, holder, amount, evidence)`. Unique job ID,
@@ -55,7 +56,7 @@ mkdir -p /tmp/ufogp-simulation
 bash -n contracts/ufogp/originate.sh
 ```
 
-The two scenarios compile all three contracts to Michelson and exercise
+The three behavior scenarios compile all three contracts to Michelson and exercise
 admin-only issuance, duplicate seats/jobs, zero/bad awards, FA2 callbacks
 and undefined IDs, transfer/operator denial, unauthorized and repeated
 votes, vote-choice bounds, duplicate labels, snapshot eligibility, exact deadline,
@@ -91,39 +92,22 @@ marker. That marker is only a guard against accidents, not authentication
 or proof of Mike's consent. The Signing desk must obtain Mike's yes with an
 amount in its own chat, review a node estimate and operation fees, and supply
 its own existing signer. A Loom message never substitutes for that yes.
-**Neither mode of the script was run. No RPC simulation or signing was done.**
+**Neither mode of the script was run. Round two also uses unsigned node-helper previews; nothing was injected or signed.**
 
 ## Review status
 
 Local SmartPy simulation passes. Independent Codex review found a payable
 FA2 callback inherited from the library; both overrides now reject tez and
 have regression tests. Lou's separate part-D review remains outstanding.
-Real-node protocol acceptance, origination cost, wallet/indexer presentation,
+Real transaction inclusion, wallet/indexer presentation,
 Sid's final metadata and recovery policy still need Signing desk/reviewer
 attention. A passing local simulation is not deployment approval.
 
-## Cost estimate (tez, not a quote)
+## Costs and round-two review
 
-2026-11-13 PT, local compiled fixtures only. Forged Micheline byte lengths
-using PyTezos 3.16.1's `forge_micheline` (no client/RPC/signing):
+[COSTS.md](COSTS.md) contains per-origination and per-entrypoint simulation
+measurements, fee assumptions, reference sizes and limitations. Its pinned
+protocol measurements supersede round one's approximate byte-size proxy.
+[REVIEW-R2.md](REVIEW-R2.md) maps Lou's checklist to code and test evidence.
 
-| Contract | Code bytes | Initial storage bytes | Storage burn proxy |
-|---|---:|---:|---:|
-| Seat | 3,436 | 92 | 0.94625 tez |
-| Doubloon | 4,042 | 139 | 1.10950 tez |
-| DAO | 2,537 | 121 | 0.72875 tez |
-| Total | 10,015 | 352 | 2.78450 tez |
-
-Proxy formula: `(code bytes + initial storage bytes + 257) × 0.00025 tez`
-per origination. The 257-byte allocation overhead and 250 mutez/byte are
-assumptions, not constants verified against a current node. Lazy storage
-accounting, final metadata, script normalization and protocol changes can
-change the result. Fixture metadata is deliberately small. Operation/gas
-fees are additional; no reveal, mint, proposal, vote or tie-break is included.
-
-**Planning estimate: 3–5 tez for the three originations**, assuming small URI
-metadata. Reserve a separate **1–2 tez provisional allowance** for six seat
-records and early DAO/job records. No price or market value is assigned to
-Doubloons. These are sizing estimates, not permission or spending limits;
-the Signing desk must obtain current node estimates and Mike's exact budget
-before any real operation. Actual spent here: **0 tez**.
+Actual spending: **0 tez**. No real contract was originated or token minted.

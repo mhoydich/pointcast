@@ -37,6 +37,11 @@ def m():
             assert sp.amount == sp.mutez(0), "NO_TEZ"
             assert sp.sender == self.data.admin, "NOT_ADMIN"
             assert not (holder in self.data.holders), "HOLDER_HAS_SEAT"
+            assert sp.len(token_info) <= 16, "TOO_MANY_METADATA_FIELDS"
+            metadata_bytes = 0
+            for item in token_info.items():
+                metadata_bytes += sp.len(item.key) + sp.len(item.value)
+            assert metadata_bytes <= 4096, "METADATA_TOO_LARGE"
             seat = self.data.next_token_id
             self.data.ledger[seat] = holder
             self.data.holders[holder] = seat
