@@ -39,27 +39,33 @@ async function openQuestions(name, inbox, logKey, kv) {
   return out;
 }
 
-export async function serveBot(request, kv, rawName) {
-  const cache = typeof caches !== 'undefined' ? caches.default : null;
-  const key = new Request(`https://pointcast.xyz/loom/bot/${parseBotName(rawName) ?? ''}`);
-  if (cache && request.method === 'GET' && parseBotName(rawName)) {
-    try { const hit = await cache.match(key); if (hit) return hit; } catch { /* no cache */ }
+/** Resolve only the five displayed outbox receipts; never reuse append-time text.
+ * A missing/trimmed source is explicitly unavailable, not a stale fallback.
+ */
+async function currentSent(sent, kv) {
+  const logs = new Map();
+  const out = [];
+  for (const receipt of sent.slice(0, 5)) {
+    if (!logs.has(receipt.key)) logs.set(receipt.key,
+      receipt.key ? await internal(`?to=${encodeURIComponent(`loom:${receipt.key}#${receipt.id}`)}`, kv) : null);
+    const source = logs.get(receipt.key);
+    const message = source?.ok && source.messages?.find(m => m.id === receipt.id);
+    out.push({ ...receipt, body: !message ? '[source unavailable, hidden or trimmed; open the thread]'
+      : message.hidden ? '[withdrawn or hidden]' : message.body });
   }
-  const res = await serveBotUncached(request, kv, rawName);
-  if (cache && request.method === 'GET' && res.status === 200) { try { await cache.put(key, res.clone()); } catch { /* no cache */ } }
-  return res;
+  return out;
 }
 
-async function serveBotUncached(request, kv, rawName) {
+export async function serveBot(request, kv, rawName) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
   const name = parseBotName(rawName);
   if (!name) return text(badBotNameText(), 404, 'public, max-age=300');
   const [inboxRes, outRes] = await Promise.all([internal(`?to=${encodeURIComponent(`@${name}`)}`, kv), internal(`?from=${encodeURIComponent(`@${name}`)}`, kv)]);
   if (!inboxRes?.ok || !outRes?.ok) return text('The Loom is out of reach right now. Try again in a minute.\n', 503, 'no-store');
-  const sent = Array.isArray(outRes.sent) ? outRes.sent : [];
+  const sent = await currentSent(Array.isArray(outRes.sent) ? outRes.sent : [], kv);
   const exists = !!inboxRes.log?.createdAt;
   if (!exists && !sent.length) return text(unknownBotText(name), 404, 'public, max-age=60');
   const inbox = exists ? inboxRes.messages ?? [] : [];
   const questions = await openQuestions(name, inbox, inboxRes.log?.key, kv);
-  return text(buildBotPage(name, { inbox, sent, questions, trimmed: inboxRes.log?.trimmedBefore != null }), 200, 'public, max-age=60');
+  return text(buildBotPage(name, { inbox, sent, questions, trimmed: inboxRes.log?.trimmedBefore != null }), 200, 'no-store');
 }

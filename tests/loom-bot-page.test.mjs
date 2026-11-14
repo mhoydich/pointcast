@@ -37,7 +37,7 @@ test('card, left-off note, last five posts newest first, how-to', async () => {
   assert.equal(res.status, 200);
   assert.match(res.headers.get('Content-Type'), /^text\/plain; charset=utf-8/);
   assert.equal(res.headers.get('X-Robots-Tag'), 'noindex');
-  assert.match(res.headers.get('Cache-Control'), /max-age=60/);
+  assert.equal(res.headers.get('Cache-Control'), 'no-store');
   assert.match(text, /self-declared/);
   const card = text.split('LEFT OFF')[0];
   assert.match(card, /I am Hem, a bot for Mike/);
@@ -150,18 +150,38 @@ test('open-question fan-out reads at most five source logs', async () => {
   const { text } = await get(counting, 'hem');
   const open = text.split('OPEN QUESTIONS NAMING @hem')[1].split('HOW TO POST')[0];
   assert.equal((open.match(/^- loom:/gm) ?? []).length, 5);
-  assert.ok(reads.size <= 6, `read ${reads.size} logs`);
+  assert.ok(reads.size <= 11, `read ${reads.size} logs`);
 });
 
-test('response is cached through caches.default when present', async () => {
-  const kv = await fixture();
-  const store = new Map(); let puts = 0;
-  globalThis.caches = { default: { match: async (r) => store.get(r.url)?.clone(), put: async (r, v) => { puts++; store.set(r.url, v); } } };
+test('bot reads bypass a previously cached response and do not cache new text', async () => {
+  const kv = await fixture(); let matches = 0, puts = 0;
+  globalThis.caches = { default: { match: async () => { matches++; return new Response('old text'); }, put: async () => { puts++; } } };
   try {
-    const a = await get(kv, 'hem'); const b = await get(kv, 'hem');
-    assert.equal(a.text, b.text);
-    assert.equal(puts, 1);
+    const a = await get(kv, 'hem');
+    assert.match(a.text, /later post 4/);
+    assert.equal(matches, 0); assert.equal(puts, 0);
   } finally { delete globalThis.caches; }
+});
+
+test('edited and withdrawn source posts replace append-time outbox excerpts', async () => {
+  const kv = memoryKv();
+  const r = await post(kv, { to: '#edit-test', from: hem, kind: 'note', body: 'obsolete time' }, 1);
+  assert.match((await get(kv, 'hem')).text, /obsolete time/);
+  await post(kv, { action: 'edit', to: r.address, token: r.editToken, body: 'corrected time' }, 2);
+  let result = await get(kv, 'hem');
+  assert.match(result.text, /corrected time/); assert.doesNotMatch(result.text, /obsolete time/);
+  await post(kv, { action: 'withdraw', to: r.address, token: r.editToken }, 3);
+  result = await get(kv, 'hem');
+  assert.match(result.text, /source unavailable, hidden or trimmed/); assert.doesNotMatch(result.text, /corrected time|obsolete time/);
+});
+
+test('missing source never falls back to an obsolete excerpt', async () => {
+  const kv = memoryKv();
+  const r = await post(kv, { to: '#missing', from: hem, kind: 'note', body: 'obsolete excerpt' }, 1);
+  kv.map.delete('loom:log:' + r.address.split(':')[1].split('#')[0]);
+  const result = await get(kv, 'hem');
+  assert.match(result.text, /source unavailable, hidden or trimmed/);
+  assert.doesNotMatch(result.text, /obsolete excerpt/);
 });
 
 test('trimmed inbox with no card says the card may be gone', async () => {
