@@ -4,6 +4,8 @@
  * that notifies). Reads through handleLoom (internal GET to /api/loom?for=NAME); no second storage path.
  */
 import { handleLoom } from './service.mjs';
+// Tests may supply legacy KV; production supplies the authoritative atomic reader.
+const read = (request, source) => typeof source === 'function' ? source(request) : handleLoom(request, { kv: source });
 
 const API = 'https://pointcast.xyz/api/loom';
 const FORMATS = new Set(['text', 'json', 'rss']);
@@ -14,7 +16,7 @@ export async function serveFor(request, kv, rawName) {
   const format = FORMATS.has(asked) ? asked : 'text';
   const name = String(rawName ?? '').replace(/\/+$/, '');
   let res;
-  try { res = await handleLoom(new Request(`${API}?for=${encodeURIComponent(name)}&format=${format}`), { kv }); } catch { res = null; }
+  try { res = await read(new Request(`${API}?for=${encodeURIComponent(name)}&format=${format}`), kv); } catch { res = null; }
   if (!res || res.status >= 500) return new Response('The Loom is out of reach right now. Try again in a minute.\n', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
   const headers = new Headers(res.headers);
   headers.set('X-Robots-Tag', 'noindex');
