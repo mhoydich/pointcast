@@ -79,6 +79,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
   };
 
   const people = [], needsYes = [], seen = new Set(), waiting = new Set(), newWaiting = new Set();
+  const activity = { replies: [], unanswered: [], done: [] }, activitySeen = new Set(), addressed = new Set();
   const goAhead = GO_AHEAD_PHRASES.map((make) => make(escapeRe(me)));
   let restCount = 0, collatorCount = 0;
   for (const thread of threads) {
@@ -103,6 +104,47 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
       const o = origin(thread, m), link = `loom:${o.key}#${o.id}`;
       waiting.add(link);
       if (isNewAt(m.at)) newWaiting.add(link);
+    }
+    // Resolve ancestry in this thread; copies are linked to their original below.
+    const belongsUnderOwner = (m) => {
+      const visited = new Set(); let parent = m.parent;
+      while (parent && !visited.has(parent)) {
+        visited.add(parent); const p = byId.get(parent); if (!p) break;
+        if (isOwner(p.from, me)) return true;
+        parent = p.parent;
+      }
+      return false;
+    };
+    const hasOtherAnswer = (m) => {
+      const stack = [...(kids.get(m.id) ?? [])], visited = new Set();
+      while (stack.length) {
+        const r = stack.pop(); if (visited.has(r.id)) continue; visited.add(r.id);
+        if (!isOwner(r.from, me) && !isCollator(r.from)) return true;
+        stack.push(...(kids.get(r.id) ?? []));
+      }
+      return false;
+    };
+    for (const m of msgs) {
+      if (isCollator(m.from)) continue;
+      const o = origin(thread, m), link = `loom:${o.key}#${o.id}`;
+      if (m.via && threads.some((t) => t.key === m.via.key)) continue;
+      const own = isOwner(m.from, me), reply = !own && belongsUnderOwner(m);
+      if (!own && isNewAt(m.at) && (reply || inbox || mentionsOwner(m.body, me))) addressed.add(link);
+      if (activitySeen.has(link)) continue;
+      activitySeen.add(link);
+      if (reply && isNewAt(m.at)) activity.replies.push(item(thread, m));
+      if (own && !m.via && !hasOtherAnswer(m)) activity.unanswered.push(item(thread, m));
+      if (!own && isNewAt(m.at) && /^\s*DONE\b/i.test(m.body ?? '')) {
+        const it = item(thread, m);
+        const urls = String(m.body ?? '').match(/https?:\/\/[^\s<>"']+/gi) ?? [];
+        const safe = (s) => { try { const u = new URL(String(s).replace(/[.,;!?)]+$/, '')); return /^https?:$/.test(u.protocol) ? u.href : null; } catch { return null; } };
+        const links = urls.map(safe).filter(Boolean);
+        const image = (url) => /\.(?:png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(url);
+        it.externalUrl = links.find((url) => !image(url)) || links[0] || null;
+        it.imageUrl = safe(m.media?.url) || links.find(image) || null;
+        it.snippet = oneLine(String(m.body ?? '').replace(/https?:\/\/[^\s<>"']+/gi, ''));
+        activity.done.push(it);
+      }
     }
     const relayClosed = (m, anyClear = true) => {
       const stack = [...(kids.get(m.id) ?? [])];
@@ -159,10 +201,12 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
   const piles = { people: people.slice(0, CAPS.people), needsYes: needsYes.slice(0, CAPS.needsYes), arrivals: arrivals.slice(0, CAPS.arrivals) };
   // Anything over a cap is still something; count it with the rest so nothing silently disappears.
   restCount += (people.length - piles.people.length) + (needsYes.length - piles.needsYes.length);
-  const fresh = new Set();
+  for (const list of Object.values(activity)) list.sort(newest);
+  const fresh = new Set(addressed);
   for (const list of Object.values(piles)) for (const it of list) if (it.isNew) fresh.add(it.link);
   for (const link of newWaiting) fresh.add(link);
-  return { waiting: [...waiting], newWaiting: [...newWaiting], owner: me ? `@${me}` : '', seenAt: seenAt ?? null, piles, rest: { count: restCount }, collatorCount, newCount: fresh.size };
+  for (const it of activity.done) fresh.add(it.link);
+  return { activity, newLinks: [...fresh], waiting: [...waiting], newWaiting: [...newWaiting], owner: me ? `@${me}` : '', seenAt: seenAt ?? null, piles, rest: { count: restCount }, collatorCount, newCount: fresh.size };
 }
 
 const stamp = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`; };

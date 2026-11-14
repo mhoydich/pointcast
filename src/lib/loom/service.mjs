@@ -241,8 +241,8 @@ ${items}
 
 /*
  * For you (OFF-45): GET /api/loom?for=NAME[&format=json|text|rss] answers "what needs NAME" in one request.
- * Reads are bounded: the board index, at most FOR_LOGS logs, newest first, updated in the last 14 days (the
- * Needs your yes window; People and the rest keep their own 7 days; the owner's own inbox always among them), at most FOR_OUTBOXES sender outboxes to find first posts, and one seen mark.
+ * Reads are bounded: the board index, up to FOR_LOGS recent logs plus FOR_LOGS of the owner’s posting locations, (the
+ * Needs your yes window is 14 days; People and the rest keep their own 7 days; the owner's own inbox is included), at most FOR_OUTBOXES sender outboxes to find first posts, and one seen mark.
  * Nothing is written on GET.
  *
  * Alerts that leave the page (the "D" of OFF-45): email needs a mail service and key, web push needs VAPID
@@ -265,6 +265,14 @@ async function forYou(kv, owner, now) {
   const recent = index.filter((e) => e && e.key && e.key !== inboxKey && Date.parse(e.updatedAt) >= nowMs - NEEDS_WINDOW_MS);
   const inbox = await readJson(kv, `loom:log:${inboxKey}`, null);
   const picked = recent.slice(0, inbox ? FOR_LOGS - 1 : FOR_LOGS);
+  // Also inspect the reader's own recent posting locations, even if other rooms
+  // have pushed them out of the latest-activity slice.
+  const ownOut = await readJson(kv, `loom:out:${await addressKey(inboxAddress)}`, []);
+  const chosen = new Set([inboxKey, ...picked.map((e) => e.key)]);
+  for (const record of (Array.isArray(ownOut) ? ownOut : [])) {
+    if (picked.length >= FOR_LOGS * 2 - (inbox ? 1 : 0) || !record?.key || chosen.has(record.key)) continue;
+    picked.push({ key: record.key }); chosen.add(record.key);
+  }
   const logs = [];
   if (inbox) logs.push(inbox);
   for (const e of picked) { const log = await readJson(kv, `loom:log:${e.key}`, null); if (log) logs.push(log); }

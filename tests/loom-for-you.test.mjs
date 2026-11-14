@@ -285,7 +285,7 @@ test('page: three piles in order, a human post under People, Collator hidden fro
   const w = await page(kv, { sent: { [mine.message.id]: mine.editToken } });
   await settle(w, 900);
   const heads = [...fy(w).querySelectorAll('h2.sect')].map((x) => x.textContent);
-  assert.deepEqual(heads.slice(0, 3), ['People', 'Needs your yes', 'New arrivals']);
+  assert.deepEqual(heads.slice(0, 7), ['Replies to you', 'Not answered yet', 'What got done', 'Start something', 'People', 'Needs your yes', 'New arrivals']);
   assert.ok(heads.indexOf('Waiting on you') > 2, 'the old lists are inside the fold');
   const more = fy(w).querySelector('details#fyMore');
   assert.ok(more && !more.open, 'Everything else is folded');
@@ -416,7 +416,26 @@ test('new count includes unanswered inbox notes and deduplicates items also in a
   const answered = msg(agent('Desk'), 'Already answered', 3);
   const answer = msg(human('Mike'), 'Done', 1, { parent: answered.id });
   const r = buildPiles({ owner: 'mike', now: NOW, threads: [thread('@mike', 'inbox', [a, b, answered, answer])] });
-  assert.equal(r.newCount, 2);
+  assert.equal(r.newCount, 3, 'answered messages are still new inbox activity');
   assert.equal(r.newWaiting.length, 2);
-  assert.match(forYouText(r, { generatedAt: NOW.toISOString() }), /New since then: 2/);
+  assert.match(forYouText(r, { generatedAt: NOW.toISOString() }), /New since then: 3/);
+});
+
+
+test('OFF-55: agent replies to old posts, unanswered posts, DONE media and counts', () => {
+  const mine = msg(human('Mike'), 'old question', 100);
+  const noAnswer = msg(human('Mike'), 'still waiting', 50);
+  const agentReply = msg(agent('Desk'), 'Here is the answer', 1, { parent: mine.id });
+  const nested = msg(agent('Other'), 'another answer', 0.5, { parent: agentReply.id });
+  const robot = msg(COLLATOR, 'automated', 0.5, { parent: noAnswer.id });
+  const done = msg(agent('Desk'), 'DONE draft https://example.com/pr/1 https://example.com/card.png', 2);
+  const echo = msg(agent('Desk'), done.body, 2, { via: { key: 'room', address: '#room', id: done.id } });
+  const inbox = msg(agent('Agent'), 'Hi Mike', 1);
+  const r = buildPiles({ owner: 'mike', now: NOW, seenAt: ago(3), threads: [thread('#room', 'room', [mine, noAnswer, agentReply, nested, robot, done]), thread('@mike', 'inbox', [echo, inbox])] });
+  assert.deepEqual(r.activity.replies.map((x) => x.id), [nested.id, agentReply.id]);
+  assert.deepEqual(r.activity.unanswered.map((x) => x.id), [noAnswer.id]);
+  assert.equal(r.activity.done.length, 1);
+  assert.equal(r.activity.done[0].externalUrl, 'https://example.com/pr/1');
+  assert.equal(r.activity.done[0].imageUrl, 'https://example.com/card.png');
+  assert.equal(r.newCount, 4);
 });
