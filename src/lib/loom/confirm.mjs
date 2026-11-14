@@ -4,29 +4,69 @@ import { normHandle } from './for-you.mjs';
 
 export class ConfirmStoreError extends Error {}
 
-export const UNVERIFIED = 'Unverified: names are self-declared. This answer is a relay, not proof of identity or approval for a high-risk action.';
+export const UNVERIFIED = 'Unverified: names are self-declared. This answer is a relay, not execution approval. Minting, sending, signing, spending, publishing and deployment stay in the desk’s own chat.';
+const ACTION_TYPES = Object.freeze({
+  start_draft: 'Start a draft only',
+  choose_option: 'Choose an option only',
+  claim_task: 'Claim a task only',
+});
+function actionFields(raw) {
+  if (!raw || typeof raw.actionType !== 'string' || !Object.hasOwn(ACTION_TYPES, raw.actionType)) throw new AddressError('confirm_action_type_not_supported');
+  if (raw.amount !== undefined) throw new AddressError('confirm_amount_not_allowed');
+  if (typeof raw.subject !== 'string' || !raw.subject.trim() || raw.subject.length > 1000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(raw.subject)) throw new AddressError('confirm_subject_required_or_invalid');
+  // The server defines the scope. Quoted subject text is context, never a
+  // second executable instruction. A sender cannot relabel "mint" as low risk.
+  const action = `${ACTION_TYPES[raw.actionType]}: ${JSON.stringify(raw.subject)}`;
+  if (action.length > 2000) throw new AddressError('confirm_subject_required_or_invalid');
+  if (raw.action !== undefined && raw.action !== action) throw new AddressError('confirm_action_must_match_type_and_subject');
+  return { actionType: raw.actionType, subject: raw.subject, action };
+}
+export function isSupportedConfirm(raw) {
+  try { return raw?.risk === 'low' && raw.action === actionFields(raw).action; } catch { return false; }
+}
 export function validateConfirm(raw, now) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AddressError('confirm_required');
   if (raw.risk !== 'low') throw new AddressError("Only low risk is accepted; high-risk approvals stay in the desk's own chat.");
-  // Never trim, truncate or rewrite the action someone will be answering.
-  if (typeof raw.action !== 'string' || !raw.action.trim() || raw.action.length > 2000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(raw.action)) throw new AddressError('confirm_action_required_or_invalid');
-  if (raw.amount !== undefined && !(typeof raw.amount === 'string' && raw.amount.length <= 200) && !(typeof raw.amount === 'number' && Number.isFinite(raw.amount) && raw.amount >= 0)) throw new AddressError('confirm_amount_invalid');
+  const fields = actionFields(raw);
   const expiry = typeof raw.expiresAt === 'string' ? Date.parse(raw.expiresAt) : NaN;
   if (!Number.isFinite(expiry) || expiry <= Date.parse(now) || expiry > Date.parse(now) + 7 * 86400000) throw new AddressError('confirm_expiresAt_must_be_future_and_within_7_days');
-  return { action: raw.action, ...(raw.amount !== undefined ? { amount: raw.amount } : {}), risk: 'low', expiresAt: new Date(expiry).toISOString(), revision: 1 };
+  return { ...fields, risk: 'low', expiresAt: new Date(expiry).toISOString(), revision: 1 };
 }
 export function answerValue(text) {
   if (typeof text !== 'string') return null;
-  const first = text.split(/\r?\n/)[0];
-  return first === 'yes' || first === 'no' || first.startsWith('change') ? first : null;
+  if (text === 'yes' || text === 'no') return text;
+  // Exact command token, not "changed", "changes" or "change my mind".
+  // Preserve every character of a change request, including subsequent lines.
+  return /^(?:change(?=\r?\n|$)|change:)/.test(text) ? text : null;
 }
-const decode = (row) => row ? { ...JSON.parse(row.message), answer: row.answer ? JSON.parse(row.answer) : null } : null;
+const decode = (row) => {
+  if (!row) return null;
+  const message = JSON.parse(row.message);
+  return { ...message, confirmBlocked: !isSupportedConfirm(message.confirm), answer: row.answer ? JSON.parse(row.answer) : null };
+};
 export const cardItem = (row) => {
   const m = decode(row);
   return { ...m, address: row.address, key: row.log_key, label: row.address, link: `loom:${row.log_key}#${m.id}`, url: `https://pointcast.xyz/loom?to=${encodeURIComponent(row.address)}#${m.id}`, snippet: m.confirm.action };
 };
 export function confirmStore(db) {
   if (!db) return null;
+  // Scan by a stable key before applying the supported-card limit. Old,
+  // unsupported rows must not crowd valid cards out of either open list.
+  const openCards = async (query, bindings, take) => {
+    const cards = [];
+    let expires = '', id = '';
+    while (cards.length < take) {
+      const { results } = await db.prepare(query + ' AND (c.expires_at > ? OR (c.expires_at = ? AND c.id > ?)) ORDER BY c.expires_at, c.id LIMIT 101').bind(...bindings, expires, expires, id).all();
+      for (const row of results) {
+        const card = cardItem(row);
+        if (!card.confirmBlocked) cards.push(card);
+        if (cards.length === take) return cards;
+      }
+      if (results.length < 101) break;
+      const last = results.at(-1); expires = last.expires_at; id = last.id;
+    }
+    return cards;
+  };
   const store = {
     async create(log, op) {
       const { tokenHash, ...message } = op;
@@ -49,7 +89,7 @@ export function confirmStore(db) {
         log.confirmAnswers[card.id] = answer;
         log.confirmCursor = Math.max(log.confirmCursor, row.answer_seq || 0);
         const op = log.ops.find((o) => o.op === 'append' && o.id === card.id);
-        if (op) { op.confirm = card.confirm; delete op.answer; op.confirmHidden = !!row.hidden; }
+        if (op) { op.confirm = card.confirm; op.confirmBlocked = card.confirmBlocked; delete op.answer; op.confirmHidden = !!row.hidden; }
         else log.ops.push({ ...card, tokenHash: row.token_hash, confirmHidden: !!row.hidden });
       }
       log.ops.sort((a, b) => a.seq - b.seq);
@@ -57,6 +97,9 @@ export function confirmStore(db) {
       return log;
     },
     async respond(id, value, by, now) {
+      const existing = await this.get(id);
+      if (!existing || existing.hidden) return { error: 'confirm_not_found', status: 404 };
+      if (decode(existing).confirmBlocked) return { error: 'confirm_action_type_not_supported', status: 400 };
       const answer = { value, by, at: now, verified: false, revision: 1 };
       // One conditional SQL write is the authority across isolates, callers and retries.
       await db.prepare('UPDATE loom_confirms SET answer = ?, answered_at = ?, answer_seq = (SELECT COALESCE(MAX(answer_seq), 0) + 1 FROM loom_confirms) WHERE id = ? AND answer IS NULL AND hidden = 0 AND expires_at > ?').bind(JSON.stringify(answer), now, id, now).run();
@@ -71,14 +114,13 @@ export function confirmStore(db) {
     },
     async hide(id) { await db.prepare('UPDATE loom_confirms SET hidden = 1 WHERE id = ?').bind(id).run(); },
     async forOwner(owner, now) {
-      const { results } = await db.prepare('SELECT c.* FROM loom_confirms c JOIN loom_confirm_recipients r ON r.card_id = c.id WHERE r.name = ? AND c.hidden = 0 AND c.answer IS NULL AND c.expires_at > ? ORDER BY c.expires_at, c.id LIMIT 100').bind(owner, now).all();
-      return results.map(cardItem);
+      return openCards('SELECT c.* FROM loom_confirms c JOIN loom_confirm_recipients r ON r.card_id = c.id WHERE r.name = ? AND c.hidden = 0 AND c.answer IS NULL AND c.expires_at > ?', [owner, now], 100);
     },
     async desk(desk, now, after = 0) {
-      const open = await db.prepare('SELECT * FROM loom_confirms WHERE desk = ? AND hidden = 0 AND answer IS NULL AND expires_at > ? ORDER BY expires_at, id LIMIT 101').bind(desk, now).all();
+      const open = await openCards('SELECT c.* FROM loom_confirms c WHERE c.desk = ? AND c.hidden = 0 AND c.answer IS NULL AND c.expires_at > ?', [desk, now], 101);
       const answered = await db.prepare('SELECT * FROM loom_confirms WHERE desk = ? AND hidden = 0 AND answered_at IS NOT NULL AND answer_seq > ? ORDER BY answer_seq LIMIT 101').bind(desk, after).all();
       const page = answered.results.slice(0, 100), last = page.at(-1);
-      return { open: open.results.slice(0, 100).map(cardItem), answered: page.map(cardItem), openTruncated: open.results.length > 100, hasMore: answered.results.length > 100, cursor: last?.answer_seq ?? after, notice: UNVERIFIED };
+      return { open: open.slice(0, 100), answered: page.map(cardItem), openTruncated: open.length > 100, hasMore: answered.results.length > 100, cursor: last?.answer_seq ?? after, notice: UNVERIFIED };
     },
   };
   return new Proxy(store, { get(target, key) {

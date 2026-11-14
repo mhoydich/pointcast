@@ -1,0 +1,32 @@
+name: Loom confirm review checks
+on:
+  pull_request:
+    paths:
+      - 'src/lib/loom/**'
+      - 'src/pages/loom/**'
+      - 'src/pages/loom.json.ts'
+      - 'functions/api/loom.ts'
+      - 'functions/loom/**'
+      - 'tests/loom*.test.mjs'
+      - 'tests/helpers/loom-confirm-db.mjs'
+      - 'migrations/auth/0035_loom_confirms.sql'
+      - '.github/workflows/loom-confirm.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      ASTRO_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/loom*.test.mjs
+      - run: npm run audit:agents
+      - run: npm run build:bare

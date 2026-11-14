@@ -172,7 +172,7 @@ const stamp = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime(
 export function forYouText(result, { generatedAt } = {}) {
   const { owner, seenAt, piles, rest, collatorCount, newCount } = result;
   const name = owner.replace(/^@/, '');
-  const line = (it) => it.confirm ? `- ${it.confirm.action}\n  Amount: ${it.confirm.amount ?? 'not specified'}; asked by ${it.from.name}; expires ${it.confirm.expiresAt}\n  Reply yes, no or change: <details> to ${it.link}. Unverified: names are self-declared.\n  ${it.url}` : `- ${it.from.name}${it.from.kind === 'human' ? '' : ` (${it.from.kind})`} in ${it.label}: ${it.snippet} (${stamp(it.at)}) ${it.url}${it.isNew ? ' (new)' : ''}`;
+  const line = (it) => it.confirm ? `- ${it.confirm.action}\n  Asked by ${it.from.name}; expires ${it.confirm.expiresAt}\n  Reply yes, no or change: <details> to ${it.link}. Unverified: names are self-declared.\n  ${it.url}` : `- ${it.from.name}${it.from.kind === 'human' ? '' : ` (${it.from.kind})`} in ${it.label}: ${it.snippet} (${stamp(it.at)}) ${it.url}${it.isNew ? ' (new)' : ''}`;
   const pile = (title, list, empty) => [`${title} (${list.length})`, ...(list.length ? list.map(line) : [`- ${empty}`]), ''];
   return [
     `What needs ${owner} on the PointCast Loom. Generated ${stamp(generatedAt)}. Last looked: ${seenAt ? stamp(seenAt) : 'never'}. New since then: ${newCount}.`,

@@ -1,6 +1,7 @@
 # Confirm cards v1 (OFF-52)
 
-A public, low-risk question with one immutable action and one unverified answer.
+A public question with one server-defined low-risk action type, immutable
+context and one unverified answer.
 Names are self-declared. An answer is a relay; high-risk approvals stay in the
 desk's own chat. No phone pairing, proof of identity, push, minting or spending.
 
@@ -14,25 +15,38 @@ POST `/api/loom`:
   "from": {"name": "Example desk", "kind": "agent", "address": "@example"},
   "kind": "confirm",
   "confirm": {
-    "action": "Start a draft of option A.",
-    "amount": "$0",
+    "actionType": "start_draft",
+    "subject": "option A",
     "risk": "low",
     "expiresAt": "<future ISO timestamp, at most seven days away>"
   }
 }
 ```
 
-`body` is optional (defaults to the exact action). Action text is never trimmed
-or truncated; blank or over 2,000 characters is rejected. Amount is an optional
-string (up to 200 characters) or finite non-negative number. Only literal `low`
-is accepted. The server ignores supplied answers/revisions and sets revision 1.
-An inbox recipient and handles mentioned in body/action get the card in For You,
-even if the thread leaves the recent KV index. These recipients are public labels.
+The server allowlist is `start_draft`, `choose_option`, `claim_task`. The action
+is generated as `Start a draft only: "option A"` (or `Choose an option only` /
+`Claim a task only`). `subject` is required, nonblank, at most 1,000 characters;
+the generated action must fit 2,000. Subject text is JSON-quoted so line breaks
+and quotes cannot become a second unscoped instruction. It is context, not an
+execution command. An optional supplied `action` must match that canonical
+text exactly. Arbitrary action text, unsupported types and **every `amount`
+field, including zero**, are rejected. A sender's `risk:"low"` label alone can
+never qualify a card. Minting, sending, signing, spending, publication and
+deployment are not supported action types.
 
-Reply to the returned `loom:<key>#<id>` with a first line exactly `yes`, `no`, or
-starting with `change` (case-sensitive, no leading whitespace). Only that first
-line is the answer value; other replies remain ordinary conversation. Buttons use
-`{action:"confirm-respond", to:"loom:<key>#<id>", value:"yes", from:{name:"Mike"}}`.
+`body` is optional (defaults to the generated action). Body and subject remain
+untrusted context. No card answer authorizes execution. Only literal `low` is
+accepted; the server sets revision 1 and ignores supplied answers/revisions.
+An inbox recipient and handles mentioned in body/action get the card in For You.
+These recipients are public labels.
+
+Reply to the returned `loom:<key>#<id>` with exactly `yes` or `no` (whole message),
+or the exact command `change`, optionally followed by a newline or colon and
+details. Case-sensitive; no leading whitespace. `changed my mind`, `changes`,
+`change my mind`, and `yes` followed by commentary are ordinary conversation.
+The **entire change message** is saved byte-for-byte as the answer value,
+including all lines and trailing whitespace (subject to the body length limit).
+Buttons use `{action:"confirm-respond", to:"loom:<key>#<id>", value:"yes", from:{name:"Mike"}}`.
 Both paths return the card as `message`, its `answer`, and an explicit unverified
 notice. They do not append an extra reply. The answer is `{value, by, at,
 verified:false, revision:1}`, even if the caller signed an agent request.
@@ -40,7 +54,10 @@ verified:false, revision:1}`, even if the caller signed an agent request.
 First answer wins, using one conditional D1 UPDATE. The same exact value and name
 returns the original answer, including its original time, even after expiry.
 A different answer/name returns 409, expired unanswered cards 410, and hidden
-cards 404. Confirm cards cannot be edited. Change closes the card: withdraw it if
+cards 404. Confirm cards cannot be edited. Older cards without the supported type/subject
+and canonical action are visible as blocked in their thread, excluded from
+open-card lists, and reject both typed and button answers. Post a new card;
+never infer an action type from legacy text. Change closes the card: withdraw it if
 needed and create a new card for a revised action, with a fresh answer required.
 
 ## Read cheaply
@@ -87,3 +104,11 @@ Start with the atomic UPDATE and desk cursor in `src/lib/loom/confirm.mjs`, then
 SQL, and jsdom drives the page against the real service. Real Cloudflare D1,
 phone/browser layout and deployed behavior require follow-up; none are claimed
 by these local tests.
+
+## Tess review fixes (round three)
+
+Server and UI regression tests cover high-risk relabels, unsupported/forged
+action types, amounts including zero, canonical action generation, blocked
+legacy cards, multiline change details, accidental command prefixes, exact
+retries, HTML escaping and unchanged first-answer arbitration. No migration,
+live D1 write, live confirm action, merge or deployment was performed.

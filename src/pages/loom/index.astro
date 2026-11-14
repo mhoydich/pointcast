@@ -776,7 +776,7 @@ function normMsg(m) {
     edited: !!(m.edited || m.editedAt), withdrawn: !!(m.withdrawn || m.withdrawnAt),
     poll: m.poll ? normPoll(m.poll, m.body) : null,
     media: m.media && typeof m.media === 'object' ? { url: String(m.media.url || ''), alt: String(m.media.alt || '') } : null,
-    confirm: m.confirm || null, answer: m.answer || null,
+    confirm: m.confirm || null, confirmBlocked: !!m.confirmBlocked, answer: m.answer || null,
     magic: normMagic(m.magic)
   };
 }
@@ -1450,9 +1450,9 @@ function renderConfirm(m, addr, link) {
   const c = m.confirm, expired = Date.parse(c.expiresAt) <= Date.now();
   const box = h('section', { class: 'confirm-card', 'data-confirm': m.id, 'aria-label': 'Confirm action' },
     h('p', { class: 'text confirm-action', text: c.action }),
-    h('p', { class: 'via', text: 'Amount: ' + (c.amount == null ? 'not specified' : c.amount) + ' · Asked by ' + m.from.name }),
+    h('p', { class: 'via', text: 'Asked by ' + m.from.name }),
     h('p', { class: 'via', text: 'Expires ' + c.expiresAt + ' · revision ' + c.revision }));
-  const status = h('p', { class: 'via', role: 'status' });
+  const status = h('p', { class: 'via confirm-action', role: 'status' });
   const showAnswer = (a) => {
     box.querySelectorAll('button').forEach((b) => b.remove());
     status.textContent = a.value + ' · ' + a.by + ' · ' + a.at + ' ';
@@ -1460,8 +1460,9 @@ function renderConfirm(m, addr, link) {
   };
   box.append(status, h('a', { class: 'linkbtn', href: '/loom?to=' + encodeURIComponent(addr) + '#' + m.id, text: 'Open thread' }));
   if (m.answer) { showAnswer(m.answer); return box; }
+  if (m.confirmBlocked) { status.textContent = 'This older card has no supported action type. Ask the desk for a new card.'; return box; }
   if (expired) { status.textContent = 'Expired'; return box; }
-  status.textContent = 'Names are self-declared. Answers are unverified.';
+  status.textContent = 'Names are self-declared. Answers are unverified relays, not execution approval.';
   const respond = async (value) => {
     if (!state.name) { openIdentitySheet({ then: () => respond(value) }); return; }
     box.querySelectorAll('button').forEach((b) => { b.disabled = true; });
@@ -1962,6 +1963,7 @@ const SERVER_ERR = {
   poll_needs_question_and_two_options: 'A poll needs a question and at least two options.',
   store_unbound: 'This copy of the Loom can’t save posts right now.',
   edit_token_invalid: 'This browser can’t change that message.',
+  confirm_action_type_not_supported: 'This card has no supported action type. Ask the desk for a new card.',
   confirm_expired: 'This confirm card has expired.',
   confirm_already_answered: 'This confirm card already has an answer. Open the thread to read it.',
   confirm_not_found: 'This confirm card is no longer available.',
@@ -2688,8 +2690,10 @@ async function send() {
   const firstHere = !t.messages.some((x) => hasOwn(state.sent, x.id));
   const request = buildRequest();
   const confirmParent = reply && t.messages.find((m) => m.id === reply.id && m.confirm);
-  const firstLine = text.split('\n')[0];
-  if (confirmParent && (firstLine === 'yes' || firstLine === 'no' || firstLine.startsWith('change'))) {
+  if (confirmParent) request.body = ta.value; // Preserve exact command and all change details.
+  const confirmText = ta.value;
+  const confirmCommand = confirmText === 'yes' || confirmText === 'no' || /^(?:change(?=\r?\n|$)|change:)/.test(confirmText);
+  if (confirmParent && confirmCommand) {
     state.sending = true; renderComposerBar();
     try {
       const res = await loomApi._post(request);

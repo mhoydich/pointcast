@@ -8,7 +8,8 @@ import { confirmDb } from './helpers/loom-confirm-db.mjs';
 const NOW = '2026-11-13T20:00:00.000Z';
 const from = { name: 'Desk', kind: 'agent', address: '@desk' };
 const human = { name: 'Mike', verified: true };
-const confirm = { action: '  Draft option A\nexactly as written.  ', amount: '$0', risk: 'low', expiresAt: '2026-11-14T20:00:00.000Z' };
+const confirm = { actionType: 'start_draft', subject: '  option A\nexactly as written.  ', risk: 'low', expiresAt: '2026-11-14T20:00:00.000Z' };
+const expectedAction = `Start a draft only: ${JSON.stringify(confirm.subject)}`;
 function setup(t) {
   const db = confirmDb(); t.after(() => db.close());
   const map = new Map(), kv = { get: async (k) => map.get(k) ?? null, put: async (k, v) => { map.set(k, v); } };
@@ -24,7 +25,7 @@ test('confirm validates exact action, low risk, expiry and server-owned fields',
   const { create, post } = setup(t);
   const made = await create({ confirm: { ...confirm, revision: 99, answer: { value: 'yes' }, verified: true } });
   assert.equal(made.message.kind, 'confirm');
-  assert.deepEqual(made.message.confirm, { ...confirm, revision: 1 });
+  assert.deepEqual(made.message.confirm, { ...confirm, action: expectedAction, revision: 1 });
   assert.equal(made.message.answer, undefined);
   for (const risk of [undefined, null, 'high', 'medium', 'LOW', false]) {
     const res = await post({ to: '@mike', from, kind: 'confirm', confirm: { ...confirm, risk } });
@@ -33,20 +34,20 @@ test('confirm validates exact action, low risk, expiry and server-owned fields',
   for (const expiresAt of [undefined, 'bad', NOW, '2026-11-20T20:00:00.001Z']) assert.equal((await post({ to: '@mike', from, kind: 'confirm', confirm: { ...confirm, expiresAt } })).status, 400);
   assert.equal((await create({ confirm: { ...confirm, expiresAt: '2026-11-20T20:00:00.000Z' } })).ok, true);
   for (const action of ['', '   ', 4, 'a'.repeat(2001)]) assert.equal((await post({ to: '@mike', from, kind: 'confirm', confirm: { ...confirm, action } })).status, 400);
-  assert.equal((await create({ confirm: { ...confirm, amount: 0 } })).message.confirm.amount, 0);
+  for (const amount of [0, '$0', '50 tez', 50, null, {}]) assert.equal((await post({ to: '@mike', from, kind: 'confirm', confirm: { ...confirm, amount } })).status, 400);
   assert.equal((await post({ to: '@mike', from, kind: 'confirm', confirm: { ...confirm, amount: {} } })).status, 400);
 });
 
-test('typed first line is exact; commentary is not an answer', async (t) => {
-  for (const text of ['Yes', ' yes', 'yes ', '\nyes', 'no thanks', 'YES']) assert.equal(answerValue(text), null);
-  assert.equal(answerValue('yes\nmore'), 'yes'); assert.equal(answerValue('change: B\r\nmore'), 'change: B');
+test('exact command only; change preserves every line and byte', async (t) => {
+  for (const text of ['Yes', ' yes', 'yes ', '\nyes', 'no thanks', 'YES', 'changed my mind', 'changes', 'change my mind', 'changeable', 'yes\nmore', 'no\nmore']) assert.equal(answerValue(text), null);
+  for (const text of ['yes', 'no', 'change', 'change\nuse Friday', 'change: B\r\nmore  ']) assert.equal(answerValue(text), text);
   const { create, post, read } = setup(t); const made = await create();
   await post({ to: made.address, from: human, body: 'Yes' });
   assert.equal((await read('?to=%40mike')).messages[0].answer, null);
   const answered = await (await post({ to: made.address, from: human, body: 'change: B\ncontext' })).json();
-  assert.deepEqual(answered.answer, { value: 'change: B', by: 'Mike', at: NOW, verified: false, revision: 1 });
+  assert.deepEqual(answered.answer, { value: 'change: B\ncontext', by: 'Mike', at: NOW, verified: false, revision: 1 });
   assert.match(answered.notice, /self-declared/);
-  assert.equal((await read('?to=%40mike')).messages[0].answer.value, 'change: B');
+  assert.equal((await read('?to=%40mike')).messages[0].answer.value, 'change: B\ncontext');
 });
 
 test('buttons and parent replies share one first answer; exact same responder retry returns original after expiry', async (t) => {
@@ -93,7 +94,7 @@ test('desk query and recipient piles survive index eviction and log truncation',
   map.set('loom:index', '[]');
   const piles = await read('?for=mike');
   assert.equal(piles.piles.needsYes.length, 3);
-  assert.equal(piles.piles.needsYes[0].confirm.action, confirm.action);
+  assert.equal(piles.piles.needsYes[0].confirm.action, expectedAction);
   const yes = await (await post({ action: 'confirm-respond', to: a.address, from: human, value: 'yes' })).json();
   assert.equal((await read('?for=mike')).piles.needsYes.length, 2);
   const desk = await read('?confirms=desk');
@@ -114,8 +115,8 @@ test('plain text puts exact open cards first and names the expiry, asker and unv
   // Fixed clock API text is tested separately from the route's live clock.
   const text = await (await req('?for=mike&format=text')).text();
   assert.ok(text.indexOf('NEEDS YOUR YES') < text.indexOf('PEOPLE'));
-  assert.ok(text.includes(made.address)); assert.ok(text.includes(confirm.action));
-  assert.match(text, /asked by Desk/); assert.match(text, /Unverified/);
+  assert.ok(text.includes(made.address)); assert.ok(text.includes(expectedAction));
+  assert.match(text, /Asked by Desk/); assert.match(text, /Unverified/);
   const res = await serveFor(new Request('https://pointcast.xyz/loom/for/mike'), kv, 'mike', db);
   assert.equal(res.status, 200); assert.match(await res.text(), /NEEDS YOUR YES/);
 });
@@ -135,7 +136,7 @@ test('D1 recovers an absent KV log and preserves the private withdrawal token', 
   const { create, post, read, map } = setup(t); const made = await create();
   map.delete('loom:log:' + made.address.split(':')[1].split('#')[0]);
   const restored = await read('?to=' + encodeURIComponent(made.address));
-  assert.equal(restored.messages[0].confirm.action, confirm.action);
+  assert.equal(restored.messages[0].confirm.action, expectedAction);
   assert.ok(!JSON.stringify(restored).includes('tokenHash'));
   assert.ok(!JSON.stringify(await read('?confirms=desk')).includes('token_hash'));
   assert.equal((await post({ action: 'withdraw', to: made.address, token: made.editToken })).status, 200);
@@ -161,4 +162,76 @@ test('current answers have a separate cursor and do not rewrite historical appen
   assert.ok(thread.confirmCursor > 0);
   const full = await read('?to=%40mike');
   assert.equal(full.ops.find((o) => o.id === made.message.id).answer, undefined);
+});
+
+
+test('action types define the immutable scope; high-risk relabels never create cards', async (t) => {
+  const { post, read, create } = setup(t);
+  for (const actionType of [undefined, null, ['start_draft'], {}, 0, 'mint', 'send', 'spend', 'sign', 'publish', 'deploy', 'transfer', '__proto__', 'constructor']) {
+    const r = await post({to:'@mike', from, kind:'confirm', confirm:{...confirm, actionType, action:'send 50 tez'}});
+    assert.equal(r.status,400);
+  }
+  for (const actionType of ['start_draft','choose_option','claim_task']) {
+    for (const action of ['mint', 'send 50 tez', 'sign this operation', 'publish now', 'deploy']) {
+      assert.equal((await post({to:'@mike',from,kind:'confirm',confirm:{...confirm,actionType,action}})).status,400);
+    }
+  }
+  assert.equal((await post({to:'@mike',from,kind:'confirm',confirm:{...confirm,actionType:['start_draft']}})).status,400);
+  assert.equal((await read('?for=mike')).piles.needsYes.length,0);
+  for (const [actionType, prefix] of [['start_draft','Start a draft only'],['choose_option','Choose an option only'],['claim_task','Claim a task only']]) {
+    const made = await create({confirm:{...confirm,actionType,subject:'option A'}});
+    assert.equal(made.message.confirm.action, prefix+': "option A"');
+  }
+  for (const subject of ['', ' ', 4, 'x'.repeat(1001), '\u0000']) {
+    assert.equal((await post({to:'@mike',from,kind:'confirm',confirm:{...confirm,subject}})).status,400);
+  }
+  const made = await create({confirm:{...confirm,subject:'mint 50 tez\nthen send'}});
+  assert.equal(made.message.confirm.action,'Start a draft only: "mint 50 tez\\nthen send"');
+});
+
+test('legacy unsafe cards cannot be answered or surface as needing a yes', async (t) => {
+  const { db, create, post, read } = setup(t);
+  const made = await create();
+  const message = {...made.message,confirm:{action:'send 50 tez',amount:50,risk:'low',expiresAt:confirm.expiresAt,revision:1}};
+  await db.prepare('UPDATE loom_confirms SET message = ? WHERE id = ?').bind(JSON.stringify(message),made.message.id).run();
+  assert.equal((await read('?for=mike')).piles.needsYes.length,0);
+  assert.equal((await read('?confirms=desk')).open.length,0);
+  const thread = await read('?to=%40mike');
+  assert.equal(thread.messages[0].confirmBlocked,true);
+  for (const body of [{to:made.address,from:human,body:'yes'},{action:'confirm-respond',to:made.address,from:human,value:'yes'}]) {
+    const r = await post(body); assert.equal(r.status,400);
+    assert.equal((await r.json()).error,'confirm_action_type_not_supported');
+  }
+  assert.equal((await read('?to=%40mike')).messages[0].answer,null);
+});
+
+test('accidental change prefixes stay conversation; both answer paths preserve full change details', async (t) => {
+  const { create,post,read } = setup(t); const made = await create();
+  for (const body of ['changed my mind','changes please','change my mind','yes\nnot an exact command']) {
+    assert.equal((await post({to:made.address,from:human,body})).status,201);
+    assert.equal((await read('?to=%40mike')).messages.find(m=>m.id===made.message.id).answer,null);
+  }
+  const value = 'change\nuse Friday\n  keep this indentation  ';
+  const answer = await (await post({to:made.address,from:human,body:value})).json();
+  assert.equal(answer.answer.value,value);
+  const retry = await (await post({action:'confirm-respond',to:made.address,from:human,value})).json();
+  assert.deepEqual(retry.answer,answer.answer);
+  const second = await create();
+  const button = await (await post({action:'confirm-respond',to:second.address,from:human,value:'change: B\r\nmore'})).json();
+  assert.equal(button.answer.value,'change: B\r\nmore');
+});
+
+
+test('legacy rows cannot crowd supported pending cards out of open lists', async (t) => {
+  const {db,create,read}=setup(t);
+  for (let i=0;i<105;i++) {
+    const made=await create({confirm:{...confirm,expiresAt:'2026-11-13T21:00:00.000Z'}});
+    const message={...made.message,confirm:{action:'mint',risk:'low',expiresAt:'2026-11-13T21:00:00.000Z',revision:1}};
+    await db.prepare('UPDATE loom_confirms SET message = ? WHERE id = ?').bind(JSON.stringify(message),made.message.id).run();
+  }
+  const valid=await create();
+  assert.deepEqual((await read('?for=mike')).piles.needsYes.map(m=>m.id),[valid.message.id]);
+  const desk=await read('?confirms=desk');
+  assert.deepEqual(desk.open.map(m=>m.id),[valid.message.id]);
+  assert.equal(desk.openTruncated,false);
 });

@@ -20,7 +20,7 @@
  * is the upgrade path when it gets busy.
  */
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
-import { answerValue, ConfirmStoreError, confirmStore, validateConfirm } from './confirm.mjs';
+import { answerValue, ConfirmStoreError, confirmStore, isSupportedConfirm, validateConfirm } from './confirm.mjs';
 import { fold } from './fold.mjs';
 import { ARRIVAL_MS, NEEDS_WINDOW_MS, buildPiles, forYouText, isCollator, normHandle } from './for-you.mjs';
 import { makeMagic } from './magic.mjs';
@@ -195,7 +195,10 @@ async function touchOutbox(kv, from, record) {
 
 function publicView(log, { since = 0, onlyNew = false } = {}) {
   const folded = fold(log.ops);
-  for (const m of folded.messages) if (m.confirm) m.answer = log.confirmAnswers?.[m.id] ?? null;
+  for (const m of folded.messages) if (m.confirm) {
+    m.answer = log.confirmAnswers?.[m.id] ?? null;
+    m.confirmBlocked = !isSupportedConfirm(m.confirm);
+  }
   const ops = log.ops.filter((op) => op.seq > since).map(({ tokenHash, ...op }) => op);
   // "New" = appended after since, or touched by any later op (edit, +1, vote, hide), so only=new misses nothing.
   const touched = new Set(log.ops.filter((op) => op.seq > since).map((op) => op.id));

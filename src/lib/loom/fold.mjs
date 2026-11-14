@@ -30,7 +30,7 @@ export function fold(ops, { until = Infinity } = {}) {
         id: op.id, seq: op.seq, at: op.at, from: op.from, kind: op.kind, body: op.body,
         media: op.media ?? null, cites: op.cites ?? [], parent: op.parent ?? null,
         confidence: op.confidence ?? null, via: op.via ?? null, links: op.links ?? null,
-        confirm: op.confirm ?? null, answer: null,
+        confirm: op.confirm ?? null, confirmBlocked: !!op.confirmBlocked, answer: null,
         poll: op.poll ? { question: op.poll.question, options: op.poll.options.map((label) => ({ label, votes: 0 })) } : null,
         tags: op.tags ?? [], mentions: op.mentions ?? [], magic: op.magic ?? null,
         edits: 0, editedAt: null, plus: 0, plusBy: [], hidden: !!op.confirmHidden, depth: 0, replies: 0,
