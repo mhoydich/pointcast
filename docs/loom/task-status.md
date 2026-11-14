@@ -31,8 +31,10 @@ header's middle-dot/vertical-bar/em-dash separator. Examples/templates/partials,
 wrong-task IDs, hidden/echoed/nested reports and Collator copies do not close a
 task. Part labels are declared uppercase letters, S-number tags or short numbers
 followed by a dot, right parenthesis or middle dot. Current folded edits/hides
-are honored. In replay, the card recomputes from only the displayed messages;
-it cannot borrow a future task DONE. No new KV key or write is introduced.
+are honored. In message replay, the card recomputes from only the displayed messages;
+it does not borrow a DONE from a later message outside that selection. The
+existing message slider still uses current edited text; exact edit-time UI
+history is not added here. No new KV key or write is introduced.
 
 The bot return page also respects an explicit task status for its open-question
 list. The existing automatic starter picker skips tasks reported DONE even if
