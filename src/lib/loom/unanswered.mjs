@@ -36,12 +36,16 @@ export async function findUnanswered({ fetcher = fetch, origin = 'https://pointc
   if (!directory?.ok || !Array.isArray(directory.logs)) throw new Error('Loom directory unavailable');
   const logs = directory.logs.slice(0, MAX_LOGS);
   const results = await mapLimit(logs, CONCURRENCY, async (entry) => {
-    const data = await readJson(fetcher, new URL(`${API_PATH}?to=${encodeURIComponent(entry.address)}`, origin));
-    return { entry, messages: Array.isArray(data.messages) ? data.messages : [] };
+    try {
+      const data = await readJson(fetcher, new URL(`${API_PATH}?to=${encodeURIComponent(entry.address)}`, origin));
+      return { entry, messages: Array.isArray(data.messages) ? data.messages : [], readError: false };
+    } catch { return { entry, messages: [], readError: true }; }
   });
   const cutoff = now - MIN_AGE_MS;
   const posts = [];
-  for (const { entry, messages } of results) {
+  let readErrors = 0;
+  for (const { entry, messages, readError } of results) {
+    if (readError) { readErrors += 1; continue; }
     const repliedTo = new Set(messages.filter((message) => message.parent && !isCollator(message)).map((message) => message.parent));
     for (const message of messages) {
       const at = Date.parse(message.at ?? '');
@@ -63,7 +67,7 @@ export async function findUnanswered({ fetcher = fetch, origin = 'https://pointc
     generatedAt: new Date(now).toISOString(),
     thresholdMinutes: 10,
     posts,
-    coverage: { logsScanned: logs.length, logsListed: directory.logs.length, directoryBounded: directory.logs.length >= MAX_LOGS },
+    coverage: { logsScanned: logs.length - readErrors, logsListed: directory.logs.length, logsKnownTotal: Number(directory.network?.logs ?? directory.logs.length), readErrors, directoryBounded: directory.logs.length >= MAX_LOGS || directory.logs.length < Number(directory.network?.logs ?? directory.logs.length) },
   };
 }
 
@@ -72,7 +76,8 @@ export function unansweredText(result) {
     'PointCast Loom · unanswered human posts',
     `As of ${result.generatedAt}. Only posts at least ${result.thresholdMinutes} minutes old are listed.`,
     'A post is omitted when anyone other than Collator has replied.',
-    `Coverage: ${result.coverage.logsScanned}/${result.coverage.logsListed} directory logs scanned${result.coverage.directoryBounded ? ' (directory limit reached; older logs may be missing)' : ''}.`,
+    `Coverage: ${result.coverage.logsScanned}/${result.coverage.logsListed} listed logs read; ${result.coverage.logsKnownTotal} stored logs are known${result.coverage.readErrors ? `; ${result.coverage.readErrors} reads failed` : ''}.`,
+    'The directory includes its room list and recent threads; older individual threads and single-post link logs may be absent.',
     '',
   ];
   if (!result.posts.length) lines.push('No matching posts in the scanned logs.');
