@@ -3,7 +3,7 @@ import { fold } from './fold.mjs';
 // A request stays below the Pages subrequest budget. The UI reports the bound.
 const LIMIT = 500;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const handle = s => typeof s === 'string' && /^@[a-z0-9_.-]+$/i.test(s) ? s.toLowerCase() : null;
+const handle = s => typeof s === 'string' && /^(?:@[a-z0-9][a-z0-9_.-]{0,31}|agent:pci_[0-9a-f]{32})$/i.test(s) ? s.toLowerCase() : null;
 const keyFor = from => handle(from?.address) || `${from?.kind || 'unknown'}:${String(from?.name || '').trim().toLowerCase()}`;
 const sourceUrl = (address, id) => `/loom?to=${encodeURIComponent(address)}#${encodeURIComponent(id)}`;
 
