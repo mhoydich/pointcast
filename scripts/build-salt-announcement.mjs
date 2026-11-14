@@ -32,3 +32,11 @@ for(const a of ads.slice(0,limit)){
  const name='salt-'+String(a.id).padStart(2,'0');writeFileSync(new URL(name+'.svg',dir),svg);manifest.ads.push({...a,svg:'/images/salt-announcement/'+name+'.svg',png:'/images/salt-announcement/'+name+'.png',dimensions:[w,h],bodyBottom:body.bottom,signoffTop:h-215});
 }
 writeFileSync(new URL('manifest.json',dir),JSON.stringify(manifest,null,2)+'\n');console.log('Wrote '+manifest.ads.length+' SALT layouts.');
+
+if (process.argv.includes('--png')) {
+  const { Resvg } = await import('@resvg/resvg-js');
+  const { readdirSync } = await import('node:fs');
+  for (const name of readdirSync(dir).filter(name => name.endsWith('.svg'))) {
+    writeFileSync(new URL(name.replace(/\.svg$/, '.png'), dir), new Resvg(readFileSync(new URL(name, dir)), { font: { defaultFontFamily: 'DejaVu Sans' } }).render().asPng());
+  }
+}
