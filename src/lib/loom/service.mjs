@@ -310,7 +310,7 @@ async function forYou(kv, owner, now, confirms) {
     let cards = [];
     try { cards = await confirms.forOwner(owner, now.toISOString()); } catch { result.confirmUnavailable = true; }
     result.piles.needsYes = [...cards.map((c) => ({ ...c, isNew: Date.parse(c.at) > Date.parse(seenAt || new Date(nowMs - 86400000).toISOString()) })), ...result.piles.needsYes];
-    result.newCount = new Set(Object.values(result.piles).flat().filter((it) => it.isNew).map((it) => it.link)).size;
+    result.newCount = new Set([...result.newWaiting, ...Object.values(result.piles).flat().filter((it) => it.isNew).map((it) => it.link)]).size;
   }
   return { ...result, scanned: { logs: threads.length, window: '14d' } };
 }

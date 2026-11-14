@@ -235,3 +235,22 @@ test('legacy rows cannot crowd supported pending cards out of open lists', async
   assert.deepEqual(desk.open.map(m=>m.id),[valid.message.id]);
   assert.equal(desk.openTruncated,false);
 });
+
+test('D1 cards preserve ordinary inbox waiting counts without counting closed cards', async (t) => {
+  const { create, post, read, req } = setup(t);
+  await post({ to: '@desk', from, body: 'Established desk card.' }, { clock: () => new Date('2026-11-09T20:00:00.000Z') });
+  const ordinary = await (await post({ to: '@mike', from, body: 'An ordinary unanswered desk note.' })).json();
+  const answered = await create();
+  await post({ action: 'confirm-respond', to: answered.address, from: human, value: 'yes' });
+  const expiring = await create({ confirm: { ...confirm, expiresAt: '2026-11-13T20:01:00.000Z' } });
+  const current = await read('?for=mike');
+  assert.deepEqual(current.waiting, [ordinary.address]);
+  assert.deepEqual(current.newWaiting, [ordinary.address]);
+  assert.equal(current.newCount, 2); // ordinary waiting note plus one open D1 card
+  assert.equal(current.piles.needsYes[0].id, expiring.message.id);
+  const later = await (await req('?for=mike', null, { clock: () => new Date('2026-11-13T20:02:00.000Z') })).json();
+  assert.deepEqual(later.waiting, [ordinary.address]);
+  assert.deepEqual(later.newWaiting, [ordinary.address]);
+  assert.equal(later.piles.needsYes.length, 0);
+  assert.equal(later.newCount, 1);
+});

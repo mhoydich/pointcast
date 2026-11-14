@@ -98,7 +98,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
       return false;
     };
     if (inbox) for (const m of msgs) {
-      if (m.parent || m.depth >= 1 || m.via || isCollator(m.from) || isOwner(m.from, me)) continue;
+      if (m.confirm || m.parent || m.depth >= 1 || m.via || isCollator(m.from) || isOwner(m.from, me)) continue;
       if ((kids.get(m.id) ?? []).some((r) => !isCollator(r.from))) continue;
       const o = origin(thread, m), link = `loom:${o.key}#${o.id}`;
       waiting.add(link);
