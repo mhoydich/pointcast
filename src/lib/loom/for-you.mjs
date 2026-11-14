@@ -36,6 +36,13 @@ export const ARRIVAL_MS = 48 * 3600000;
 export const FIRST_LOOK_MS = 24 * 3600000;
 export const CAPS = { people: 15, needsYes: 25, arrivals: 10 };
 const SITE = 'https://pointcast.xyz';
+// Narrow phrases used for recent top-level relays asking the owner for a decision.
+export const GO_AHEAD_PHRASES = [
+  (owner) => new RegExp(`\\bneeds\\s+@?${owner}(?:['’]s)?\\s+yes\\b`, 'i'),
+  () => /\bneeds your yes\b/i,
+  () => /\bget his yes\b/i,
+  () => /\brelay[,;:]?\s+not his signature\b/i,
+];
 
 /** "@Mike", "mike", " MIKE " -> "mike". Same rule as the /loom page's handleOf. */
 export const normHandle = (s) => String(s ?? '').trim().replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_.-]/g, '');
@@ -71,7 +78,8 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
     };
   };
 
-  const people = [], needsYes = [], seen = new Set();
+  const people = [], needsYes = [], seen = new Set(), waiting = new Set(), newWaiting = new Set();
+  const goAhead = GO_AHEAD_PHRASES.map((make) => make(escapeRe(me)));
   let restCount = 0, collatorCount = 0;
   for (const thread of threads) {
     const msgs = (thread?.messages ?? []).filter((m) => m && !m.hidden && !m.withdrawn);
@@ -89,6 +97,22 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
       }
       return false;
     };
+    if (inbox) for (const m of msgs) {
+      if (m.parent || m.depth >= 1 || m.via || isCollator(m.from) || isOwner(m.from, me)) continue;
+      if ((kids.get(m.id) ?? []).some((r) => !isCollator(r.from))) continue;
+      const o = origin(thread, m), link = `loom:${o.key}#${o.id}`;
+      waiting.add(link);
+      if (isNewAt(m.at)) newWaiting.add(link);
+    }
+    const relayClosed = (m, anyClear = true) => {
+      const stack = [...(kids.get(m.id) ?? [])];
+      while (stack.length) {
+        const r = stack.pop();
+        if (time(r.at) > time(m.at) && (isOwner(r.from, me) || (anyClear && /^\s*CLEARED\b/i.test(r.body ?? '')))) return true;
+        stack.push(...(kids.get(r.id) ?? []));
+      }
+      return false;
+    };
     for (const m of msgs) {
       const at = time(m.at);
       const o = origin(thread, m);
@@ -102,7 +126,9 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
         if (at >= nowMs - WINDOW_MS && (inbox || (parent && isOwner(parent.from, me)) || mentionsOwner(m.body, me))) collatorCount += 1;
         continue;
       }
-      if (needsRe && !m.via && needsRe.test(firstLine(m.body)) && at >= nowMs - NEEDS_WINDOW_MS && !cleared(m)) {
+      const explicitNeeds = needsRe && needsRe.test(firstLine(m.body)) && at >= nowMs - NEEDS_WINDOW_MS && !cleared(m) && (m.parent || m.depth >= 1 || m.from?.kind !== 'agent' || !relayClosed(m, goAhead.some((re) => re.test(m.body ?? ''))));
+      const relay = me && !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent' && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && goAhead.some((re) => re.test(m.body ?? '')) && !relayClosed(m);
+      if (!m.via && (explicitNeeds || relay)) {
         needsYes.push(item(thread, m)); continue;
       }
       if (at < nowMs - WINDOW_MS) continue;
@@ -135,7 +161,8 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
   restCount += (people.length - piles.people.length) + (needsYes.length - piles.needsYes.length);
   const fresh = new Set();
   for (const list of Object.values(piles)) for (const it of list) if (it.isNew) fresh.add(it.link);
-  return { owner: me ? `@${me}` : '', seenAt: seenAt ?? null, piles, rest: { count: restCount }, collatorCount, newCount: fresh.size };
+  for (const link of newWaiting) fresh.add(link);
+  return { waiting: [...waiting], newWaiting: [...newWaiting], owner: me ? `@${me}` : '', seenAt: seenAt ?? null, piles, rest: { count: restCount }, collatorCount, newCount: fresh.size };
 }
 
 const stamp = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`; };
