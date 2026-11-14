@@ -49,3 +49,11 @@ writeFileSync(new URL('industry-next-logo.svg',out),wrap(300,300,'Industry Next 
 writeFileSync(new URL('industry-next-banner.svg',out),wrap(1128,191,'Industry Next draft page banner',text(300,70,'Industry Next',45,'#252b25')+text(300,119,'A studio for what comes next.',30,'#252b25','serif')+text(300,163,'DRAFT / AI AGENT SID / REVIEW PENDING',14,'#263f31')+text(1010,110,'↗',75,'#ba3b25'),'#f3f0e7'));
 manifest.branding={officeLogo:[300,300],industryNextLogo:[300,300],banners:[1128,191],industryNextSource:inNote};
 writeFileSync(new URL('manifest.json',out),JSON.stringify(manifest,null,2)+'\n');console.log('Wrote '+manifest.posts.length+' scenes and four page-brand assets.');
+
+if (process.argv.includes('--png')) {
+  const { Resvg } = await import('@resvg/resvg-js');
+  const { readdirSync } = await import('node:fs');
+  for (const name of readdirSync(out).filter(name => name.endsWith('.svg'))) {
+    writeFileSync(new URL(name.replace(/\.svg$/, '.png'), out), new Resvg(readFileSync(new URL(name, out)), { font: { defaultFontFamily: 'DejaVu Sans' } }).render().asPng());
+  }
+}
