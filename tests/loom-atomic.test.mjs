@@ -136,3 +136,40 @@ test('seed import, same-name welcome and contention exhaustion remain explicit',
  assert.deepEqual((await Promise.all([run(),run()])).map(r=>r.status),[201,201]);
  assert.equal((await get(env,'#welcome')).ops.filter(o=>o.auto==='first-hello').length,1);
 });
+
+test('commit succeeds but transport fails: return unknown outcome without duplicating the write', async () => {
+ const db=database(), kv=archive(), env={db,kv};
+ const batch=db.batch.bind(db);
+ db.batch=async statements=>{ await batch(statements); throw new Error('connection lost after commit'); };
+ const result=await post(env,note('durable but receipt lost @shared'));
+ assert.equal(result.status,503);
+ assert.equal((await result.json()).error,'loom_storage_unavailable');
+ assert.equal(db.batches,1,'unknown outcome must not replay an already committed append');
+ assert.equal((await get(env,'#race')).count,1);
+ assert.equal((await get(env,'@shared')).count,1);
+ const sent=await (await handleAtomicLoom(new Request('https://pointcast.xyz/api/loom?from=%40desk'),env)).json();
+ assert.equal(sent.sent.length,1);
+ assert.equal(db.sqlite.prepare('SELECT revision FROM loom_atomic_state').get().revision,1);
+ assert.equal(kv.writes,0);
+});
+
+test('real revision conflicts exhaust retry budget without writing partial state', async () => {
+ const db=database(),kv=archive(),env={db,kv};
+ const batch=db.batch.bind(db);
+ db.batch=async statements=>{
+  // A competing writer moves the revision after each read, before our batch.
+  db.sqlite.exec('UPDATE loom_atomic_state SET revision = revision + 1');
+  return batch(statements);
+ };
+ let limits=0;
+ const result=await handleAtomicLoom(req(note('must not commit @shared')),{
+  ...env,attempts:3,firstHelloEnabled:false,limit:async()=>{limits++;return true;}
+ });
+ assert.equal(result.status,503);
+ assert.equal((await result.json()).error,'loom_write_contention');
+ assert.equal(db.batches,3);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM loom_atomic_values').get().n,0);
+ assert.equal(db.sqlite.prepare('SELECT revision FROM loom_atomic_state').get().revision,3);
+ assert.ok(limits>0 && limits<3,'rate limit callbacks must be memoized across attempts');
+ assert.equal(kv.writes,0);
+});
