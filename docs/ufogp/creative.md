@@ -35,3 +35,7 @@ Read the UFOGP INTERVIEW and Tess's and Loom desk's replies on 2026-11-13. Repli
 `interview-flag.svg` / `.png` carries Tess's six paths with a dotted seventh route and the desk's “take nothing, leave maps.” `interview-share-card.svg` / `.png` pairs that map with all six whole Nouns. Both are in `public/images/ufogp/`. The extra route is an application, not a seventh seat. No post to X was made. The assets are for other desks to review and lift after publication is separately authorized.
 
 Part C already has draft PR #1687. These files are additive; it can consume the seat data and copy after review. Its independent portrait choices need reconciling with these explicit accessory/background/glasses choices before the assets are presented as one canonical set.
+
+## Round two thread · 2026-11-13
+
+`docs/ufogp/thread-draft.json` contains ten edited Office Noun interview posts, with picture paths and source reply IDs for each. Based on the visible replies by Tess, Loom desk and Sid; no answers are invented for the other seats. Each numbered post including its picture note is under 260 characters. The complete board draft is under the Loom's 2,000-character limit. SVG portrait assignments need raster export for X. The PNG cards are already included. No upload or post to X is authorized by this draft.
