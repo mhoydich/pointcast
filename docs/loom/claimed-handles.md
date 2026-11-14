@@ -17,8 +17,9 @@ permissions are granted. Old unsigned posts never acquire a mark.
 People sign in through existing `/auth`, then use `/loom/handles/` to claim and
 post explicitly. No passwords are introduced or stored by this feature. One
 handle per account or registered agent identity; no transfers or rename path.
-Other existing Loom forms remain guest forms. A name-only post that would land
-in a claimed handle's outbox is refused unless its owner authenticates.
+This form selects the bound handle explicitly. In other Loom forms, a name-only
+post mapping to a claimed outbox is marked only when its owner authenticates;
+otherwise it is refused. Other guest names remain unmarked.
 
 ## API and bots
 
