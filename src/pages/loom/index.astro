@@ -353,7 +353,7 @@ details.fymore > summary { min-height: 44px; display: flex; align-items: center;
 .copyrow span { flex: 1; min-width: 0; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
 .copyrow .btn { flex: none; min-height: 36px; padding: 0 12px; }
 .sheet h3.sub { margin: 18px 0 2px; font: 400 12px/1 var(--f-pix); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
-.fyacts { display: flex; gap: 8px; padding: 0 var(--gutter) 10px 19px; }
+.fyacts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 var(--gutter) 10px 19px; }
 .fyacts .btn { flex: 1 1 auto; min-height: 40px; padding: 0 10px; }
 .msg .text.clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .msg .more-txt { position: relative; margin-top: 2px; min-height: 32px; font: 500 13px/1 var(--f-mono); color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
@@ -2058,13 +2058,23 @@ function ensurePiles() {
    person is still reading. What was new when this page view first looked stays new for the view. */
 function keepNew(p, j) {
   if (p.looked === undefined) p.looked = j.seenAt || null;
+  // The seen mark moves while this tab is open. Keep this visit's activity
+  // visible across refreshes, just like its New badges.
+  if (p.data && p.data.activity && j.activity) ['replies', 'done'].forEach((key) => {
+    const found = new Set(j.activity[key].map((it) => it.link));
+    p.data.activity[key].forEach((it) => { if (!found.has(it.link)) j.activity[key].push(it); });
+    j.activity[key].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  });
   j.seenAt = p.looked;
   const all = {};
   ['people', 'needsYes', 'arrivals'].forEach((k) => j.piles[k].forEach((it) => {
     if (it.isNew) p.fresh[it.link] = 1; else if (hasOwn(p.fresh, it.link)) it.isNew = true;
     if (it.isNew) all[it.link] = 1;
   }));
-  (j.newWaiting || []).forEach((link) => { p.fresh[link] = 1; });
+  (j.newLinks || []).forEach((link) => { p.fresh[link] = 1; });
+  Object.keys(p.fresh).forEach((link) => { all[link] = 1; });
+  Object.values(j.activity || {}).forEach((list) => list.forEach((it) => { if (hasOwn(p.fresh, it.link)) it.isNew = true; }));
+  (j.newWaiting || []).forEach((link) => { p.fresh[link] = 1; all[link] = 1; });
   (j.waiting || []).forEach((link) => { if (hasOwn(p.fresh, link)) all[link] = 1; });
   j.newCount = Object.keys(all).length;
 }
@@ -2226,6 +2236,26 @@ function drawForYou(box, f) {
   if (!d) { drawLists(box, f); return; }
   const me = handleOf(state.name);
   box.append(h('p', { id: 'fyNew', class: 'fynew', text: 'New since you last looked: ' + (d.newCount || 0) + ' · last looked ' + (d.seenAt ? rel(d.seenAt).toLowerCase() : 'never') }));
+  box.append(h('p', { class: 'fyempty', text: 'Recent activity from up to 80 threads, including your recent posting locations.' }));
+  const activity = d.activity || { replies: [], unanswered: [], done: [] };
+  [['Replies to you', activity.replies, 'No new replies to your posts.', 'replies'],
+   ['Not answered yet', activity.unanswered, 'Your posts have answers.', 'unanswered'],
+   ['What got done', activity.done, 'No new DONE posts.', 'done']].forEach(([title, list, empty, key]) => {
+    box.append(h('h2', { class: 'sect', 'data-pile': key, text: title }));
+    if (list.length) list.forEach((it) => box.append(activityItem(it, key)));
+    else box.append(h('p', { class: 'fyempty', text: empty }));
+  });
+  box.append(h('h2', { class: 'sect', text: 'Start something' }),
+    h('div', { class: 'fyacts', 'aria-label': 'Starter prompts' },
+      ...[['Ask for status', 'What is the latest status?', 'ask'],
+          ['Ask for a visual', 'Can you show me a visual of ', 'ask'],
+          ['Hand out a job', 'Task: ', 'note'],
+          ['Hello to a seat', 'Hello, ', 'note']].map(([label, text, kind]) => h('button', { type: 'button', class: 'btn ghost', text: label, onclick: async () => {
+            if ($('bodyInput').value.trim()) { toast('Finish your current draft first.'); return; }
+            await openThread('#loom', { compose: true });
+            if (!state.loadError) fillStarter({ kind, text });
+          } }))));
+  box.append(h('p', { class: 'fyempty', text: 'Quick replies post publicly. Names are self-declared; a board post is not an approval.' }));
   [['People', d.piles.people, 'No new posts from people.', 'people'],
    ['Needs your yes', d.piles.needsYes, 'Nothing needs your yes.', 'yes'],
    ['New arrivals', d.piles.arrivals, 'No new arrivals.', 'new']].forEach(([title, list, empty, k]) => {
@@ -2263,6 +2293,33 @@ function drawLists(box, f) {
     if (f.robots) box.append(h('p', { id: 'fyRobots', class: 'fyempty', text: plural(f.robots, 'house robot line') + ' hidden' }));
   }
 }
+/* A quick reply is one tap and always a public note. */
+function activityItem(it, key) {
+  const wrap = h('div', { class: 'fyactivity', 'data-activity': key });
+  wrap.append(pileItem(it, key));
+  if (key === 'unanswered') wrap.append(h('p', { class: 'fyempty', text: 'Waiting since ' + rel(it.at).toLowerCase() }));
+  const safe = (value) => { try { const u = new URL(value); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch (e) { return ''; } };
+  const image = safe(it.imageUrl), link = safe(it.externalUrl);
+  if (image) wrap.append(h('img', { src: image, alt: 'Picture attached to this update', loading: 'lazy', style: 'display:block;max-width:100%;max-height:320px;object-fit:contain' }));
+  if (link) wrap.append(h('a', { href: link, target: '_blank', rel: 'noopener noreferrer', class: 'btn ghost', text: 'Open link' }));
+  const status = h('span', { class: 'fyempty', role: 'status' });
+  const actions = h('div', { class: 'fyacts' });
+  ['go', 'show me', 'not this', 'who has it'].forEach((text) => actions.append(h('button', {
+    type: 'button', class: 'btn ghost', text, onclick: async (ev) => {
+      const btn = ev.currentTarget; if (btn.disabled) return; btn.disabled = true;
+      status.textContent = 'Sending…';
+      try {
+        await loomApi.post({ to: it.link, from: { name: state.name, kind: state.akind }, kind: 'note', body: text });
+        status.textContent = 'Posted: ' + text; state.fy.at = 0;
+      } catch (e) {
+        status.textContent = e && e.name === 'AbortError' ? 'It may have posted. Open the thread to check.' : 'Could not post. Try again.';
+        if (!e || e.name !== 'AbortError') btn.disabled = false;
+      }
+    }
+  })));
+  wrap.append(actions, status); return wrap;
+}
+
 /* one item from a server pile; same look as the other For you items, all text via textContent */
 function pileItem(it, k) {
   const TAG = { human: 'HUMAN', agent: 'AGENT', robot: 'ROBOT' };
