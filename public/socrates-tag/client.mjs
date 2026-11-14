@@ -1,5 +1,7 @@
-import {API,readGame,clockText,chainHTML,makePost,link,portraitMap} from './model.mjs';
-let state=null, checked=0, busy=false, portraits={}, refreshVersion=0;
+import './visualizer.mjs';
+import {flameView} from './flame.mjs';
+import {API,readGame,clockText,chainHTML,makePost,link,portraitMap,esc} from './model.mjs';
+let state=null, checked=0, busy=false, portraits={}, refreshVersion=0, emberId=null;
 const el=id=>document.getElementById(id);
 function paint() {
   if (!state) return;
@@ -10,10 +12,20 @@ function paint() {
   el('notices').replaceChildren(...state.notes.slice(-6).map(n=>{
     const p=document.createElement('p'),a=document.createElement('a');a.href=link(n.id);a.textContent=n.name+': '+n.body;p.append(a);return p;
   }));
-  document.dispatchEvent(new CustomEvent('socrates-state',{detail:{...state,checkedAt:checked}}));
+  document.dispatchEvent(new CustomEvent('socrates-state',{detail:{...state,checkedAt:checked,portraits}}));
+  el('fire-count').textContent=state.moves.length+' source-labelled moves retained · sources unchecked';
+  const changed=emberId && emberId!==state.latest?.id;emberId=state.latest?.id;
+  if(changed){el('ember').classList.remove('passed');void el('ember').offsetWidth;el('ember').classList.add('passed');}
   tick();
 }
 function tick() {
+  const fire=flameView(state,checked);
+  el('flame-visualizer').style.setProperty('--fire-brightness',String(fire.brightness));
+  el('flame-visualizer').dataset.mode=fire.mode;
+  el('fire-status').textContent=fire.label;
+  el('ember').textContent=fire.tag ? 'Ember → '+fire.tag : 'Ember waiting';
+  el('fire-meter').value=fire.remaining;
+
   const stale=!checked || Date.now()-checked>120000;
   el('clock').textContent=state ? clockText(state.deadline) : 'Clock unavailable';
   el('move-submit').disabled=busy || stale || !state?.latest || state.attention || Date.now()>=state.deadline;
@@ -29,7 +41,7 @@ async function refresh() {
   if(busy)return;
   const version=++refreshVersion;
   try { const next=await fetchRoom();if(version!==refreshVersion)return;state=next;checked=Date.now();paint();el('read-error').textContent=''; }
-  catch { if(version!==refreshVersion)return;checked=0;el('read-error').textContent='Live read failed. Retained text may be old; open the room or retry. No move is enabled.';tick(); }
+  catch { if(version!==refreshVersion)return;checked=0;document.dispatchEvent(new CustomEvent('socrates-read-failed'));el('read-error').textContent='Live read failed. Retained text may be old; open the room or retry. No move is enabled.';tick(); }
 }
 el('refresh').addEventListener('click',refresh);
 el('motion').addEventListener('click',()=>{const paused=el('motion').getAttribute('aria-pressed')!=='true';el('motion').setAttribute('aria-pressed',String(paused));el('motion').textContent=paused?'Resume flame':'Pause flame';document.querySelector('hearth-fire').style.display=paused?'none':'';el('flame-still').hidden=!paused;});

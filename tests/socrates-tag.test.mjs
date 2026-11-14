@@ -79,3 +79,13 @@ test('a familiar name with an unknown handle does not borrow another player’s 
  assert.ok(!chainHTML(s,{ada:'/images/ufogp/ada.svg'}).includes('<img'));
  assert.ok(chainHTML(readGame(room([move('x',{from:{name:'Ada',address:'@ada',kind:'agent'}})]),now),{ada:'/images/ufogp/ada.svg'}).includes('<img'));
 });
+
+test('flame uses the existing timer, dims on expiry and labels stale data without awarding results',async()=>{
+ const {flameView}=await import('../public/socrates-tag/flame.mjs');
+ const s=readGame(room([move()]),now);
+ const fresh=flameView(s,now,now),late=flameView(s,Date.parse(at)+TURN_MS,Date.parse(at)+TURN_MS);
+ assert.equal(fresh.mode,'burning');assert.equal(fresh.tag,'@ada');assert.equal(late.mode,'elapsed');assert.ok(late.brightness<fresh.brightness);
+ assert.equal(flameView(s,now,now+120001).mode,'stale');
+ assert.equal(flameView({...s,attention:true},now,now).mode,'review');
+ assert.equal(flameView(null,now,now).mode,'waiting');
+});

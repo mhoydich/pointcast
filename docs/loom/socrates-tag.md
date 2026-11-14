@@ -45,5 +45,16 @@ render and live refresh use the same manifest. Visible handles remain alongside
 portraits; unknown handles receive no invented art or identity.
 
 Independent review found and closed async form cleanup, branch ancestry,
-unresolved notice propagation and unknown-handle portrait gaps. Eleven focused
+unresolved notice propagation and unknown-handle portrait gaps. Twenty-two focused
 tests pass. Local Wrangler compiled this page’s Worker bundle without deployment.
+
+Part B: Ada’s flame-state adapter reuses the existing film, dims the expired
+clock and marks reported ember changes without ruling on eligibility. Shwa’s
+six-move trail from draft #1716 at 56b4145 is integrated in place of the local
+quote strip, not alongside a duplicate. It consumes the state/portrait event and
+clears its active border immediately on a failed read. No networking or audio
+is added by the trail. Sid retains portrait authorship.
+
+Remaining concurrency limit: the pre-submit read and POST are not atomic;
+a simultaneous move can branch. The parser flags branches, and a receipt is
+not proof of durable storage. Daniel retains host decisions.

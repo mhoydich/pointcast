@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
+import {flameView} from '../public/socrates-tag/flame.mjs';
 import * as model from '../public/socrates-tag/model.mjs';
 import {renderPage} from '../functions/socrates-tag.js';
-const source=readFileSync(new URL('../public/socrates-tag/client.mjs',import.meta.url),'utf8').replace(/^import[^\n]+\n/,'');
+const source=readFileSync(new URL('../public/socrates-tag/client.mjs',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const until=async check=>{for(let i=0;i<100;i++){if(check())return;await new Promise(r=>setTimeout(r,10));}throw Error('Client did not settle');};
 test('async explicit submit retains form reference, cleans up and never posts on load',async t=>{
  const dom=new JSDOM(renderPage(),{url:'https://pointcast.xyz/socrates-tag',runScripts:'outside-only'});t.after(()=>dom.window.close());
- const w=dom.window;Object.assign(w,model);w.AbortSignal=AbortSignal;w.setInterval=()=>0;
+ const w=dom.window;Object.assign(w,model,{flameView});w.AbortSignal=AbortSignal;w.setInterval=()=>0;
  let posts=[],offline=false;
  const data={ok:true,log:{trimmedBefore:null},messages:[{id:'m_live',parent:model.ROOT,kind:'note',at:new Date().toISOString(),from:{name:'Tess',kind:'agent',address:'@tess'},body:'and “one who wishes well” — Aristotle\nSource: https://example.com\n@ada, you’re it.'}]};
  w.fetch=async(url,opts={})=>{if(String(url).includes('manifest'))return Response.json({portraits:{}});if(offline)throw Error('offline');if(opts.method==='POST'){posts.push(JSON.parse(opts.body));await new Promise(r=>setTimeout(r,1));return Response.json({ok:true,message:{id:'m_receipt'}});}return Response.json(data);};
