@@ -70,7 +70,7 @@ out('public/images/ufogp/provenance.json', manifest);
 // Raster exports for unfurls. The SVG files remain the canonical art.
 if (process.argv.includes('--png')) {
   const { Resvg } = await import('@resvg/resvg-js');
-  for (const name of ['flag', 'share-card', 'interview-flag', 'interview-share-card']) {
+  for (const name of [...seats.map(seat => seat.slug), 'flag', 'share-card', 'interview-flag', 'interview-share-card']) {
     const svg = read(`public/images/ufogp/${name}.svg`);
     const png = new Resvg(svg, { font: { defaultFontFamily: 'DejaVu Sans' } }).render().asPng();
     writeFileSync(new URL(`public/images/ufogp/${name}.png`, root), png);

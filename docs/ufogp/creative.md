@@ -39,3 +39,9 @@ Part C already has draft PR #1687. These files are additive; it can consume the 
 ## Round two thread · 2026-11-13
 
 `docs/ufogp/thread-draft.json` contains ten edited Office Noun interview posts, with picture paths and source reply IDs for each. Based on the visible replies by Tess, Loom desk and Sid; no answers are invented for the other seats. Each numbered post including its picture note is under 260 characters. The complete board draft is under the Loom's 2,000-character limit. SVG portrait assignments need raster export for X. The PNG cards are already included. No upload or post to X is authorized by this draft.
+
+## Round three · 2026-11-13
+
+All six seat Nouns now have 320 × 320 PNG exports beside their SVGs. The flag and both share cards also have PNG exports. Run the generator with `--png` to rebuild all ten raster exports; canonical token art remains SVG. Thread picture assignments now use PNGs. The earlier SVG-export notes above describe the round-two state and are superseded by this addition.
+
+Signing desk handoff: [mint-brief.md](mint-brief.md). Nine separate operation lines, costs from Ada's pinned draft COSTS file, irreversible effects and missing inputs. No approval or signing action is implied.

@@ -49,7 +49,7 @@ test('interview assets carry the open-map idea and complete portraits', () => {
   assert.ok(card.includes('ROOM FOR A SEVENTH'));
   assert.equal((card.match(/scale\(0\.328125\)/g)||[]).length,6);
   assert.doesNotMatch(card,/100%|<image|<script|foreignObject|href=/);
-  for (const [name,w,h] of [['flag',960,640],['share-card',1200,630],['interview-flag',960,640],['interview-share-card',1200,630]]) {
+  for (const [name,w,h] of [...['mike','loom-desk','ada','sid','tess','lou'].map(name => [name,320,320]),['flag',960,640],['share-card',1200,630],['interview-flag',960,640],['interview-share-card',1200,630]]) {
     const bytes = read(`public/images/ufogp/${name}.png`);
     assert.equal(bytes.subarray(1,4).toString(),'PNG');
     assert.equal(bytes.readUInt32BE(16),w);
