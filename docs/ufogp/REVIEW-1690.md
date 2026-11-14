@@ -35,14 +35,14 @@ Job evidence, proposals, and vote records accumulate in big maps without pruning
 
 ## Checklist disposition
 
-- **Admin control:** issuance and tie-break roles are explicit and restricted to fixed addresses; no general execution or withdrawal entrypoint was found. The uncapped seat issuance and unrecoverable roles above remain the primary control risks.
-- **Mint limits:** duplicate job IDs and positive amounts are checked; the amount and total supply are not capped (finding 2). Seat count is not capped (finding 1).
-- **Transfer locks:** both FA2 contracts inherit `NoTransfer`; tests exercise transfer/operator denial. This is a deliberate permanent lock with no unlock/recovery path.
-- **Vote windows:** `propose` fixes close at `NOW + 86,400 seconds`; vote requires `NOW < closes`, and close requires `NOW >= closes`. No post-creation window edit was found.
-- **Ties:** plurality is recorded; a tied leader set stays pending and only the founder can select a tied leader. A zero-vote poll closes without a result. Tests cover ties and rejection of nonleaders.
-- **Replay:** votes are keyed by `(proposal, seat)` and duplicate keys reject. The draft has no signed-vote format or custom nonce to replay; ordinary Tezos operation authentication/counters provide the transaction domain. No cross-proposal signed-vote mechanism was found.
-- **Upgrade paths:** no upgrade, migration, pause, or arbitrary-call path was found. That reduces live code-replacement risk but makes constructor choices and lost immutable roles permanent.
-- **Storage costs:** per-record bounds and the 16-option close loop are helpful. Big-map history grows over time; cost fixtures are bounded samples, and proposal/vote script gas remains unmeasured as noted above.
+- **Admin control —** `contracts/ufogp/contracts.py:15-19,38,61-66,82,97-100,169`: issuance and tie-break roles are explicit and restricted to fixed addresses; no general execution or withdrawal entrypoint was found. The uncapped seat issuance and unrecoverable roles above remain the primary control risks.
+- **Mint limits —** `contracts/ufogp/contracts.py:35-49,79-89`: duplicate job IDs and positive amounts are checked; the amount and total supply are not capped (finding 2). Seat count is not capped (finding 1).
+- **Transfer locks —** `contracts/ufogp/contracts.py:14-17,61-65`; `contracts/ufogp/test_contracts.py:25-26,117-118`: both FA2 contracts inherit `NoTransfer`; tests exercise transfer/operator denial. This is a deliberate permanent lock with no unlock/recovery path.
+- **Vote windows —** `contracts/ufogp/contracts.py:121-123,127-132,142-146`; `contracts/ufogp/test_contracts.py:40-42,127-128`: `propose` fixes close at `NOW + 86,400 seconds`; vote requires `NOW < closes`, and close requires `NOW >= closes`. No post-creation window edit was found.
+- **Ties —** `contracts/ufogp/contracts.py:148-173`; `contracts/ufogp/test_contracts.py:44-55,126-130`: plurality is recorded; a tied leader set stays pending and only the founder can select a tied leader. A zero-vote poll closes without a result. Tests cover ties and rejection of nonleaders.
+- **Replay —** `contracts/ufogp/contracts.py:104,127-139`; `contracts/ufogp/test_contracts.py:38-42,123-125`: votes are keyed by `(proposal, seat)` and duplicate keys reject. The draft has no signed-vote format or custom nonce to replay; ordinary Tezos operation authentication/counters provide the transaction domain. No cross-proposal signed-vote mechanism was found.
+- **Upgrade paths —** `contracts/ufogp/contracts.py:97-104` and the complete entrypoint list: no upgrade, migration, pause, or arbitrary-call path was found. That reduces live code-replacement risk but makes constructor choices and lost immutable roles permanent.
+- **Storage costs —** `contracts/ufogp/contracts.py:87-89,103-104,121-139`; `contracts/ufogp/COSTS.md:35-54,62-70,76-77`: per-record bounds and the 16-option close loop are helpful. Big-map history grows over time; cost fixtures are bounded samples, and proposal/vote script gas remains unmeasured as noted above.
 - **Atomicity:** duplicate-job and failed mint checks occur before state writes; the simulation tests include failed-issuance state checks. I did not independently execute the test suite.
 
 Static review only. This review is not approval to merge, originate, mint, spend, or deploy.
