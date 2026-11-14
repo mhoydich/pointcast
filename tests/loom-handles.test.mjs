@@ -126,3 +126,11 @@ test('claim creation pause does not block an owner read or disable ownership enf
  const r=await endpoint({env:x.env,request:new Request('https://pointcast.xyz/api/loom/handles',{headers:signedIn})});const d=await r.json();assert.equal(d.claim.handle,'@owned');assert.equal(d.claimsOpen,false);
  assert.equal((await endpoint({env:x.env,request:request({handle:'new'},signedIn)})).status,503);
 });
+
+
+test('account binding uses the authenticated session subject, never mutable profile payload',async()=>{
+ const x=setup();const profile=JSON.parse(x.sql.prepare("SELECT payload FROM users WHERE id='user-a'").get().payload);profile.userId='different-profile-id';
+ x.sql.prepare("UPDATE users SET payload=? WHERE id='user-a'").run(JSON.stringify(profile));
+ const auth=await handlePrincipal(request({handle:'new'},signedIn),x.env,{handle:'new'},'loom.claim','loom:claim');
+ assert.equal(auth.principal,'account:user-a');
+});

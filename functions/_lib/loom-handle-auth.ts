@@ -17,7 +17,7 @@ export async function handlePrincipal(request:Request,env:any,payload:Record<str
   if(!current)return {principal:null};
   if(request.method!=='GET' && request.headers.get('Origin')!==new URL(request.url).origin)
     return {response:handleJson({ok:false,error:'same_origin_required'},403)};
-  return {principal:'account:'+current.user.userId,proof:'account'};
+  return {principal:'account:'+current.session.userId,proof:'account'};
 }
 
 export async function boundedHandleJson(request:Request,limit:number) {
