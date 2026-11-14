@@ -1,11 +1,13 @@
 /** Thin handler for /loom/bot/NAME. Reads through handleLoom (internal GETs); no second storage path. */
 import { handleLoom } from './service.mjs';
+// Tests may supply legacy KV; production supplies the authoritative atomic reader.
+const read = (request, source) => typeof source === 'function' ? source(request) : handleLoom(request, { kv: source });
 import { badBotNameText, buildBotPage, isBotSender, parseBotName, unknownBotText } from './bot-page.mjs';
 
 const API = 'https://pointcast.xyz/api/loom';
 const text = (body, status, cache) => new Response(body, { status, headers: {
   'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': cache, 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } });
-const internal = async (query, kv) => { try { return await (await handleLoom(new Request(`${API}${query}`), { kv })).json(); } catch { return null; } };
+const internal = async (query, kv) => { try { return await (await read(new Request(`${API}${query}`), kv)).json(); } catch { return null; } };
 
 /** Questions that name the bot and have no reply of kind "answer". Echoes lose their kind, so look at the source log. */
 async function openQuestions(name, inbox, logKey, kv) {
