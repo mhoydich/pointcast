@@ -14,6 +14,7 @@
 import { clean, esc, heavy, wrap } from '../unfurl/cards.mjs';
 import { nounForPath } from '../unfurl/rooms.mjs';
 import { parseAddress } from './address.mjs';
+import { parseTopicName } from './topic-page.mjs';
 import { nounBackground, nounRecipe, nounRects } from './noun-card.mjs';
 
 export const SITE = 'https://pointcast.xyz';
@@ -224,11 +225,13 @@ export function metaFor(summary, address, seq = summary?.seq ?? 0) {
   const canonical = summary?.address || address;
   const s = Math.max(0, Math.floor(Number(seq) || 0));
   const url = summary.empty ? `${SITE}/loom` : `${SITE}/loom?to=${enc(summary.replyAddress || canonical)}`;
+  const topic = summary.kind === 'topic' && !summary.empty && !summary.replyAddress
+    ? parseTopicName(String(canonical).replace(/^#/, '')) : null;
   return {
     title: summary.title,
     description: summary.description,
     url,
-    canonical: url,
+    canonical: topic ? `${SITE}/loom/topic/${topic}` : url,
     noindex: !!summary.empty,
     image: summary.empty ? null : `${SITE}/og/loom.png?to=${enc(canonical)}&s=${s}`,
     imageWidth: '1200',

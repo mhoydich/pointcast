@@ -127,6 +127,18 @@ test('meta carries the address and seq', () => {
   assert.equal(metaFor(s, 'x', 8).image.endsWith('&s=8'), true);
 });
 
+test('populated topic shares canonicalize to readable HTML without changing preview URLs', () => {
+  const s = summarize(api([msg({})]), '#officenoun-tasks');
+  const m = metaFor(s, '#officenoun-tasks', 7);
+  assert.equal(m.canonical, 'https://pointcast.xyz/loom/topic/officenoun-tasks');
+  assert.equal(m.url, 'https://pointcast.xyz/loom?to=%23officenoun-tasks');
+  assert.equal(m.image, 'https://pointcast.xyz/og/loom.png?to=%23officenoun-tasks&s=7');
+  const reply = { ...s, replyAddress: 'loom:' + 'a'.repeat(24) + '#m_abc123' };
+  assert.equal(metaFor(reply, reply.replyAddress).canonical, metaFor(reply, reply.replyAddress).url);
+  const inbox = { ...s, kind: 'handle', address: '@sol' };
+  assert.equal(metaFor(inbox, '@sol').canonical, 'https://pointcast.xyz/loom?to=%40sol');
+});
+
 test('noun is stable per address and differs across addresses', () => {
   const a1 = summarize(api([msg({})]), '#x').noun;
   assert.equal(summarize(api([msg({}), msg({})]), '#x').noun, a1);
