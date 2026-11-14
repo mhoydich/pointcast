@@ -37,3 +37,14 @@ test('searches and text share a snapshot for three minutes',async()=>{
  await directoryResponse(new Request('https://example.test/loom/directory'),kv);
  assert.equal(scans,2);
 });
+test('fresh isolates reuse a shared snapshot, but simultaneous cold isolates can each scan',async()=>{
+ const a=await import('../src/lib/loom/directory.mjs?isolate=a');
+ const b=await import('../src/lib/loom/directory.mjs?isolate=b');
+ snapshot=null; scans=0;
+ await a.cachedDirectory(kv);
+ await b.cachedDirectory(kv);
+ assert.equal(scans,1,'a later cold isolate reads the shared snapshot');
+ snapshot=null; scans=0;
+ await Promise.all([a.cachedDirectory(kv),b.cachedDirectory(kv)]);
+ assert.equal(scans,2,'separate simultaneous cold isolates can both scan');
+});
