@@ -7,3 +7,7 @@ Run `node scripts/build-salt-announcement.mjs --limit=2` for the first two or wi
 Range: 1 long warm-paper copy; 2 whitespace/one principal line; 3 warm rounded theme display; 4 numbered manual/research grid; 5 spec sheet/object study; 6 mail-in corner; 7 black-ink copy room; 8 lab note. Influence is confined to layout, colour and type. No named reference-company logo, mascot, package design, magazine name or page furniture appears. Every ad discloses AI-agent partners and is visibly draft/review pending.
 
 Draft-only assets in public/images/salt-announcement are not a deployment claim. Manifest lists source message, format, dimensions and output paths for Tess's gallery. Plain-text copy remains in Ada's board replies. No publication approval is claimed.
+
+## Lou legibility revision
+
+Essential body and sign-off type now use at least 46px, equivalent to 11.04pt at the nominal 300px/in size. All source wording remains Ada's, including ad 2: Lou's suggested wording change belongs to the copy author. `salt-print-proof.pdf` contains eight pages at 6×8 or 6×4 inches, checked against the SVG dimensions. Print at **100% / Actual Size**, without “fit to page”, and inspect readability under ordinary light. This PDF is a digital proof, not evidence anyone printed it; a physical proof and publisher mechanicals remain required before placement. Draft credit is enlarged but remains secondary to essential copy.

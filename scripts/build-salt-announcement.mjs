@@ -23,13 +23,14 @@ for(const a of ads.slice(0,limit)){
  else if(a.id===4||a.id===8){font='monospace';bg='#f4f0df';headlineY=300;bodyY=a.id===8?470:800;bodySize=a.id===8?31:42;for(let x=100;x<1750;x+=100)b+=`<path d="M${x} 100V${h-140}" stroke="#dcd7c3" stroke-width="1"/>`;b+=text(140,160,'SALT / FIELD INSTRUCTIONS',35,ink,'monospace');}
  else if(a.id===5){bg='#e6e7df';headlineY=300;bodyY=1250;font='monospace';bodySize=36;b+=text(140,150,'SALT / INSPECTION SHEET',34,ink,'monospace')+rect(480,570,800,460,'#c1c8c5')+rect(530,520,800,460,'#fff')+text(605,680,'BRIEF',65)+text(605,775,'AUDIENCE / PURPOSE / LIMITS',28);}
  else {bg='#fff';headlineY=420;bodyY=1100;b+=text(140,160,'SALT',55);for(let i=0;i<18;i++)b+=rect(105+i*90,180,1,h-390,'#ededeb');}
- const head=block(a.headline,140,headlineY,1500,a.id===2?84:82,95,[1,3,6].includes(a.id)?'serif':font,ink);b+=head.svg;
+ bodySize=Math.max(bodySize,46); if(a.id===8) headlineY=240;
+ const head=block(a.headline,140,headlineY,1500,a.id===8?60:(a.id===2?84:82),a.id===8?74:95,[1,3,6].includes(a.id)?'serif':font,ink);b+=head.svg;
  const body=block(a.body,140,Math.max(bodyY,head.bottom+150),bodyW,bodySize,Math.round(bodySize*1.48),font,ink);b+=body.svg;
- const sign=block(a.signoff,140,h-215,1480,30,42,'sans-serif',ink);b+=sign.svg;
- b+=text(140,h-110,'DRAFT / COPY: ADA · LAYOUT: SID / AI AGENTS / HUMAN REVIEW PENDING',20,ink,'monospace');
+ const sign=block(a.signoff,140,h-215,1480,46,66,'sans-serif',ink);b+=sign.svg;
+ b+=text(140,h-110,'DRAFT / COPY: ADA · LAYOUT: SID / AI AGENTS / HUMAN REVIEW PENDING',28,ink,'monospace');
  if(body.bottom>h-300)throw new Error('Copy overlaps signoff '+a.id+' at '+body.bottom);
  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"><title>${esc(a.headline)}</title>${rect(0,0,w,h,bg)}${b}</svg>\n`;
- const name='salt-'+String(a.id).padStart(2,'0');writeFileSync(new URL(name+'.svg',dir),svg);manifest.ads.push({...a,svg:'/images/salt-announcement/'+name+'.svg',png:'/images/salt-announcement/'+name+'.png',dimensions:[w,h],bodyBottom:body.bottom,signoffTop:h-215});
+ const name='salt-'+String(a.id).padStart(2,'0');writeFileSync(new URL(name+'.svg',dir),svg);manifest.ads.push({...a,svg:'/images/salt-announcement/'+name+'.svg',png:'/images/salt-announcement/'+name+'.png',dimensions:[w,h],bodyTypePx:bodySize,signoffTypePx:46,bodyBottom:body.bottom,signoffTop:h-215});
 }
 writeFileSync(new URL('manifest.json',dir),JSON.stringify(manifest,null,2)+'\n');console.log('Wrote '+manifest.ads.length+' SALT layouts.');
 
