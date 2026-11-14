@@ -8,14 +8,17 @@
  * send it as X-Loom-Admin with {action:"hide"}.
  */
 import { handleLoom } from '../../src/lib/loom/service.mjs';
-import { rateLimit } from '../_rate-limit';
-import { hashAgentActionRequest, verifyAgentRequest } from '../_lib/agent-identity';
+import {authorizeHandle,reserveDestinations,primary} from '../../src/lib/loom/handles.mjs';
+import {handleJson,handlePrincipal,boundedHandleJson} from '../_lib/loom-handle-auth.ts';
+import { rateLimit } from '../_rate-limit.ts';
 
 type Env = {
   PC_LOOM_KV?: KVNamespace;
   VISITS?: KVNamespace;
   PC_RATES_KV?: KVNamespace;
   AUTH_DB?: D1Database;
+  USERS?: KVNamespace;
+  LOOM_HANDLES_ENABLED?: string;
   LOOM_ADMIN_KEY?: string;
   DRUM_COUNTER?: DurableObjectNamespace;
 };
@@ -55,19 +58,37 @@ const LIMITS: Record<string, { windowSec: number; maxRequests: number }> = {
 };
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
-  // A signed PointCast agent request (scope loom:append) earns the verified mark.
   let verifiedAgent: string | null = null;
-  if (request.method === 'POST' && request.headers.get('PointCast-Agent-Id') && env.AUTH_DB) {
-    let payload: Record<string, unknown> = {};
-    try { payload = await request.clone().json(); } catch { /* the service reports invalid JSON */ }
-    const hash = await hashAgentActionRequest('loom.append', payload);
-    const verified = await verifyAgentRequest(env.AUTH_DB, request, hash, 'loom:append');
-    if (verified.response) return verified.response;
-    verifiedAgent = verified.agentId;
+  let auth: any = {principal:null};
+  let authorizeFrom: any = null;
+  let reserveAddresses: any = null;
+  if(request.method === 'POST') {
+    const parsed=await boundedHandleJson(request,16384);if(parsed.response)return parsed.response;
+    const payload=parsed.payload;
+    try {
+      // Reject partial proof even when the handle feature is disabled; never downgrade it.
+      if(['append','edit','withdraw'].includes(String(payload.action??'append')) || ['PointCast-Agent-Id','PointCast-Agent-Timestamp','PointCast-Agent-Signature'].some(h=>request.headers.has(h))) {
+        auth=await handlePrincipal(request,env,payload,'loom.append','loom:append');
+        if(auth.response)return auth.response;
+        verifiedAgent=auth.agentId??null;
+      }
+      if(['append','edit','withdraw'].includes(String(payload.action??'append'))) {
+        if(!env.AUTH_DB)return handleJson({ok:false,error:'claim_store_unavailable'},503);
+        const db=primary(env.AUTH_DB);
+        reserveAddresses=(addresses:string[])=>reserveDestinations(db,addresses);
+        authorizeFrom=async (from:any,address:any) => {
+          try {return await authorizeHandle(db,from,address,auth.principal,auth.fingerprint);}
+          catch {return {error:'claim_store_unavailable',status:503};}
+        };
+      }
+    }catch {return handleJson({ok:false,error:'proof_store_unavailable'},503);}
   }
   return handleLoom(request, {
     kv: env.PC_LOOM_KV ?? env.VISITS ?? null,
     verifiedAgent,
+    authorizeFrom,
+    reserveAddresses,
+    authorizeMutation: authorizeFrom,
     adminKey: env.LOOM_ADMIN_KEY ?? '',
     drumCount: () => drumCount(env),
     // Full result ({ allowed, retryAfter }) so refusals can say when to retry; clientId keys the per-sender budget.

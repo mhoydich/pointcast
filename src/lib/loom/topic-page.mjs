@@ -90,8 +90,9 @@ function renderMessage(m) {
     const label = String(m.media.alt || '').trim() || 'image';
     media = url ? `<p><a href="${esc(url)}" rel="nofollow ugc noopener">${esc(`Image: ${label}`)}</a></p>` : `<p>${esc(`Image: ${label}`)}</p>`;
   }
+  const claimed = from.claimed ? `<span class="k" title="${from.claimed.proof === 'account' ? 'Account authenticated' : 'Agent key authenticated'}; not an approval">CLAIMED ${esc(from.claimed.handle)}</span>` : '';
   const ver = from.verified ? '<span class="k">verified</span>' : '';
-  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
+  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${claimed}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
 }
 
 /**
