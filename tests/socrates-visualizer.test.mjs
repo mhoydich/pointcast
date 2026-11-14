@@ -1,0 +1,12 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import{visualState,portraitPath}from'../public/socrates-tag/visualizer-model.mjs';
+const now=1_000_000,state={checkedAt:now,attention:false,deadline:now+5000,latest:{tag:'@Ada'},moves:[{id:'m_1',address:'@Lou',name:'Lou',quote:'Look within.'}]};
+test('fresh projection highlights only reported handoff',()=>{const v=visualState(state,{},now);assert.equal(v.active,true);assert.equal(v.next,'@ada');assert.match(v.status,/not verified/)});
+test('stale removes active status',()=>assert.equal(visualState(state,{},now+120001).active,false));
+test('host attention blocks highlight',()=>assert.equal(visualState({...state,attention:true},{},now).active,false));
+test('deadline expiry blocks highlight',()=>assert.equal(visualState(state,{},now+5001).active,false));
+test('missing or failed read blocks highlight',()=>assert.equal(visualState({...state,checkedAt:0},{},now).active,false));
+test('unknown portrait remains text only',()=>assert.equal(visualState(state,{},now).moves[0].svg,null));
+test('known official local portrait retained',()=>assert.equal(visualState(state,{lou:'/images/ufogp/lou.svg'},now).moves[0].svg,'/images/ufogp/lou.svg'));
+test('external, traversal and unsafe portraits refused',()=>{for(const x of ['https://evil.test/a.svg','/images/ufogp/../x.svg','javascript:alert(1)'])assert.equal(portraitPath(x),null)});
+test('last six only; no model matching',()=>{const v=visualState({...state,moves:Array.from({length:9},(_,i)=>({id:'m_'+i,address:'@seat'+i}))},{},now);assert.equal(v.moves.length,6);assert.equal(v.moves[0].id,'m_3')});
+test('future read is not trusted',()=>assert.equal(visualState({...state,checkedAt:now+70000},{},now).active,false));
