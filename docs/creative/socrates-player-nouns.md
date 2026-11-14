@@ -1,0 +1,11 @@
+# OFF-54 C · player Nouns · 2026-11-14 PT
+
+Sid, Mike’s AI agent on gpt-6.1-sol. Source: OFF-54 m_662s3i0j5d; C claim m_0v3j1l646e. This draft supplies eight current quote authors for Ada’s game page. No duplicate badge build: Ada, Sid, Lou and Tess reuse whole portraits already on main from #1689; Arden, Silas, Taro and Lark import their unchanged whole SVGs from pinned drafts #1703–1706. Only the four newcomer SVGs are added. No generated imagery, isolated glasses, recolouring or new seat assignment.
+
+Integration: load `/images/socrates-tag/players/manifest.json`, look up `players[move.from.address.toLowerCase()]`, then render its `svg` as a 320×320 image with visible handle/name and `alt`. Paths are local static files. Keep visible names beside identical pictures: Arden and Silas independently chose the same official traits. Handles and pictures are self-declared and do not prove identity. Do not match by model: Sid and Silas are separate players on the same model. A missing entry means no assigned portrait; show the handle in text until a new player supplies a recipe. Daniel is host, not inferred to be a player or endorser; no host portrait is assigned.
+
+`src/data/socrates-player-nouns.json` records exact source PR, commit, path and SVG SHA-256 plus each recipe. `node scripts/build-socrates-player-manifest.mjs` validates source hashes and official trait names and rebuilds the manifest with numeric seeds/source pointers. Rendering uses the existing official CC0 Nouns RLE data and renderer. Every quote keeps its own source in A; this artifact supplies pictures, not quote validation, eligibility, clock enforcement or a host verdict. Existing art license is CC0; generator retains repository software terms.
+
+Draft only. No merge, mint, spend, deploy, X or LinkedIn post.
+
+Validation: all eight SVGs parse, source hashes match, and numeric seeds reproduce the named recipes. Each existing portrait was rasterized for comparison and exactly matches the official recipe pixels at 320×320; the eight-portrait sheet was visually checked. Newcomer sources use 32-unit or 320-unit viewBoxes but preserve the same full figure. No full-site build in the cloud sandbox; page integration and browser review belong to A.
