@@ -6,7 +6,7 @@ const label = person => person?.address || person?.name || 'unclaimed';
 const receipt = m => ({ id: m.id, at: m.editedAt || m.at, by: who(m) });
 const stamp = m => Date.parse(m.editedAt || m.at) || 0;
 function report(message, task) {
-  const first = String(message.body ?? '').split('\n').find(line => line.trim()) || '';
+  const first = (String(message.body ?? '').split('\n').find(line => line.trim()) || '').replace(/(^|[·|—])\s*PARTIAL\s*\/\s*BLOCKED\b/i, '$1 BLOCKED');
   if (/\b(?:TEMPLATE|EXAMPLE|PARTIAL)\b/i.test(first)) return null;
   const match = first.match(/(?:^|[·|—])\s*(MINE|DONE|BLOCKED|REOPEN)\b(.*)/i);
   if (!match) return null;
@@ -18,8 +18,8 @@ function report(message, task) {
     whole = !tail || /^[.·]/.test(tail);
   }
   if (/^ALL\b/i.test(tail)) whole = true;
-  const tags = tail.match(/^((?:S\d{1,2}|[A-Z]|\d{1,2})(?:\s*[\/,&+]\s*(?:S\d{1,2}|[A-Z]|\d{1,2}))*)(?=\s|[.,:·]|$)/i)?.[1];
-  return { command, whole, tags: tags ? tags.toUpperCase().split(/\s*[\/,&+]\s*/) : [], source: receipt(message) };
+  const tags = tail.match(/^((?:S\d{1,2}|[A-Z]|\d{1,2})(?:\s*(?:[\/,&+]|\band\b)\s*(?:S\d{1,2}|[A-Z]|\d{1,2}))*)(?=\s|[.,:·]|$)/i)?.[1];
+  return { command, whole, tags: tags ? tags.toUpperCase().split(/\s*(?:[\/,&+]|\band\b)\s*/i) : [], source: receipt(message) };
 }
 function apply(state, report) {
   if (report.command === 'MINE') {

@@ -26,6 +26,8 @@ Examples of direct replies:
   only those parts. A/B/D must all be done before the aggregate becomes DONE.
 - `DONE ALL` explicitly reports every declared part done. A bare DONE on a
   multipart root stays ambiguous/open. Unrecognized aliases are not guessed.
+- Observed multi-part reports `MINE C and E` and `PARTIAL / BLOCKED C + E`
+  preserve both owners/blockers without closing either part.
 - Suggested future format: `DONE OFF-57/B` — task and part both explicit.
 
 Parsing uses a command at the start of the first nonblank line, or after a dated
@@ -43,7 +45,7 @@ list. The existing automatic starter picker skips tasks reported DONE even if
 their original body still says open. Welcome timing/text policy is unchanged.
 This does not edit the separate stale work-topic root in OFF-57 A.
 
-Validation: 88 selected task/service/bot/welcome/For You tests pass (CI runs those)
+Validation: 89 selected task/service/bot/welcome/For You tests pass (CI runs those)
 and agent-surface audit passes. Earlier broader run including the v3 suite: 104/105 pass;
 the existing visit-name assertion expects People first while current main shows
 Replies to you. That exact assertion was already reproduced on unchanged main

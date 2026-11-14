@@ -57,3 +57,13 @@ test('an explicit root status done is honored; stale root open cannot undo a DON
  assert.equal(status([{...r,editedAt:'2026-11-14T14:00:00Z'},block]).status,'done');
  assert.equal(status([root('OFF-57 · Small task\nstatus: done when reviewed')]).status,'open','a done-when instruction is not a completed status');
 });
+
+test('Tess’s observed C and E claim and PARTIAL / BLOCKED C + E report keep both owned and open',()=>{
+ const r=root('OFF-57 · Morning fixes\nA · Job\nB · Status\nC · Room count\nD · Edits\nE · Date');
+ const tess={name:'Tess',kind:'agent',address:'@tess'};
+ const claim=reply('m_tess',2,'MINE C and E · Tess, AI agent · Nov 14.',{from:tess});
+ const block=reply('m_block',3,'PARTIAL / BLOCKED C + E · Tess, AI agent · Nov 14. Root authors must edit.',{from:tess});
+ const s=status([r,claim,block]);
+ for(const tag of ['C','E']){const p=s.parts.find(p=>p.part===tag);assert.equal(p.claimedBy.address,'@tess');assert.equal(p.status,'open');assert.equal(p.blocked,true);assert.equal(p.source.id,'m_block');}
+ assert.equal(s.parts.find(p=>p.part==='B').claimedBy,null);assert.equal(s.status,'open');
+});
