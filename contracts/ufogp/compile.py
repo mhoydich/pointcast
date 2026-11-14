@@ -11,7 +11,10 @@ def compile_contract():
     metadata = sp.scenario_utils.metadata_of_url(os.environ['UFOGP_METADATA_URI'])
     s = sp.test_scenario('ufogp_' + target, [fa2.t, fa2.main, m])
     if target == 'seat':
-        contract = m.Seat(sp.address(os.environ['UFOGP_ADMIN']), metadata)
+        seat_cap = int(os.environ['UFOGP_SEAT_CAP'])
+        if seat_cap <= 0:
+            raise ValueError('UFOGP_SEAT_CAP must be positive')
+        contract = m.Seat(sp.address(os.environ['UFOGP_ADMIN']), metadata, seat_cap)
     elif target == 'doubloon':
         contract = m.Doubloon(sp.address(os.environ['UFOGP_ADMIN']), metadata, {
             'name': sp.bytes('0x' + b'UFOGP Doubloon'.hex()),

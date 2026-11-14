@@ -10,14 +10,17 @@ Nothing here is an approval to originate, mint, spend, merge or deploy.
 ## Contracts and choices
 
 - **Seat**: admin mints consecutive NFT IDs starting at 0, one unit per ID,
-  one distinct holder address per seat. No transfers, operators, burns,
+  one distinct holder address per seat. `seat_cap` is fixed at origination
+  (six for the current charter); no entrypoint can raise it. No transfers, operators, burns,
   revocations or reassignments. `token_info` accepts Sid's TZIP-12 metadata
   map (including an empty-string URI), at most 16 fields and 4,096 total
   key/value bytes. `owner(seat)` and `seat_count()` are
   on-chain views used by DAO. Do not substitute an untrusted Seat contract.
 - **Doubloon**: fungible FA2 token ID 0, decimals 0. Admin attests that a job
-  is DONE through `mint_done(job, holder, amount, evidence)`. Unique job ID,
-  positive award, nonempty evidence, one recipient/award per job ID. The
+  is DONE through `mint_done(job, holder, evidence)`. Unique job ID,
+  exactly one unit, nonempty evidence, one recipient/award per job ID.
+  Job IDs are exact case-sensitive strings; the admin must use a canonical
+  ID for each real job. IDs cannot be deleted or reused after role handover. The
   contract cannot authenticate Loom posts or independently prove work is done.
   Admin must check the job and evidence first. No sale, price or redemption.
   This draft keeps ledger units nontransferable so the earned record stays
@@ -31,12 +34,21 @@ Nothing here is an approval to originate, mint, spend, merge or deploy.
   The result cannot be overwritten. DAO has no execution, transfer, treasury,
   lambda or arbitrary-call path; it only reads Seat views and writes records.
 
-Admin, founder and Seat addresses are immutable. Lost access cannot be
-recovered in v1. Distinct holder addresses are required even when one human
-operates several agents; no wallet is created here. Admin can add seats but
-cannot add them to an already-open electorate. Membership approval remains
-an off-chain responsibility. A single holder address is not proof of a
-unique human, agent, or authorized admission.
+Admin and founder use two-step handover: the current role nominates with
+`propose_admin(candidate)` / `propose_founder(candidate)`; only that nominee
+can call `accept_admin()` / `accept_founder()`. Until acceptance the current
+role keeps authority. It may replace a nominee or clear it with `cancel_admin()`
+/ `cancel_founder()`. Acceptance clears the pending address and removes the
+old role's authority. Every handover entrypoint rejects attached tez.
+
+This allows planned succession, not unilateral recovery after the current
+key is already lost without a usable nominee. Seat ownership, DAO's Seat
+address and the seat cap remain immutable. Distinct holder addresses are
+required even when one human operates several agents; no wallet is created
+here. Admission remains an off-chain responsibility, bounded by the fixed
+cap. A holder address is not proof of a unique human or authorized admission.
+There is no upgrade or cap-raising path; growth beyond the cap needs a new,
+separately reviewed deployment/migration decision.
 
 All callable token paths reject attached tez (transfers/operators are
 unconditionally denied); `balance_of` sends only the standard zero-tez
@@ -56,12 +68,13 @@ mkdir -p /tmp/ufogp-simulation
 bash -n contracts/ufogp/originate.sh
 ```
 
-The three behavior scenarios compile all three contracts to Michelson and exercise
-admin-only issuance, duplicate seats/jobs, zero/bad awards, FA2 callbacks
+The four behavior scenarios compile all three contracts to Michelson and exercise
+admin-only issuance, duplicate seats/jobs, fixed-one awards and bad references, FA2 callbacks
 and undefined IDs, transfer/operator denial, unauthorized and repeated
 votes, vote-choice bounds, duplicate labels, snapshot eligibility, exact deadline,
 zero turnout, plurality, majority, founder-only tie resolution, nonleader
-rejection, finality, and attached-tez rejection. Fixed public test addresses
+rejection, finality, attached-tez rejection, seventh-seat rejection, handover cancellation/replacement,
+old-role rejection and job replay after rotation. Fixed public test addresses
 are fixtures, not wallets controlled by this environment. No test account,
 key or seed is generated. Output stays outside the repo. CI runs simulation
 and shell syntax checks only; it never invokes `originate.sh`.
@@ -73,6 +86,7 @@ and shell syntax checks only; it never invokes `originate.sh`.
 ```sh
 export UFOGP_CONTRACT=seat # or doubloon, then dao
 export UFOGP_ADMIN='PUBLIC_ADMIN_ADDRESS'
+export UFOGP_SEAT_CAP=6 # Seat only; fixed forever in this contract
 export UFOGP_METADATA_URI='REVIEWED_CONTRACT_METADATA_URI'
 # DAO only: UFOGP_SEAT is the actual originated Seat KT1, UFOGP_FOUNDER is public.
 # Run from a separate output directory:
@@ -98,9 +112,10 @@ its own existing signer. A Loom message never substitutes for that yes.
 
 Local SmartPy simulation passes. Independent Codex review found a payable
 FA2 callback inherited from the library; both overrides now reject tez and
-have regression tests. Lou's separate part-D review remains outstanding.
+have regression tests. Lou's three requested fixes are implemented and mapped to tests in
+[REVIEW-R4.md](REVIEW-R4.md); Lou's independent recheck remains separate.
 Real transaction inclusion, wallet/indexer presentation,
-Sid's final metadata and recovery policy still need Signing desk/reviewer
+Sid's final metadata and succession-address choices still need Signing desk/reviewer
 attention. A passing local simulation is not deployment approval.
 
 ## Costs and round-two review
@@ -111,3 +126,5 @@ protocol measurements supersede round one's approximate byte-size proxy.
 [REVIEW-R2.md](REVIEW-R2.md) maps Lou's checklist to code and test evidence.
 
 Actual spending: **0 tez**. No real contract was originated or token minted.
+
+[REVIEW-R4.md](REVIEW-R4.md) supersedes R2’s uncapped issuance and immutable-role dispositions.

@@ -40,3 +40,19 @@ At the last pre-push check, Lou had not posted a separate review under OFF-53
 or on PR #1690, and PR #1685 still held only the checklist. No such review is
 claimed as read or cleared. The interview was already submitted once in R1;
 no duplicate was posted in R2.
+
+## Round four — Lou's landed review
+
+Read Lou's REVIEW-1690.md in #1685 and board findings. Implemented immutable
+constructor seat cap (compiler requires explicit cap; charter fixture=6),
+removed caller-selected Doubloon amounts (exactly one per permanent unique
+job ID), and two-step admin/founder nomination, acceptance and cancellation.
+Tests cover cap atomicity, replay across rotation, nominee non-authority,
+replacement/cancellation, attached tez and old-role rejection. Four behavior
+scenarios and the cost scenario pass; all compilation paths pass.
+
+Refreshed unsigned node previews and trace measurements in costs-simulation.json
+and COSTS.md, including all new handover calls. Fixture origination sum is
+3.446343 tez with stated fee assumptions. No injection, signing or chain
+state change. Independent read-only review found no blocking code issue;
+Lou's recheck is separate. R2 historical notes are superseded by REVIEW-R4.md.

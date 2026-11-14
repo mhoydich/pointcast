@@ -88,7 +88,7 @@ def main():
             state[current_contract] = value
     for i in initial:
         code[i] = json.loads(next(args.artifacts.glob(f'*_cont_{i}_contract.json')).read_text())
-    assert len(initial) == 3 and len(cases) == 14
+    assert len(initial) == 3 and len(cases) == 26
 
     def preview(i, storage):
         op = dict(kind='origination', source=source, fee='0',
@@ -139,7 +139,7 @@ def main():
         else:
             now = {'dao_close_tie':86500,'dao_close_empty_sixteen':176400,'dao_close_winner':266400}.get(c['name'],300000)
             payload = dict(script=code[i],storage=c['before'],input=c['input'],entrypoint=c['entrypoint'],
-                           amount='0',balance='0',chain_id=header['chain_id'],source=admin,payer=source,
+                           amount='0',balance='0',chain_id=header['chain_id'],source=('tz1gjaF81ZRRvdzjobyfVNsAeSC6PScjfQwN' if c['entrypoint'].startswith('accept_') else admin),payer=source,
                            gas=constants['hard_gas_limit_per_operation'],now=str(now))
             result = request(root+'/helpers/scripts/trace_code',payload)
             assert isinstance(result,dict) and 'trace' in result, result

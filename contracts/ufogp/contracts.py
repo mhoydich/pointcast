@@ -11,11 +11,38 @@ def m():
     import main
     import t
 
-    class Seat(main.NoTransfer, main.Nft):
-        def __init__(self, admin, metadata):
+    class AdminHandover(sp.Contract):
+        def __init__(self, admin):
+            self.data.admin = admin
+            self.data.pending_admin = sp.cast(None, sp.option[sp.address])
+
+        @sp.entrypoint
+        def propose_admin(self, candidate):
+            sp.cast(candidate, sp.address)
+            assert sp.amount == sp.mutez(0), "NO_TEZ"
+            assert sp.sender == self.data.admin, "NOT_ADMIN"
+            assert candidate != self.data.admin, "ALREADY_ADMIN"
+            self.data.pending_admin = sp.Some(candidate)
+
+        @sp.entrypoint
+        def accept_admin(self):
+            assert sp.amount == sp.mutez(0), "NO_TEZ"
+            assert self.data.pending_admin == sp.Some(sp.sender), "NOT_PENDING_ADMIN"
+            self.data.admin = sp.sender
+            self.data.pending_admin = None
+
+        @sp.entrypoint
+        def cancel_admin(self):
+            assert sp.amount == sp.mutez(0), "NO_TEZ"
+            assert sp.sender == self.data.admin, "NOT_ADMIN"
+            self.data.pending_admin = None
+
+    class Seat(main.NoTransfer, main.Nft, AdminHandover):
+        def __init__(self, admin, metadata, seat_cap):
             main.Nft.__init__(self, metadata, {}, [])
             main.NoTransfer.__init__(self)
-            self.data.admin = admin
+            AdminHandover.__init__(self, admin)
+            self.data.seat_cap = sp.cast(seat_cap, sp.nat)
             self.data.holders = sp.cast(sp.big_map(), sp.big_map[sp.address, sp.nat])
 
         @sp.entrypoint
@@ -36,6 +63,7 @@ def m():
             sp.cast(token_info, sp.map[sp.string, sp.bytes])
             assert sp.amount == sp.mutez(0), "NO_TEZ"
             assert sp.sender == self.data.admin, "NOT_ADMIN"
+            assert self.data.next_token_id < self.data.seat_cap, "SEAT_CAP_REACHED"
             assert not (holder in self.data.holders), "HOLDER_HAS_SEAT"
             assert sp.len(token_info) <= 16, "TOO_MANY_METADATA_FIELDS"
             metadata_bytes = 0
@@ -57,11 +85,11 @@ def m():
             sp.cast(seat, sp.nat)
             return self.data.ledger.get_opt(seat)
 
-    class Doubloon(main.NoTransfer, main.Fungible):
+    class Doubloon(main.NoTransfer, main.Fungible, AdminHandover):
         def __init__(self, admin, metadata, token_info):
             main.Fungible.__init__(self, metadata, {}, [token_info])
             main.NoTransfer.__init__(self)
-            self.data.admin = admin
+            AdminHandover.__init__(self, admin)
             self.data.jobs = sp.cast(sp.big_map(), sp.big_map[sp.string, sp.record(holder=sp.address, amount=sp.nat, evidence=sp.string)])
 
         @sp.entrypoint
@@ -76,17 +104,15 @@ def m():
             sp.transfer(reversed(answers), sp.mutez(0), params.callback)
 
         @sp.entrypoint
-        def mint_done(self, job, holder, amount, evidence):
-            sp.cast(amount, sp.nat)
+        def mint_done(self, job, holder, evidence):
             assert sp.amount == sp.mutez(0), "NO_TEZ"
             assert sp.sender == self.data.admin, "NOT_ADMIN"
             assert sp.len(job) > 0 and sp.len(job) <= 128, "BAD_JOB"
             assert sp.len(evidence) > 0 and sp.len(evidence) <= 512, "BAD_EVIDENCE"
-            assert amount > 0, "ZERO_AWARD"
             assert not (job in self.data.jobs), "JOB_ALREADY_REWARDED"
-            self.data.jobs[job] = sp.record(holder=holder, amount=amount, evidence=evidence)
-            self.data.ledger[(holder, 0)] = self.data.ledger.get((holder, 0), default=0) + amount
-            self.data.supply[0] += amount
+            self.data.jobs[job] = sp.record(holder=holder, amount=1, evidence=evidence)
+            self.data.ledger[(holder, 0)] = self.data.ledger.get((holder, 0), default=0) + 1
+            self.data.supply[0] += 1
 
     proposal_t: type = sp.record(
         text=sp.string, options=sp.list[sp.string], closes=sp.timestamp,
@@ -98,10 +124,32 @@ def m():
         def __init__(self, seat, founder, metadata):
             self.data.seat = seat
             self.data.founder = founder
+            self.data.pending_founder = sp.cast(None, sp.option[sp.address])
             self.data.metadata = metadata
             self.data.next_proposal = 0
             self.data.proposals = sp.cast(sp.big_map(), sp.big_map[sp.nat, proposal_t])
             self.data.votes = sp.cast(sp.big_map(), sp.big_map[sp.pair[sp.nat, sp.nat], sp.nat])
+
+        @sp.entrypoint
+        def propose_founder(self, candidate):
+            sp.cast(candidate, sp.address)
+            assert sp.amount == sp.mutez(0), "NO_TEZ"
+            assert sp.sender == self.data.founder, "NOT_FOUNDER"
+            assert candidate != self.data.founder, "ALREADY_FOUNDER"
+            self.data.pending_founder = sp.Some(candidate)
+
+        @sp.entrypoint
+        def accept_founder(self):
+            assert sp.amount == sp.mutez(0), "NO_TEZ"
+            assert self.data.pending_founder == sp.Some(sp.sender), "NOT_PENDING_FOUNDER"
+            self.data.founder = sp.sender
+            self.data.pending_founder = None
+
+        @sp.entrypoint
+        def cancel_founder(self):
+            assert sp.amount == sp.mutez(0), "NO_TEZ"
+            assert sp.sender == self.data.founder, "NOT_FOUNDER"
+            self.data.pending_founder = None
 
         @sp.entrypoint
         def propose(self, seat, text, options):

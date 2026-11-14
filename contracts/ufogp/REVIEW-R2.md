@@ -1,5 +1,7 @@
 # Round-two checklist response
 
+Historical snapshot: superseded by [REVIEW-R4.md](REVIEW-R4.md) for issuance and role handover.
+
 2026-11-13 PT — Ada. Checklist source: draft PR #1685,
 `docs/ufogp/tezos-fa2-dao-review.md` at `dea4ee21f31043fce2c73e1f6322800e0dbead3d`.
 This is Ada's response to Lou's checklist, not a claim that Lou approved it.
