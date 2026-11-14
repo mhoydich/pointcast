@@ -17,8 +17,8 @@ for(const a of ads.slice(0,limit)){
  if([1,3,6].includes(a.id)){
   bg='#efcf75';b+=rect(45,45,1710,h-90,'#c84e36')+rect(85,85,1630,h-170,'#fff3ce');
   b+=text(140,180,'SALT',65,'#a13c2d','serif');headlineY=350;bodyY=650;
-  if(a.id===3){b+=`<circle cx="1370" cy="650" r="180" fill="#e7af32"/>`;bodyY=1100;bodyW=1400;}
-  if(a.id===6){headlineY=260;bodyY=440;bodySize=34;}
+  if(a.id===3){b+=`<circle cx="1300" cy="700" r="190" fill="#e7af32"/><path d="M1115 700H1485Q1470 870 1300 870Q1130 870 1115 700Z" fill="#c84e36"/><ellipse cx="1300" cy="700" rx="185" ry="45" fill="#fff3ce"/><circle cx="1200" cy="692" r="15" fill="#ad753b"/><circle cx="1260" cy="707" r="15" fill="#ad753b"/><circle cx="1320" cy="686" r="15" fill="#ad753b"/><circle cx="1380" cy="710" r="15" fill="#ad753b"/>`;bodyY=1100;bodyW=1400;}
+  if(a.id===6){b+=`<rect x="110" y="385" width="1540" height="510" fill="none" stroke="#a13c2d" stroke-width="3" stroke-dasharray="12 10"/>`;headlineY=260;bodyY=440;bodySize=34;}
  }else if(a.id===2){headlineY=420;bodyY=810;bodySize=30;b+=text(140,180,'SALT',46);}
  else if(a.id===4||a.id===8){font='monospace';bg='#f4f0df';headlineY=300;bodyY=a.id===8?470:800;bodySize=a.id===8?31:42;for(let x=100;x<1750;x+=100)b+=`<path d="M${x} 100V${h-140}" stroke="#dcd7c3" stroke-width="1"/>`;b+=text(140,160,'SALT / FIELD INSTRUCTIONS',35,ink,'monospace');}
  else if(a.id===5){bg='#e6e7df';headlineY=300;bodyY=1250;font='monospace';bodySize=36;b+=text(140,150,'SALT / INSPECTION SHEET',34,ink,'monospace')+rect(480,570,800,460,'#c1c8c5')+rect(530,520,800,460,'#fff')+text(605,680,'BRIEF',65)+text(605,775,'AUDIENCE / PURPOSE / LIMITS',28);}
@@ -26,7 +26,7 @@ for(const a of ads.slice(0,limit)){
  const head=block(a.headline,140,headlineY,1500,a.id===2?84:82,95,[1,3,6].includes(a.id)?'serif':font,ink);b+=head.svg;
  const body=block(a.body,140,Math.max(bodyY,head.bottom+150),bodyW,bodySize,Math.round(bodySize*1.48),font,ink);b+=body.svg;
  const sign=block(a.signoff,140,h-215,1480,30,42,'sans-serif',ink);b+=sign.svg;
- b+=text(140,h-70,'DRAFT / COPY: ADA · LAYOUT: SID / AI AGENTS / HUMAN REVIEW PENDING',20,ink,'monospace');
+ b+=text(140,h-110,'DRAFT / COPY: ADA · LAYOUT: SID / AI AGENTS / HUMAN REVIEW PENDING',20,ink,'monospace');
  if(body.bottom>h-300)throw new Error('Copy overlaps signoff '+a.id+' at '+body.bottom);
  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"><title>${esc(a.headline)}</title>${rect(0,0,w,h,bg)}${b}</svg>\n`;
  const name='salt-'+String(a.id).padStart(2,'0');writeFileSync(new URL(name+'.svg',dir),svg);manifest.ads.push({...a,svg:'/images/salt-announcement/'+name+'.svg',png:'/images/salt-announcement/'+name+'.png',dimensions:[w,h],bodyBottom:body.bottom,signoffTop:h-215});
