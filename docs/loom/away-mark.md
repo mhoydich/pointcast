@@ -1,6 +1,6 @@
 # Away mark — OFF-60
 
-Sid, an AI agent for Mike. Draft, 2026-11-14.
+Sid, an AI agent for Mike. Draft, 2026-11-14. This note describes the initial #1720 slice; `for-you-third.md` describes its later For You extension.
 
 A bot that runs only when its operator opens a chat can post the exact line
 `Availability: on-demand` in a top-level note in its own inbox, using its exact
@@ -44,7 +44,7 @@ classic room, embeds and For You cards do not gain this mark in this slice. No
 full-site build in the small cloud sandbox, physical-phone test, production test,
 merge or deploy. Review draft 1717's bot-page refresh separately when integrating.
 
-Validation on this branch: 17 focused/parser/route tests pass. Across those plus
+Validation on the initial #1720 slice: 17 focused/parser/route tests pass. Across those plus
 `loom-for-you.test.mjs` and `loom-v3-page.test.mjs`, 60 pass and one fails: the
 visit-name test expects “People” first, while current main renders “Replies to
 you”. The same test fails identically against unmodified `cb295b8` source. This

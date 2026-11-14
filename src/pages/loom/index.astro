@@ -906,6 +906,8 @@ const state = {
   hasTo: false,       // page was opened on a thread link (?to=)
   waitingCount: 0,
   fy: { name: '', data: null, at: 0, loading: false, failed: false, seenFor: '', seenTimer: null, fresh: {}, looked: undefined },
+  forHandle: '',     // public queue selected by a short link; never a posting identity
+  fyOlderOpen: false,
   fyMoreOpen: false,  // the "Everything else" fold on For you
   expanded: {},
   hideEchoes: false,
@@ -958,6 +960,7 @@ function cleanVisitName(v) {
 
 /* identity helpers: "@Name" and "name" are the same handle */
 function handleOf(name) { return String(name || '').trim().replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_.-]/g, ''); }
+function forYouHandle() { return state.forHandle || handleOf(state.name); }
 function myHandle() { const h0 = handleOf(state.name); return h0 ? '@' + h0 : ''; }
 function mentions(body, handle) {
   if (!handle) return false;
@@ -1259,7 +1262,7 @@ function participantsText(t) {
 /* Availability is an explicit public declaration, never an activity timer. */
 let availabilityTools = null;
 const recipientAvailability = new Map();
-import('/loom-availability.mjs').then(tools => { availabilityTools = tools; renderThread('keep'); }).catch(() => { /* unknown, never online */ });
+import('/loom-availability.mjs').then(tools => { availabilityTools = tools; renderThread('keep'); renderForYou(); }).catch(() => { /* unknown, never online */ });
 function recipientBadges(t, m) {
   if (!availabilityTools || state.playN != null) return null;
   return availabilityTools.recipientHandles(t.addr, m).map(handle => {
@@ -1268,7 +1271,7 @@ function recipientBadges(t, m) {
     if (value?.state !== 'away') return null;
     return h('a', { class: 'via availability', href: '/loom?to=' + encodeURIComponent(handle) + '#' + value.id,
       title: availabilityTools.AWAY_EXPLANATION + ' Source: ' + value.at,
-      text: handle + ': ' + availabilityTools.AWAY_LABEL + ' (self-reported)' });
+      text: (value.detail || handle + ': ' + availabilityTools.AWAY_LABEL) + ' (self-reported)' });
   });
 }
 function refreshRecipientAvailability(t) {
@@ -1291,7 +1294,7 @@ function refreshRecipientAvailability(t) {
       record.value = availabilityTools.availabilityFromMessages(handle, inbox.messages);
     }).catch(() => { record.value = null; }).finally(() => {
       record.loading = false; record.at = Date.now();
-      if (state.addr === t.addr) renderMessages('keep');
+      if (t.forYou) renderForYou(); else if (state.addr === t.addr) renderMessages('keep');
     });
   }
 }
@@ -2022,7 +2025,7 @@ function setView(v) {
     try { location.hash = v; } catch (e) { /* ignore */ }
   }
   /* leaving a thread: the list views are not one thread's link */
-  if (v !== 'thread' && location.search) { try { history.replaceState(null, '', LOOM_PATH + '#' + v); } catch (e) { /* ignore */ } }
+  if (v !== 'thread' && location.search) { try { history.replaceState(null, '', LOOM_PATH + (state.forHandle ? '?for=' + encodeURIComponent(state.forHandle) : '') + '#' + v); } catch (e) { /* ignore */ } }
 }
 const isWide = () => window.innerWidth >= 900;
 /* Leaving the thread on a phone: put focus on that thread's row (or the active tab), not on <body>. */
@@ -2060,7 +2063,7 @@ function renderTabs() {
 /* the house robot (Collator) never shows in Replies to you; it is counted instead */
 const isHouseRobot = (from) => !!from && (from.kind === 'robot' || handleOf(from.name) === 'collator' || from.address === '@collator');
 function collectForYou() {
-  const me = myHandle(), waiting = [], replies = [];
+  const me = forYouHandle() ? '@' + forYouHandle() : '', waiting = [], replies = [];
   let robots = 0;
   if (!me) return { me, waiting, replies, robots };
   Object.keys(state.threads).forEach((addr) => {
@@ -2083,11 +2086,11 @@ function collectForYou() {
 /* the server's piles for the current name, or null */
 function pilesNow() {
   const p = state.fy;
-  return p.data && p.name && p.name === handleOf(state.name) ? p.data : null;
+  return p.data && p.name && p.name === forYouHandle() ? p.data : null;
 }
 /* fetch the piles at most once a minute; renderForYou calls this on every paint */
 function ensurePiles() {
-  const me = handleOf(state.name), p = state.fy;
+  const me = forYouHandle(), p = state.fy;
   if (!me || loomApi.mode !== 'live') return;
   if (p.name !== me) { p.name = me; p.data = null; p.failed = false; p.at = 0; p.seenFor = ''; p.fresh = {}; p.looked = undefined; }
   if (p.loading || Date.now() - p.at < 60000) return;
@@ -2125,7 +2128,7 @@ function keepNew(p, j) {
 function maybeMarkSeen() {
   const p = state.fy, me = handleOf(state.name), d = pilesNow();
   /* a ?as=NAME visit name is self-declared for one visit: it never moves that name's server mark */
-  if (!d || state.visitName || p.seenFor === me || p.seenTimer || loomApi.mode !== 'live') return;
+  if (!d || state.forHandle || state.visitName || p.seenFor === me || p.seenTimer || loomApi.mode !== 'live') return;
   if (state.tab !== 'for-you' || ($('app').dataset.view !== 'for-you' && !isWide()) || document.hidden) return;
   if (!$('fyDyn') || !$('fyDyn').querySelector('[data-pile]')) return;
   const at = d.generatedAt;
@@ -2143,6 +2146,8 @@ function renderForYou() {
   const f = collectForYou();
   state.waitingCount = f.waiting.length;
   ensurePiles();
+  const data = pilesNow();
+  if (data) refreshRecipientAvailability({ addr: '#for-you', forYou: true, messages: Object.values(data.activity || {}).flat().map(it => ({ body: (it.recipients || []).join(' ') })) });
   renderTabs(); renderAskBots(); renderDesks();
   keepFocus(box, (a) => a.dataset.fy ? '[data-fy=' + cssStr(a.dataset.fy) + ']' : (a.dataset.fyact ? '[data-fyact=' + cssStr(a.dataset.fyact) + ']' : null),
     () => drawForYou(box, f), () => $('newBtn'));
@@ -2257,7 +2262,7 @@ function fyItemBtn(it, wait) {
 }
 function drawForYou(box, f) {
   box.textContent = '';
-  const wel = !state.welcomeGone && !store.get('welcome') && !state.name && !state.hasTo;
+  const wel = !state.welcomeGone && !store.get('welcome') && !state.name && !state.hasTo && !state.forHandle;
   if (wel) $('app').setAttribute('data-welcome', ''); else $('app').removeAttribute('data-welcome');
   /* one primary action per screen: add a name, answer what is waiting, or start a thread */
   if (wel) box.append(welcomeCard(!!f.me && !f.waiting.length));
@@ -2276,16 +2281,22 @@ function drawForYou(box, f) {
   if (!d && loomApi.mode !== 'offline' && !state.fy.failed) { box.append(h('p', { class: 'fyempty', text: 'Checking what needs you…' })); return; }
   /* no piles (offline, or the for= read failed): today's lists, unfolded, no error noise */
   if (!d) { drawLists(box, f); return; }
-  const me = handleOf(state.name);
+  const me = forYouHandle();
+  if (state.forHandle) box.append(h('p', { class: 'visiting', text: 'Public For You for @' + me + '. This does not sign you in or change your posting name.' }));
   box.append(h('p', { id: 'fyNew', class: 'fynew', text: 'New since you last looked: ' + (d.newCount || 0) + ' · last looked ' + (d.seenAt ? rel(d.seenAt).toLowerCase() : 'never') }));
-  box.append(h('p', { class: 'fyempty', text: 'Recent activity from up to 80 threads, including your recent posting locations.' }));
+  box.append(h('p', { class: 'fyempty', style: 'overflow-wrap:anywhere' }, h('a', { href: '/loom/for/' + encodeURIComponent(me), text: 'pointcast.xyz/loom/for/' + me })));
   const activity = d.activity || { replies: [], unanswered: [], done: [] };
   [['Replies to you', activity.replies, 'No new replies to your posts.', 'replies'],
    ['Not answered yet', activity.unanswered, 'Your posts have answers.', 'unanswered'],
    ['What got done', activity.done, 'No new DONE posts.', 'done']].forEach(([title, list, empty, key]) => {
     box.append(h('h2', { class: 'sect', 'data-pile': key, text: title }));
     if (list.length) list.forEach((it) => box.append(activityItem(it, key)));
-    else box.append(h('p', { class: 'fyempty', text: empty }));
+    else box.append(h('p', { class: 'fyempty', text: key === 'unanswered' ? 'No unanswered posts from the last 24 hours.' : empty }));
+    if (key === 'unanswered' && activity.olderUnanswered?.length) {
+      box.append(h('details', { class: 'fymore', id: 'fyOlder', open: state.fyOlderOpen, ontoggle: ev => { state.fyOlderOpen = ev.currentTarget.open; } },
+        h('summary', { 'data-fyact': 'older', text: activity.olderUnanswered.length + ' older unanswered posts' }),
+        ...activity.olderUnanswered.map(it => activityItem(it, 'unanswered'))));
+    }
   });
   box.append(h('h2', { class: 'sect', text: 'Start something' }),
     h('div', { class: 'fyacts', 'aria-label': 'Starter prompts' },
@@ -2339,6 +2350,8 @@ function drawLists(box, f) {
 function activityItem(it, key) {
   const wrap = h('div', { class: 'fyactivity', 'data-activity': key });
   wrap.append(pileItem(it, key));
+  const badges = recipientBadges({ addr: it.address }, { body: (it.recipients || []).join(' ') });
+  if (badges) badges.forEach(badge => { if (badge) wrap.append(badge); });
   if (key === 'unanswered') wrap.append(h('p', { class: 'fyempty', text: 'Waiting since ' + rel(it.at).toLowerCase() }));
   const safe = (value) => { try { const u = new URL(value); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch (e) { return ''; } };
   const image = safe(it.imageUrl), link = safe(it.externalUrl);
@@ -2346,8 +2359,9 @@ function activityItem(it, key) {
   if (link) wrap.append(h('a', { href: link, target: '_blank', rel: 'noopener noreferrer', class: 'btn ghost', text: 'Open link' }));
   const status = h('span', { class: 'fyempty', role: 'status' });
   const actions = h('div', { class: 'fyacts' });
-  ['go', 'show me', 'not this', 'who has it'].forEach((text) => actions.append(h('button', {
-    type: 'button', class: 'btn ghost', text, onclick: async (ev) => {
+  (key === 'unanswered' ? ['nudge'] : ['go', 'show me', 'not this', 'who has it']).forEach((text) => actions.append(h('button', {
+    type: 'button', class: 'btn ghost', 'data-fyact': 'activity|' + it.link + '|' + text, text, onclick: async (ev) => {
+      if (!state.name) { openIdentitySheet(); return; }
       const btn = ev.currentTarget; if (btn.disabled) return; btn.disabled = true;
       status.textContent = 'Sending…';
       try {
@@ -2924,7 +2938,7 @@ window.addEventListener('hashchange', () => {
   if (location.hash !== '#' + v) { try { history.replaceState(null, '', '#' + v); } catch (e) { /* ignore */ } }
   if (sheetEl) closeSheet(true);
   const was = $('app').dataset.view;
-  if (v !== 'thread' && location.search) { try { history.replaceState(null, '', LOOM_PATH + '#' + v); } catch (e) { /* ignore */ } }
+  if (v !== 'thread' && location.search) { try { history.replaceState(null, '', LOOM_PATH + (state.forHandle ? '?for=' + encodeURIComponent(state.forHandle) : '') + '#' + v); } catch (e) { /* ignore */ } }
   if (v !== 'thread') { state.tab = v; $('app').dataset.tab = v; }
   $('app').dataset.view = v;
   renderTabs();
@@ -3072,6 +3086,8 @@ let pendingReveal = null;
   try {
     const q0 = new URLSearchParams(location.search);
     state.hasTo = !!(q0.get('to') || '').trim();
+    const publicFor = q0.get('for') || '';
+    if (/^[a-z0-9][a-z0-9_.-]{0,31}$/i.test(publicFor)) state.forHandle = publicFor.toLowerCase();
     const asName = cleanVisitName(q0.get('as') || '');
     if (asName && !state.name) { state.name = asName; state.visitName = true; }
     /* strip as= from the address bar so a copied link never carries someone's identity.

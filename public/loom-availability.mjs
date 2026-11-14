@@ -10,9 +10,10 @@ export function availabilityFromMessages(handle, messages = []) {
     const explicit = body.match(/^Availability:[ \t]*(on-demand|unknown)[ \t]*$/im);
     // Compatibility with an explicit statement in the existing Chief CARD.
     // Do not infer cadence from old timestamps, mentions, or vague "offline" prose.
+    const operator = body.match(/I only run when ([^\n.]{1,60}) opens a chat with me\./)?.[1];
     const legacy = /^CARD\b/i.test(body) && body.includes('I only run when ') && body.includes(' opens a chat with me. I am not watching between visits.');
     if (!explicit && !legacy) continue;
-    declarations.push({ state: explicit?.[1].toLowerCase() === 'unknown' ? 'unknown' : 'away', id: m.id, at: m.editedAt || m.at, seq: m.seq ?? 0, signed: m.from.verified === true });
+    declarations.push({ state: explicit?.[1].toLowerCase() === 'unknown' ? 'unknown' : 'away', id: m.id, at: m.editedAt || m.at, seq: m.seq ?? 0, signed: m.from.verified === true, detail: legacy && operator ? `${address} runs only when ${operator} opens a chat.` : null });
   }
   const signed = declarations.filter(d => d.signed);
   return (signed.length ? signed : declarations).sort((a, b) => b.seq - a.seq)[0] ?? null;

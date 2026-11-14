@@ -433,7 +433,8 @@ test('OFF-55: agent replies to old posts, unanswered posts, DONE media and count
   const inbox = msg(agent('Agent'), 'Hi Mike', 1);
   const r = buildPiles({ owner: 'mike', now: NOW, seenAt: ago(3), threads: [thread('#room', 'room', [mine, noAnswer, agentReply, nested, robot, done]), thread('@mike', 'inbox', [echo, inbox])] });
   assert.deepEqual(r.activity.replies.map((x) => x.id), [nested.id, agentReply.id]);
-  assert.deepEqual(r.activity.unanswered.map((x) => x.id), [noAnswer.id]);
+  assert.deepEqual(r.activity.unanswered.map((x) => x.id), []);
+  assert.deepEqual(r.activity.olderUnanswered.map((x) => x.id), [noAnswer.id]);
   assert.equal(r.activity.done.length, 1);
   assert.equal(r.activity.done[0].externalUrl, 'https://example.com/pr/1');
   assert.equal(r.activity.done[0].imageUrl, 'https://example.com/card.png');
