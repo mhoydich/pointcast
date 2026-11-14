@@ -21,7 +21,7 @@ export function derive({definitions,evidence}) {
   });
   const createdPrs=[...new Set(definitions.flatMap(j=>j.prs))].map(n=>evidence.pullRequests[String(n)]).filter(Boolean);
   const replies=evidence.context.firstCheckReplies;
-  return {jobs,createdPrs,evidence,summary:{selected:jobs.length,delivered:jobs.filter(j=>j.state==='delivered').length,blocked:jobs.filter(j=>j.state==='blocked').length,unconfirmed:jobs.filter(j=>j.state==='unconfirmed').length,artifactPrs:createdPrs.length},
+  return {jobs,createdPrs,evidence,gameReportedReady:header(receipt(evidence,evidence.context.gameStatus),'DONE'),summary:{selected:jobs.length,delivered:jobs.filter(j=>j.state==='delivered').length,blocked:jobs.filter(j=>j.state==='blocked').length,unconfirmed:jobs.filter(j=>j.state==='unconfirmed').length,artifactPrs:createdPrs.length},
     firstCheck:{claimed:replies.some(m=>header(m,'MINE\\s*(?:·\\s*)?FIRST-CHECK')),done:replies.some(m=>header(m,'DONE\\s*(?:·\\s*)?FIRST-CHECK'))}};
 }
 export function intervalLabel(ms) {
