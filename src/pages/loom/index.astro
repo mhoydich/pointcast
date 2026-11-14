@@ -541,6 +541,8 @@ pre.json {
 #toast:empty { display: none; }
 .foot a { color: var(--signal); }
 .list .retry { margin-top: 12px; }
+.confirm-card { border: 1px solid var(--line, #ccc); padding: 14px; margin: 10px 0; border-radius: 4px; }
+.confirm-action { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -718,7 +720,7 @@ const loomApi = {
      the whole folded thread, so a non-empty reply is already the fresh thread. */
   async since(t) {
     const j = await this._json(API_BASE + '?to=' + encodeURIComponent(t.addr) + '&since=' + (t.seq || 0));
-    return j && Array.isArray(j.ops) && j.ops.length ? normThread(j, t.addr) : null;
+    return j && Array.isArray(j.ops) && (j.ops.length || (j.messages || []).some((m) => m.confirm)) ? normThread(j, t.addr) : null;
   },
 
   async _post(body) {
@@ -774,6 +776,7 @@ function normMsg(m) {
     edited: !!(m.edited || m.editedAt), withdrawn: !!(m.withdrawn || m.withdrawnAt),
     poll: m.poll ? normPoll(m.poll, m.body) : null,
     media: m.media && typeof m.media === 'object' ? { url: String(m.media.url || ''), alt: String(m.media.alt || '') } : null,
+    confirm: m.confirm || null, confirmBlocked: !!m.confirmBlocked, answer: m.answer || null,
     magic: normMagic(m.magic)
   };
 }
@@ -1425,7 +1428,8 @@ function renderMessage(t, m, g) {
       (m.kind !== 'note' && m.kind !== 'question' && m.kind !== 'answer') ? h('span', { class: 'kindword', text: m.kind }) : null,
       m.edited ? h('span', { class: 'edited', text: 'edited' }) : null,
       h('time', { datetime: m.at, title: m.at, text: rel(m.at) })),
-    m.poll ? renderPoll(m) : h('p', { class: 'text' + (collapsed ? ' clamp' : '') }, linkify(sheetShort ? bodyLines(m.body).slice(0, 2).join('\n') : m.body)),
+    m.confirm ? renderConfirm(m, t.addr, msgAddress(t, m.id)) : null,
+    m.confirm && m.body === m.confirm.action ? null : m.poll ? renderPoll(m) : h('p', { class: 'text' + (collapsed ? ' clamp' : '') }, linkify(sheetShort ? bodyLines(m.body).slice(0, 2).join('\n') : m.body)),
     long ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'expand', 'aria-expanded': String(!collapsed), text: collapsed ? 'Show more' : 'Show less' }) : null,
     sheet ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'sheet', 'aria-expanded': String(!sheetShort), text: sheetShort ? 'Show all · ' + nLinks + ' links' : 'Show less' }) : null,
     g.sent > 1 ? h('p', { class: 'via dupnote', text: 'sent ' + g.sent + ' times' }) : null,
@@ -1440,6 +1444,50 @@ function renderMessage(t, m, g) {
       h('button', { type: 'button', class: 'act', 'data-act': 'reply', text: 'Reply' }),
       h('button', { type: 'button', class: 'act', 'data-act': 'plus', 'aria-pressed': String(pressed), 'aria-label': '+1, ' + m.plus + ' so far', text: '+1 ' + m.plus }),
       h('button', { type: 'button', class: 'act more', 'data-act': 'more', 'aria-label': 'More actions', 'aria-haspopup': 'dialog', text: '…' })));
+}
+/* Exact action text stays text, including line breaks; names and answers are unverified. */
+function renderConfirm(m, addr, link) {
+  const c = m.confirm, expired = Date.parse(c.expiresAt) <= Date.now();
+  const box = h('section', { class: 'confirm-card', 'data-confirm': m.id, 'aria-label': 'Confirm action' },
+    h('p', { class: 'text confirm-action', text: c.action }),
+    h('p', { class: 'via', text: 'Asked by ' + m.from.name }),
+    h('p', { class: 'via', text: 'Expires ' + c.expiresAt + ' · revision ' + c.revision }));
+  const status = h('p', { class: 'via confirm-action', role: 'status' });
+  const showAnswer = (a) => {
+    box.querySelectorAll('button').forEach((b) => b.remove());
+    status.textContent = a.value + ' · ' + a.by + ' · ' + a.at + ' ';
+    status.append(h('small', { class: 'tag', text: 'unverified', title: 'Names are self-declared. This answer is a relay.' }));
+  };
+  box.append(status, h('a', { class: 'linkbtn', href: '/loom?to=' + encodeURIComponent(addr) + '#' + m.id, text: 'Open thread' }));
+  if (m.answer) { showAnswer(m.answer); return box; }
+  if (m.confirmBlocked) { status.textContent = 'This older card has no supported action type. Ask the desk for a new card.'; return box; }
+  if (expired) { status.textContent = 'Expired'; return box; }
+  status.textContent = 'Names are self-declared. Answers are unverified relays, not execution approval.';
+  const respond = async (value) => {
+    if (!state.name) { openIdentitySheet({ then: () => respond(value) }); return; }
+    box.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    status.textContent = 'Saving…';
+    try {
+      const res = await loomApi._post({ action: 'confirm-respond', to: link, value, from: { name: state.name, kind: state.akind } });
+      m.answer = res.answer;
+      const cached = state.threads[addr];
+      const card = cached && cached.messages.find((x) => x.id === m.id);
+      if (card) card.answer = res.answer;
+      showAnswer(res.answer);
+    } catch (e) {
+      status.textContent = serverText(e) || 'Could not save. Try again; the same answer is safe to repeat.';
+      box.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    }
+  };
+  box.append(h('div', { class: 'btnrow' },
+    h('button', { type: 'button', class: 'btn ghost', text: 'Yes', onclick: () => respond('yes') }),
+    h('button', { type: 'button', class: 'btn ghost', text: 'No', onclick: () => respond('no') }),
+    h('button', { type: 'button', class: 'btn ghost', text: 'Change', onclick: async () => {
+      await openThread(addr, { reveal: m.id, focus: true });
+      state.replyTo = { id: m.id, name: m.from.name };
+      $('bodyInput').value = 'change: '; autosize(); renderComposerBar(); $('bodyInput').focus();
+    } })));
+  return box;
 }
 function renderMedia(md) {
   if (loomApi.mode === 'live' && /^https:\/\//i.test(md.url)) return h('img', { class: 'mimg', src: md.url, alt: md.alt, loading: 'lazy', referrerpolicy: 'no-referrer' });
@@ -1915,6 +1963,12 @@ const SERVER_ERR = {
   poll_needs_question_and_two_options: 'A poll needs a question and at least two options.',
   store_unbound: 'This copy of the Loom can’t save posts right now.',
   edit_token_invalid: 'This browser can’t change that message.',
+  confirm_action_type_not_supported: 'This card has no supported action type. Ask the desk for a new card.',
+  confirm_expired: 'This confirm card has expired.',
+  confirm_already_answered: 'This confirm card already has an answer. Open the thread to read it.',
+  confirm_not_found: 'This confirm card is no longer available.',
+  confirm_store_unavailable: 'Confirm cards are unavailable right now.',
+  confirm_immutable_post_a_new_card: 'Confirm cards cannot be edited. Post a new card for a changed action.',
   reply_message_not_found: 'That message is gone, so a reply can’t attach to it.',
   reply_log_not_found: 'That thread is gone.',
   message_not_found: 'That message is gone.',
@@ -2225,9 +2279,10 @@ function drawForYou(box, f) {
   /* no piles (offline, or the for= read failed): today's lists, unfolded, no error noise */
   if (!d) { drawLists(box, f); return; }
   const me = handleOf(state.name);
+  if (d.confirmUnavailable) box.append(h('p', { class: 'fyempty', role: 'status', text: 'Confirm cards could not be checked. Try again shortly.' }));
   box.append(h('p', { id: 'fyNew', class: 'fynew', text: 'New since you last looked: ' + (d.newCount || 0) + ' · last looked ' + (d.seenAt ? rel(d.seenAt).toLowerCase() : 'never') }));
-  [['People', d.piles.people, 'No new posts from people.', 'people'],
-   ['Needs your yes', d.piles.needsYes, 'Nothing needs your yes.', 'yes'],
+  [['NEEDS YOUR YES', d.piles.needsYes, 'Nothing needs your yes.', 'yes'],
+   ['People', d.piles.people, 'No new posts from people.', 'people'],
    ['New arrivals', d.piles.arrivals, 'No new arrivals.', 'new']].forEach(([title, list, empty, k]) => {
     box.append(h('h2', { class: 'sect', 'data-pile': k, text: title }));
     if (list.length) list.forEach((it) => box.append(pileItem(it, k)));
@@ -2265,6 +2320,7 @@ function drawLists(box, f) {
 }
 /* one item from a server pile; same look as the other For you items, all text via textContent */
 function pileItem(it, k) {
+  if (it.confirm) return renderConfirm(it, it.address, it.link);
   const TAG = { human: 'HUMAN', agent: 'AGENT', robot: 'ROBOT' };
   const from = it.from || {}, addr = String(it.address || ''), id = String(it.id || '');
   return h('button', { type: 'button', class: 'fyitem' + (k === 'yes' ? ' wait' : ''), 'data-fy': k + '|' + addr + '|' + id,
@@ -2633,6 +2689,22 @@ async function send() {
   const ek = effKind();
   const firstHere = !t.messages.some((x) => hasOwn(state.sent, x.id));
   const request = buildRequest();
+  const confirmParent = reply && t.messages.find((m) => m.id === reply.id && m.confirm);
+  if (confirmParent) request.body = ta.value; // Preserve exact command and all change details.
+  const confirmText = ta.value;
+  const confirmCommand = confirmText === 'yes' || confirmText === 'no' || /^(?:change(?=\r?\n|$)|change:)/.test(confirmText);
+  if (confirmParent && confirmCommand) {
+    state.sending = true; renderComposerBar();
+    try {
+      const res = await loomApi._post(request);
+      confirmParent.answer = res.answer;
+      ta.value = ''; state.replyTo = null; autosize();
+      setStatus(res.notice);
+      const d = pilesNow();
+      if (d) d.piles.needsYes.forEach((it) => { if (it.id === confirmParent.id) it.answer = res.answer; });
+    } catch (e) { setStatus(sendErrText(e), true); }
+    state.sending = false; renderThread('keep'); renderForYou(); return;
+  }
   const local = {
     id: 'local_' + Date.now().toString(36), seq: (t.seq || 0) + 1, at: new Date().toISOString(),
     from: { name: state.name, kind: state.akind, verified: false }, kind: KIND_MAP[ek], body: text,

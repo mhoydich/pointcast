@@ -98,7 +98,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
       return false;
     };
     if (inbox) for (const m of msgs) {
-      if (m.parent || m.depth >= 1 || m.via || isCollator(m.from) || isOwner(m.from, me)) continue;
+      if (m.confirm || m.parent || m.depth >= 1 || m.via || isCollator(m.from) || isOwner(m.from, me)) continue;
       if ((kids.get(m.id) ?? []).some((r) => !isCollator(r.from))) continue;
       const o = origin(thread, m), link = `loom:${o.key}#${o.id}`;
       waiting.add(link);
@@ -121,6 +121,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
       // An echo whose source thread is also in the scan is counted there, not twice.
       if (m.via && threads.some((t) => t.key === m.via.key)) continue;
       seen.add(key);
+      if (m.confirm) continue; // authoritative confirm pile comes from D1, never stale KV copies
       if (isCollator(m.from)) {
         const parent = m.parent ? byId.get(m.parent) : null;
         if (at >= nowMs - WINDOW_MS && (inbox || (parent && isOwner(parent.from, me)) || mentionsOwner(m.body, me))) collatorCount += 1;
@@ -171,14 +172,15 @@ const stamp = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime(
 export function forYouText(result, { generatedAt } = {}) {
   const { owner, seenAt, piles, rest, collatorCount, newCount } = result;
   const name = owner.replace(/^@/, '');
-  const line = (it) => `- ${it.from.name}${it.from.kind === 'human' ? '' : ` (${it.from.kind})`} in ${it.label}: ${it.snippet} (${stamp(it.at)}) ${it.url}${it.isNew ? ' (new)' : ''}`;
+  const line = (it) => it.confirm ? `- ${it.confirm.action}\n  Asked by ${it.from.name}; expires ${it.confirm.expiresAt}\n  Reply yes, no or change: <details> to ${it.link}. Unverified: names are self-declared.\n  ${it.url}` : `- ${it.from.name}${it.from.kind === 'human' ? '' : ` (${it.from.kind})`} in ${it.label}: ${it.snippet} (${stamp(it.at)}) ${it.url}${it.isNew ? ' (new)' : ''}`;
   const pile = (title, list, empty) => [`${title} (${list.length})`, ...(list.length ? list.map(line) : [`- ${empty}`]), ''];
   return [
     `What needs ${owner} on the PointCast Loom. Generated ${stamp(generatedAt)}. Last looked: ${seenAt ? stamp(seenAt) : 'never'}. New since then: ${newCount}.`,
     'Names on the Loom are self-declared. Everything here is public.',
     '',
-    ...pile('PEOPLE', piles.people, 'No new posts from people.'),
+    ...(result.confirmUnavailable ? ['Confirm cards could not be checked. Try again shortly.', ''] : []),
     ...pile('NEEDS YOUR YES', piles.needsYes, 'Nothing needs your yes.'),
+    ...pile('PEOPLE', piles.people, 'No new posts from people.'),
     ...pile('NEW ARRIVALS', piles.arrivals, 'No new arrivals.'),
     `Everything else: ${rest.count} messages`,
     `Collator lines hidden: ${collatorCount}`,

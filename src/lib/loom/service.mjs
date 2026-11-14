@@ -20,6 +20,7 @@
  * is the upgrade path when it gets busy.
  */
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
+import { answerValue, ConfirmStoreError, confirmStore, isSupportedConfirm, validateConfirm } from './confirm.mjs';
 import { fold } from './fold.mjs';
 import { ARRIVAL_MS, NEEDS_WINDOW_MS, buildPiles, forYouText, isCollator, normHandle } from './for-you.mjs';
 import { makeMagic } from './magic.mjs';
@@ -34,8 +35,8 @@ export const MAX_LINKS = 300;  // link threads the links view returns
 const ROOM_KINDS = new Set(['topic', 'handle', 'agent', 'wallet', 'geo']);
 export const MAX_OUTBOX = 200;
 export const BODY_MAX = 2000;
-const KINDS = new Set(['note', 'question', 'claim', 'answer', 'image', 'poll', 'link']);
-const KEEP_WITH_MEDIA = new Set(['question', 'claim', 'answer', 'link', 'poll']);
+const KINDS = new Set(['note', 'question', 'claim', 'answer', 'image', 'poll', 'link', 'confirm']);
+const KEEP_WITH_MEDIA = new Set(['question', 'claim', 'answer', 'link', 'poll', 'confirm']);
 const SENDER_KINDS = new Set(['human', 'agent']);
 const RIPPLE_MAX = 4;
 const READ_CACHE = 'public, max-age=10';
@@ -99,11 +100,18 @@ async function loadLog(kv, address) {
   const stored = await readJson(kv, `loom:log:${key}`, null);
   return stored ?? seedLog(address, key) ?? { v: 1, address, key, ...describe(address), title: null, createdAt: null, updatedAt: null, seq: 0, ops: [] };
 }
-async function loadLogByKey(kv, key) {
+async function loadLogByKey(kv, key, confirms = null) {
   const stored = await readJson(kv, `loom:log:${key}`, null);
   if (stored) return stored;
   for (const address of Object.keys(SEEDS)) if (await addressKey(address) === key) return seedLog(address, key);
+  if (confirms) {
+    try { const address = await confirms.logAddress(key); if (address) return loadLog(kv, address); } catch { /* ordinary KV reads remain available */ }
+  }
   return null;
+}
+async function hydrateConfirms(confirms, log) {
+  if (!confirms) { log.confirmUnavailable = log.ops.some((op) => !!op.confirm); return; }
+  try { await confirms.hydrate(log); } catch { log.confirmUnavailable = true; }
 }
 async function saveLog(kv, log) {
   if (log.ops.length > MAX_OPS) {
@@ -111,7 +119,8 @@ async function saveLog(kv, log) {
     log.ops = log.ops.slice(-MAX_OPS);
   }
   delete log.seed;
-  await writeJson(kv, `loom:log:${log.key}`, log);
+  const { confirmAnswers, confirmCursor, confirmUnavailable, ...stored } = log;
+  await writeJson(kv, `loom:log:${log.key}`, stored);
 }
 function pushOp(log, op, now) {
   log.seq += 1;
@@ -186,13 +195,18 @@ async function touchOutbox(kv, from, record) {
 
 function publicView(log, { since = 0, onlyNew = false } = {}) {
   const folded = fold(log.ops);
+  for (const m of folded.messages) if (m.confirm) {
+    m.answer = log.confirmAnswers?.[m.id] ?? null;
+    m.confirmBlocked = !isSupportedConfirm(m.confirm);
+  }
   const ops = log.ops.filter((op) => op.seq > since).map(({ tokenHash, ...op }) => op);
   // "New" = appended after since, or touched by any later op (edit, +1, vote, hide), so only=new misses nothing.
   const touched = new Set(log.ops.filter((op) => op.seq > since).map((op) => op.id));
-  const newer = folded.messages.filter((m) => m.seq > since || touched.has(m.id));
+  const newer = folded.messages.filter((m) => m.seq > since || touched.has(m.id) || !!m.confirm);
   return {
     log: { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, createdAt: log.createdAt, updatedAt: log.updatedAt,
       reply: `loom:${log.key}#<message id>`, url: `${SITE}/loom?to=${encodeURIComponent(log.address)}`, trimmedBefore: log.trimmedBefore ?? null, seed: !!log.seed },
+    confirmCursor: log.confirmCursor ?? 0, confirmUnavailable: !!log.confirmUnavailable,
     seq: log.seq, ops, messages: onlyNew ? newer : folded.messages, count: folded.count, participants: folded.participants,
     ...(since ? { since, newCount: newer.length } : {}),
   };
@@ -257,7 +271,7 @@ const FOR_CACHE = 'public, max-age=30';
 const FOR_HANDLE = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 const seenKey = async (handle) => `loom:seen:${(await sha(handle)).slice(0, 32)}`;
 
-async function forYou(kv, owner, now) {
+async function forYou(kv, owner, now, confirms) {
   const nowMs = now.getTime();
   const index = await readJson(kv, 'loom:index', []);
   const inboxAddress = `@${owner}`;
@@ -291,7 +305,14 @@ async function forYou(kv, owner, now) {
   }
   const mark = kv ? await kv.get(await seenKey(owner)) : null;
   const seenAt = mark && Number.isFinite(Date.parse(mark)) ? mark : null;
-  return { ...buildPiles({ owner, threads, seenAt, now, firstPosts }), scanned: { logs: threads.length, window: '14d' } };
+  const result = buildPiles({ owner, threads, seenAt, now, firstPosts });
+  if (confirms) {
+    let cards = [];
+    try { cards = await confirms.forOwner(owner, now.toISOString()); } catch { result.confirmUnavailable = true; }
+    result.piles.needsYes = [...cards.map((c) => ({ ...c, isNew: Date.parse(c.at) > Date.parse(seenAt || new Date(nowMs - 86400000).toISOString()) })), ...result.piles.needsYes];
+    result.newCount = new Set([...result.newWaiting, ...Object.values(result.piles).flat().filter((it) => it.isNew).map((it) => it.link)]).size;
+  }
+  return { ...result, scanned: { logs: threads.length, window: '14d' } };
 }
 
 function forYouRss(result) {
@@ -340,10 +361,15 @@ function validateFrom(raw, verifiedAgent) {
   return out;
 }
 
-function validateMessage(body) {
+function validateMessage(body, now) {
   const kind = KINDS.has(body.kind) ? body.kind : 'note';
   const text = clean(body.body, BODY_MAX);
   const out = { kind, body: text };
+  if (kind === 'confirm') {
+    out.confirm = validateConfirm(body.confirm, now);
+    out.body ||= out.confirm.action;
+    if (body.poll || body.media) throw new AddressError('confirm_cannot_have_poll_or_media');
+  }
   if (clean(body.body, Infinity).length > BODY_MAX) out.truncated = true;
   if (body.media) {
     const url = String(body.media.url ?? '');
@@ -423,15 +449,18 @@ function nearestTo(target, index) {
     .map(({ e }) => ({ address: e.address, kind: e.kind, title: e.title, count: e.count }));
 }
 
-async function resolveTarget(kv, to) {
+async function resolveTarget(kv, to, confirms) {
   const target = parseAddress(to);
   if (target.kind === 'reply') {
-    const log = await loadLogByKey(kv, target.logKey);
+    const log = await loadLogByKey(kv, target.logKey, confirms);
     if (!log) throw new AddressError('reply_log_not_found');
+    await hydrateConfirms(confirms, log);
     if (!log.ops.some((op) => op.op === 'append' && op.id === target.parent)) throw new AddressError('reply_message_not_found');
     return { log, parent: target.parent };
   }
-  return { log: await loadLog(kv, target.address), parent: null };
+  const log = await loadLog(kv, target.address);
+  await hydrateConfirms(confirms, log);
+  return { log, parent: null };
 }
 
 /** Echo a message into every log it reaches (mentions, topics, cited URLs). */
@@ -509,11 +538,20 @@ async function firstHello(kv, { log, op, from, now, limit }) {
  * Options: `drumCount` is an optional async () => number|null, read only when a message's first
  * line is the magic word "drum" (OFF-49); functions/api/loom.ts wires it to the drum counter.
  */
-export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '', firstHelloEnabled = true, drumCount = null } = {}) {
+export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '', firstHelloEnabled = true, drumCount = null, db = null } = {}) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   const url = new URL(request.url);
+  const confirms = confirmStore(db);
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {
+      if (url.searchParams.has('confirms')) {
+        if (!confirms) return fail('confirm_store_unavailable', 503);
+        const desk = normHandle(url.searchParams.get('confirms'));
+        if (!desk || !FOR_HANDLE.test(desk)) return fail('confirm_desk_invalid');
+        const after = Number(url.searchParams.get('after') || 0);
+        if (!Number.isSafeInteger(after) || after < 0) return fail('confirm_cursor_invalid');
+        return json({ ok: true, spec: SPEC, ...(await confirms.desk(desk, clock().toISOString(), after)) });
+      }
       const to = url.searchParams.get('to');
       const from = url.searchParams.get('from');
       if (url.searchParams.has('for')) {
@@ -522,7 +560,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         if (!owner) return fail('for_name_required');
         if (!FOR_HANDLE.test(owner)) return fail('for_name_invalid');
         const now = clock();
-        const result = { ok: true, spec: SPEC, ...(await forYou(kv, owner, now)), generatedAt: now.toISOString() };
+        const result = { ok: true, spec: SPEC, ...(await forYou(kv, owner, now, confirms)), generatedAt: now.toISOString() };
         const format = url.searchParams.get('format');
         if (format === 'rss') return new Response(forYouRss(result), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': FOR_CACHE } });
         if (format === 'text') return new Response(forYouText(result, { generatedAt: result.generatedAt }), { headers: { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': FOR_CACHE } });
@@ -530,8 +568,9 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       }
       if (to) {
         const target = parseAddress(to);
-        const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
+        const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey, confirms) : await loadLog(kv, target.address);
         if (!log) return fail('log_not_found', 404);
+        await hydrateConfirms(confirms, log);
         const format = url.searchParams.get('format');
         if (format === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8', 'Cache-Control': READ_CACHE });
         if (format === 'rss') return new Response(asRss(log), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
@@ -605,7 +644,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     const action = String(body.action ?? 'append');
     const now = clock().toISOString();
 
-    if (action === 'append') {
+    if (action === 'append' || action === 'confirm-respond') {
       const from = validateFrom(body.from, verifiedAgent);
       // Budget per sender, not per caller IP: MCP callers all arrive from one server IP. Verified agents
       // are keyed on their agent id; unsigned senders on a hash of name+operator, plus a looser per-IP
@@ -619,8 +658,21 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         const ceiling = await gate(limit, 'loom:append:ip');
         if (!ceiling.allowed) return limited(ceiling.retryAfter);
       }
-      const { truncated, ...message } = validateMessage(body);
-      const { log, parent } = await resolveTarget(kv, body.to);
+      const { log, parent } = await resolveTarget(kv, body.to, confirms);
+      const parentId = parent ?? (typeof body.parent === 'string' ? body.parent : null);
+      if (log.confirmUnavailable && (action === 'confirm-respond' || body.kind === 'confirm')) return fail('confirm_store_unavailable', 503);
+      const card = log.ops.find((o) => o.op === 'append' && o.id === parentId && o.confirm);
+      const value = answerValue(action === 'confirm-respond' ? body.value : body.body);
+      if (action === 'confirm-respond' || (card && value !== null)) {
+        if (!confirms) return fail('confirm_store_unavailable', 503);
+        if (!card) return fail('confirm_not_found', 404);
+        if (value === null || value.length > BODY_MAX) return fail('confirm_answer_must_be_yes_no_or_change');
+        const result = await confirms.respond(card.id, value, from.name, clock().toISOString());
+        if (result.error) return fail(result.error, result.status, { answer: result.answer, notice: result.notice });
+        return json({ ok: true, spec: SPEC, ...result, address: `loom:${log.key}#${card.id}`, log: log.address });
+      }
+      const { truncated, ...message } = validateMessage(body, now);
+      if (message.confirm && !confirms) return fail('confirm_store_unavailable', 503);
       // A title sticks on a new log, or late on an untitled #topic; otherwise say why not.
       let title;
       const wanted = clean(body.title, 90);
@@ -639,6 +691,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       const op = pushOp(log, { op: 'append', id: `m_${randomId(5)}`, from, parent: parent ?? (typeof body.parent === 'string' ? body.parent : null), ...message,
         ...(magic ? { magic } : {}), tags: topics.slice(0, 8), mentions: mentions.slice(0, 8), tokenHash: await sha(token) }, now);
       if (op.parent && !log.ops.some((o) => o.op === 'append' && o.id === op.parent)) op.parent = null;
+      if (op.confirm) await confirms.create(log, op);
       const reached = await ripple(kv, log, op, now);
       const hello = firstHelloEnabled ? await firstHello(kv, { log, op, from, now, limit }) : null;
       await saveLog(kv, log);
@@ -672,13 +725,15 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     }
 
     const target = parseAddress(body.to);
-    const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
+    const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey, confirms) : await loadLog(kv, target.address);
+    if (log) await hydrateConfirms(confirms, log);
     const id = target.kind === 'reply' ? target.parent : String(body.id ?? '');
     const original = log?.ops.find((op) => op.op === 'append' && op.id === id);
     if (!original) return fail('message_not_found', 404);
 
     if (action === 'edit' || action === 'withdraw') {
       if (!original.tokenHash || !safeEqual(await sha(String(body.token ?? '')), original.tokenHash)) return fail('edit_token_invalid', 403);
+      if (action === 'edit' && original.confirm) return fail('confirm_immutable_post_a_new_card', 409);
       if (action === 'edit') {
         if (clean(body.body, Infinity).length > BODY_MAX) return fail('body_too_long', 400, { bodyMax: BODY_MAX });
         const text = clean(body.body, BODY_MAX);
@@ -699,11 +754,13 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       if (!adminKey || !safeEqual(request.headers.get('X-Loom-Admin') ?? '', adminKey)) return fail('admin_required', 403);
       pushOp(log, { op: 'hide', id, reason: clean(body.reason, 80) || 'moderated' }, now);
     } else return fail('action_unknown');
+    if (original.confirm && (action === 'hide' || action === 'withdraw')) await confirms.hide(id);
     await saveLog(kv, log);
     if (action !== 'plus' && action !== 'vote') { try { await retouchIndex(kv, log); } catch { /* the log is saved; the excerpt refreshes on the next post */ } }
     const view = publicView(log);
     return json({ ok: true, spec: SPEC, seq: log.seq, message: view.messages.find((m) => m.id === id) ?? null });
   } catch (error) {
+    if (error instanceof ConfirmStoreError) return fail(error.message, 503);
     if (error instanceof AddressError) return fail(error.message);
     return fail('loom_unavailable', 500);
   }

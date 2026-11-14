@@ -67,6 +67,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   }
   return handleLoom(request, {
     kv: env.PC_LOOM_KV ?? env.VISITS ?? null,
+    db: env.AUTH_DB?.withSession('first-primary') ?? null,
     verifiedAgent,
     adminKey: env.LOOM_ADMIN_KEY ?? '',
     drumCount: () => drumCount(env),

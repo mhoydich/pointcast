@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
+import { confirmDb } from './helpers/loom-confirm-db.mjs';
 import { handleLoom } from '../src/lib/loom/service.mjs';
 
 const SOURCE = readFileSync(new URL('../src/pages/loom/index.astro', import.meta.url), 'utf8');
@@ -19,7 +20,7 @@ function memoryKv() {
   return { map, get: async (k) => map.get(k) ?? null, put: async (k, v) => { map.set(k, v); } };
 }
 const ORIGIN = 'https://pointcast.xyz';
-const api = (kv, path, init) => handleLoom(new Request(new URL(path, ORIGIN), init), { kv });
+const api = (kv, path, init) => handleLoom(new Request(new URL(path, ORIGIN), init), { kv, db: kv.confirmDb ?? null });
 const post = async (kv, body) => (await api(kv, '/api/loom', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
 const read = async (kv, to) => (await api(kv, `/api/loom?to=${encodeURIComponent(to)}`)).json();
 
@@ -242,8 +243,8 @@ test('?as=NAME fills the name for this visit only, marked self-declared, never s
   assert.equal(fy(w).querySelector('.card.wel'), null);
   assert.match(fy(w).querySelector('.visiting').textContent, /Visiting as mike \(self-declared, this visit only\)/);
   await settle(w, 120);
-  // OFF-45: For you opens on the People pile; "Waiting on you" now lives inside "Everything else".
-  assert.equal(fy(w).querySelector('h2.sect').textContent, 'People');
+  // OFF-52: For you opens on Needs your yes; "Waiting on you" now lives inside "Everything else".
+  assert.equal(fy(w).querySelector('h2.sect').textContent, 'NEEDS YOUR YES');
   assert.equal(w.document.getElementById('asBtn').textContent, 'mike');
   assert.equal(w.localStorage.getItem('loom.name'), null);
   assert.equal(w.localStorage.getItem('loom.akind'), null);
@@ -308,4 +309,48 @@ test('C8: the Links chip lists one-message link threads; the default list hides 
   await settle(w, 120);
   assert.ok(labels().some((l) => /single/.test(l)));
   assert.ok(!labels().includes('#c8room'));
+});
+
+for (const choice of ['Yes', 'No', 'Change']) test(`confirm card ${choice}: For You to saved inline unverified answer`, async (t) => {
+  const kv = memoryKv(); kv.confirmDb = confirmDb(); t.after(() => kv.confirmDb.close());
+  const made = await post(kv, { to: '@tester', from: { name: 'Desk', kind: 'agent', address: '@desk' }, kind: 'confirm',
+    confirm: { actionType: 'start_draft', subject: '<img src=x onerror=alert(1)> Draft A\nKeep exact text.', risk: 'low', expiresAt: new Date(Date.now() + 3600000).toISOString() } });
+  const w = await page(kv);
+  let card = fy(w).querySelector('[data-confirm]');
+  assert.ok(card); assert.equal(fy(w).querySelector('h2.sect').textContent, 'NEEDS YOUR YES');
+  assert.match(card.textContent, /Asked by Desk/); assert.match(card.textContent, /Start a draft only/); assert.match(card.textContent, /Expires/);
+  assert.equal(card.querySelector('img'), null);
+  assert.deepEqual([...card.querySelectorAll('button')].map((b) => b.textContent), ['Yes', 'No', 'Change']);
+  [...card.querySelectorAll('button')].find((b) => b.textContent === choice).click();
+  await settle(w, 160);
+  if (choice === 'Change') {
+    assert.equal(w.document.getElementById('bodyInput').value, 'change: ');
+    await send(w, 'change\nuse Friday\n  keep detail  ');
+    card = msgEl(w, made.message.id).querySelector('[data-confirm]');
+  }
+  assert.match(card.textContent, /unverified/);
+  assert.equal(card.querySelectorAll('button').length, 0);
+  const saved = (await read(kv, '@tester')).messages.find((m) => m.id === made.message.id);
+  assert.equal(saved.answer.value, choice === 'Change' ? 'change\nuse Friday\n  keep detail  ' : choice.toLowerCase());
+  assert.equal(saved.answer.by, 'tester'); assert.equal(saved.answer.verified, false);
+});
+
+
+test('confirm commentary does not close a card and legacy cards offer no answer buttons', async (t) => {
+  const kv = memoryKv(); kv.confirmDb = confirmDb(); t.after(()=>kv.confirmDb.close());
+  const made = await post(kv,{to:'@tester',from:{name:'Desk',address:'@desk'},kind:'confirm',confirm:{actionType:'claim_task',subject:'OFF-52',risk:'low',expiresAt:new Date(Date.now()+3600000).toISOString()}});
+  const w = await page(kv);
+  [...fy(w).querySelector('[data-confirm]').querySelectorAll('button')].find(b=>b.textContent==='Change').click(); await settle(w,160);
+  for (const text of ['changed my mind','change my mind',' yes']) {
+    msgEl(w,made.message.id).querySelector('[data-act="reply"]').click();
+    await send(w,text);
+    const saved=(await read(kv,'@tester')).messages.find(m=>m.id===made.message.id);
+    assert.equal(saved.answer,null);
+  }
+  const legacy={...made.message,confirm:{action:'mint',risk:'low',expiresAt:made.message.confirm.expiresAt,revision:1}};
+  await kv.confirmDb.prepare('UPDATE loom_confirms SET message = ? WHERE id = ?').bind(JSON.stringify(legacy),made.message.id).run();
+  const other = await page(kv,{path:'/loom?to=%40tester#thread'});
+  const card=msgEl(other,made.message.id).querySelector('[data-confirm]');
+  assert.equal(card.querySelectorAll('button').length,0);
+  assert.match(card.textContent,/no supported action type/);
 });
