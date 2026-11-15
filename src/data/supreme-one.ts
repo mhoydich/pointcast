@@ -10,7 +10,10 @@
  * (#supreme-one) and nothing touches a chain.
  *
  * "Supreme" is the plain word here (the highest kind). No brand is implied.
- * The art in public/supreme-one/nouns is original pixel work, CC0.
+ * The art in public/supreme-one/nouns is built from the official CC0 Nouns traits:
+ * Stapler and Mug are officenoun.xyz canon Nouns; Clip, Couch and Fax use the
+ * official paperclip, couch and fax machine heads with official bodies, accessories
+ * and noggles. All CC0.
  */
 
 export const SUPREME_SPEC = 'pointcast.supreme-one/v1';
@@ -42,10 +45,10 @@ export const SUPREME_NOUNS: SupremeNoun[] = [
     drip: 'one MUG a day', line: 'The first thing on the desk every morning.' },
   { slug: 'clip', name: 'Supreme Clip', ticker: 'CLIP', dailyAmount: 1, art: '/supreme-one/nouns/clip.svg', color: '#0f6e56',
     drip: 'one CLIP a day', line: 'Small, bent wire. Keeps the pile in order.' },
-  { slug: 'lamp', name: 'Supreme Lamp', ticker: 'LAMP', dailyAmount: 1, art: '/supreme-one/nouns/lamp.svg', color: '#ff9a4a',
-    drip: 'one LAMP a day', line: 'Stays on after everyone else goes home.' },
-  { slug: 'chair', name: 'Supreme Chair', ticker: 'CHAIR', dailyAmount: 1, art: '/supreme-one/nouns/chair.svg', color: '#5b2a86',
-    drip: 'one CHAIR a day', line: 'Somewhere to sit while the work happens.' },
+  { slug: 'couch', name: 'Supreme Couch', ticker: 'COUCH', dailyAmount: 1, art: '/supreme-one/nouns/couch.svg', color: '#1d8a7e',
+    drip: 'one COUCH a day', line: 'Somewhere to sit while the work happens.' },
+  { slug: 'fax', name: 'Supreme Fax', ticker: 'FAX', dailyAmount: 1, art: '/supreme-one/nouns/fax.svg', color: '#c5b9a1',
+    drip: 'one FAX a day', line: 'Still sends it the old way. Still gets there.' },
 ];
 
 /** What has to be true before a single drip is sent. */
