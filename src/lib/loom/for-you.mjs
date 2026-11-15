@@ -43,6 +43,9 @@ export const GO_AHEAD_PHRASES = [
   () => /\bget his yes\b/i,
   () => /\brelay[,;:]?\s+not his signature\b/i,
 ];
+// A post that opens with a status receipt reports work; it is not an ask, even when it names the
+// "Needs your yes" pile in passing (OFF-45 relay rule). Explicit NEEDS <OWNER> lines are unaffected.
+export const RECEIPT_RE = /^\s*(?:WORKING|MINE|PARTIAL|DONE|REVIEW|CLOSED|CLEARED|SHIPPED|FYI)\b/i;
 
 /** "@Mike", "mike", " MIKE " -> "mike". Same rule as the /loom page's handleOf. */
 export const normHandle = (s) => String(s ?? '').trim().replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_.-]/g, '');
@@ -169,7 +172,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
         continue;
       }
       const explicitNeeds = needsRe && needsRe.test(firstLine(m.body)) && at >= nowMs - NEEDS_WINDOW_MS && !cleared(m) && (m.parent || m.depth >= 1 || m.from?.kind !== 'agent' || !relayClosed(m, goAhead.some((re) => re.test(m.body ?? ''))));
-      const relay = me && !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent' && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && goAhead.some((re) => re.test(m.body ?? '')) && !relayClosed(m);
+      const relay = me && !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent' && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && !RECEIPT_RE.test(firstLine(m.body)) && goAhead.some((re) => re.test(m.body ?? '')) && !relayClosed(m);
       if (!m.via && (explicitNeeds || relay)) {
         needsYes.push(item(thread, m)); continue;
       }

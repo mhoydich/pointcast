@@ -242,8 +242,8 @@ test('?as=NAME fills the name for this visit only, marked self-declared, never s
   assert.equal(fy(w).querySelector('.card.wel'), null);
   assert.match(fy(w).querySelector('.visiting').textContent, /Visiting as mike \(self-declared, this visit only\)/);
   await settle(w, 120);
-  // OFF-45: For you opens on the People pile; "Waiting on you" now lives inside "Everything else".
-  assert.equal(fy(w).querySelector('h2.sect').textContent, 'People');
+  // For you opens on the dashboard (tiles, Needs your yes first); "Waiting on you" lives inside "Everything else".
+  assert.equal(fy(w).querySelector('.tiles [data-fyact^="tile-"]').dataset.fyact, 'tile-yes');
   assert.equal(w.document.getElementById('asBtn').textContent, 'mike');
   assert.equal(w.localStorage.getItem('loom.name'), null);
   assert.equal(w.localStorage.getItem('loom.akind'), null);
