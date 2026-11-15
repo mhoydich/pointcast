@@ -12,7 +12,7 @@ const server=createServer((req,res)=>{try{
  if(req.method!=='GET'){res.writeHead(405).end();return;}
  const path=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
  if(path.includes('..')){res.writeHead(403).end();return;}
- const file=new URL('.'+path,folder);res.writeHead(200,{'content-type':types[extname(path)]||'application/octet-stream'}).end(readFileSync(file));
+ const file=new URL('.'+path,folder);const bytes=readFileSync(file);res.writeHead(200,{'content-type':types[extname(path)]||'application/octet-stream'}).end(bytes);
 }catch{res.writeHead(404).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;let browser;
 try{
