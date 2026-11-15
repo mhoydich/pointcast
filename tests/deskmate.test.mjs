@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleDeskmate, cleanMessages, systemPrompt, PLANS, ROSTER, allowedOrigin } from '../src/lib/deskmate/service.mjs';
+import { handleDeskmate, cleanMessages, systemPrompt, PLANS, ROSTER, BACKENDS, allowedOrigin } from '../src/lib/deskmate/service.mjs';
 
 const open = { allowed: true };
 const req = (method, body, origin = 'https://officenoun.xyz') =>
@@ -89,4 +89,20 @@ test('every roster noun has a full persona', () => {
     for (const key of ['name', 'head', 'title', 'specialty']) assert.ok(n[key], `${slug}.${key}`);
     assert.match(systemPrompt(n, PLANS.fulltime), new RegExp(`You are ${n.name}`));
   }
+});
+
+test('the Workers AI backend is named honestly in GET, the prompt and the reply', async () => {
+  const get = await (await handleDeskmate(req('GET'), { callModel: async () => ({}), backend: BACKENDS.workers, limit: async () => open })).json();
+  assert.equal(get.open, true);
+  assert.equal(get.backend, 'an open Llama model on Cloudflare Workers AI');
+  let seen;
+  const res = await handleDeskmate(req('POST', { noun: 'vend', messages: [{ role: 'user', content: 'a show' }] }), {
+    callModel: async (args) => { seen = args; return { text: 'act one.', stop: 'end_turn', model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' }; },
+    backend: BACKENDS.workers,
+    limit: async () => open,
+  });
+  const data = await res.json();
+  assert.equal(data.backend, BACKENDS.workers);
+  assert.match(seen.system, /made-up name for an open Llama model on Cloudflare Workers AI/);
+  assert.doesNotMatch(seen.system, /Claude/);
 });

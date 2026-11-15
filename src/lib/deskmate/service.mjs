@@ -3,7 +3,8 @@
  * free of the SDK so it can be tested with a fake model (tests/deskmate.test.mjs).
  * functions/api/deskmate.ts supplies the real one.
  *
- * Deskmate is a made-up product name. It runs on Claude by Anthropic and says so when asked. The
+ * Deskmate is a made-up product name. It runs on Claude by Anthropic when ANTHROPIC_API_KEY is set,
+ * otherwise on an open Llama model through Cloudflare Workers AI, and always says which. The
  * rentable nouns (the roster) live here, server-side, so a browser can only pick one by slug and
  * never write the persona itself. Free for now: no accounts, no payments, nothing stored.
  */
@@ -65,13 +66,18 @@ function clean(text, max) {
   return String(text ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);
 }
 
-export function systemPrompt(noun, plan) {
+export const BACKENDS = {
+  claude: 'Claude by Anthropic',
+  workers: 'an open Llama model on Cloudflare Workers AI',
+};
+
+export function systemPrompt(noun, plan, backend = BACKENDS.claude) {
   return [
     `You are ${noun.name}, ${noun.title}, one of the rentable Office Nouns in the Temp Pool on officenoun.xyz. You have a ${noun.head} for a head and square glasses. Your job description: ${noun.specialty}.`,
     'Office Noun is a CC0 daybook about a pixel-art office where every day has its own Noun. You are a new hire there: the stapler, the copier, the kettle, standup and the out tray are your world.',
     'Voice: lowercase, warm, dry, a little funny, office metaphors. Short: usually under 120 words. Plain text, no markdown headings.',
     'Lean into your specialty, but help with anything reasonable. If something is far outside your lane, say which roster noun would be better (Clip outcomes, Fax posts, Index paperwork, Toast lunch, Vend shows, Bars plans, Webster poems, Blue tech help) and still give a short useful answer.',
-    `If asked what you are: you are ${noun.name}, a persona made up by the Office Noun desk, running on ${plan.name}, which is a made-up name for Claude by Anthropic. You are an AI, not a person.`,
+    `If asked what you are: you are ${noun.name}, a persona made up by the Office Noun desk, running on ${plan.name}, which is a made-up name for ${backend}. You are an AI, not a person.`,
     'You cannot post, send, spend, sign or buy anything, and you have no memory after the shift. Do not give financial or investment advice, and do not talk up any coin or token. Do not pretend to be a real person. Never ask for keys, passwords or private details.',
   ].join('\n');
 }
@@ -95,6 +101,7 @@ export function cleanMessages(raw) {
 /**
  * @param {Request} request
  * @param {{ callModel: ((args: object) => Promise<{ text: string, stop: string, model: string }>) | null,
+ *           backend?: string,
  *           limit: (bucket: string) => Promise<{ allowed: boolean, retryAfter?: number }> }} deps
  */
 export async function handleDeskmate(request, deps) {
@@ -108,9 +115,10 @@ export async function handleDeskmate(request, deps) {
     return json({
       ok: true,
       open: !!deps.callModel,
+      backend: deps.callModel ? (deps.backend ?? BACKENDS.claude) : null,
       plans: Object.entries(PLANS).map(([id, p]) => ({ id, name: p.name, plan: p.plan, model: p.model })),
       roster: Object.entries(ROSTER).map(([slug, n]) => ({ slug, name: n.name, title: n.title })),
-      note: 'Deskmate is a made-up name for the model behind the Office Noun Temp Pool. It runs on Claude by Anthropic. Free for now. Nothing is stored.',
+      note: 'Deskmate is a made-up name for the model behind the Office Noun Temp Pool. It runs on Claude by Anthropic when connected, otherwise on an open Llama model on Cloudflare Workers AI; `backend` says which. Free for now. Nothing is stored.',
     });
   }
   if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405);
@@ -128,8 +136,9 @@ export async function handleDeskmate(request, deps) {
   if (!messages) return json({ ok: false, error: 'messages_invalid' }, 400);
 
   try {
-    const result = await deps.callModel({ plan, system: systemPrompt(noun, plan), messages });
-    const base = { ok: true, noun: slug, name: noun.name, plan: plan.name, model: result.model };
+    const backend = deps.backend ?? BACKENDS.claude;
+    const result = await deps.callModel({ plan, system: systemPrompt(noun, plan, backend), messages });
+    const base = { ok: true, noun: slug, name: noun.name, plan: plan.name, model: result.model, backend };
     if (result.stop === 'refusal') return json({ ...base, reply: "that one's above my pay grade. ask me something else?", stop: 'refusal' });
     return json({ ...base, reply: clean(result.text, 4000) || '…', stop: result.stop });
   } catch (error) {
