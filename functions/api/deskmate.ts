@@ -1,12 +1,13 @@
 /**
- * /api/noggles — rent an Office Noun that talks. Logic lives in src/lib/noggles/service.mjs
- * (tested in tests/noggles.test.mjs); this wrapper supplies the Claude call and the rate limit.
+ * /api/deskmate — the model behind the Office Noun Temp Pool (officenoun.xyz/rent/). Logic lives in
+ * src/lib/deskmate/service.mjs (tested in tests/deskmate.test.mjs); this wrapper supplies the Claude
+ * call and the rate limit.
  *
  * Needs the ANTHROPIC_API_KEY Pages secret. Without it, GET reports open:false and POST answers
- * 503 not_configured, so officenoun.xyz/rent/ falls back to its offline noun.
+ * 503 not_configured, so officenoun.xyz/rent/ falls back to its offline intern.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { handleNoggles } from '../../src/lib/noggles/service.mjs';
+import { handleDeskmate } from '../../src/lib/deskmate/service.mjs';
 import { rateLimit } from '../_rate-limit';
 
 type Env = {
@@ -47,7 +48,7 @@ function modelCaller(apiKey: string) {
 }
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) =>
-  handleNoggles(request, {
+  handleDeskmate(request, {
     callModel: env.ANTHROPIC_API_KEY ? modelCaller(env.ANTHROPIC_API_KEY) : null,
     // 20 messages per 10 minutes per visitor IP.
     limit: async (bucket: string) => rateLimit(request, env, { bucket, windowSec: 600, maxRequests: 20 }),
