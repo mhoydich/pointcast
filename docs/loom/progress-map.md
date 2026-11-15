@@ -22,6 +22,12 @@ Local check: serve the repository’s `public/` directory and open `/loom-lab/pr
 
 Validation so far: five domain tests cover scoped counts, hidden/wrong-author results, missing/reversed clocks and pasted completion templates. Local Chromium at 1440×1100 and 390×844 passed map/cards defaults, blocked filtering, keyboard selection/focus, four whole portraits, unknown capacity, missing interval, no body overflow and GET-only page requests. Captured reports are in `progress-map-checks.json`. The focused CI workflow checks evidence hashes, generated-data consistency and domain tests without a full site build or network telemetry. Physical devices and production behavior were not tested.
 
+## Receipt timeline (Gantt), Office UI look
+
+The intervals panel is now a Gantt in the CC0 office ui kit look (warm eyebrow, two-tone headline, soft tiles, pill tabs, rounded bars; light and dark follow the reader). One row per work item, grouped by seat. A bar runs from a retained claim to a retained result receipt in Pacific wall time. A blocked item is hatched from its claim to the blocked partial receipt, with a dashed tail to the snapshot. A missing or reversed clock gives a dot at the one receipt that exists, or "unavailable"; never a bar. The axis has day and hour ticks and a "now" line at the snapshot time (not live). Pill filters cover person and state. Hover or focus shows the source receipts; selecting a row opens the existing inspector. Phones stack rows into cards with a mini bar on the same time window, so the page never scrolls sideways.
+
+Layout lives in `public/loom-lab/progress/gantt.mjs` (pure, no DOM) and is covered by `tests/loom-progress-gantt.test.mjs`: window bounds, bar start/end from timestamps, dot-not-bar for missing timing, reversed clocks, the blocked tail, seat grouping and Pacific hour ticks. The browser harness also checks the timeline at 390 light and dark and stubs every non-GET.
+
 ## Next stages, after review
 
 Expand the sample with explicit job IDs and receipt reconciliation before adding DAO-wide totals. Add opt-in, expiring availability reports separately from authorized provider measurements. Test human acceptance/correction loops before calling a score “collective intelligence.” A future 3D/WebXR layer should reuse these relationships while retaining the card/text view; none is implemented here.
