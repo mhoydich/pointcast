@@ -1,6 +1,6 @@
 import {prepare} from './tray.mjs';
 const $=s=>document.querySelector(s);let selected=null,preview=null;
-const data=await (await fetch('./manifest.json')).json();
+let data=[];try{const response=await fetch('./manifest.json');if(!response.ok)throw Error();data=await response.json();if(!Array.isArray(data)||data.length!==10)throw Error();}catch{$('#status').textContent='Expression kit failed to load. Refresh later; no message was sent.';$('#form button[type=submit]').disabled=true;}
 function invalidate(){preview=null;$('#review').hidden=true;$('#status').textContent='Draft changed. Review again before sending.';}
 for(const m of data){const b=document.createElement('button');b.type='button';b.className='tile';b.setAttribute('aria-pressed','false');b.setAttribute('aria-label','Select '+m.name+' expression');const img=document.createElement('img');img.src='./assets/'+m.slug+'.svg';img.alt='';img.width=88;img.height=88;img.addEventListener('error',()=>{img.hidden=true;b.classList.add('image-missing');$('#status').textContent='Image unavailable. Text label remains available.'});const t=document.createElement('span');t.textContent=m.name;b.append(img,t);b.addEventListener('click',()=>{selected=m;document.querySelectorAll('.tile').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));$('#alt').value=m.alt;invalidate();$('#status').textContent=m.name+' selected. Nothing sent.'});$('#tiles').append(b)}
 $('#form').addEventListener('input',invalidate);
