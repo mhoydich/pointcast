@@ -22,4 +22,4 @@ Static public artifacts on an isolated branch of mhoydich/pointcast. A draft PR 
 
 ## Reproduction
 
-Original image-data.json is included. Recipes identify exact layers in order: body, accessory, head, glasses over background. build_gallery.py rebuilds the HTML gallery and synthesizes the supplied musical score using Python and ffmpeg. The downloadable kit includes PNG and SVG avatars.
+The official image-data.json source URL and SHA256 are recorded in provenance.json; that source file is not bundled here. Recipes identify layers in order: body, accessory, head, glasses over background. build_gallery.py rebuilds the HTML gallery and synthesizes the supplied musical score using Python and ffmpeg; it does not regenerate portraits. This directory supplies individual SVG portraits and one PNG crew sheet, not individual PNG portraits or a downloadable archive.
