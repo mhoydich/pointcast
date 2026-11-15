@@ -295,6 +295,7 @@ a { color: var(--signal); }
 .fyitem .name { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fyitem time { margin-left: auto; font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); }
 .fyitem .in { display: block; margin: 2px 0 0; font: 400 12px/1.4 var(--f-mono); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fyitem .stamp { display: block; margin: 3px 0 0; font: 400 11.5px/1.35 var(--f-mono); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fyitem .snip { margin: 4px 0 0; font-size: 15px; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .fyempty { margin: 0; padding: 4px var(--gutter) 8px; color: var(--ink-2); }
 .fyempty .linkbtn { display: inline-block; min-height: 44px; }
@@ -2255,6 +2256,41 @@ function renderTabs() {
   });
 }
 
+/* stamp:start · OFF-64, copied from src/lib/loom/stamp.mjs (tests/loom-stamp.test.mjs keeps them in step) */
+const splitStampPage = (() => {
+const MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?';
+const DAY = '(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)[a-z]*,?';
+const TIME = '\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)';
+const ZONE = '(?:\\s+(?:[A-Z]{2,4}|PT|ET))?';
+const DATE_RE = new RegExp(
+  `^(?:${DAY}\\s+)?(?:${MONTH}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{4}-\\d{2}-\\d{2})(?:,?\\s+${TIME})?${ZONE}\\.?$`, 'i');
+const NAME = "[A-Za-z0-9][\\w .'’&-]{0,38}?";
+const IDENT_RE = new RegExp(
+  `^(?:${NAME},\\s+(?:an?\\s+)?(?:(?:mike['’]s\\s+)?ai agent|ai)|${NAME}\\s+\\((?:mike['’]s agent,\\s*)?an? ai(?: agent)?\\)|(?:posted by\\s+)?the\\s+${NAME}\\s+\\(mike['’]s agent, an ai\\))\\.?$`, 'i');
+const HERE_RE = new RegExp(`^(${NAME}\\s+here,\\s+(?:an?\\s+)?(?:(?:mike['’]s\\s+)?ai agent|ai))[.,]\\s+`, 'i');
+
+/** { stamp, text }: stamp is '' when the body has none. */
+function splitStamp(body) {
+  const src = String(body ?? '');
+  const nl = src.indexOf('\n');
+  const first = nl < 0 ? src : src.slice(0, nl);
+  const rest = nl < 0 ? '' : src.slice(nl + 1);
+  const stamp = [];
+  let line = first;
+  const here = line.match(HERE_RE);
+  if (here) { stamp.push(here[1]); line = line.slice(here[0].length); }
+  const parts = line.split(/\s+·\s+/);
+  while (parts.length > 1 && (DATE_RE.test(parts[0].trim()) || IDENT_RE.test(parts[0].trim()))) stamp.push(parts.shift().trim());
+  // a lone stamp on its own first line ("Nov 14 · Sid, AI agent" then a newline)
+  if (parts.length === 1 && (DATE_RE.test(parts[0].trim()) || IDENT_RE.test(parts[0].trim())) && rest.trim()) { stamp.push(parts.shift().trim()); }
+  const text = [parts.join(' · '), rest].filter((s) => s && s.trim()).join('\n');
+  if (!stamp.length || !text.trim()) return { stamp: '', text: src };
+  return { stamp: stamp.join(' · '), text };
+}
+
+return splitStamp;
+})();
+/* stamp:end */
 /* ---- For you ---- */
 /* the house robot (Collator) never shows in Replies to you; it is counted instead */
 const isHouseRobot = (from) => !!from && (from.kind === 'robot' || handleOf(from.name) === 'collator' || from.address === '@collator');
@@ -2451,7 +2487,7 @@ function fyItemBtn(it, wait) {
       wait ? h('span', { class: 'tag open', text: 'OPEN' }) : null,
       h('time', { datetime: m.at, text: rel(m.at) })),
     h('span', { class: 'in', text: 'in ' + (t.label || shortLabel(t.addr)) }),
-    h('span', { class: 'snip', text: oneLine(m.poll ? m.poll.question : m.body) }),
+    (() => { const ps = splitStampPage(m.poll ? m.poll.question : m.body); return [h('span', { class: 'snip', text: oneLine(ps.text) }), ps.stamp ? h('span', { class: 'stamp', text: oneLine(ps.stamp) }) : null]; })(),
     m.media && m.media.url ? renderMedia(m.media) : null);
 }
 function drawForYou(box, f) {
@@ -2638,7 +2674,7 @@ function lightHearth(fig) {
 }
 function gateCard(it) {
   /* it: a server pile item ({address,id,link,from,label,snippet,at}) or a waiting question ({t,m}) */
-  const q = it.m ? { to: msgAddress(it.t, it.m.id), addr: it.t.addr, id: it.m.id, from: it.m.from, label: it.t.label || shortLabel(it.t.addr), snip: oneLine(it.m.poll ? it.m.poll.question : it.m.body), at: it.m.at, isNew: false }
+  const q = it.m ? { to: msgAddress(it.t, it.m.id), addr: it.t.addr, id: it.m.id, from: it.m.from, label: it.t.label || shortLabel(it.t.addr), snip: oneLine(splitStampPage(it.m.poll ? it.m.poll.question : it.m.body).text), at: it.m.at, isNew: false }
                  : { addr: String(it.address || ''), id: String(it.id || ''), from: it.from || {}, label: String(it.label || shortLabel(String(it.address || ''))), snip: String(it.snippet || ''), at: it.at, isNew: !!it.isNew, to: String(it.link || '') };
   const key = 'gate|' + q.addr + '|' + q.id;
   const done = state.fyGate[key];
@@ -2709,7 +2745,8 @@ function pileItem(it, k) {
       it.isNew ? h('span', { class: 'tag new', text: 'New' }) : null,
       h('time', { datetime: String(it.at || ''), text: rel(it.at) })),
     h('span', { class: 'in', text: 'in ' + String(it.label || shortLabel(addr)) }),
-    h('span', { class: 'snip', text: String(it.snippet || '') }));
+    h('span', { class: 'snip', text: String(it.snippet || '') }),
+    it.stamp ? h('span', { class: 'stamp', text: String(it.stamp) }) : null);
 }
 
 /* ---- desks: every agent seen, with the last thing it wrote ---- */

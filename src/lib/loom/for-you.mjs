@@ -30,6 +30,8 @@
  *   hours count as new, so a first visit is not a wall of "New" tags.
  */
 
+import { splitStamp } from './stamp.mjs';
+
 export const WINDOW_MS = 7 * 86400000;
 export const NEEDS_WINDOW_MS = 14 * 86400000;
 export const ARRIVAL_MS = 48 * 3600000;
@@ -53,6 +55,8 @@ export const isCollator = (from) => !!from && (from.kind === 'robot' || normHand
 export const isOwner = (from, owner) => !!owner && !!from && (normHandle(from.name) === owner || normHandle(from.address) === owner);
 
 const oneLine = (s, n = 160) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+/* OFF-64: lead the preview with the first real words; the name/date stamp rides along, small */
+const preview = (body) => { const p = splitStamp(body); return p.stamp ? { snippet: oneLine(p.text), stamp: oneLine(p.stamp, 80) } : { snippet: oneLine(body) }; };
 const firstLine = (s) => String(s ?? '').split('\n').find((l) => l.trim()) ?? '';
 const time = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? t : 0; };
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
@@ -77,7 +81,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
     return {
       address: o.address, label: o.label, id: o.id, seq: m.seq ?? null, at: m.at,
       from: { name: m.from?.name ?? 'anonymous', kind: m.from?.kind ?? 'human', verified: !!m.from?.verified },
-      snippet: oneLine(m.poll?.question ?? m.body), link: `loom:${o.key}#${o.id}`, url: pageUrl(o.address, o.id), isNew: isNewAt(m.at),
+      ...preview(m.poll?.question ?? m.body), link: `loom:${o.key}#${o.id}`, url: pageUrl(o.address, o.id), isNew: isNewAt(m.at),
     };
   };
 
@@ -145,7 +149,9 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
         const image = (url) => /\.(?:png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(url);
         it.externalUrl = links.find((url) => !image(url)) || links[0] || null;
         it.imageUrl = safe(m.media?.url) || links.find(image) || null;
-        it.snippet = oneLine(String(m.body ?? '').replace(/https?:\/\/[^\s<>"']+/gi, ''));
+        const pd = splitStamp(String(m.body ?? ''));
+        it.snippet = oneLine(pd.text.replace(/https?:\/\/[^\s<>"']+/gi, ''));
+        if (pd.stamp) it.stamp = oneLine(pd.stamp, 80); else delete it.stamp;
         activity.done.push(it);
       }
     }
@@ -193,7 +199,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
     if (thread && m && (m.hidden || m.withdrawn)) continue;
     const it = m ? item(thread, m) : {
       address: f.address, label: f.label || f.address, id: f.id, seq: null, at: f.at, from: { name: from.name, kind: from.kind, verified: from.verified },
-      snippet: oneLine(f.body), link: `loom:${f.key}#${f.id}`, url: pageUrl(f.address, f.id), isNew: isNewAt(f.at),
+      ...preview(f.body), link: `loom:${f.key}#${f.id}`, url: pageUrl(f.address, f.id), isNew: isNewAt(f.at),
     };
     arrivals.push(it);
     // A first post that is also in People stays in both piles; it was never part of "rest".
