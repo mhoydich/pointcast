@@ -4,6 +4,7 @@ const film = $('film'), sound = $('crackle'), root = $('card');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 let cards, index = 0, phase = 'arrival', elapsed = 0, since = 0, consent = false, epoch = 0, drag;
 sound.volume = .25;
+const active = () => ['quiet','ready'].includes(phase) && !document.hidden;
 function stopMedia() { film.pause(); sound.pause(); root.dataset.playing = 'false'; }
 function paint() {
   const view = flameView(elapsed, phase === 'quiet' || phase === 'ready');
@@ -31,11 +32,11 @@ async function begin(withSound) {
   const pending = [];
   if (!reduced.matches) {
     film.src ||= 'https://pointcast.xyz/pray/fire/media/hearth-loop.mp4';
-    pending.push(film.play().then(() => { if (run === epoch && !reduced.matches && !document.hidden) root.dataset.playing = 'true'; else film.pause(); }).catch(() => { if (run === epoch) $('status').textContent = 'The still fire is here; video could not play.'; }));
+    pending.push(film.play().then(() => { if (active() && !reduced.matches) root.dataset.playing = 'true'; else film.pause(); }).catch(() => { if (run === epoch) $('status').textContent = 'The still fire is here; video could not play.'; }));
   }
-  if (consent) pending.push(sound.play().catch(() => { if (run === epoch) $('status').textContent = 'Sound could not start. The quiet moment continues.'; }));
+  if (consent) pending.push(sound.play().then(() => { if (!active() || !consent) sound.pause(); }).catch(() => { if (run === epoch) $('status').textContent = 'Sound could not start. The quiet moment continues.'; }));
   await Promise.all(pending);
-  if (run !== epoch || document.hidden) stopMedia();
+  if (!active()) stopMedia();
 }
 function settle() { elapsed = 0; since = performance.now(); phase = 'quiet'; $('status').textContent = ''; paint(); $('quote').focus({preventScroll:true}); }
 function move(direction) {

@@ -1,6 +1,5 @@
 // Run against a local static server. No board posts; media calls are mocked.
 import assert from 'node:assert/strict';
-import {writeFile} from 'node:fs/promises';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH || '/usr/bin/chromium',headless:true,args:['--no-sandbox']});
 const url=process.env.FIRESIDE_URL || 'http://127.0.0.1:8766/sketches/fireside-cards/';
@@ -27,7 +26,6 @@ try{
  await page.click('#pause');assert(await page.locator('#arrival').isVisible());assert((await page.evaluate(()=>window.pauses)).includes('crackle'));
  const n=await page.evaluate(()=>window.plays.length);await page.click('#silent');assert.equal(await page.evaluate(()=>window.plays.slice(-1)[0]),'film');assert.equal(await page.evaluate(()=>window.plays.length),n+1);checks++;
  await page.clock.runFor(30250);
- async function gesture(cancel=false,dy=0){await page.locator('#quote').dispatchEvent('pointerdown',{pointerId:11,isPrimary:true,button:0,clientX:280,clientY:250});await page.locator('#card').dispatchEvent(cancel?'pointercancel':'pointerup',{pointerId:11,isPrimary:true,button:0,clientX:100,clientY:250+dy});}
  // Synthetic pointers cannot capture; use real mouse drag for capture behavior.
  await page.mouse.move(280,260);await page.mouse.down();await page.mouse.move(100,260);await page.mouse.up();
  assert.equal(await page.locator('#topic').textContent(),'daos');checks++;
@@ -41,6 +39,18 @@ try{
  const reduced=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});
  await reduced.addInitScript(()=>{window.plays=[];HTMLMediaElement.prototype.play=function(){window.plays.push(this.id);return Promise.resolve()};});
  const rp=await reduced.newPage();await rp.goto(url);await rp.click('#silent');assert.deepEqual(await rp.evaluate(()=>window.plays),[]);checks++;await reduced.close();
+ const late=await browser.newContext({viewport:{width:390,height:844}});
+ await late.addInitScript(()=>{
+  window.pending=[];window.pauses=[];
+  HTMLMediaElement.prototype.play=function(){return new Promise(resolve=>window.pending.push({id:this.id,resolve}))};
+  HTMLMediaElement.prototype.pause=function(){window.pauses.push(this.id)};
+ });
+ const lp=await late.newPage();await lp.goto(url);await lp.click('#light');await lp.click('#pause');await lp.click('#silent');
+ await lp.evaluate(()=>{window.pauses=[];window.pending.forEach(p=>p.resolve())});
+ assert((await lp.evaluate(()=>window.pauses)).includes('crackle'));
+ assert.equal(await lp.locator('#card').getAttribute('data-playing'),'true');checks++;await late.close();
+ const failed=await browser.newContext();await failed.route('**/cards.json',r=>r.fulfill({status:503,body:'unavailable'}));
+ const fp=await failed.newPage();await fp.goto(url);await fp.locator('#ways').waitFor({state:'visible'});assert(await fp.locator('#thread').isVisible());assert(await fp.locator('#next').isHidden());assert(await fp.locator('#arrival').isHidden());checks++;await failed.close();
  const off=await browser.newContext({javaScriptEnabled:false,viewport:{width:320,height:568}});const sp=await off.newPage();await sp.goto(url);assert(await sp.locator('noscript a').isVisible());assert((await sp.locator('h1').textContent()).includes('who schedules'));assert(await sp.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks++;await sp.screenshot({path:'/tmp/fireside-nojs.png'});await off.close();
  console.log(`${checks} browser checks passed; mocked playback, real Chromium layout; not physical-device/audio QA.`);
 }finally{await browser.close()}
