@@ -24,6 +24,7 @@ export const GET: APIRoute = () => {
       drip: n.drip,
       line: n.line,
       art: `https://pointcast.xyz${n.art}`,
+      png: `https://pointcast.xyz${n.art.replace(/\.svg$/, '.png')}`,
       page: `${SUPREME_URL}#${n.slug}`,
       status: 'not poured',
     })),
@@ -37,6 +38,7 @@ export const GET: APIRoute = () => {
       license: 'CC0-1.0',
       files: [
         ...SUPREME_NOUNS.map((n) => ({ name: `${n.slug}.svg`, url: `https://pointcast.xyz${n.art}`, kind: 'image/svg+xml', size: '32x32 pixel grid' })),
+        ...SUPREME_NOUNS.map((n) => ({ name: `${n.slug}.png`, url: `https://pointcast.xyz${n.art.replace(/\.svg$/, '.png')}`, kind: 'image/png', size: '512x512' })),
         { name: 'supreme-one.json', url: `${SUPREME_URL}.json`, kind: 'application/json' },
       ],
     },
