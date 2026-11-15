@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const html=readFileSync(new URL('../public/after-hours/index.html',import.meta.url),'utf8');
+test('exactly six real destination tracks',()=>{const tracks=[...html.matchAll(/class="track" href="([^"]+)"/g)].map(x=>x[1]);assert.deepEqual(tracks,['/pray/','/small-shrines/','/baby-bonfire/','/nouns/drum-club/','/keyboard/','/ufogp/']);});
+test('no scripts, embeds, media, forms or implicit writes',()=>{assert.doesNotMatch(html,/<(script|iframe|audio|video|form)\b/i);assert.doesNotMatch(html,/onclick|localStorage|fetch\(/);});
+test('honest draft and page-not-player framing',()=>{assert.match(html,/Draft edition/);assert.match(html,/playlist of pages, not an audio player/);assert.match(html,/not a product for sale/);assert.match(html,/not the six-seat portrait tribute/);});
+test('accessible structural landmarks and focus',()=>{assert.match(html,/<html lang="en">/);assert.match(html,/class="skip" href="#tracks"/);assert.match(html,/aria-labelledby="side-a"/);assert.match(html,/aria-labelledby="side-b"/);assert.match(html,/:focus-visible/);assert.match(html,/aria-hidden="true"/);});
+test('responsive and print layout',()=>{assert.match(html,/@media\(max-width:650px\)/);assert.match(html,/@media print/);assert.match(html,/width=device-width/);});
+test('does not invent keyboard route or third-party assets',()=>{assert.doesNotMatch(html,/keyboard-bloom/);assert.doesNotMatch(html,/<img|@import|url\(/);});
