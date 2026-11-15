@@ -5,6 +5,15 @@ import json
 
 ROOT = Path(__file__).resolve().parent
 
+def public_copy_path():
+    """Mirror only from the known PointCast checkout layout, never a loose kit."""
+    if ROOT.parts[-3:] != ("sketches", "traveling-trapper", "2026-11-15"):
+        return None
+    repo = ROOT.parents[2]
+    if not (repo / "astro.config.mjs").is_file() or not (repo / "AGENTS.md").is_file():
+        return None
+    return repo / "public" / "traveling-trapper" / "index.html"
+
 def script_json(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
@@ -17,8 +26,15 @@ def main():
     runtime = (ROOT / "app.js").read_text(encoding="utf-8")
     output = template.replace("__HOST__", noun).replace("__DATA__", script_json(content)).replace("__NOUN_DATA__", script_json(noun)).replace("__APP__", runtime)
     assert all(marker not in output for marker in ("__HOST__", "__DATA__", "__NOUN_DATA__", "__APP__"))
-    (ROOT / "index.html").write_text(output, encoding="utf-8")
-    print(json.dumps({"file": str(ROOT / "index.html"), "bytes": len(output.encode("utf-8")), "concepts": len(content["concepts"]), "parts": len(content["part_types"])}))
+    output_bytes = output.encode("utf-8")
+    (ROOT / "index.html").write_bytes(output_bytes)
+    result = {"file": str(ROOT / "index.html"), "bytes": len(output_bytes), "concepts": len(content["concepts"]), "parts": len(content["part_types"])}
+    public_file = public_copy_path()
+    if public_file is not None:
+        public_file.parent.mkdir(parents=True, exist_ok=True)
+        public_file.write_bytes(output_bytes)
+        result["public_file"] = str(public_file)
+    print(json.dumps(result))
 
 if __name__ == "__main__":
     main()

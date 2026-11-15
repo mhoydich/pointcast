@@ -18,6 +18,8 @@ python3 build.py
 
 No dependencies, build framework, secret, account or service token is required.
 
+Inside the PointCast checkout at `sketches/traveling-trapper/2026-11-15/`, the same command also writes an identical copy to `public/traveling-trapper/index.html`. It checks the exact repository layout and the repository's `astro.config.mjs` and `AGENTS.md` before doing so. A standalone downloaded kit still writes only its own `index.html`.
+
 ## The complete interaction
 
 1. Choose a starting concept. Changing concepts resets the layout and part variants to that concept.
@@ -75,6 +77,10 @@ The five part icons and arrangement/postcard graphics are original code-native S
 
 ## Integration
 
-The episode belongs under `sketches/traveling-trapper/2026-11-15/` for a reviewable PointCast contribution. A future reviewed deployment can place the self-contained page at a public site route. This packet does not modify the main site, add dependencies, install a scheduler or create a new project room.
+The editable source remains under `sketches/traveling-trapper/2026-11-15/`. The checked public copy is staged at `public/traveling-trapper/index.html`, for the direct `/traveling-trapper/` route on PointCast after a reviewed main merge and successful production deployment. This source change does not establish that the route is already live.
+
+The existing standalone-room allowlist includes only this route prefix, suppressing PointCast's account/session bridge for the episode. It adds no authentication, API, scheduler, dependency or new project room. The source and public HTML copies remain byte-identical; the site's normal metadata processing still applies during build and delivery.
+
+The external GitHack review link can show an “Open the page” confirmation before serving HTML. Its [official FAQ](https://raw.githack.com/) says acceptance suppresses that notice for the same repository for 24 hours. The direct PointCast route removes that hosting intermediary; switching GitHack hostnames is not the delivery fix.
 
 Use the original #teamterra thread for feedback and source review. The earlier practice atlas remains a separate linked record collection; this episode adds an editorial and creative experience over that work.
