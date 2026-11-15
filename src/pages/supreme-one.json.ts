@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { SUPREME_LOOM, SUPREME_NOUNS, SUPREME_SPEC, SUPREME_SWITCH_ON, SUPREME_URL } from '../data/supreme-one';
+import { SUPREME_CHAIN, SUPREME_LOOM, SUPREME_NOUNS, SUPREME_SPEC, SUPREME_SWITCH_ON, SUPREME_URL } from '../data/supreme-one';
 
 /**
  * /supreme-one.json — Supreme One · November, as data: the five Supreme Office
@@ -12,7 +12,8 @@ export const GET: APIRoute = () => {
     name: 'Supreme One · November',
     url: SUPREME_URL,
     status: 'concept',
-    summary: 'Five Supreme Office Nouns, each a faucet that drips one token a day to any address the holder names. The tokens are not poured yet; getting in line posts a public note to the Loom. Nothing touches a chain.',
+    summary: 'Five Supreme Office Nouns on Solana, each a faucet that drips one SPL token a day to any Solana address the holder names. The tokens are not created yet; getting in line posts a public note to the Loom. Nothing touches a chain.',
+    chain: { ...SUPREME_CHAIN, mints: null, mintsNote: 'Five SPL mints, one per noun, created only after Mike says go.' },
     note: '"Supreme" is the plain word (the highest kind); no brand affiliation.',
     nouns: SUPREME_NOUNS.map((n, i) => ({
       no: i + 1,
