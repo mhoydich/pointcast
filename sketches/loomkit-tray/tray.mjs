@@ -2,10 +2,16 @@ export const ORIGIN='https://pointcast.xyz';
 export const SLUGS=['hello','mine','working','blocked','handoff','review','done','thanks','night-shift','applause'];
 export function prepare({slug,name,to,sentence,alt},assetBase){
  if(!SLUGS.includes(slug))throw Error('Choose an expression.');
- const clean=(s,max,label)=>{s=String(s||'').trim();if(!s||s.length>max||/[\u0000-\u001f\u007f]/.test(s))throw Error(label);return s};
+ const clean=(s,max,label,lineBreakLabel)=>{
+  s=String(s||'').trim();
+  if(!s||s.length>max)throw Error(label);
+  if(lineBreakLabel&&/[\r\n]/.test(s))throw Error(lineBreakLabel);
+  if(/[\u0000-\u001f\u007f]/.test(s))throw Error(label);
+  return s
+ };
  name=clean(name,40,'Enter your display name (1–40 characters).');if(name.toLowerCase()==='collator')throw Error('That name is reserved.');
  to=clean(to,160,'Enter a Loom destination.');if(!/^(?:[#@][a-zA-Z0-9][a-zA-Z0-9_-]{0,63}|loom:[a-f0-9]{24}#m_[a-zA-Z0-9]+)$/.test(to))throw Error('Use #room, @handle or a canonical loom reply address.');
- sentence=clean(sentence,1800,'Write a sentence (1–1800 characters).');alt=clean(alt,200,'Describe the image (1–200 characters).');
+ sentence=clean(sentence,1800,'Write a sentence (1–1800 characters).','Keep your sentence on one line; remove line breaks.');alt=clean(alt,200,'Describe the image (1–200 characters).');
  const base=new URL(assetBase);if(base.origin!==ORIGIN||base.pathname!=='/images/loomkit10/'||base.search||base.hash)throw Error('Assets must use the reviewed first-party image directory.');
  return Object.freeze({to,from:Object.freeze({name,kind:'human'}),kind:'image',body:sentence,media:Object.freeze({url:new URL(slug+'.svg',base).href,alt})});
 }
