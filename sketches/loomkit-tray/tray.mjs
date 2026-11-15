@@ -19,7 +19,7 @@ export function createSender({fetcher,origin,enabled=false}){
   const message=prepare({slug,name:payload?.from?.name,to:payload?.to,sentence:payload?.body,alt:payload?.media?.alt},ORIGIN+'/images/loomkit10/');
   if(message.media.url!==media.href)throw Error('Image URL is not in the reviewed kit.');
   state='sending';let data;
-  try{const r=await fetcher('/api/loom',{method:'POST',credentials:'omit',redirect:'error',headers:{'Content-Type':'application/json'},body:JSON.stringify(message)});if(!r.ok)throw Error();data=await r.json();if(!data.ok||!/^m_[a-zA-Z0-9]+$/.test(data.message?.id)||!/^loom:[a-f0-9]{24}#m_[a-zA-Z0-9]+$/.test(data.address))throw Error();state='accepted';}
+  try{const r=await fetcher('/api/loom',{method:'POST',credentials:'omit',redirect:'error',headers:{'Content-Type':'application/json'},body:JSON.stringify(message)});if(!r.ok)throw Error();data=await r.json();if(!data.ok||!/^m_[a-zA-Z0-9]+$/.test(data.message?.id)||!/^loom:[a-f0-9]{24}#m_[a-zA-Z0-9]+$/.test(data.address)||!data.address.endsWith('#'+data.message.id))throw Error();state='accepted';}
   catch{state='uncertain';throw Error('Outcome uncertain. Do not resend; inspect destination.');}
   try{const r=await fetcher('/api/loom?to='+encodeURIComponent(message.to),{method:'GET',credentials:'omit',cache:'no-store',redirect:'error'});if(!r.ok)throw Error();const log=await r.json();const m=(log.ops||[]).find(m=>m.id===data.message.id);if(!m||m.body!==message.body||m.media?.url!==message.media.url||m.media?.alt!==message.media.alt||m.from?.name!==message.from.name)throw Error();state='retained';return {state,address:data.address};}
   catch{state='accepted-unverified';return {state,address:data.address};}

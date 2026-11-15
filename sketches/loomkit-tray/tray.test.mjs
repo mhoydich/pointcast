@@ -10,3 +10,5 @@ test('lost receipt yields uncertainty and no retry',async()=>{let n=0;const s=cr
 test('accepted but mismatched readback not success',async()=>{const s=createSender({enabled:true,origin:ORIGIN,fetcher:async(u,o)=>response(o.method==='POST'?{ok:true,message:{id},address}:{ops:[{id,...payload,body:'different'}]})});assert.equal((await s.send(payload,true)).state,'accepted-unverified')});
 
 test('transport revalidates before network',async()=>{let n=0;const s=createSender({enabled:true,origin:ORIGIN,fetcher:()=>n++});await assert.rejects(s.send({...payload,media:{url:'https://evil.test/mine.svg',alt:'x'}},true));assert.equal(n,0);assert.equal(s.state,'idle')});
+
+test('mismatched receipt ID locks uncertain attempt',async()=>{const s=createSender({enabled:true,origin:ORIGIN,fetcher:async()=>response({ok:true,message:{id},address:address+'x'})});await assert.rejects(s.send(payload,true),/uncertain/);assert.equal(s.state,'uncertain')});
