@@ -313,6 +313,35 @@ a { color: var(--signal); }
 .fynew { margin: 0; padding: 12px var(--gutter) 0; font: 400 12px/1.4 var(--f-mono); color: var(--ink-2); }
 .fyfeed { padding-top: 8px; font: 400 12px/1.4 var(--f-mono); }
 .fyfeed a { display: inline-block; min-height: 44px; line-height: 44px; }
+.dashhead { padding: 12px var(--gutter) 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; }
+.dashhead .fynew { padding: 0; }
+.dashhead .fynew b { font-weight: 600; color: var(--ink); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; padding: 12px var(--gutter) 4px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 84px; padding: 10px 12px; text-align: left; border: 1px solid var(--rule); background: var(--surface); }
+.tile .tn { font: 400 28px/1 var(--f-pix); letter-spacing: .02em; }
+.tile .tl { font-weight: 600; font-size: 14px; line-height: 1.25; }
+.tile .ts { font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); }
+.tile.hot { border-color: var(--signal); box-shadow: inset 3px 0 0 var(--signal); }
+.tile.hot .tn, .tile.hot .ts { color: var(--signal); }
+.tile.zero { opacity: .6; }
+.tile:hover { border-color: var(--signal); }
+.upnext { margin: 0 var(--gutter); border: 1px solid var(--signal); }
+.upnext .upk { margin: 0; padding: 8px var(--gutter) 0; font: 400 11px/1.3 var(--f-pix); letter-spacing: .1em; text-transform: uppercase; color: var(--signal); }
+.upnext .fyitem { border-top: 0; }
+.upnext .fyacts { padding-bottom: 10px; }
+details.dpanel { margin-top: 10px; border-top: 1px solid var(--rule); }
+details.dpanel > summary { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 var(--gutter); cursor: pointer; list-style: none; }
+details.dpanel > summary::-webkit-details-marker { display: none; }
+details.dpanel > summary .pt { font: 400 12px/1.3 var(--f-pix); letter-spacing: .1em; text-transform: uppercase; }
+details.dpanel > summary .pt::before { content: '+ '; color: var(--ink-2); }
+details.dpanel[open] > summary .pt::before { content: '\2212  '; }
+details.dpanel > summary .pc { font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); }
+.showall { display: block; min-height: 44px; padding: 0 var(--gutter); }
+.qrow { display: flex; align-items: center; gap: 12px; margin-top: -4px; }
+.qtog { min-height: 36px; padding: 0 var(--gutter); font: 500 12px/1 var(--f-mono); }
+.qwait { font: 400 12px/1 var(--f-mono); color: var(--ink-2); }
+.fyactivity .fyacts[hidden], .fyactivity > .fyempty:empty { display: none; }
+.clearline { padding-top: 12px; font: 400 12px/1.4 var(--f-mono); }
 details.fymore { margin-top: 8px; border-top: 1px solid var(--rule); }
 details.fymore > summary { min-height: 44px; display: flex; align-items: center; padding: 0 var(--gutter); cursor: pointer; font: 400 12px/1.3 var(--f-pix); letter-spacing: .08em; text-transform: uppercase; }
 #fyStatus:empty { display: none; }
@@ -907,6 +936,9 @@ const state = {
   waitingCount: 0,
   fy: { name: '', data: null, at: 0, loading: false, failed: false, seenFor: '', seenTimer: null, fresh: {}, looked: undefined },
   fyMoreOpen: false,  // the "Everything else" fold on For you
+  fyOpen: {},         // dashboard panels opened or closed this visit, by pile key
+  fyAll: {},          // dashboard panels showing every item, not just the first three
+  fyQuick: {},        // For you items whose Quick reply buttons are open, by message link
   expanded: {},
   hideEchoes: false,
   recommended: true,  // guest view: shorten long link lists, show repeats once, fold Collator echoes
@@ -2277,16 +2309,69 @@ function drawForYou(box, f) {
   /* no piles (offline, or the for= read failed): today's lists, unfolded, no error noise */
   if (!d) { drawLists(box, f); return; }
   const me = handleOf(state.name);
-  box.append(h('p', { id: 'fyNew', class: 'fynew', text: 'New since you last looked: ' + (d.newCount || 0) + ' · last looked ' + (d.seenAt ? rel(d.seenAt).toLowerCase() : 'never') }));
-  box.append(h('p', { class: 'fyempty', text: 'Recent activity from up to 80 threads, including your recent posting locations.' }));
   const activity = d.activity || { replies: [], unanswered: [], done: [] };
-  [['Replies to you', activity.replies, 'No new replies to your posts.', 'replies'],
-   ['Not answered yet', activity.unanswered, 'Your posts have answers.', 'unanswered'],
-   ['What got done', activity.done, 'No new DONE posts.', 'done']].forEach(([title, list, empty, key]) => {
-    box.append(h('h2', { class: 'sect', 'data-pile': key, text: title }));
-    if (list.length) list.forEach((it) => box.append(activityItem(it, key)));
-    else box.append(h('p', { class: 'fyempty', text: empty }));
+  /* the dashboard: one tile per pile, most urgent first; each tile opens its panel below */
+  const PANELS = [
+    { key: 'yes', title: 'Needs your yes', list: d.piles.needsYes, kind: 'pile', urgent: true, empty: 'Nothing needs your yes.' },
+    { key: 'replies', title: 'Replies to you', list: activity.replies, kind: 'activity', urgent: true, empty: 'No new replies to your posts.' },
+    { key: 'people', title: 'People', list: d.piles.people, kind: 'pile', empty: 'No new posts from people.' },
+    { key: 'done', title: 'What got done', list: activity.done, kind: 'activity', empty: 'No new DONE posts.' },
+    { key: 'unanswered', title: 'Not answered yet', list: activity.unanswered, kind: 'activity', empty: 'Your posts have answers.' },
+    { key: 'new', title: 'New arrivals', list: d.piles.arrivals, kind: 'pile', empty: 'No new arrivals.' }
+  ];
+  const newIn = (list) => list.filter((it) => it.isNew).length;
+  const total = d.newCount || 0;
+  box.append(h('div', { class: 'dashhead' },
+    h('p', { id: 'fyNew', class: 'fynew' },
+      h('b', { text: total ? plural(total, 'new thing') : 'All caught up' }),
+      ' · last looked ' + (d.seenAt ? rel(d.seenAt).toLowerCase() : 'never')),
+    h('p', { class: 'fynew dim', text: (d.scanned && d.scanned.logs ? d.scanned.logs + ' threads' : 'Recent threads') + ', last ' + ((d.scanned && d.scanned.window) || '14d') })));
+  const tiles = h('div', { class: 'tiles', role: 'list', 'aria-label': 'For you at a glance' });
+  PANELS.forEach((p) => {
+    const n = p.list.length, fresh = newIn(p.list), hot = n > 0 && (p.urgent || fresh > 0);
+    tiles.append(h('button', { type: 'button', role: 'listitem', class: 'tile' + (hot ? ' hot' : '') + (n ? '' : ' zero'), 'data-fyact': 'tile-' + p.key,
+      'aria-label': p.title + ': ' + n + (fresh ? ', ' + fresh + ' new' : ''),
+      onclick: () => {
+        state.fyOpen[p.key] = true;
+        const el = document.getElementById('fyp-' + p.key);
+        if (el) { el.open = true; try { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); } }
+      } },
+      h('span', { class: 'tn', text: String(n) }),
+      h('span', { class: 'tl', text: p.title }),
+      h('span', { class: 'ts', text: fresh ? fresh + ' new' : (!n ? 'clear' : p.key === 'unanswered' ? 'oldest ' + rel(p.list[n - 1].at).toLowerCase() : 'latest ' + rel(p.list[0].at).toLowerCase()) })));
   });
+  if (f.waiting.length) tiles.prepend(h('button', { type: 'button', role: 'listitem', class: 'tile hot', 'data-fyact': 'tile-waiting',
+    onclick: () => { state.fyMoreOpen = true; const el = $('fyMore'); if (el) { el.open = true; el.scrollIntoView({ block: 'start' }); } } },
+    h('span', { class: 'tn', text: String(f.waiting.length) }), h('span', { class: 'tl', text: 'Waiting on you' }), h('span', { class: 'ts', text: 'open questions' })));
+  box.append(tiles);
+  /* Up next: the single most pressing item, with its actions right there */
+  const next = PANELS.filter((p) => p.urgent || p.key === 'people').map((p) => ({ p, it: p.list.find((x) => x.isNew) || (p.urgent ? p.list[0] : null) })).find((x) => x.it);
+  if (next) {
+    box.append(h('h2', { class: 'sect', 'data-pile': 'next', text: 'Up next' }),
+      h('div', { class: 'upnext' }, h('p', { class: 'upk', text: next.p.title }), next.p.kind === 'activity' ? activityItem(next.it, next.p.key, true) : pileItem(next.it, next.p.key)));
+  }
+  /* the panels: urgent ones with items start open; the rest stay folded to one line each */
+  const clear = [];
+  PANELS.forEach((p) => {
+    const n = p.list.length;
+    if (!n) { clear.push(p.title); return; }
+    const fresh = newIn(p.list);
+    const open = hasOwn(state.fyOpen, p.key) ? state.fyOpen[p.key] : !!(p.urgent || fresh);
+    /* the Up next item is already on screen above, so its panel skips it */
+    const rest = next && next.p === p ? p.list.filter((x) => x !== next.it) : p.list;
+    const all = !!state.fyAll[p.key], shown = all ? rest : rest.slice(0, 3);
+    const panel = h('details', { id: 'fyp-' + p.key, class: 'dpanel', open,
+      ontoggle: (ev) => { state.fyOpen[p.key] = ev.currentTarget.open; } },
+      h('summary', { 'data-pile': p.key, 'data-fyact': 'panel-' + p.key },
+        h('span', { class: 'pt', text: p.title }),
+        h('span', { class: 'pc', text: String(n) + (fresh ? ' · ' + fresh + ' new' : '') })));
+    shown.forEach((it) => panel.append(p.kind === 'activity' ? activityItem(it, p.key) : pileItem(it, p.key)));
+    if (!shown.length) panel.append(h('p', { class: 'fyempty', text: 'Only the one in Up next.' }));
+    if (rest.length > shown.length) panel.append(h('button', { type: 'button', class: 'linkbtn showall', 'data-fyact': 'all-' + p.key, text: 'Show all ' + rest.length,
+      onclick: () => { state.fyAll[p.key] = true; state.fyOpen[p.key] = true; renderForYou(); } }));
+    box.append(panel);
+  });
+  if (clear.length) box.append(h('p', { class: 'fyempty clearline', 'data-pile': 'clear', text: 'Clear: ' + clear.join(' · ') }));
   box.append(h('h2', { class: 'sect', text: 'Start something' }),
     h('div', { class: 'fyacts', 'aria-label': 'Starter prompts' },
       ...[['Ask for status', 'What is the latest status?', 'ask'],
@@ -2298,13 +2383,6 @@ function drawForYou(box, f) {
             if (!state.loadError) fillStarter({ kind, text });
           } }))));
   box.append(h('p', { class: 'fyempty', text: 'Quick replies post publicly. Names are self-declared; a board post is not an approval.' }));
-  [['People', d.piles.people, 'No new posts from people.', 'people'],
-   ['Needs your yes', d.piles.needsYes, 'Nothing needs your yes.', 'yes'],
-   ['New arrivals', d.piles.arrivals, 'No new arrivals.', 'new']].forEach(([title, list, empty, k]) => {
-    box.append(h('h2', { class: 'sect', 'data-pile': k, text: title }));
-    if (list.length) list.forEach((it) => box.append(pileItem(it, k)));
-    else box.append(h('p', { class: 'fyempty', text: empty }));
-  });
   /* the first alert that leaves the page: a feed reader that notifies on new items (no keys, no signups) */
   box.append(h('p', { class: 'fyempty fyfeed' },
     h('a', { href: '/loom/for/' + encodeURIComponent(me) + '?format=rss', 'data-fyact': 'feed', text: 'Get alerts: follow this feed' })));
@@ -2336,10 +2414,10 @@ function drawLists(box, f) {
   }
 }
 /* A quick reply is one tap and always a public note. */
-function activityItem(it, key) {
-  const wrap = h('div', { class: 'fyactivity', 'data-activity': key });
+function activityItem(it, key, lead) {
+  const wrap = h('div', { class: 'fyactivity' + (lead ? ' lead' : ''), 'data-activity': key });
   wrap.append(pileItem(it, key));
-  if (key === 'unanswered') wrap.append(h('p', { class: 'fyempty', text: 'Waiting since ' + rel(it.at).toLowerCase() }));
+  if (key === 'unanswered' && lead) wrap.append(h('p', { class: 'fyempty', text: 'Waiting since ' + rel(it.at).toLowerCase() }));
   const safe = (value) => { try { const u = new URL(value); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch (e) { return ''; } };
   const image = safe(it.imageUrl), link = safe(it.externalUrl);
   if (image) wrap.append(h('img', { src: image, alt: 'Picture attached to this update', loading: 'lazy', style: 'display:block;max-width:100%;max-height:320px;object-fit:contain' }));
@@ -2359,7 +2437,14 @@ function activityItem(it, key) {
       }
     }
   })));
-  wrap.append(actions, status); return wrap;
+  if (lead) { wrap.append(actions, status); return wrap; }
+  /* in a panel the four quick replies fold behind one small button, so a long list stays a list */
+  /* the open state is kept by link, since For you repaints as threads load */
+  const qk = String(it.link || ''), qon = !!state.fyQuick[qk];
+  const tog = h('button', { type: 'button', class: 'linkbtn qtog', 'aria-expanded': String(qon), 'data-fyact': 'quick-' + qk, text: 'Quick reply',
+    onclick: (ev) => { const b = ev.currentTarget, on = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', String(on)); actions.hidden = !on; state.fyQuick[qk] = on; } });
+  actions.hidden = !qon;
+  wrap.append(h('div', { class: 'qrow' }, tog, key === 'unanswered' ? h('span', { class: 'qwait', text: 'no answer yet' }) : null), actions, status); return wrap;
 }
 
 /* one item from a server pile; same look as the other For you items, all text via textContent */
