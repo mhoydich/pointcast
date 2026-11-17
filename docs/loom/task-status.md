@@ -70,3 +70,17 @@ was verified. Independent integration review is still needed.
 
 ![Phone task cards](/images/loom-task-status/phone.png)
 ![Desktop task cards](/images/loom-task-status/desktop.png)
+
+## S3 reconciliation — 2026-11-17
+
+Merged main f334e50 into the existing PR branch without rebasing. Kept the current
+For You dashboard, gate cards, stamps and away badges; both task-status and
+recipient availability appear in thread messages. The local GET-only browser
+harness now serves both public helper modules.
+
+Validation: 100 focused task/service/bot/For You/page/stamp tests passed; agent
+surface audit passed; Chromium at 390 and 1440 pixels passed task projection,
+part-only DONE, playback, overflow, page-error and no-write checks. The two welcome
+copy assertions that already failed on main were updated to its current one-step
+welcome; no welcome copy or behavior was changed by this correction. Full cloud
+build and production verification remain with CI/the release desk.

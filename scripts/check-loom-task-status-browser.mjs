@@ -30,6 +30,7 @@ const server = createServer(async (req, res) => {
       const response = await handleLoom(new Request('https://pointcast.xyz' + req.url), {kv});
       res.writeHead(response.status, Object.fromEntries(response.headers)); res.end(await response.text()); return;
     }
+    if (req.url === '/loom-availability.mjs') { res.writeHead(200, {'content-type':'text/javascript; charset=utf-8'}).end(readFileSync(new URL('../public/loom-availability.mjs', import.meta.url))); return; }
     if (req.url === '/loom-task-status.mjs') { res.writeHead(200, {'content-type':'text/javascript; charset=utf-8'}).end(readFileSync(new URL('../public/loom-task-status.mjs', import.meta.url))); return; }
     if (req.url.startsWith('/loom')) { res.writeHead(200, {'content-type':'text/html; charset=utf-8'}).end(html); return; }
     res.writeHead(404).end();

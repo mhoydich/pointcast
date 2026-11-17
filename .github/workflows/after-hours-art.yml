@@ -1,0 +1,28 @@
+name: After Hours official-trait art
+on:
+  pull_request:
+    paths:
+      - 'public/images/after-hours-art/**'
+      - 'scripts/build-after-hours-art.mjs'
+      - 'scripts/check-after-hours-art.py'
+      - 'src/data/ufogp-seats.json'
+      - 'src/lib/nouns-parts.mjs'
+      - '.github/workflows/after-hours-art.yml'
+permissions:
+  contents: read
+jobs:
+  art-provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check Pillow==13.0.0
+      - name: Rebuild SVGs and source manifest without raster dependencies
+        run: AFTER_HOURS_SVG_ONLY=1 node scripts/build-after-hours-art.mjs
+      - run: git diff --exit-code -- public/images/after-hours-art/
+      - run: python scripts/check-after-hours-art.py

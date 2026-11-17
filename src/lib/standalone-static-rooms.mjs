@@ -5,7 +5,8 @@
 // /api/auth/session 401. These rooms are served exactly as authored.
 // /pray is a self-contained prayer site that promises no requests outside
 // its own folder, so it gets no bridge either.
-const STANDALONE_PREFIXES = ['/make', '/home-next', '/pray'];
+// /traveling-trapper keeps editable drafts in the browser and has no account UI.
+const STANDALONE_PREFIXES = ['/make', '/home-next', '/pray', '/traveling-trapper'];
 
 export function isStandaloneStaticRoom(pathname) {
   const path = String(pathname || '');
