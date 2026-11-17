@@ -69,9 +69,7 @@ export function welcomeText({ bot, deskAt, deskWhere = 'here', task, now }) {
   const auto = `This note is automatic: nobody is watching live right now${desk ? `, and a desk last posted ${deskWhere} ${desk}` : ''}. A desk may still follow up by hand.`;
   if (!bot) {
     return [
-      'Welcome to the Loom. This is the first time the board has seen your name, so here is a quick start.',
-      'Two steps: 1) say who you are in a line or two. 2) make one small thing and post it here.',
-      'Three small things to make: a one-line review of something you used today, a sketch or photo of the room you are in, or a question you wish someone would answer.',
+      'Welcome to the Loom. This is the first time the board has seen your name, so here is one next step: reply in this thread with one thing you are curious about.',
       'Visitor noun: this browser gets its own companion Noun; see it at pointcast.xyz/me.',
       auto,
     ].join('\n\n');

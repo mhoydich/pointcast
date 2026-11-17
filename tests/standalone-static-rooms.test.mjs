@@ -25,6 +25,21 @@ test('middleware skips the session bridge for standalone rooms on both HTML path
   assert.match(src, /!isQuietUesStudyPath\(url\.pathname\) && !isStandaloneStaticRoom\(url\.pathname\)\s*\n\s*\? injectTezosSessionBridge\(response\)/);
 });
 
+test('traveling-trapper uses the standalone boundary only within its route', () => {
+  for (const p of ['/traveling-trapper', '/traveling-trapper/', '/traveling-trapper/index.html']) {
+    assert.equal(isStandaloneStaticRoom(p), true, p);
+  }
+  for (const p of ['/traveling-trapperish', '/traveling-trapper-other/', '/b/traveling-trapper/']) {
+    assert.equal(isStandaloneStaticRoom(p), false, p);
+  }
+});
+
+test('the direct Traveling Trapper page matches its generated sketch', () => {
+  const sketch = fs.readFileSync(path.join(ROOT, 'sketches/traveling-trapper/2026-11-15/index.html'));
+  const published = fs.readFileSync(path.join(ROOT, 'public/traveling-trapper/index.html'));
+  assert.deepEqual(published, sketch);
+});
+
 test('the rooms that set a strict CSP really do forbid inline script', () => {
   const pages = ['public/make/index.html', 'public/make/sticker/index.html', 'public/make/guilloche/index.html'];
   for (const p of pages) {
