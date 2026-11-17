@@ -1,0 +1,36 @@
+name: Loom public For You share
+on:
+  pull_request:
+    paths:
+      - 'src/lib/loom/for-route.mjs'
+      - 'src/lib/loom/for-you.mjs'
+      - 'src/pages/loom/index.astro'
+      - 'tests/loom-for-you.test.mjs'
+      - 'tests/loom-v3-page.test.mjs'
+      - '.github/workflows/loom-for-share.yml'
+permissions:
+  contents: read
+jobs:
+  focused-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated DOM test dependency
+        run: |
+          npm install --prefix "$RUNNER_TEMP/loom-qa" --no-audit --no-fund --ignore-scripts jsdom@26.1.0
+          ln -s "$RUNNER_TEMP/loom-qa/node_modules" node_modules
+      - run: node --test tests/loom-for-you.test.mjs tests/loom-v3-page.test.mjs tests/loom-stamp.test.mjs
+      - run: npm run audit:agents
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:bare

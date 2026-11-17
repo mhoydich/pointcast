@@ -269,7 +269,7 @@ async function page(kv, { name = 'tester', sent = null, path = '/loom' } = {}) {
   const every = w.setInterval.bind(w);
   w.ticks = [];
   w.setInterval = (fn, ms) => { w.ticks.push({ fn, ms }); return every(fn, ms); };
-  w.eval(JS);
+  w.eval(JS + '\nwindow.loomTest = { renderForYou, setView, postingName: () => state.name };');
   await settle(w);
   return w;
 }
@@ -339,7 +339,7 @@ test('page: if the for= read fails, today\'s lists show unfolded with no error n
     return api(kv, new URL(url, ORIGIN).href, rest);
   };
   w.HTMLElement.prototype.scrollIntoView = () => {};
-  w.eval(JS);
+  w.eval(JS + '\nwindow.loomTest = { renderForYou, setView, postingName: () => state.name };');
   await settle(w, 300);
   assert.equal(fy(w).querySelector('h2.sect').textContent, 'Waiting on you');
   assert.equal(fy(w).querySelector('details#fyMore'), null);
@@ -446,9 +446,89 @@ test('OFF-55: agent replies to old posts, unanswered posts, DONE media and count
   const inbox = msg(agent('Agent'), 'Hi Mike', 1);
   const r = buildPiles({ owner: 'mike', now: NOW, seenAt: ago(3), threads: [thread('#room', 'room', [mine, noAnswer, agentReply, nested, robot, done]), thread('@mike', 'inbox', [echo, inbox])] });
   assert.deepEqual(r.activity.replies.map((x) => x.id), [nested.id, agentReply.id]);
-  assert.deepEqual(r.activity.unanswered.map((x) => x.id), [noAnswer.id]);
+  assert.deepEqual(r.activity.unanswered.map((x) => x.id), []);
+  assert.deepEqual(r.activity.olderUnanswered.map((x) => x.id), [noAnswer.id]);
   assert.equal(r.activity.done.length, 1);
   assert.equal(r.activity.done[0].externalUrl, 'https://example.com/pr/1');
   assert.equal(r.activity.done[0].imageUrl, 'https://example.com/card.png');
   assert.equal(r.newCount, 4);
+});
+
+// S3: only the two missing third-pass features, against the dashboard on main.
+test('S3 share route: browser redirects locally, machine formats win, invalid names never redirect', async () => {
+  const kv = memoryKv();
+  const req = (name, suffix = '', method = 'GET') => serveFor(new Request('https://pointcast.xyz/loom/for/' + encodeURIComponent(name) + suffix, {method, headers:{Accept:'text/html,application/xhtml+xml'}}), kv, name);
+  const redirect = await req('MiKe');
+  assert.equal(redirect.status, 302);
+  assert.equal(redirect.headers.get('vary'), 'Accept');
+  assert.equal(redirect.headers.get('location'), '/loom?for=mike#for-you');
+  assert.equal((await req('mike', '', 'HEAD')).status, 302);
+  for (const format of ['text', 'json', 'rss']) {
+    const res = await req('mike', '?format=' + format);
+    assert.equal(res.status, 200); assert.equal(res.headers.get('location'), null);
+  }
+  for (const name of ['', 'x/y', '//evil.example', 'a b', '-sid', 'a'.repeat(33)]) {
+    const res = await req(name); assert.equal(res.status, 400); assert.equal(res.headers.get('location'), null);
+  }
+  const offline = await serveFor(new Request('https://pointcast.xyz/loom/for/sid', {headers:{Accept:'text/html'}}), null, 'sid');
+  assert.equal(offline.status, 302, 'a public share redirect does not read storage');
+});
+
+test('S3 unanswered: 24-hour boundary is recent; older posts remain in their own sorted fold', () => {
+  const boundary = msg(human('Mike'), 'boundary', 24);
+  const recent = msg(human('Mike'), 'recent', 1);
+  const older = msg(human('Mike'), 'older', 25);
+  const oldest = msg(human('Mike'), 'oldest', 30);
+  const answered = msg(human('Mike'), 'answered', 28);
+  const reply = msg(agent('Desk'), 'answer', 1, {parent:answered.id});
+  const r = buildPiles({owner:'mike', now:NOW, threads:[thread('#room','room',[boundary,recent,older,oldest,answered,reply])]});
+  assert.deepEqual(r.activity.unanswered.map(x=>x.id), [recent.id,boundary.id]);
+  assert.deepEqual(r.activity.olderUnanswered.map(x=>x.id), [older.id,oldest.id]);
+});
+
+test('S3 public view preserves stored writer and dashboard, never marks the viewed name seen', async () => {
+  const kv = memoryKv();
+  await post(kv, {to:'#room',from:human('mike'),body:'question for later'});
+  const w = await page(kv,{name:'tester',path:'/loom?for=MiKe#for-you'});
+  await settle(w,900);
+  assert.match(fy(w).querySelector('#fyPublicView').textContent,/Public For you for @mike/);
+  assert.match(fy(w).querySelector('.eyebrow').textContent,/for you · mike/);
+  assert.equal(w.localStorage.getItem('loom.name'),'tester');
+  assert.equal(w.loomTest.postingName(),'tester');
+  assert.equal(w.posts.length,0);
+  assert.equal(fy(w).querySelector('[data-fyact="share"]').getAttribute('href'),'/loom/for/mike');
+  assert.equal(fy(w).querySelectorAll('.tiles [data-fyact^="tile-"]').length,6);
+  w.loomTest.setView('directory'); w.loomTest.setView('for-you');
+  assert.equal(w.location.search,'?for=mike');
+});
+
+test('S3 older-only dashboard: folded, counted, keyboard-native and expandable without posting', async () => {
+  const kv = memoryKv();
+  const saved = await post(kv,{to:'#room',from:human('tester'),body:'older-only question'});
+  for (const [key,value] of kv.map) {
+    if (!key.startsWith('loom:log:')) continue;
+    const log=JSON.parse(value); const m=(log.ops || []).find(m=>m.id===saved.message.id);
+    if(m) {m.at=new Date(Date.now()-30*3600000).toISOString(); kv.map.set(key,JSON.stringify(log));}
+  }
+  const w=await page(kv,{path:'/loom?for=tester#for-you'});
+  await settle(w,150);
+  const fold=fy(w).querySelector('#fyOlder');
+  assert.ok(fold); assert.equal(fold.open,false);
+  assert.match(fold.querySelector('summary').textContent,/Older unanswered posts.*1/);
+  assert.equal(fy(w).querySelector('[data-fyact="tile-unanswered"] .tn').textContent,'0');
+  fold.open=true; fold.dispatchEvent(new w.Event('toggle'));
+  assert.match(fold.textContent,/older-only question/);
+  w.loomTest.renderForYou();
+  assert.equal(fy(w).querySelector('#fyOlder').open,true);
+  assert.equal(w.posts.length,0);
+});
+
+test('S3 public view also works without a saved identity or a seen POST', async () => {
+  const w = await page(memoryKv(), {name:'',path:'/loom?for=sid#for-you'});
+  await settle(w,750);
+  assert.match(fy(w).querySelector('#fyPublicView').textContent, /@sid/);
+  assert.equal(fy(w).querySelectorAll('.tiles .tile').length,6);
+  assert.equal(w.loomTest.postingName(),'');
+  assert.equal(w.localStorage.getItem('loom.name'),null);
+  assert.equal(w.posts.length,0);
 });

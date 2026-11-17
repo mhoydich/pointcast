@@ -86,7 +86,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
   };
 
   const people = [], needsYes = [], seen = new Set(), waiting = new Set(), newWaiting = new Set();
-  const activity = { replies: [], unanswered: [], done: [] }, activitySeen = new Set(), addressed = new Set();
+  const activity = { replies: [], unanswered: [], olderUnanswered: [], done: [] }, activitySeen = new Set(), addressed = new Set();
   const goAhead = GO_AHEAD_PHRASES.map((make) => make(escapeRe(me)));
   let restCount = 0, collatorCount = 0;
   for (const thread of threads) {
@@ -140,7 +140,10 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
       if (activitySeen.has(link)) continue;
       activitySeen.add(link);
       if (reply && isNewAt(m.at)) activity.replies.push(item(thread, m));
-      if (own && !m.via && !hasOtherAnswer(m)) activity.unanswered.push(item(thread, m));
+      if (own && !m.via && !hasOtherAnswer(m)) {
+        const bucket = time(m.at) >= nowMs - FIRST_LOOK_MS ? activity.unanswered : activity.olderUnanswered;
+        bucket.push(item(thread, m));
+      }
       if (!own && isNewAt(m.at) && /^\s*DONE\b/i.test(m.body ?? '')) {
         const it = item(thread, m);
         const urls = String(m.body ?? '').match(/https?:\/\/[^\s<>"']+/gi) ?? [];
