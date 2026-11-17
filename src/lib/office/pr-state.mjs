@@ -4,7 +4,7 @@ const sha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 const time = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(value) ? Date.parse(value) : NaN;
 
 // No authentication, ambient credentials, redirects, retries, or background work.
-async function get(number, fetcher, now, maxAgeMs) {
+async function get(number, fetcher, clock, maxAgeMs) {
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), 5000);
   try {
@@ -14,6 +14,7 @@ async function get(number, fetcher, now, maxAgeMs) {
     });
     if (!response.ok) throw new Error('http_error');
     const date = Date.parse(response.headers.get('date'));
+    const now = clock();
     if (!Number.isFinite(date) || date > now) throw new Error('invalid_observation_time');
     if (now - date > maxAgeMs) throw new Error('stale_response');
     const reader = response.body.getReader();
@@ -43,14 +44,16 @@ export async function readPrStates({ prs, fetcher = fetch, now = Date.now(), max
   if (!Array.isArray(prs) || prs.length > 20 || prs.some(n => !Number.isSafeInteger(n) || n < 1) || !Number.isFinite(now) || !Number.isFinite(maxAgeMs) || maxAgeMs < 0 || maxAgeMs > 120000 || !Number.isFinite(new Date(now).getTime())) {
     return { ...result, state: 'error', errors: ['invalid_input'] };
   }
+  const started = performance.now();
+  const clock = () => now + Math.max(0, performance.now() - started);
   for (const number of new Set(prs)) {
     const row = { number, url: `${WEB}/pull/${number}`, headSha: null, state: 'unknown', blocked: null, mergedAt: null, mergeSha: null, evidence: [], errors: [] };
     try {
-      const first = await get(number, fetcher, now, maxAgeMs);
-      const pr = await get(number, fetcher, now, maxAgeMs);
+      const first = await get(number, fetcher, clock, maxAgeMs);
+      const pr = await get(number, fetcher, clock, maxAgeMs);
       if (first.head.sha !== pr.head.sha) throw new Error('head_changed');
       row.headSha = pr.head.sha;
-      const merged = p => p.merged === true && p.state === 'closed' && p.draft === false && sha(p.merge_commit_sha) && Number.isFinite(time(p.merged_at)) && time(p.merged_at) <= now;
+      const merged = p => p.merged === true && p.state === 'closed' && p.draft === false && sha(p.merge_commit_sha) && Number.isFinite(time(p.merged_at)) && time(p.merged_at) <= clock();
       if (pr.merged === true || first.merged === true) {
         if (!merged(first) || !merged(pr) || first.merged_at !== pr.merged_at || first.merge_commit_sha !== pr.merge_commit_sha) throw new Error('contradictory_state');
         row.state = 'merged'; row.mergedAt = pr.merged_at; row.mergeSha = pr.merge_commit_sha;
@@ -71,6 +74,6 @@ export async function readPrStates({ prs, fetcher = fetch, now = Date.now(), max
     result.data.pullRequests.push(row);
   }
   result.state = result.errors.length ? (result.errors.every(e => e.endsWith(':stale_response')) ? 'stale' : 'error') : prs.length ? 'ok' : 'idle';
-  if (result.state === 'ok') result.observedAt = new Date(now).toISOString();
+  if (result.state === 'ok') result.observedAt = new Date(clock()).toISOString();
   return result;
 }

@@ -25,8 +25,13 @@ unavailable; this adapter currently proves explicit conflicts only. Snapshot
 reads cannot lock GitHub against subsequent changes. The HTTP Date bounds
 response age, not the last PR edit time; old merged PRs remain valid facts.
 
-Validation: `node --test tests/office/astra-5.test.mjs` (11 tests). All synthetic
+Validation: `node --test tests/office/astra-5.test.mjs` (13 tests). All synthetic
 PR123 records in tests are fixtures, not live data. No full site build or
 production wiring. READY FOR TERRA REVIEW, never a review verdict.
 
 Contract: https://pointcast.xyz/loom?to=loom%3A0c4fe73d9b7a2a11f5f75e2b%23m_505c2g1l6b
+
+Cycle 3 corrects latency handling: response freshness and completion observedAt
+use the supplied epoch plus monotonic elapsed time. Deterministic tests simulate
+1100ms responses across two PRs and a wall-clock jump, and retain rejection of
+genuinely future and stale HTTP Date values. No real APIs are used in tests.

@@ -26,3 +26,30 @@ test('invalid input performs no fetch',async()=>{assert.equal((await readPrState
 test('empty is idle',async()=>assert.equal((await readPrStates({prs:[],now})).state,'idle'));
 test('stale HTTP response cannot emit evidence',async()=>assert.equal((await run([base],{now:now+121000})).state,'stale'));
 test('network error is bounded',async()=>{ const r=await run([base],{fetcher:()=>{throw Error('private upstream text')}});assert.deepEqual(r.errors,['pr_123:request_failed']);});
+test('monotonic elapsed time handles response latency and sequential batches', async t => {
+  let elapsed = 0;
+  t.mock.method(performance, 'now', () => elapsed);
+  // Simulate wall-clock jumps: supplied epoch plus monotonic time governs reads.
+  t.mock.method(Date, 'now', () => now - 86400000);
+  const r = await readPrStates({ prs: [123, 124], now, fetcher: async url => {
+    elapsed += 1100;
+    const number = Number(url.split('/').at(-1));
+    return Response.json({ ...base, number, draft: true }, { headers: { date: new Date(now + elapsed).toUTCString() } });
+  } });
+  assert.equal(r.state, 'ok');
+  assert.equal(r.observedAt, new Date(now + 4400).toISOString());
+  assert.deepEqual(r.data.pullRequests.map(p => p.state), ['draft', 'draft']);
+});
+test('elapsed clock still rejects genuinely future and stale observations', async t => {
+  let elapsed = 0;
+  t.mock.method(performance, 'now', () => elapsed);
+  for (const [offset, expected] of [[10000, 'invalid_observation_time'], [-121000, 'stale_response']]) {
+    elapsed = 0;
+    const r = await readPrStates({ prs: [123], now, fetcher: async () => {
+      elapsed += 1100;
+      return Response.json(base, { headers: { date: new Date(now + elapsed + offset).toUTCString() } });
+    } });
+    assert.deepEqual(r.errors, [`pr_123:${expected}`]);
+    assert.equal(r.observedAt, null);
+  }
+});
