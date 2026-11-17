@@ -1,4 +1,4 @@
-import { makeNet, pinnedStatus, cleanText, isWhole, isObj } from './chain-kit.js';
+import { makeNet, pinnedStatus, cleanText, isWhole, isObj, isHex64, shortHex } from './chain-kit.js';
 
 // All chain text is hostile; render with textContent only. Pin every read to the
 // network the page was built for. This page never loads or handles signing keys.
@@ -37,7 +37,15 @@ if (root) {
         const details = document.createElement('div');
         const title = document.createElement('span'); title.textContent = cleanText(tx.payload?.title, 140) || cleanText(tx.kind, 80) || 'Transaction';
         const meta = document.createElement('small'); meta.textContent = `Type: ${cleanText(tx.kind, 60) || 'unknown'} · From: ${cleanText(tx.sender, 80) || 'unknown'}`;
-        details.append(title, meta); row.append(height, details); activity.append(row); count++;
+        details.append(title, meta);
+        if (isHex64(tx.hash)) {
+          const receipt = document.createElement('a'); receipt.className = 'activity-receipt';
+          receipt.href = `/chain/receipt/?hash=${tx.hash}`;
+          receipt.textContent = `View receipt · ${shortHex(tx.hash)}`;
+          receipt.setAttribute('aria-label', `View receipt for transaction ${tx.hash}`);
+          details.append(receipt);
+        }
+        row.append(height, details); activity.append(row); count++;
       }
     }
     if (!count) { const empty = document.createElement('p'); empty.textContent = 'No recent transactions in this feed.'; activity.append(empty); }
@@ -45,6 +53,7 @@ if (root) {
   async function refresh() {
     const request = ++generation; ++accountGeneration;
     online = false; reset(); accountResult.textContent = 'No account selected.';
+    activity.textContent = 'Reading recent transactions…';
     status.textContent = 'Checking network identity…'; network.textContent = 'Connecting…'; refreshButton.disabled = true;
     try {
       const st = await check();
