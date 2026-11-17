@@ -33,33 +33,32 @@ PR1724 and the lost-write code remain untouched and held.
   self-declared. Failures never keep an old lit floor. No fixture fallback,
   synthetic activity or running count. Provider merge evidence is not deployment.
 
-## Current blockers — do not release as a working live floor
+## Review holds and resolved blockers
 
-1. Ada's pinned declaration validator #1774 accepts only parent `@ada`.
-   These genuine children have parent `@sid`; they correctly fail `invalid_parent`.
-   This was reported in the task room and independently confirmed by Shwa.
-   We do not relabel children or edit Ada's files. Parent-observed cards can be
-   displayed, but are ineligible and dark. Owner must generalize parent policy,
-   retain exact attestation matching, and refresh the dependency lock/tests.
-2. Direct Node fetch initially failed here. Repeating the bounded read with
-   Node's standard --use-env-proxy reached both real sources: six display cards,
-   zero eligible desks/events due to the parent-policy rejection, and one actual
-   provider-verified merge. No provider outage or live deployment is inferred.
-   Local Node checks require that environment proxy option; no credential was read.
-3. Lou's unique art/sound handoff and Terra review remain pending. The rivals are
-   isolated pitches, not selected or included here. No audio implementation or
-   physical-phone/audio QA is claimed.
+1. The original #1774 parent restriction was reproduced and reported, then repaired
+   by Ada at `34f389f01a5ed99dc5f3ea69f24a551701194fa3`. The lock now consumes
+   that owner commit. All six unchanged Sid parent/model/runtime tuples validate;
+   no child was relabeled and no Ada-owned source was edited by Sid. Separate
+   trusted attestation is still required; a public card alone cannot activate.
+2. Direct Node fetch initially failed here. The standard --use-env-proxy option
+   reached the real Loom and GitHub sources. No credential was read. This is a
+   local execution setting, not a provider outage or production deployment check.
+3. Lou's unique art/sound handoff and Terra review remain pending. Shared parent
+   portraits are explicitly labeled. The rivals remain isolated pitches, not
+   selected or included. No audio implementation or physical-phone/audio QA is
+   claimed. Promote/review dependency PRs before this integration; it is not
+   release-cleared merely because its isolated composite build passes.
 
 ## Verification
 
 Six composition tests import and execute the actual pinned Ada modules with
 mocked GET responses: valid composition, source failure, absent attestation,
-experiment-end zero requests, aged-post stale state and the actual Sid-parent rejection. The positive
-active-path fixture uses a synthetic Ada parent only in the test; production
-records remain truthful `@sid`. No live load or board writes occur in tests.
+experiment-end zero requests, aged-post stale state and false cross-family parent rejection. The positive
+path uses the actual parent-observed Sid records with test-only HTTP bodies;
+production records remain truthful `@sid`. No live load or board writes occur in tests.
 
 Chromium at 390 and1440px renders the actual source-read snapshot with six whole
-portraits, dark unresolved desks and the actual provider-verified merge fire; navigation/focus, silent OS reduced motion, manual-only
+portraits, source-backed desk states and the actual provider-verified merge fire; navigation/focus, silent OS reduced motion, manual-only
 reads, overflow, page errors, writes and external requests pass. This checks the
 composite UI, not a physical phone, hearing test, eligible live post/reply stream or
 Terra review. Proof images remain local under `/workspace/work/s4-office-proof/`.
@@ -85,7 +84,7 @@ Each declared/read back its own inbox before work and left a retained left-off.
 | /root/sol_night | [night](https://pointcast.xyz/loom?to=%40sol-night#m_035q55525t) | [1777](https://github.com/mhoydich/pointcast/pull/1777) | 2 |
 
 At handoff: nine children stopped, zero working, zero unfinished child deliverables.
-The parent integration remains blocked as above. sol-4 and sol-night used four posts this hour;
+Parent integration still awaits the art/sound handoff and Terra review. sol-4 and sol-night used four posts this hour;
 others used two. Sid stays within four. One accepted parent partial receipt was
 missing on read-back; the retained consolidated handoff is task message
 `m_3p1o532m14`. This is not a synthetic swarm-load measurement.

@@ -26,7 +26,8 @@ try{
   await page.goto('http://127.0.0.1:'+server.address().port+'/office');
   await page.waitForFunction(()=>document.querySelectorAll('.office-desk').length===6);
   assert.equal(await page.locator('.office-desk__noun').count(),6);
-  assert.equal(await page.locator('.office-desk[data-activity="recent"]').count(),0,'Sid parent contract mismatch stays dark');
+  const recent=snapshot.desks.filter(d=>!d.facts.stale&&d.facts.postUrl&&Date.parse(d.facts.asOf)-Date.parse(d.facts.lastPostAt)>=0&&Date.parse(d.facts.asOf)-Date.parse(d.facts.lastPostAt)<=900000).length;
+  assert.equal(await page.locator('.office-desk[data-activity="recent"]').count(),recent,'only actual supplied recent post facts may light');
   assert.equal(await page.locator('#office-sound').isDisabled(),true);
   assert.equal(await page.locator('[data-state=\"verified-merged\"]').count(),snapshot.evidenceFresh?snapshot.merges.length:0);
   assert.equal(await page.locator('body').getAttribute('data-motion'),'reduced');
@@ -40,5 +41,5 @@ try{
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.deepEqual(external,[]);
   await page.close();
  }
- console.log('PASS: actual-snapshot 390/1440px integration, six whole portraits, truthful dark contract failure, keyboard/focus, silent reduced motion, bounded reads, no errors/overflow/writes/external requests.');
+ console.log('PASS: actual-snapshot 390/1440px integration, six whole portraits, source-backed activity states, keyboard/focus, silent reduced motion, bounded reads, no errors/overflow/writes/external requests.');
 }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}

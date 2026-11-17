@@ -30,9 +30,8 @@ function sources({fail=false}={}) {
  };
  return{fetcher,requests};
 }
-// Synthetic @ada-parent fixture exercises the existing validator's active path.
-// Production Sid records remain @sid and must fail closed until the owner fixes it.
-const fixtureRecords = structuredClone(records).map(r=>{r.declaration.parentSeat='@ada';r.attestation.parentSeat='@ada';return r;});
+// Real parent-attested Sid records; HTTP bodies below are test-only fixtures.
+const fixtureRecords=structuredClone(records);
 function clock(){const started=performance.now();return()=>NOW+Math.ceil(performance.now()-started);}
 test('actual adapters compose verified parent records, sourced reply edges, merge and conflict facts',async()=>{
  const {fetcher,requests}=sources();
@@ -62,11 +61,12 @@ test('hard experiment end makes zero requests and offers no desks or lights',asy
  assert.equal(r.state,'ended');assert.equal(calls,0);assert.deepEqual(r.desks,[]);
 });
 
-test('current Sid parent contract mismatch remains explicit and cannot activate desks',async()=>{
- const {fetcher}=sources(); const r=await readOfficeSnapshot({records,adapters,fetcher,clock:clock()});
+test('a false cross-family parent claim cannot activate desks',async()=>{
+ const {fetcher}=sources(); const falseParent=structuredClone(records);falseParent.forEach(r=>r.declaration.parentSeat='@ada');
+ const r=await readOfficeSnapshot({records:falseParent,adapters,fetcher,clock:clock()});
  assert.equal(r.desks.length,6); assert.ok(r.desks.every(d=>!d.eligible));
  assert.equal(r.events.length,0);assert.equal(r.edges.length,0);
- assert.ok(r.errors.includes('missing_declaration'));
+ assert.ok(r.errors.includes('invalid_parentage'));
  assert.ok(records.every(r=>r.declaration.parentSeat==='@sid'));
 });
 
