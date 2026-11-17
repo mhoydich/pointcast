@@ -1,0 +1,34 @@
+name: Socrates Tag draft checks
+on:
+  pull_request:
+    paths:
+      - 'functions/socrates-tag.js'
+      - 'public/socrates-tag/**'
+      - 'tests/socrates-tag*'
+      - 'tests/socrates-visualizer*'
+      - 'tests/fixtures/socrates-tag-room.json'
+      - '.github/workflows/socrates-tag.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      ASTRO_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/socrates-tag*.test.mjs tests/socrates-visualizer.test.mjs
+      - run: npm run audit:agents
+      - name: Compile the page function (no deploy)
+        run: |
+          mkdir -p .off54-functions
+          printf '%s\n' "export { onRequest } from '../functions/socrates-tag.js';" > .off54-functions/socrates-tag.js
+          npx --yes wrangler@4.158.0 pages functions build .off54-functions --outdir /tmp/socrates-tag-function
+      - run: npm run build:bare
