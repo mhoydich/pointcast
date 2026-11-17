@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+export { DrumAttestRoom } from "./drum-attest-room";
 export { DrumCounter } from "./drum-counter";
 import { runFloorBot } from "./floor-bot";
 
@@ -593,6 +594,12 @@ export class DrumRoom {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (["/api/drum/attest", "/api/drum/chain-room"].includes(url.pathname)) {
+      const room = url.searchParams.get("room") || "";
+      if (!ROOM_RE.test(room)) return json({ error: "invalid-room" }, { status: 400 });
+      if (!env.DRUM_ATTEST_ROOMS.split(",").includes(room)) return json({ error: "attestor-not-configured" }, { status: 503 });
+      return env.DRUM_ATTEST_ROOM.getByName(`${env.DRUM_ATTEST_CHAIN_ID}:${env.DRUM_ATTEST_GENESIS}:${room}`).fetch(request);
+    }
     const room = normalizeRoom(url.searchParams.get("room"));
     const stub = env.DRUM_ROOM.getByName(room);
     return stub.fetch(request);
