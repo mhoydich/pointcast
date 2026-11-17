@@ -6,11 +6,27 @@ Run from the repository root with Node's built-in test runner:
 node --test tests/office/adapter-contract.test.mjs
 ```
 
-This is **static fixture conformance**, not execution of the office adapters.
-It checks example envelope shapes, scenario preconditions and written expected
-constraints. No sibling modules, packages, credentials or network calls are
-needed. A passing result cannot establish that an adapter, integration, live
-feed, identity or PR works. Actual adapter tests must call the implementations.
+By default this runs **35 static fixture conformance checks** and explicitly
+skips **24 actual adapter execution tests**. Static checks validate envelope
+shapes, scenario preconditions and written constraints. They do not establish
+that an adapter, integration, live feed, identity or PR works. No sibling
+modules or dependencies are needed for the default run.
+
+To execute the same scenarios against separately assembled implementations:
+
+```sh
+OFFICE_ADAPTER_ROOT=/absolute/path/to/src/lib/office \
+  node --test tests/office/adapter-contract.test.mjs
+```
+
+The configured directory must contain `declarations.mjs`, `loom-read.mjs`,
+`desk-registry.mjs`, `events.mjs` and `pr-state.mjs`. Missing modules or exports
+fail the run. Each invocation checks actual outputs against the fixture's
+partial constraints. Fetch responses are mocked, request URLs are checked,
+and global fetch is disabled before loading adapters. No fixture URL is fetched.
+Report the 35 static checks and 24 implementation cases separately, alongside
+the exact module revisions used. An unset root means skipped execution cases,
+never a claim that those cases passed.
 
 The fixtures are authored synthetic examples derived from the
 [shared S4 data contract](https://pointcast.xyz/loom?to=loom%3A0c4fe73d9b7a2a11f5f75e2b%23m_505c2g1l6b).
@@ -38,18 +54,17 @@ freshness window as identity expiry. Trusted attestation remains valid until
 can revoke it by withholding it. Public board `verified` values and embedded
 attestations must not enter that trusted channel.
 
-## Running the real adapters together later
+## Integration coverage and input mapping
 
-In a separately authorized integration checkout containing the sibling modules,
-first run their own focused tests. `node --test tests/office/*.test.mjs` includes
-both those implementation tests and this fixture-only suite when present;
-report their results separately. Missing sibling tests are not integration
-coverage. This PR intentionally has no conditional imports or silently skipped
-adapter checks.
+Use a separately authorized integration checkout containing the sibling modules
+and run their own focused tests too. `node --test tests/office/*.test.mjs`
+includes those files when present; absent sibling tests provide no coverage.
+The optional mode here executes each adapter independently on scripted inputs;
+it does not yet connect their outputs into an end-to-end pipeline.
 
 Each case names an `adapter`, `input`, partial `expected` constraints and a
 `note`. These are test descriptions, not a production interchange schema.
-Use the following mapping when adding an actual integration test:
+The optional execution mode uses this mapping:
 
 | Case adapter | Invocation and supplied data |
 | --- | --- |
@@ -59,7 +74,7 @@ Use the following mapping when adding an actual integration test:
 | `normalizeLoomEvents` | Pass `input` directly, including `rooms`, numeric `now` and `maxAgeMs`. |
 | `readPrStates` | Remove `input.response`; inject a fake fetcher for the fixed repository. The script describes the PR response only; reject unexpected requests or explicitly add fixtures for status evidence. |
 
-Then assert the *actual* result against the relevant constraints. `eventKeys`
+The execution cases assert the *actual* result against the relevant constraints. `eventKeys`
 means `[roomKey, messageId]` pairs from `data.events`; unresolved and forbidden
 message IDs describe actual replies and parents, not fabricated event rows.
 `mergeEventEligible`, `rawPayloadExposed`, `mustNotBeOk` and `forbiddenStates`

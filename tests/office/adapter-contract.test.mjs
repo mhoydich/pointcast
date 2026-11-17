@@ -1,7 +1,7 @@
-/** Static fixture conformance only. No sibling adapter is imported or executed. */
+/** Static fixture checks; opt-in actual adapter execution is separately labeled below. */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import test from 'node:test';
+import test, { after } from 'node:test';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/adapter-contract.fixture.json', import.meta.url), 'utf8'));
 const byId = new Map(fixture.cases.map(c => [c.id, c]));
@@ -160,6 +160,112 @@ for (const c of fixture.cases) {
     if (c.adapter === 'readPrStates') {
       assert.deepEqual(c.input.prs, [900001]);
       assert.equal(c.expected.mergeEventEligible, false);
+    }
+  });
+}
+
+// Opt-in implementation tests. A missing/unimportable module in a configured
+// root is a failure, never a silent skip. No implementation is bundled here.
+const adapterFiles = {
+  validateDeclaration: 'declarations.mjs', readLoom: 'loom-read.mjs',
+  buildDeskRegistry: 'desk-registry.mjs', normalizeLoomEvents: 'events.mjs',
+  readPrStates: 'pr-state.mjs',
+};
+const adapterRoot = process.env.OFFICE_ADAPTER_ROOT;
+const adapters = {};
+const originalFetch = globalThis.fetch;
+let unexpectedFetches = 0;
+// Fail before imports as well as during calls, including caught fetch attempts.
+globalThis.fetch = async () => { unexpectedFetches++; throw new Error('network_forbidden_in_fixture_tests'); };
+after(() => {
+  globalThis.fetch = originalFetch;
+  assert.equal(unexpectedFetches, 0, 'adapters must use only the injected fake fetcher');
+});
+if (adapterRoot) {
+  const { resolve } = await import('node:path');
+  const { pathToFileURL } = await import('node:url');
+  for (const [name, file] of Object.entries(adapterFiles)) {
+    adapters[name] = (await import(pathToFileURL(resolve(adapterRoot, file)).href))[name];
+    assert.equal(typeof adapters[name], 'function', `missing export: ${name}`);
+  }
+}
+
+for (const c of fixture.cases) {
+  test(`actual adapter execution: ${c.id}`, {
+    skip: adapterRoot ? false : 'Set OFFICE_ADAPTER_ROOT to assembled modules; fixture checks do not execute adapters.',
+  }, async () => {
+    const input = structuredClone(c.input);
+    const { response, ...options } = input;
+    const requests = [];
+    if (response) {
+      const allowedUrl = c.adapter === 'readLoom'
+        ? `https://pointcast.xyz/api/loom?to=${encodeURIComponent(input.to)}`
+        : `https://api.github.com/repos/mhoydich/pointcast/pulls/${input.prs[0]}`;
+      options.fetcher = async (url, init) => {
+        requests.push({ url, method: init?.method, credentials: init?.credentials });
+        // Throwing here alone is insufficient: fail-closed adapters catch it.
+        // Validate the captured requests after the adapter returns as well.
+        assert.equal(url, allowedUrl);
+        assert.equal(init?.method, 'GET');
+        assert.equal(init?.credentials, 'omit');
+        return new Response(response.text ?? JSON.stringify(response.json), {
+          status: response.status,
+          headers: { 'content-type': 'application/json', ...response.headers },
+        });
+      };
+    }
+    const actual = c.adapter === 'validateDeclaration'
+      ? await adapters[c.adapter](input.declaration, input.options)
+      : await adapters[c.adapter](options);
+    if (response) {
+      assert.ok(requests.length > 0);
+      assert.ok(requests.length <= (c.adapter === 'readLoom' ? 1 : 2));
+      for (const request of requests) {
+        assert.equal(request.url, c.adapter === 'readLoom'
+          ? `https://pointcast.xyz/api/loom?to=${encodeURIComponent(input.to)}`
+          : `https://api.github.com/repos/mhoydich/pointcast/pulls/${input.prs[0]}`);
+        assert.equal(request.method, 'GET');
+        assert.equal(request.credentials, 'omit');
+      }
+    }
+    const expected = c.expected;
+    if (c.adapter === 'validateDeclaration') {
+      assert.equal(actual.verified, expected.verified);
+      if (expected.verified) assert.equal(actual.valid, true);
+      return;
+    }
+    assert.equal(actual.schema, 'pointcast.office-data/v1');
+    assert.ok(['ok', 'idle', 'stale', 'error'].includes(actual.state));
+    assert.ok(actual.observedAt === null || isoUtc(actual.observedAt));
+    assert.ok(actual.sourceUrl === null || typeof actual.sourceUrl === 'string');
+    assert.ok(Array.isArray(actual.errors));
+    assert.ok(actual.errors.every(code => typeof code === 'string' && /^[a-zA-Z0-9_:-]{1,128}$/.test(code)));
+    const data = actual.data;
+    if (c.adapter === 'readPrStates') {
+      assert.equal(data.pullRequests.length, 1);
+      const row = data.pullRequests[0];
+      assert.equal(row.number, input.prs[0]);
+      assert.equal(row.headSha, response.json.head.sha, 'scripted PR must pass transport/schema checks');
+      assert.equal(row.state, expected.state);
+      if (Object.hasOwn(expected, 'blocked')) assert.equal(row.blocked, expected.blocked);
+      assert.equal(row.state === 'merged' && !!row.mergedAt && !!row.mergeSha, expected.mergeEventEligible);
+    } else {
+      if (expected.state) assert.equal(actual.state, expected.state);
+      if (expected.mustNotBeOk) assert.notEqual(actual.state, 'ok');
+    }
+    if (expected.messages) assert.deepEqual(data.messages, expected.messages);
+    if (expected.rawPayloadExposed === false) assert.ok(!JSON.stringify(actual).includes(response.text));
+    if (expected.events) assert.deepEqual(data.events, expected.events);
+    if (expected.eventKeys) assert.deepEqual(data.events.map(e => [e.roomKey, e.messageId]).sort(), [...expected.eventKeys].sort());
+    if (expected.unresolvedMessageIds) {
+      assert.deepEqual(data.unresolvedReplies.map(e => e.messageId).sort(), [...expected.unresolvedMessageIds].sort());
+    }
+    if (expected.forbiddenMessageIds) {
+      assert.ok([...data.events, ...data.unresolvedReplies].every(e => !expected.forbiddenMessageIds.includes(e.messageId)));
+    }
+    if (Object.hasOwn(expected, 'eligible')) {
+      assert.equal(data.desks.length, 1);
+      assert.ok(data.desks.every(d => d.eligible === expected.eligible && !expected.forbiddenStates.includes(d.state)));
     }
   });
 }
