@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as delay } from 'node:timers/promises';
 import { handleAtomicLoom } from '../../src/lib/loom/atomic.mjs';
+import { addressKey } from '../../src/lib/loom/address.mjs';
 
 const writers = 25;
 const room = '#synthetic-swarm';
@@ -11,10 +12,9 @@ const clock = () => new Date('2026-11-17T18:24:00Z');
 
 // In-memory model of the adapter contract. No database, SQL engine, or
 // network. A batch compares the revision before publishing any buffered keys.
-function memoryRevisionStore() {
+function memoryRevisionStore(values = new Map()) {
   let revision = 0;
   let conflicts = 0;
-  const values = new Map();
   return {
     get conflicts() { return conflicts; },
     withSession(mode) { assert.equal(mode, 'first-primary'); return this; },
@@ -44,6 +44,23 @@ function memoryRevisionStore() {
       revision += 1;
     },
   };
+}
+
+const roomKey = `loom:log:${await addressKey(room)}`;
+for (const [key, value] of [[roomKey, 'null'], ['loom:rooms', '{}']]) {
+  for (const source of ['archive', 'committed']) {
+    const original = new Map([[key, value]]);
+    const committed = source === 'committed' ? original : new Map();
+    const kv = source === 'archive' ? { get: async name => original.get(name) ?? null } : null;
+    const db = memoryRevisionStore(committed);
+    const response = await handleAtomicLoom(new Request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({ to: room, from: { name: 'Fixture', kind: 'human' }, body: 'replacement' }),
+    }), { db, kv, clock, firstHelloEnabled: false });
+    assert.equal(response.status, 503, `${source} ${key} must fail closed`);
+    assert.equal((await response.json()).error, 'loom_storage_unavailable');
+    assert.deepEqual([...committed], source === 'committed' ? [[key, value]] : []);
+  }
 }
 
 async function run(label, handler, { limitAfter = Infinity, retryContention = false } = {}) {

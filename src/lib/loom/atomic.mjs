@@ -13,6 +13,20 @@ const memoize = (fn) => {
   return (...args) => { const key = JSON.stringify(args); if (!calls.has(key)) calls.set(key, Promise.resolve().then(() => fn(...args))); return calls.get(key); };
 };
 
+function validateStoredJson(key, value) {
+  if (value === null) return;
+  if (key.startsWith('loom:log:')) {
+    const log = JSON.parse(value);
+    if (!log || log.key !== key.slice('loom:log:'.length) ||
+        typeof log.address !== 'string' || !Array.isArray(log.ops) ||
+        !Number.isSafeInteger(log.seq) || log.seq < 0) {
+      throw new Error('Invalid Loom log');
+    }
+  } else if (key === 'loom:index' || key === 'loom:rooms' || key.startsWith('loom:out:')) {
+    if (!Array.isArray(JSON.parse(value))) throw new Error('Invalid Loom list');
+  }
+}
+
 export async function handleAtomicLoom(request, { db, kv: archive = null, attempts = 8, ...options } = {}) {
   if (request.method === 'OPTIONS') return handleLoom(request, options);
   if (!db?.withSession) return unavailable();
@@ -41,9 +55,9 @@ export async function handleAtomicLoom(request, { db, kv: archive = null, attemp
             try {
               const row = await session.prepare('SELECT value FROM loom_atomic_values WHERE key = ?').bind(key).first();
               const value = row ? row.value : (archive ? await archive.get(key) : null);
-              // service.readJson historically swallowed invalid JSON. Detect it
-              // here so a corrupt log cannot be mistaken for an empty room.
-              if (value !== null && (key === 'loom:index' || key === 'loom:rooms' || key.startsWith('loom:log:') || key.startsWith('loom:out:'))) JSON.parse(value);
+              // The legacy service can treat invalid data as missing, including
+              // well-formed JSON such as a stored literal null.
+              validateStoredJson(key, value);
               return value;
             } catch (error) { readFailed = true; throw error; }
           })());
