@@ -4,32 +4,33 @@ import { SUPREME_CHAIN, SUPREME_LOOM, SUPREME_NOUNS, SUPREME_SPEC, SUPREME_SWITC
 /**
  * /supreme-one.json — Supreme One · November, as data: the five Supreme Office
  * Nouns, what each would drip, how to get in line, the CC0 kit files, and what
- * has to be true before anything is sent. Static; status is "concept".
+ * how the faucets pour. Static; status is "live".
  */
 export const GET: APIRoute = () => {
   const payload = {
     spec: SUPREME_SPEC,
     name: 'Supreme One · November',
     url: SUPREME_URL,
-    status: 'concept',
-    summary: 'Five Supreme Office Nouns on Solana, each a faucet that drips one SPL token a day to any Solana address the holder names. The tokens are not created yet; getting in line posts a public note to the Loom. Nothing touches a chain.',
-    chain: { ...SUPREME_CHAIN, mints: null, mintsNote: 'Five SPL mints, one per noun, created only after Mike says go.' },
+    status: 'live',
+    summary: 'Five Supreme Office Nouns on Solana, each a faucet that drips one SPL token a day to any Solana address the holder names. Live on Solana mainnet (Token-2022). Sign up with an address at officenoun.xyz/faucets; the faucet desk drips once a day at 00:10 PT and replies DRIPPED with transaction signatures in #supreme-one.',
+    chain: { ...SUPREME_CHAIN, mints: Object.fromEntries(SUPREME_NOUNS.map((n) => [n.slug, n.mint])), metadata: 'https://officenoun-pump-meta.mhoydich.workers.dev/supreme-one/<slug>.json' },
     note: '"Supreme" is the plain word (the highest kind); no brand affiliation.',
     nouns: SUPREME_NOUNS.map((n, i) => ({
       no: i + 1,
       slug: n.slug,
       name: n.name,
       ticker: n.ticker,
+      mint: n.mint,
       dailyAmount: n.dailyAmount,
       drip: n.drip,
       line: n.line,
       art: `https://pointcast.xyz${n.art}`,
       png: `https://pointcast.xyz${n.art.replace(/\.svg$/, '.png')}`,
       page: `${SUPREME_URL}#${n.slug}`,
-      status: 'not poured',
+      status: 'live',
     })),
     signUp: {
-      how: 'Post "IN LINE · <noun name>" to the Loom address below, under any name. Public; no address is collected yet.',
+      how: 'Sign up at https://officenoun.xyz/faucets/ or post "SIGN UP · <noun names> · to <solana address>" to the Loom address below. Public.',
       loom: SUPREME_LOOM,
       api: 'https://pointcast.xyz/api/loom',
       thread: `https://pointcast.xyz/loom?to=${encodeURIComponent(SUPREME_LOOM)}#thread`,
@@ -44,7 +45,7 @@ export const GET: APIRoute = () => {
     },
     switchOn: SUPREME_SWITCH_ON,
     guardrails: [
-      'A place in line is not a promise of tokens.',
+      'A sign-up is not a promise of tokens; drips stop at the faucet SOL cap.',
       'The tokens have no promised value; no price or trading surface.',
       'Anything that spends, signs or deploys waits for Mike in his own chat.',
     ],
