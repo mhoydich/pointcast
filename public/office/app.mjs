@@ -5,14 +5,21 @@ import { renderEvidence } from './evidence-indicators.mjs';
 import { createPhoneNav } from './phone-nav.mjs';
 import { createMotionControls } from './motion-ui.mjs';
 import { roomControls } from './room-controls.mjs';
+import { createFreshnessGuard } from './freshness.mjs';
 const $ = id => document.getElementById(id);
 const status = $('office-status'), refresh = $('office-refresh');
 const motion = createMotionControls(document, document.body, {matchMedia:window.matchMedia?.bind(window)});
 $('office-controls').append(motion.element);
 const nav = createPhoneNav(document, {onSelect:key=>{const el=$('office-'+key);el.focus({preventScroll:true});el.scrollIntoView({block:'start'});}});
 $('office-nav').append(nav.element);
-let current = null, busy = false;
+let current = null, busy = false, pendingRead = null;
 const live = roomControls({ read, sound: $('office-sound'), watch: $('office-watch') });
+const freshness = createFreshnessGuard({onChange(data, reason) {
+  if (data.state === 'ended') pendingRead?.abort();
+  paint(data);
+  // Local aging is not a new observation: do not chime or reschedule watch.
+  if (reason === 'read' || data.state === 'ended') live.observe(data);
+}});
 const safeLink = url => {try {const u=new URL(url);return u.origin==='https://pointcast.xyz'&&u.pathname==='/loom'?u.href:null;}catch{return null;}};
 function paint(data) {
   current=data;
@@ -42,7 +49,6 @@ function paint(data) {
   const fine=document.createElement('p');fine.className='fine';fine.textContent='Tracked PRs: '+(data.trackedPrs||[]).join(', ')+'. This is a bounded watch list.';$('office-evidence').append(fine);
   status.textContent=data.state==='ended'?'Experiment ended. Source reads are stopped.':'Snapshot '+data.observedAt+' · '+data.state+(data.errors?.length?' · Some source checks are unavailable; unresolved desks stay dark':'')+'. Tap to read again.';
   refresh.disabled=data.state==='ended';drawEdges();
-  live.observe(data);
 }
 function drawEdges(){
   document.querySelector('.floor-threads')?.remove();if(!current?.edges?.length)return;
@@ -51,18 +57,24 @@ function drawEdges(){
   const lines=renderReplyThreads(document,current.edges,positions);lines.classList.add('floor-threads');root.append(lines);
 }
 async function read(){
+  if(freshness.expired()){freshness.recheck();return;}
   if(busy)return;busy=true;refresh.disabled=true;status.textContent='Reading public sources…';
-  const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),45000);
+  const controller=new AbortController();pendingRead=controller;const deadline=setTimeout(()=>controller.abort(),45000);
   try{
     const res=await fetch('/api/office',{method:'GET',credentials:'omit',signal:controller.signal});if(!res.ok)throw new Error('unavailable');
-    paint(await res.json());
+    const data=await res.json();
+    freshness.accept(data); // Recheck wall time after the complete response, including JSON.
   }catch{
+    if(freshness.expired()){freshness.recheck();return;}
     // Never keep an old lit floor on a failed read.
+    freshness.forget();
     live.observe(null);
     current=null;$('office-floor').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Floor unavailable. Read the source board or try again.'}));
     $('office-events').replaceChildren();$('office-evidence').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Provider evidence unavailable; no fire or red lamp asserted.'}));
     status.textContent='Source read failed. No live activity or running count is asserted.';
-  }finally{clearTimeout(deadline);busy=false;if(current?.state!=='ended')refresh.disabled=false;}
+  }finally{clearTimeout(deadline);pendingRead=null;busy=false;if(current?.state!=='ended')refresh.disabled=false;}
 }
 refresh.addEventListener('click',read);window.addEventListener('resize',drawEdges);
+document.addEventListener('visibilitychange',()=>freshness.recheck());
+window.addEventListener('pageshow',()=>freshness.recheck());
 read();

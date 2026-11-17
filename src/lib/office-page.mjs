@@ -1,10 +1,12 @@
 /** Sid's integration adapter. All facts come through Ada's office-data/v1 modules. */
-export const OFFICE_END = Date.parse('2026-11-18T17:24:00.000Z');
+import { OFFICE_END } from '../../public/office/freshness.mjs';
+export { OFFICE_END };
+const ended = now => ({schema:'pointcast.office-view/v1',state:'ended',observedAt:new Date(now).toISOString(),desks:[],events:[],edges:[],merges:[],blocked:[],errors:['experiment_ended']});
 const SCHEMA = 'pointcast.office-view/v1';
 const fixed = [1767, 1770, 1773]; // A small explicit watch list, not a repository-wide count.
 export async function readOfficeSnapshot({ records, adapters, fetcher = fetch, clock = Date.now } = {}) {
   const started = clock();
-  if (started >= OFFICE_END) return { schema: SCHEMA, state: 'ended', observedAt: new Date(started).toISOString(), desks: [], events: [], edges: [], merges: [], blocked: [], errors: ['experiment_ended'] };
+  if (started >= OFFICE_END) return ended(started);
   if (!Array.isArray(records) || records.length > 25) throw new TypeError('bounded trusted records required');
   const boundedFetch = (...args) => { if (clock() >= OFFICE_END) throw new Error('experiment_ended'); return fetcher(...args); };
   const { validateDeclaration, buildDeskRegistry, readLoom, normalizeLoomEvents, readPrStates } = adapters;
@@ -17,8 +19,11 @@ export async function readOfficeSnapshot({ records, adapters, fetcher = fetch, c
   const registry = buildDeskRegistry({declarations,portraits,now:started});
   const rooms = await Promise.all(['#officenoun-tasks', ...records.map(r => r.declaration.handle)].map(to => readLoom({to,fetcher:boundedFetch,now:clock(),timeoutMs:5000,maxAgeMs:120000})));
   const now = clock();
+  if (now >= OFFICE_END) return ended(now);
   const observed = normalizeLoomEvents({rooms,now,maxAgeMs:900000});
   const pr = await readPrStates({prs:fixed,fetcher:boundedFetch,now:clock(),maxAgeMs:120000});
+  const completed = clock();
+  if (completed >= OFFICE_END) return ended(completed);
   const eligible = new Set(registry.data.desks.filter(d => d.eligible).map(d => d.handle));
   const roomAddresses = new Map(rooms.filter(feed => feed.data?.room).map(feed => [feed.data.room.key, feed.data.room.address]));
   const events = observed.data.events.filter(e => eligible.has(e.handle))
@@ -29,7 +34,7 @@ export async function readOfficeSnapshot({ records, adapters, fetcher = fetch, c
     return parent && eligible.has(parent.handle) ? [{id:e.id,parentId:e.parentId,fromHandle:e.handle,toHandle:parent.handle,sourceUrl:e.sourceUrl}] : [];
   });
   const errors = [...new Set([...declarations.flatMap(r=>r.validation.errors),...registry.errors,...observed.errors,...pr.errors])];
-  const snapshot = new Date(clock()).toISOString();
+  const snapshot = new Date(completed).toISOString();
   // Display parent-observed sessions without claiming registry eligibility. This
   // keeps contract failures visible, rather than silently relabeling parentage.
   const visible = records.map(r => registry.data.desks.find(d=>d.handle===r.declaration.handle) || {

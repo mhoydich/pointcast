@@ -81,3 +81,20 @@ test('fresh reads of aged posts remain stale, not a successful empty activity cl
  const r=await readOfficeSnapshot({records:fixtureRecords,adapters,fetcher,clock:clock()});
  assert.equal(r.state,'stale');assert.deepEqual(r.events,[]);assert.ok(r.desks.every(d=>d.facts.stale));
 });
+
+test('a Loom read crossing cutoff returns ended before PR reads begin',async()=>{
+ let now=OFFICE_END-60_000,release,entered;
+ const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);let prReads=0;
+ const delayed={...adapters,readLoom:async()=>{entered();await gate;return {schema:'pointcast.office-data/v1',state:'idle',observedAt:new Date(now).toISOString(),data:{room:{},messages:[]},errors:[]};},readPrStates:async()=>{prReads++;throw Error('must not start');}};
+ const pending=readOfficeSnapshot({records,adapters:delayed,clock:()=>now});
+ await started;now=OFFICE_END+1;release();const r=await pending;
+ assert.equal(r.state,'ended');assert.deepEqual(r.desks,[]);assert.equal(prReads,0);
+});
+test('PR completion crossing cutoff cannot return old eligible desks or merge lights',async()=>{
+ let now=OFFICE_END-60_000,release,entered;
+ const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);
+ const delayed={...adapters,readPrStates:async()=>{entered();await gate;return {schema:'pointcast.office-data/v1',state:'ok',observedAt:new Date(now).toISOString(),data:{pullRequests:[{number:1767,url:'https://github.com/mhoydich/pointcast/pull/1767',state:'merged',mergeSha:'b'.repeat(40),mergedAt:new Date(OFFICE_END-1000).toISOString()}]},errors:[]};}};
+ const pending=readOfficeSnapshot({records,adapters:delayed,fetcher:sources().fetcher,clock:()=>now});
+ await started;now=OFFICE_END+1;release();const r=await pending;
+ assert.equal(r.state,'ended');assert.deepEqual(r.desks,[]);assert.deepEqual(r.merges,[]);assert.deepEqual(r.events,[]);
+});
