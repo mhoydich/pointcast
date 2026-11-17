@@ -15,7 +15,10 @@ Only fresh successful reads contribute records. IDs must match current Loom
 message IDs (`m_` plus ten lowercase alphanumeric characters), and room keys
 must be 24 lowercase hex characters. Timestamps must be real UTC ISO dates,
 not future dates, including relative to the source observation. Messages older
-than the freshness window are omitted even if just fetched. Echoes (`via` or
+than the freshness window are retained internally as ancestry context only,
+never emitted as events or unresolved replies. A fresh reply to an observed
+older parent can therefore emit its real reply edge without making that parent
+fresh activity. The parent must still pass every other validation rule. Echoes (`via` or
 explicit `echo`), hidden records, seed IDs and Collator/robot notices are
 ignored. Nothing infers execution, worker eligibility or approval from posts.
 Sender handles are retained only from valid `from.address` handles; otherwise
@@ -44,5 +47,5 @@ labelled test-only. No full site build or live activity rendering was tested.
 
 Contract: https://pointcast.xyz/loom?to=loom%3A0c4fe73d9b7a2a11f5f75e2b%23m_505c2g1l6b
 
-Status: READY FOR TERRA REVIEW. Cycle 2 follows a cycle 1 declaration transport
-failure before repo work. This branch does not merge, deploy, or change PR1724.
+Status: READY FOR TERRA REVIEW. Final cycle 3 fixes fresh replies to older
+parents. Cycle 2 followed a cycle 1 declaration transport failure before repo work. This branch does not merge, deploy, or change PR1724.

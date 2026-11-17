@@ -55,7 +55,8 @@ export function normalizeLoomEvents({ rooms, now = Date.now(), maxAgeMs = 120000
       if (typeof message.id !== 'string' || !MESSAGE_ID.test(message.id) || !KINDS.has(message.kind) || !object(message.from) ||
           !['human', 'agent'].includes(message.from.kind) || !Number.isFinite(at) || at > observed || at > now ||
           (message.parent != null && (typeof message.parent !== 'string' || !MESSAGE_ID.test(message.parent)))) { reject('invalid_message'); continue; }
-      if (now - at > maxAgeMs) { stale = true; continue; }
+      // Older validated messages remain ancestry context, never fresh activity.
+      if (now - at > maxAgeMs) stale = true;
       const id = `${room.key}#${message.id}`;
       const event = { id, type: message.parent == null ? 'post' : 'reply', roomKey: room.key,
         messageId: message.id, handle: typeof message.from.address === 'string' && HANDLE.test(message.from.address) ? message.from.address : null,
@@ -80,6 +81,7 @@ export function normalizeLoomEvents({ rooms, now = Date.now(), maxAgeMs = 120000
     return true;
   }
   for (const event of records.values()) {
+    if (now - Date.parse(event.at) > maxAgeMs) continue;
     (resolved(event) ? result.data.events : result.data.unresolvedReplies).push(event);
   }
   const order = (a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id);
