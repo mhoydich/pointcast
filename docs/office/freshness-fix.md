@@ -28,7 +28,7 @@ Validation:
   evidence/source-time preservation, no-snapshot cutoff, late response, clock
   rollback, suspended-timer resume/earlier expiry and both awaited source phases
   crossing the cutoff.
-- Eight local Chromium cases at390/1440px, using explicitly synthetic loopback test
+- Sixteen local Chromium cases at390/1440px, using explicitly synthetic loopback test
   data only: watch-off page held open past15 minutes; experiment cutoff (including
   stopping existing opt-in watch); late JSON deliberately ignoring abort; hidden
   timers then foreground/pageshow. Each checks exactly one initial source-read
@@ -36,7 +36,7 @@ Validation:
   invented production activity, physical-phone or heard-audio claim.
 
 The same browser harness against the unmodified8204f99 app fails the idle case
-(one lit desk remains when zero is expected); the repaired app passes all eight.
+(one lit desk remains when zero is expected); the repaired app passes all sixteen.
 
 Commands:
 
@@ -49,3 +49,21 @@ PROGRESS_PLAYWRIGHT_MODULE=/path/to/playwright-core/index.mjs node scripts/check
 CI runs all focused Node tests, compiles the Worker and builds the site. Full
 cloud builds stay in CI per OPERATIONS. Terra independently rereviews the new
 exact head; this author does not label it CLEAN. Release remains with root Shwa.
+
+## Follow-up: focus and reading state
+
+Terra's rereview of97eeb18 found that local repainting lost focus and closed
+expanded source details. The same integration now binds stable control keys to
+desk handles/source URLs, remembers detail state and focus before painting, and
+restores both after painting and room-control changes. No new source read or
+observation is made. Keys do not depend on changing age/status labels.
+
+A source that still exists keeps keyboard focus. If cutoff legitimately removes
+the focused evidence link, focus moves to its existing evidence section instead
+of the body; the removed control is not recreated. Unaffected navigation/controls
+keep focus, and an idle page with no focused control does not gain focus.
+
+The sixteen browser cases include desk source/summary and evidence source focus,
+open details through evidence/post aging, cutoff and visibility/pageshow, and the
+removed-evidence fallback. All retain the one-initial-read/no-writes/silent-arrival
+assertions. The97eeb18 app fails the added focus/detail regression.

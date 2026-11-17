@@ -83,6 +83,54 @@ try{
    assert.match(await page.locator('#office-status').textContent(),/Experiment ended/);
    await finish();
   }
+  {
+   const at=OFFICE_END-20*60_000,{page,finish}=await open(at);
+   await page.locator('.office-desk details > summary').click();
+   await page.locator('.office-desk__source').focus();
+   await page.clock.runFor(120_000);
+   assert.equal(await page.locator('.office-desk details').evaluate(e=>e.open),true,'age repaint keeps expanded detail');
+   assert.equal(await page.evaluate(()=>document.activeElement.matches('.office-desk__source')),true,'desk source focus restored');
+   await page.locator('.office-desk details > summary').focus();
+   await page.clock.runFor(POST_FRESHNESS_MS-120_000);
+   assert.equal(await page.evaluate(()=>document.activeElement.matches('.office-desk details > summary')),true,'summary focus survives post expiry');
+   assert.equal(await page.locator('.office-desk details').evaluate(e=>e.open),true);
+   await page.locator('.office-desk__source').focus();
+   await page.clock.setSystemTime(at+16*60_000);
+   await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+   assert.equal(await page.evaluate(()=>document.activeElement.matches('.office-desk__source')),true,'visibility repaint keeps source focus');
+   assert.equal(await page.locator('.office-desk details').evaluate(e=>e.open),true);
+   await finish();
+  }
+  {
+   const at=OFFICE_END-20*60_000,{page,finish}=await open(at);
+   await page.locator('.office-desk details > summary').click();
+   await page.locator('.office-evidence__merge a').focus();
+   await page.clock.runFor(120_000);
+   assert.equal(await page.evaluate(()=>document.activeElement.matches('.office-evidence__merge a')),true,'evidence source focus restored when flame ages');
+   assert.equal(await page.locator('.office-desk details').evaluate(e=>e.open),true);
+   await page.clock.setSystemTime(at+16*60_000);await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));
+   assert.equal(await page.evaluate(()=>document.activeElement.matches('.office-evidence__merge a')),true,'pageshow repaint preserves evidence focus');
+   assert.equal(await page.locator('.office-desk details').evaluate(e=>e.open),true);
+   await finish();
+  }
+  {
+   const {page,finish}=await open(OFFICE_END-1000);
+   await page.locator('.office-desk details > summary').click();await page.locator('.office-desk__source').focus();
+   await page.clock.runFor(1000);
+   assert.match(await page.locator('#office-status').textContent(),/Experiment ended/);
+   assert.equal(await page.evaluate(()=>document.activeElement.matches('.office-desk__source')),true,'historical desk source remains focused at cutoff');
+   assert.equal(await page.locator('.office-desk details').evaluate(e=>e.open),true);
+   await finish();
+  }
+  {
+   const {page,finish}=await open(OFFICE_END-1000);
+   await page.locator('.office-desk details > summary').click();await page.locator('.office-evidence__merge a').focus();
+   await page.clock.runFor(1000);
+   assert.equal(await page.locator('.office-evidence__merge a').count(),0,'cutoff still removes active evidence');
+   assert.equal(await page.evaluate(()=>document.activeElement.id),'office-evidence','removed control falls back to its section, never body');
+   assert.equal(await page.locator('.office-desk details').evaluate(e=>e.open),true);
+   await finish();
+  }
  }
- console.log('PASS: 8 browser regressions at390/1440px: idle aging, cutoff/watch cancellation, late JSON crossing cutoff, hidden/foreground/BFCache; no extra reads/writes or unsolicited sound.');
+ console.log('PASS: 16 browser regressions at390/1440px: idle aging, cutoff/watch cancellation, late JSON crossing cutoff, hidden/foreground/BFCache, desk/evidence focus and expanded details across age/cutoff/resume; no extra reads/writes or unsolicited sound.');
 }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}

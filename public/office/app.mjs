@@ -6,6 +6,7 @@ import { createPhoneNav } from './phone-nav.mjs';
 import { createMotionControls } from './motion-ui.mjs';
 import { roomControls } from './room-controls.mjs';
 import { createFreshnessGuard } from './freshness.mjs';
+import { bindViewKeys, rememberView, restoreView } from './view-state.mjs';
 const $ = id => document.getElementById(id);
 const status = $('office-status'), refresh = $('office-refresh');
 const motion = createMotionControls(document, document.body, {matchMedia:window.matchMedia?.bind(window)});
@@ -15,10 +16,13 @@ $('office-nav').append(nav.element);
 let current = null, busy = false, pendingRead = null;
 const live = roomControls({ read, sound: $('office-sound'), watch: $('office-watch') });
 const freshness = createFreshnessGuard({onChange(data, reason) {
+  const view=rememberView(document);
   if (data.state === 'ended') pendingRead?.abort();
   paint(data);
   // Local aging is not a new observation: do not chime or reschedule watch.
   if (reason === 'read' || data.state === 'ended') live.observe(data);
+  bindViewKeys(document);
+  restoreView(document,view);
 }});
 const safeLink = url => {try {const u=new URL(url);return u.origin==='https://pointcast.xyz'&&u.pathname==='/loom'?u.href:null;}catch{return null;}};
 function paint(data) {
