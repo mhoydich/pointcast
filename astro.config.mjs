@@ -7,6 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { normalizeGeneratedSeo } from './src/lib/seo-build.mjs';
+import { loadPageSourceDates, lastmodForPath } from './src/lib/sitemap-lastmod.mjs';
 import { isNoindexPath, isRedirectPath } from './src/lib/seo-rules.mjs';
 
 const githubPages = process.env.POINTCAST_GITHUB_PAGES === '1';
@@ -34,13 +35,15 @@ const SITEMAP_DATED_PATHS = new Set([
   '/front-desk/agents',
 ]);
 
+const pageSourceDates = loadPageSourceDates();
+
 function sitemapLastmod(pageUrl) {
   const path = new URL(pageUrl).pathname.replace(/\/$/, '') || '/';
   const card = path.match(/^\/almanac\/(\d{4}-\d{2}-\d{2})$/);
   if (card) return new Date(`${card[1]}T12:00:00.000Z`);
   if (path === '/standards' || path.startsWith('/standards/')) return new Date(SITEMAP_PUBLISHED);
   if (SITEMAP_DATED_PATHS.has(path)) return new Date(SITEMAP_PUBLISHED);
-  return undefined;
+  return lastmodForPath(path, pageSourceDates);
 }
 
 // https://astro.build/config
