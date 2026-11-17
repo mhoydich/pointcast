@@ -177,6 +177,21 @@ test('route: end to end through the real Loom service', async () => {
   assert.ok((await sm.text()).includes('/loom/topic/officenoun'));
 });
 
+test('classic incremental reads request only new messages and retain the operations', async () => {
+  const source = readFileSync(new URL('../src/pages/loom/classic.astro', import.meta.url), 'utf8');
+  const query = source.match(/fetch\((`\$\{API\}\?to=.*?`), full/)[1];
+  const path = new Function('API', 'address', 'full', 'seq', 'return ' + query);
+  const kv = memoryKv();
+  for (const body of ['first', 'second']) {
+    await post(kv, { to: '#poll-check', from: { name: 'reader', kind: 'human' }, body });
+  }
+  const initial = await (await handleLoom(req(path('/api/loom', '#poll-check', true, 0)), { kv })).json();
+  assert.deepEqual(initial.messages.filter((m) => m.from.kind !== 'robot').map((m) => m.body), ['first', 'second']);
+  const update = await (await handleLoom(req(path('/api/loom', '#poll-check', false, initial.seq - 1)), { kv })).json();
+  assert.deepEqual(update.messages.map((m) => m.body), ['second']);
+  assert.equal(update.ops.length, 1);
+});
+
 test('route without storage still answers', async () => {
   const res = await serveTopic(req('/loom/topic/loom'), null, 'loom');
   assert.equal(res.status, 200);
