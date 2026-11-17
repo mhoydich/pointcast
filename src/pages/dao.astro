@@ -1,27 +1,10 @@
 ---
 /**
- * /dao — PointCast DAO v1.
- *
- * Lightweight no-moderation governance surface:
- *   - Proposals are author-curated (Mike drafts, no free-text from
- *     visitors) — the page has zero user-submitted content to moderate
- *   - Voting is Beacon-wallet signed (Kukai, Temple, Umami). One signature
- *     per proposal per wallet. Sign message is a plain-text JSON string
- *     with proposal id, choice, timestamp.
- *   - Tally backend is env-guarded: if PC_DAO_KV is bound, the /api/dao
- *     function accepts signed votes and aggregates. Until then, votes
- *     persist to localStorage and show your own vote status.
- *   - Zero free-text anywhere in the UI. Vote is FOR / AGAINST / ABSTAIN.
- *
- * Mike 2026-04-18: "continue to think how community can use, in short
- * term where we don't have to moderate content." The design answer:
- * predefined proposals + signed binary votes + no comments.
- *
- * v1 ships the proposals and the signing flow. Tally aggregation lands
- * when Manus binds the KV namespace.
+ * /dao — historical proposals and a local-only choice prototype.
+ * Choices are stored on this device and are not signed, submitted,
+ * tallied, eligibility-checked or executed.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-import WalletChip from '../components/WalletChip.astro';
 import contracts from '../data/contracts.json';
 
 const visitNounsKt1 = ((contracts as any).visit_nouns?.mainnet ?? '').trim();
@@ -158,14 +141,16 @@ const jsonLd = {
   '@type': 'WebPage',
   '@id': 'https://pointcast.xyz/dao',
   name: 'PointCast DAO',
-  description: 'Community governance for PointCast. Predefined proposals, signed votes, no free-text submissions — no moderation surface.',
+  description: 'Historical PointCast proposals with a local-only choice prototype; choices are not signed or submitted.',
   url: 'https://pointcast.xyz/dao',
 };
 ---
 
 <BlockLayout
   title="DAO"
-  description="PointCast DAO — lightweight community governance via Beacon-wallet signed votes. No comments, no moderation."
+  isolated
+  includeManifest={false}
+  description="PointCast DAO — historical proposals and a local-only choice prototype."
   image="/images/og/dao.png"
   jsonLd={jsonLd}
   alternates={[{ type: 'application/json', href: '/dao.json', title: 'DAO proposals (JSON)' }]}
@@ -188,31 +173,29 @@ const jsonLd = {
 
     <header class="hero">
       <div class="hero__kicker-row">
-        <p class="kicker">DAO · v1</p>
-        <WalletChip />
+        <p class="kicker">DAO · LOCAL PROTOTYPE</p>
       </div>
-      <h1 class="display">Decide together.</h1>
+      <h1 class="display">Explore the proposals.</h1>
       <p class="dek">
-        PointCast DAO is a lightweight governance surface. Proposals are
-        author-curated. Votes are signed by your Tezos wallet. There are
-        no comments, no threads, no free-text submissions — and therefore
-        no moderation burden. Every position is a signed binary choice.
+        These historical proposals are a prototype. You can record a choice on
+        this device without connecting a wallet, but it is not signed or sent to
+        PointCast. There is no shared tally, eligibility check, or automatic action.
       </p>
       <dl class="facts">
-        <div><dt class="mono">PROPOSALS LIVE</dt><dd>{PROPOSALS.length}</dd></div>
-        <div><dt class="mono">VOTING</dt><dd>Beacon-signed message</dd></div>
-        <div><dt class="mono">ELIGIBILITY</dt><dd>Visit Nouns FA2 / DRUM</dd></div>
+        <div><dt class="mono">HISTORICAL PROPOSALS</dt><dd>{PROPOSALS.length}</dd></div>
+        <div><dt class="mono">VOTING</dt><dd>Local choice only</dd></div>
+        <div><dt class="mono">ELIGIBILITY</dt><dd>Not checked</dd></div>
         <div><dt class="mono">BACKEND</dt><dd id="dao-backend-status">v1 · local</dd></div>
       </dl>
     </header>
 
-    <section class="proposals" aria-label="Active proposals">
+    <section class="proposals" aria-label="Historical proposals">
       {PROPOSALS.map((p) => (
         <article class="prop" id={p.id} data-proposal={p.id}>
           <header class="prop__head">
             <span class="prop__id mono">{p.id}</span>
             <span class={`prop__kind mono prop__kind--${p.kind}`}>{p.kind.toUpperCase()}</span>
-            <span class="prop__window mono">CLOSES · {fmtDate(p.closesAt)}</span>
+            <span class="prop__window mono">PROPOSED WINDOW ENDED · {fmtDate(p.closesAt)}</span>
           </header>
           <h2 class="prop__title">{p.title}</h2>
           <p class="prop__summary">{p.summary}</p>
@@ -220,7 +203,7 @@ const jsonLd = {
             <summary class="prop__detail-toggle mono">READ FULL PROPOSAL</summary>
             <div class="prop__body">
               {p.body.map((para) => <p>{para}</p>)}
-              <p class="prop__elig mono">ELIGIBILITY · {p.minEligibility}</p>
+              <p class="prop__elig mono">PROPOSED ELIGIBILITY · {p.minEligibility} · NOT CHECKED</p>
             </div>
           </details>
           <div class="prop__options">
@@ -233,24 +216,25 @@ const jsonLd = {
                 data-consequence={o.consequence}
               >
                 <span class="prop__option-label">{o.label}</span>
-                <span class="prop__option-consequence">{o.consequence}</span>
+                <span class="prop__option-consequence">Proposed outcome: {o.consequence}</span>
               </button>
             ))}
           </div>
-          <p class="prop__status mono" data-vote-status={p.id}>NOT YET VOTED</p>
+          <p class="prop__status mono" data-vote-status={p.id}>NO LOCAL CHOICE</p>
         </article>
       ))}
     </section>
 
     <section class="principles">
       <p class="kicker">HOW THIS WORKS</p>
+      <p id="dao-storage-status" role="status" aria-live="polite"></p>
       <ol class="principles__list">
-        <li><strong>Proposals are author-curated.</strong> Mike drafts, commits to the repo. Zero user-submitted content means zero moderation surface — the DAO never has to police speech.</li>
-        <li><strong>Votes are Beacon-signed.</strong> Click FOR / AGAINST / ABSTAIN; your wallet signs a plain-text JSON message containing the proposal id, your choice, and a timestamp. No gas.</li>
-        <li><strong>Eligibility is on-chain.</strong> Most proposals require a Visit Noun or DRUM balance to count. The page checks TzKT at sign time.</li>
-        <li><strong>Binary outcomes.</strong> Every proposal is FOR / AGAINST / ABSTAIN. Discussion happens off-site in the blocks that set up the proposal. Vote, don't debate — here.</li>
-        <li><strong>Tally lands when the backend does.</strong> v1 stores votes to localStorage + prints your signature to console. v1.1 lands a Cloudflare KV-backed tally aggregator (env-guarded — same pattern as <a href="/api/indexnow">/api/indexnow</a>).</li>
+        <li><strong>These are historical proposals.</strong> The dates and potential outcomes below describe proposals, not decisions made by this page.</li>
+        <li><strong>Choices stay on this device.</strong> New choices do not need a wallet and stay in browser storage. Earlier saved choices may still contain a wallet address. The page does not request a signature or send the choice.</li>
+        <li><strong>Eligibility is not checked.</strong> The eligibility listed on each proposal is an idea for a future process, not a current requirement enforced here.</li>
+        <li><strong>There is no shared tally or automatic execution.</strong> A local choice does not cast a binding vote, allocate funds, change a schema, or authorize an action.</li>
       </ol>
+
     </section>
 
     <aside class="surfaces">
@@ -266,21 +250,17 @@ const jsonLd = {
   </div>
 
   <script is:inline>
-    /**
-     * v1 vote handler — Beacon signs a plain-text message, we store the
-     * signature + vote + timestamp to localStorage keyed by proposal id.
-     * When PC_DAO_KV lands, we'll POST the payload to /api/dao/vote.
-     */
+    // Local-only choice prototype: no signatures, submission or tally.
     (function () {
       const STORAGE_KEY = 'pc:dao:votes';
 
       function readVotes() {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+        try { const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {}; }
         catch { return {}; }
       }
 
       function writeVotes(v) {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); } catch {}
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); return true; } catch { return false; }
       }
 
       function renderStatus() {
@@ -289,43 +269,17 @@ const jsonLd = {
           const pid = el.getAttribute('data-vote-status');
           const v = votes[pid];
           if (v && v.vote) {
-            el.textContent = 'YOU VOTED · ' + v.vote + ' · ' + (v.ts || '');
+            el.textContent = 'LOCAL CHOICE · ' + v.vote + ' · ' + (v.ts || '');
             el.classList.add('prop__status--voted');
           } else {
-            el.textContent = 'NOT YET VOTED';
+            el.textContent = 'NO LOCAL CHOICE';
             el.classList.remove('prop__status--voted');
           }
         });
       }
 
-      async function signVote(proposalId, vote) {
-        const { connectKukai, getActiveAddress } = await import('/src/lib/tezos.ts').catch(async () => await import('../lib/tezos'));
-        let addr;
-        try {
-          addr = await getActiveAddress();
-          if (!addr) addr = await connectKukai();
-        } catch (err) {
-          alert('Wallet not connected or signing was cancelled.');
-          return null;
-        }
-
-        const payload = {
-          type: 'pc-dao-vote',
-          proposal: proposalId,
-          vote,
-          timestamp: new Date().toISOString(),
-          address: addr,
-        };
-
-        // For v1 we don't actually call client.requestSignPayload —
-        // that's v1.1 when we wire the tally backend. For now we just
-        // record that the wallet was connected and the vote was cast.
-        // The signature step is a stub that records intent.
-        return payload;
-      }
-
       document.querySelectorAll('[data-vote]').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
+        btn.addEventListener('click', function () {
           const pid = btn.getAttribute('data-proposal');
           const vote = btn.getAttribute('data-vote');
           if (!pid || !vote) return;
@@ -334,18 +288,16 @@ const jsonLd = {
           if (current[pid] && current[pid].vote === vote) {
             // Tapping same option again — treat as cancel.
             delete current[pid];
-            writeVotes(current);
+            if (!writeVotes(current)) { document.getElementById('dao-storage-status').textContent = 'Browser storage is unavailable; your choice was not changed.'; return; }
+            document.getElementById('dao-storage-status').textContent = 'Local choice cleared.';
             renderStatus();
             return;
           }
 
-          const payload = await signVote(pid, vote);
-          if (!payload) return;
-
-          current[pid] = { vote, ts: payload.timestamp, address: payload.address };
-          writeVotes(current);
+          current[pid] = { vote, ts: new Date().toISOString() };
+          if (!writeVotes(current)) { document.getElementById('dao-storage-status').textContent = 'Browser storage is unavailable; your choice was not saved.'; return; }
+          document.getElementById('dao-storage-status').textContent = 'Local choice saved on this device.';
           renderStatus();
-          console.info('[pc-dao] vote recorded', payload);
         });
       });
 
