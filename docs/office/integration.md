@@ -41,25 +41,27 @@ PR1724 and the lost-write code remain untouched and held.
    We do not relabel children or edit Ada's files. Parent-observed cards can be
    displayed, but are ineligible and dark. Owner must generalize parent policy,
    retain exact attestation matching, and refresh the dependency lock/tests.
-2. A real read-only source attempt from this sandbox's Node fetch failed for
-   Loom/GitHub sources. It produced degraded data, zero eligible events/merges;
-   this is an environment read limitation, not proof the providers are down.
+2. Direct Node fetch initially failed here. Repeating the bounded read with
+   Node's standard --use-env-proxy reached both real sources: six display cards,
+   zero eligible desks/events due to the parent-policy rejection, and one actual
+   provider-verified merge. No provider outage or live deployment is inferred.
+   Local Node checks require that environment proxy option; no credential was read.
 3. Lou's unique art/sound handoff and Terra review remain pending. The rivals are
    isolated pitches, not selected or included here. No audio implementation or
    physical-phone/audio QA is claimed.
 
 ## Verification
 
-Five composition tests import and execute the actual pinned Ada modules with
+Six composition tests import and execute the actual pinned Ada modules with
 mocked GET responses: valid composition, source failure, absent attestation,
-experiment-end zero requests and the actual Sid-parent rejection. The positive
+experiment-end zero requests, aged-post stale state and the actual Sid-parent rejection. The positive
 active-path fixture uses a synthetic Ada parent only in the test; production
 records remain truthful `@sid`. No live load or board writes occur in tests.
 
-Chromium at 390 and1440px renders the actual degraded read snapshot with six whole
-portraits and dark desks; navigation/focus, silent OS reduced motion, manual-only
+Chromium at 390 and1440px renders the actual source-read snapshot with six whole
+portraits, dark unresolved desks and the actual provider-verified merge fire; navigation/focus, silent OS reduced motion, manual-only
 reads, overflow, page errors, writes and external requests pass. This checks the
-composite UI, not a physical phone, hearing test, live successful event stream or
+composite UI, not a physical phone, hearing test, eligible live post/reply stream or
 Terra review. Proof images remain local under `/workspace/work/s4-office-proof/`.
 Agent surface audit passed. CI overlays pinned dependencies, compiles the Worker
 and builds the site; no full cloud build was run locally (OPERATIONS).
@@ -80,10 +82,10 @@ Each declared/read back its own inbox before work and left a retained left-off.
 | /root/sol_6 | [sol-6](https://pointcast.xyz/loom?to=%40sol-6#m_1d13044d30) | [1772](https://github.com/mhoydich/pointcast/pull/1772) | 1 |
 | /root/sol_rival_desk | [rival desk](https://pointcast.xyz/loom?to=%40sol-rival-desk#m_6j2c505s0a) | [1779](https://github.com/mhoydich/pointcast/pull/1779) | 1 |
 | /root/sol_rival_phone | [rival phone](https://pointcast.xyz/loom?to=%40sol-rival-phone#m_260n0s4j73) | [1781](https://github.com/mhoydich/pointcast/pull/1781) | 1 |
-| /root/sol_night | [night](https://pointcast.xyz/loom?to=%40sol-night#m_035q55525t) | [1777](https://github.com/mhoydich/pointcast/pull/1777) | 1 |
+| /root/sol_night | [night](https://pointcast.xyz/loom?to=%40sol-night#m_035q55525t) | [1777](https://github.com/mhoydich/pointcast/pull/1777) | 2 |
 
 At handoff: nine children stopped, zero working, zero unfinished child deliverables.
-The parent integration remains blocked as above. sol-4 used four posts this hour;
+The parent integration remains blocked as above. sol-4 and sol-night used four posts this hour;
 others used two. Sid stays within four. One accepted parent partial receipt was
 missing on read-back; the retained consolidated handoff is task message
 `m_3p1o532m14`. This is not a synthetic swarm-load measurement.
@@ -92,5 +94,6 @@ missing on read-back; the retained consolidated handoff is task message
 has no standalone chat URL, external wake endpoint, scheduler or persistence
 promise. Queue preparation is done, overnight execution is not scheduled.
 Shwa must arrange actual wakes for Nov17 23:00–Nov18 07:00 ET (Nov18 04–12 UTC),
-within max3 work cycles and stop3 empty wakes. The experiment ends Nov18 17:24 UTC.
+with only one productive cycle remaining (preparation and correction consumed two),
+max3 empty wakes, and three total work cycles. The experiment ends Nov18 17:24 UTC.
 No merges overnight. No wallet, keys, mint, spend, database or outside-Loom post.

@@ -42,7 +42,9 @@ export async function readOfficeSnapshot({ records, adapters, fetcher = fetch, c
   });
   const merges = pr.data.pullRequests.filter(p=>p.state==='merged' && p.mergeSha).map(p=>({number:p.number,url:p.url,mergedAt:p.mergedAt,verified:true}));
   const blocked = pr.data.pullRequests.filter(p=>p.blocked===true).map(p=>({number:p.number,url:p.url,reason:'Provider reports a conflicting head',checkedAt:pr.observedAt,verified:true}));
-  return {schema:SCHEMA,state:errors.length?'degraded':events.length?'ok':'idle',observedAt:snapshot,desks,events,edges,merges,blocked,
+  const degraded=errors.length>0 || [registry,observed,pr].some(x=>x.state==='error');
+  const stale=[registry,observed,pr].some(x=>x.state==='stale');
+  return {schema:SCHEMA,state:degraded?'degraded':stale?'stale':events.length?'ok':'idle',observedAt:snapshot,desks,events,edges,merges,blocked,
     evidenceFresh:pr.state==='ok',trackedPrs:fixed,errors,sourceUrls:rooms.map(r=>r.sourceUrl).filter(Boolean),
     expiresAt:new Date(OFFICE_END).toISOString()};
 }

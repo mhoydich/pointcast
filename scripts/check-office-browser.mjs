@@ -28,6 +28,7 @@ try{
   assert.equal(await page.locator('.office-desk__noun').count(),6);
   assert.equal(await page.locator('.office-desk[data-activity="recent"]').count(),0,'Sid parent contract mismatch stays dark');
   assert.equal(await page.locator('#office-sound').isDisabled(),true);
+  assert.equal(await page.locator('[data-state=\"verified-merged\"]').count(),snapshot.evidenceFresh?snapshot.merges.length:0);
   assert.equal(await page.locator('body').getAttribute('data-motion'),'reduced');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   const before=reads;await page.waitForTimeout(500);assert.equal(reads,before,'no background polling');

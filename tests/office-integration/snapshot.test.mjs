@@ -69,3 +69,15 @@ test('current Sid parent contract mismatch remains explicit and cannot activate 
  assert.ok(r.errors.includes('missing_declaration'));
  assert.ok(records.every(r=>r.declaration.parentSeat==='@sid'));
 });
+
+test('fresh reads of aged posts remain stale, not a successful empty activity claim',async()=>{
+ const source=sources();
+ const fetcher=async(url,init)=>{
+  const res=await source.fetcher(url,init);
+  if(!url.startsWith('https://pointcast.xyz/'))return res;
+  const payload=await res.json();payload.messages.forEach(m=>m.at=new Date(NOW-3600000).toISOString());
+  return Response.json(payload);
+ };
+ const r=await readOfficeSnapshot({records:fixtureRecords,adapters,fetcher,clock:clock()});
+ assert.equal(r.state,'stale');assert.deepEqual(r.events,[]);assert.ok(r.desks.every(d=>d.facts.stale));
+});
