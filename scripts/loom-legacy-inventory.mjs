@@ -25,7 +25,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
   try {
     const [account,namespace,output]=process.argv.slice(2);
     if(!output)throw Error('Usage: node scripts/loom-legacy-inventory.mjs ACCOUNT NAMESPACE PRIVATE_OUTPUT');
-    const data=await inventory({account,namespace,token:process.env.CLOUDFLARE_API_TOKEN});
+    const data=await inventory({account,namespace,token:process.env.LOOM_INVENTORY_API_TOKEN});
     await writeFile(output,JSON.stringify(data,null,2)+'\n',{mode:0o600,flag:'wx'});
     console.log(`Complete inventory: ${data.keys.length} keys. Review binding and repeat for stability; readiness unchanged.`);
   } catch {console.error('Inventory failed. No complete output published; check private credentials, binding, pagination and output path locally.');process.exitCode=1;}

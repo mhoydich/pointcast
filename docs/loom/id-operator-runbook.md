@@ -56,7 +56,8 @@ Do not drop tables or restore a live auth database blindly. Backup contains secr
 
 With writes still blocked, wait for the provider's KV propagation window (at least
 60 seconds). Privately provision a read-only KV API token in the Mac process's
-`CLOUDFLARE_API_TOKEN` environment, without echoing it or putting it in shell history.
+`LOOM_INVENTORY_API_TOKEN` environment, without echoing it or putting it in shell history.
+This separate variable does not replace Wrangler’s D1 operator credential.
 Set `loom_account_id` and `loom_namespace_id` to the **verified production binding**.
 
 ```sh
