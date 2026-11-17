@@ -59,7 +59,12 @@ for (const [parentSeat, prefix, model] of families) {
     const d = declaration();
     assert.equal(run(d).valid, true); assert.equal(run(d).verified, false);
     assert.equal(run(d, trusted(d)).verified, true);
-    assert.equal(run(d, { ...trusted(d), parentSeat: '@unknown' }).verified, false);
+    for (const key of ['parentSeat', 'handle', 'model', 'runtimeId', 'job', 'ownedFiles']) {
+      const a = trusted(d); a[key] = key === 'ownedFiles' ? ['wrong.mjs'] : 'mismatch';
+      const result = run(d, a);
+      assert.equal(result.valid, true); assert.equal(result.verified, false, key);
+      assert.ok(result.errors.includes('attestation_mismatch'));
+    }
   });
   test(`${parentSeat} rejects spoofed or malformed family identity`, () => {
     for (const patch of [
