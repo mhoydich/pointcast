@@ -28,7 +28,8 @@ try{
   assert.equal(await page.locator('.office-desk__noun').count(),6);
   const recent=snapshot.desks.filter(d=>!d.facts.stale&&d.facts.postUrl&&Date.parse(d.facts.asOf)-Date.parse(d.facts.lastPostAt)>=0&&Date.parse(d.facts.asOf)-Date.parse(d.facts.lastPostAt)<=900000).length;
   assert.equal(await page.locator('.office-desk[data-activity="recent"]').count(),recent,'only actual supplied recent post facts may light');
-  assert.equal(await page.locator('#office-sound').isDisabled(),true);
+  assert.equal(await page.locator('#office-sound').getAttribute('aria-pressed'),'false');
+  assert.equal(await page.locator('#office-watch').getAttribute('aria-pressed'),'false');
   assert.equal(await page.locator('[data-state=\"verified-merged\"]').count(),snapshot.evidenceFresh?snapshot.merges.length:0);
   assert.equal(await page.locator('body').getAttribute('data-motion'),'reduced');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

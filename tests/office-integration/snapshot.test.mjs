@@ -37,7 +37,7 @@ test('actual adapters compose verified parent records, sourced reply edges, merg
  const {fetcher,requests}=sources();
  const result=await readOfficeSnapshot({records:fixtureRecords,adapters,fetcher,clock:clock()});
  assert.equal(result.desks.length,6);assert.ok(result.desks.every(d=>d.eligible));
- assert.equal(result.events.length,2);assert.equal(result.edges.length,1);
+ assert.equal(result.events.length,2);assert.ok(result.events.every(event => event.roomAddress === "#officenoun-tasks"));assert.equal(result.edges.length,1);
  assert.equal(result.edges[0].fromHandle,'@sol-2');assert.equal(result.edges[0].toHandle,'@sol-1');
  assert.deepEqual(result.merges.map(p=>p.number),[1767]);assert.deepEqual(result.blocked.map(p=>p.number),[1770]);
  assert.equal(result.desks[0].nounUrl,'/images/ufogp/sid.svg');

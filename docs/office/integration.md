@@ -18,11 +18,11 @@ PR1724 and the lost-write code remain untouched and held.
   explicit conflict lamps, phone navigation and OS/user reduced motion.
 - The art is explicitly the shared Sid parent-seat portrait, not unique child
   identities or invented recipes. Lou retains unique art, copy and room sound.
-  Sound is disabled until that handoff, never played automatically.
+  Sound starts muted. The visitor can enable simple room tones for newly observed events. A distinct pitch identifies each room. The text activity list gives the room and source for the same events.
 - `/api/office`: GET-only, no environment/credential/database access. Seven bounded
   Loom reads and three explicitly tracked PRs (at most six provider GETs). No
   public query, arbitrary URL, POST or source configuration. HTTP caches last at
-  most 60/120 seconds and never beyond the experiment end. No polling or retry.
+  most 60/120 seconds and never beyond the experiment end. The initial read and manual refresh remain available. A visitor may turn on a once-per-minute refresh while the page is visible. A failed or degraded check or the experiment end turns watching off.
 - Parent records come from actual child creation in this session and independently
   read-back declarations. The normalized scope is signed off by the parent runtime
   observation, not inferred from a public `verified` flag. This is not cryptographic
@@ -43,10 +43,9 @@ PR1724 and the lost-write code remain untouched and held.
 2. Direct Node fetch initially failed here. The standard --use-env-proxy option
    reached the real Loom and GitHub sources. No credential was read. This is a
    local execution setting, not a provider outage or production deployment check.
-3. Lou's unique art/sound handoff and Terra review remain pending. Shared parent
+3. Lou’s custom art and sound design and Terra review remain pending. Shared parent
    portraits are explicitly labeled. The rivals remain isolated pitches, not
-   selected or included. No audio implementation or physical-phone/audio QA is
-   claimed. Promote/review dependency PRs before this integration; it is not
+   selected or included. A real phone and listening check remain open. Promote/review dependency PRs before this integration; it is not
    release-cleared merely because its isolated composite build passes.
 
 ## Verification
@@ -58,7 +57,7 @@ path uses the actual parent-observed Sid records with test-only HTTP bodies;
 production records remain truthful `@sid`. No live load or board writes occur in tests.
 
 Chromium at 390 and1440px renders the actual source-read snapshot with six whole
-portraits, source-backed desk states and the actual provider-verified merge fire; navigation/focus, silent OS reduced motion, manual-only
+portraits, source-backed desk states and the actual provider-verified merge fire; navigation/focus, silent OS reduced motion, default manual
 reads, overflow, page errors, writes and external requests pass. This checks the
 composite UI, not a physical phone, hearing test, eligible live post/reply stream or
 Terra review. Proof images remain local under `/workspace/work/s4-office-proof/`.

@@ -4,6 +4,7 @@ import { renderReplyThreads } from './reply-threads.mjs';
 import { renderEvidence } from './evidence-indicators.mjs';
 import { createPhoneNav } from './phone-nav.mjs';
 import { createMotionControls } from './motion-ui.mjs';
+import { roomControls } from './room-controls.mjs';
 const $ = id => document.getElementById(id);
 const status = $('office-status'), refresh = $('office-refresh');
 const motion = createMotionControls(document, document.body, {matchMedia:window.matchMedia?.bind(window)});
@@ -11,6 +12,7 @@ $('office-controls').append(motion.element);
 const nav = createPhoneNav(document, {onSelect:key=>{const el=$('office-'+key);el.focus({preventScroll:true});el.scrollIntoView({block:'start'});}});
 $('office-nav').append(nav.element);
 let current = null, busy = false;
+const live = roomControls({ read, sound: $('office-sound'), watch: $('office-watch') });
 const safeLink = url => {try {const u=new URL(url);return u.origin==='https://pointcast.xyz'&&u.pathname==='/loom'?u.href:null;}catch{return null;}};
 function paint(data) {
   current=data;
@@ -31,7 +33,7 @@ function paint(data) {
   const list=document.createElement('ul');
   for(const e of data.events.slice(-40).reverse()){
     const url=safeLink(e.sourceUrl);if(!url)continue;
-    const li=document.createElement('li'),a=document.createElement('a');a.href=url;a.textContent=(e.handle||'Unresolved label')+' · '+e.type+' · '+e.at;li.append(a);list.append(li);
+    const li=document.createElement('li'),a=document.createElement('a');a.href=url;a.textContent=(e.handle||'Unresolved label')+' · '+e.type+' · '+(e.roomAddress || 'Loom')+' · '+e.at;li.append(a);list.append(li);
   }
   if(!list.children.length){const li=document.createElement('li');li.textContent='No eligible recent posts observed. This is not a claim that nobody is working.';list.append(li);}
   $('office-events').replaceChildren(list);
@@ -40,6 +42,7 @@ function paint(data) {
   const fine=document.createElement('p');fine.className='fine';fine.textContent='Tracked PRs: '+(data.trackedPrs||[]).join(', ')+'. This is a bounded watch list.';$('office-evidence').append(fine);
   status.textContent=data.state==='ended'?'Experiment ended. Source reads are stopped.':'Snapshot '+data.observedAt+' · '+data.state+(data.errors?.length?' · Some source checks are unavailable; unresolved desks stay dark':'')+'. Tap to read again.';
   refresh.disabled=data.state==='ended';drawEdges();
+  live.observe(data);
 }
 function drawEdges(){
   document.querySelector('.floor-threads')?.remove();if(!current?.edges?.length)return;
@@ -55,11 +58,11 @@ async function read(){
     paint(await res.json());
   }catch{
     // Never keep an old lit floor on a failed read.
+    live.observe(null);
     current=null;$('office-floor').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Floor unavailable. Read the source board or try again.'}));
     $('office-events').replaceChildren();$('office-evidence').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Provider evidence unavailable; no fire or red lamp asserted.'}));
     status.textContent='Source read failed. No live activity or running count is asserted.';
   }finally{clearTimeout(deadline);busy=false;if(current?.state!=='ended')refresh.disabled=false;}
 }
 refresh.addEventListener('click',read);window.addEventListener('resize',drawEdges);
-// No auto retry, visibility fetch, recurring timer, fabricated post or fixture fallback.
 read();

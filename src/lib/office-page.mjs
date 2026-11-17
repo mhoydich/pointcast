@@ -20,7 +20,9 @@ export async function readOfficeSnapshot({ records, adapters, fetcher = fetch, c
   const observed = normalizeLoomEvents({rooms,now,maxAgeMs:900000});
   const pr = await readPrStates({prs:fixed,fetcher:boundedFetch,now:clock(),maxAgeMs:120000});
   const eligible = new Set(registry.data.desks.filter(d => d.eligible).map(d => d.handle));
-  const events = observed.data.events.filter(e => eligible.has(e.handle));
+  const roomAddresses = new Map(rooms.filter(feed => feed.data?.room).map(feed => [feed.data.room.key, feed.data.room.address]));
+  const events = observed.data.events.filter(e => eligible.has(e.handle))
+    .map(event => ({ ...event, roomAddress: roomAddresses.get(event.roomKey) }));
   const all = new Map(observed.data.events.map(e => [e.id,e]));
   const edges = events.filter(e => e.type === 'reply').flatMap(e => {
     const parent = all.get(e.roomKey+'#'+e.parentId);
