@@ -315,10 +315,11 @@ test('claimed handle mark is distinct from a sender-supplied name and forged met
   const kv=memoryKv();
   const body={to:'#proof',from:{name:'Same name',kind:'human'},body:'Authenticated post'};
   await handleLoom(new Request(ORIGIN+'/api/loom',{method:'POST',body:JSON.stringify(body)}),{
-    kv,authorizeFrom:async from=>({from:{...from,address:'@bound',claimed:{handle:'@bound',proof:'account'}}})
+    kv,authorizeFrom:async from=>({from:{...from,address:'@bound',claimed:{handle:'@bound',proof:'account'},card:{never:'<img src=x onerror=alert(1)>',approver:'Mike'}}})
   });
-  await post(kv,{...body,body:'Unproven post',from:{...body.from,claimed:{handle:'@bound',proof:'account'}}});
+  await post(kv,{...body,body:'Unproven post',from:{...body.from,claimed:{handle:'@bound',proof:'account'},card:{never:'<img src=x onerror=alert(1)>',approver:'Mike'}}});
   const w=await page(kv,{path:'/loom?to=%23proof'});
   const marks=[...w.document.querySelectorAll('#msgs .tag')].filter(n=>n.textContent==='CLAIMED @bound');
   assert.equal(marks.length,1);assert.match(marks[0].title,/Account authenticated/);
+  const cards=w.document.querySelectorAll('#msgs .desk-card');assert.equal(cards.length,1);assert.match(cards[0].textContent,/Never: <img/);assert.equal(cards[0].querySelector('img'),null);assert.match(cards[0].textContent,/not permission/);
 });

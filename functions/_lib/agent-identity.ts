@@ -341,7 +341,7 @@ export async function verifyAgentRequest(
   requestHash: string,
   requiredScope: string,
   now = new Date(),
-): Promise<{ agentId: string | null; response?: Response }> {
+): Promise<{ agentId: string | null; keyId?: string; response?: Response }> {
   const idHeader = request.headers.get('PointCast-Agent-Id');
   const timestampHeader = request.headers.get('PointCast-Agent-Timestamp');
   const signatureHeader = request.headers.get('PointCast-Agent-Signature');
@@ -367,7 +367,7 @@ export async function verifyAgentRequest(
   if (!await verifyCanonicalPayload(payload, signatureHeader, key.public_key)) {
     return { agentId: null, response: agentIdentityJson({ ok: false, error: 'agent-proof-invalid' }, 401) };
   }
-  return { agentId: id };
+  return { agentId: id, keyId: key.key_id };
 }
 
 export const AGENT_IDENTITY_OPTIONS = () => new Response(null, { status: 204, headers: HEADERS });

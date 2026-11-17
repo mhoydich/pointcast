@@ -1,5 +1,5 @@
 // OFF-66 Loom ID layer, step two: claim / continue / save / fork / card.
-// Pure library over a D1-shaped db ({prepare().bind().first()/run()}). Not wired to any route yet.
+// D1-backed ID operations. Routes are gated; holder authority survives flag shutdown.
 import {normalizeHandle} from './handles.mjs';
 
 export const LINK_TTL_MS = 10 * 60 * 1000;
@@ -32,15 +32,33 @@ export async function createLink(db, {handle, kind, principal, forkName=null, no
 }
 
 // A session redeems a link. Single use is enforced by one conditional UPDATE.
-export async function redeemLink(db, {token, session, now=Date.now()}) {
+export async function redeemLink(db, {token, session, now=Date.now(), allowFork=true}) {
   if (!session) return {error:'session_required', status:401};
+  if (typeof token !== 'string' || !/^[a-f0-9]{48}$/.test(token)) return {error:'invalid_token',status:400};
   const th = await hashToken(token);
-  const r = await db.prepare('UPDATE loom_id_links SET used_at = ?, used_by = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?')
-    .bind(now, session, th, now).run();
-  if (r.meta?.changes !== 1) return {error:'link_invalid_used_or_expired', status:410};
   const link = await db.prepare('SELECT * FROM loom_id_links WHERE token_hash = ?').bind(th).first();
-  if (link.kind === 'fork') return fork(db, link, session, now);
-  return moveHolder(db, link.handle, session, now);
+  if (!link || link.used_at != null || link.expires_at <= now) return {error:'link_invalid_used_or_expired',status:410};
+  // Fork is not exposed by step-three routes. Keep its existing library behavior.
+  if (link.kind === 'fork') {
+    if (!allowFork) return {error:'fork_not_enabled',status:400};
+    const r = await db.prepare('UPDATE loom_id_links SET used_at=?,used_by=? WHERE token_hash=? AND used_at IS NULL AND expires_at>?').bind(now,session,th,now).run();
+    return r.meta?.changes === 1 ? fork(db,link,session,now) : {error:'link_invalid_used_or_expired',status:410};
+  }
+  // D1 batch is transactional: a failed holder move must not consume the token.
+  // Unique per-attempt marker also prevents a same-session/same-time replay.
+  const attempt = newToken();
+  const results = await db.batch([
+    db.prepare('UPDATE loom_id_links SET used_at=?,used_by=? WHERE token_hash=? AND used_at IS NULL AND expires_at>?').bind(now,attempt,th,now),
+    db.prepare(`INSERT INTO loom_id_holders (handle,holder,epoch,held_since)
+      SELECT handle,?,1,? FROM loom_id_links WHERE token_hash=? AND used_by=?
+      ON CONFLICT(handle) DO UPDATE SET holder=excluded.holder,epoch=loom_id_holders.epoch+1,held_since=excluded.held_since`).bind(session,now,th,attempt),
+    db.prepare(`DELETE FROM loom_id_links WHERE used_at IS NULL AND kind IN ('claim','continue')
+      AND handle IN (SELECT handle FROM loom_id_links WHERE token_hash=? AND used_by=?)`).bind(th,attempt)
+  ]);
+  if (results[0].meta?.changes !== 1) return {error:'link_invalid_used_or_expired',status:410};
+  const chk = await checkHolder(db,link.handle,session);
+  if (!chk.ok) return chk;
+  return {holder:{handle:'@'+link.handle,epoch:chk.epoch,heldSince:now},resume:await latestSave(db,link.handle)};
 }
 
 // Claim and continue both end the previous holder: one handle, one live session.
@@ -69,21 +87,27 @@ async function fork(db, link, session, now) {
 // Every write by a handle checks it is still the live holder; a stale session is refused.
 export async function checkHolder(db, handle, session) {
   const h = normalizeHandle(handle);
-  const row = h && await db.prepare('SELECT holder, epoch FROM loom_id_holders WHERE handle = ?').bind(h).first();
+  if (!h || !session) return {error:'holder_required',status:403};
+  const row = await db.prepare('SELECT holder, epoch FROM loom_id_holders WHERE handle = ?').bind(h).first();
   if (!row) return {error:'no_holder', status:403};
   if (row.holder !== session) return {error:'holder_moved', status:409, epoch:row.epoch};
   return {ok:true, epoch:row.epoch};
 }
 
-const SECRETISH = /(sk-|ghp_|xox[bp]-|BEGIN [A-Z ]*PRIVATE KEY|edsk|seed phrase|mnemonic)/i;
+const SECRETISH = /(sk-|gh[pousr]_|github_pat_|xox[bp]-|BEGIN [A-Z ]*PRIVATE KEY|edsk|seed phrase|mnemonic|pcs_|bearer\s|[a-f0-9]{48,})/i;
 export async function saveHandoff(db, {handle, session, note, memoryRef=null, branch=null, now=Date.now()}) {
   const chk = await checkHolder(db, handle, session);
   if (!chk.ok) return chk;
   if (typeof note !== 'string' || !note.trim() || note.length > 2000) return {error:'invalid_note', status:400};
+  if ((memoryRef != null && (typeof memoryRef !== 'string' || memoryRef.length > 300)) || (branch != null && (typeof branch !== 'string' || branch.length > 120))) return {error:'invalid_save_metadata',status:400};
   if ([note, memoryRef, branch].some(v => v && SECRETISH.test(v))) return {error:'looks_like_a_secret', status:400};
   const h = normalizeHandle(handle);
-  await db.prepare('INSERT INTO loom_id_saves (handle,epoch,note,memory_ref,branch,saved_at) VALUES (?,?,?,?,?,?)')
-    .bind(h, chk.epoch, note.trim(), memoryRef, branch, now).run();
+  // Check the epoch and holder in the INSERT itself; a concurrent handover
+  // cannot accept a stale save between a JS check and a separate write.
+  const written = await db.prepare(`INSERT INTO loom_id_saves (handle,epoch,note,memory_ref,branch,saved_at)
+    SELECT handle,epoch,?,?,?,? FROM loom_id_holders WHERE handle=? AND holder=? AND epoch=?`)
+    .bind(note.trim(),memoryRef,branch,now,h,session,chk.epoch).run();
+  if (written.meta?.changes !== 1) return {error:'holder_moved',status:409};
   return {saved: await latestSave(db, h)};
 }
 

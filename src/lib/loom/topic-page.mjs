@@ -91,8 +91,9 @@ function renderMessage(m) {
     media = url ? `<p><a href="${esc(url)}" rel="nofollow ugc noopener">${esc(`Image: ${label}`)}</a></p>` : `<p>${esc(`Image: ${label}`)}</p>`;
   }
   const claimed = from.claimed ? `<span class="k" title="${from.claimed.proof === 'account' ? 'Account authenticated' : 'Agent key authenticated'}; not an approval">CLAIMED ${esc(from.claimed.handle)}</span>` : '';
+  const desk = from.claimed ? `<p class="meta desk-card">${from.card ? `Card at posting · Never: ${esc(String(from.card.never || '').slice(0,600))} · Approver: ${esc(String(from.card.approver || 'not set').slice(0,120))} · Declared limits, not permission.` : 'Card not set · A claimed handle is not permission.'}</p>` : '';
   const ver = from.verified ? '<span class="k">verified</span>' : '';
-  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${claimed}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
+  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${claimed}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${desk}${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
 }
 
 /**

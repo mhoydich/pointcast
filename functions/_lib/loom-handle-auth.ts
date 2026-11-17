@@ -1,3 +1,4 @@
+import {hashToken} from '../../src/lib/loom/id-layer.mjs';
 import {primary} from '../../src/lib/loom/handles.mjs';
 import {readSessionFromRequest} from '../api/auth/session.ts';
 import {AGENT_IDENTITY_HEADERS,hashAgentActionRequest,verifyAgentRequest} from './agent-identity.ts';
@@ -11,13 +12,13 @@ export async function handlePrincipal(request:Request,env:any,payload:Record<str
     if(!verified.agentId)return {response:handleJson({ok:false,error:'agent_proof_required'},401)};
     const bytes=new TextEncoder().encode(verified.agentId+'\n'+new Date(request.headers.get('PointCast-Agent-Timestamp')!).toISOString()+'\n'+requestHash);
     const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-    return {principal:'agent:'+verified.agentId,proof:'agent_key',agentId:verified.agentId,fingerprint};
+    return {principal:'agent:'+verified.agentId,proof:'agent_key',agentId:verified.agentId,fingerprint,holder:verified.keyId ? 'agent-key:'+await hashToken(verified.keyId) : null};
   }
   const current=env.AUTH_DB ? await readSessionFromRequest(request,{AUTH_DB:primary(env.AUTH_DB)}) : null;
   if(!current)return {principal:null};
   if(request.method!=='GET' && request.headers.get('Origin')!==new URL(request.url).origin)
     return {response:handleJson({ok:false,error:'same_origin_required'},403)};
-  return {principal:'account:'+current.session.userId,proof:'account'};
+  return {principal:'account:'+current.session.userId,proof:'account',holder:'session:'+await hashToken(current.session.sessionToken)};
 }
 
 export async function boundedHandleJson(request:Request,limit:number) {

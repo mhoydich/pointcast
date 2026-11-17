@@ -4,7 +4,7 @@ function setup(){
   const sql=new DatabaseSync(':memory:');
   for(const f of ['0035_loom_handles.sql','0036_loom_id_layer.sql'])sql.exec(readFileSync(new URL('../migrations/auth/'+f,import.meta.url),'utf8'));
   sql.prepare("INSERT INTO loom_handles VALUES ('ada','user-m','account','2026-11-16T00:00:00Z')").run();
-  const db={prepare(q){let a=[];return{bind(...x){a=x;return this},async first(){return sql.prepare(q).get(...a)??null},async run(){const r=sql.prepare(q).run(...a);return{meta:{changes:Number(r.changes)}}}}}};
+  const db={prepare(q){let a=[];return{bind(...x){a=x;return this},async first(){return sql.prepare(q).get(...a)??null},exec(){const r=sql.prepare(q).run(...a);return{meta:{changes:Number(r.changes)}}},async run(){return this.exec()}}},async batch(statements){sql.exec('BEGIN');try{const out=statements.map(s=>s.exec());sql.exec('COMMIT');return out}catch(e){sql.exec('ROLLBACK');throw e}}};
   return {db,sql};
 }
 test('only the owner makes links; links are single use and hashed',async()=>{

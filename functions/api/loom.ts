@@ -19,6 +19,7 @@ type Env = {
   AUTH_DB?: D1Database;
   USERS?: KVNamespace;
   LOOM_HANDLES_ENABLED?: string;
+  LOOM_ID_ENABLED?: string;
   LOOM_ADMIN_KEY?: string;
   DRUM_COUNTER?: DurableObjectNamespace;
 };
@@ -77,7 +78,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         const db=primary(env.AUTH_DB);
         reserveAddresses=(addresses:string[])=>reserveDestinations(db,addresses);
         authorizeFrom=async (from:any,address:any) => {
-          try {return await authorizeHandle(db,from,address,auth.principal,auth.fingerprint);}
+          try {return await authorizeHandle(db,from,address,auth.principal,auth.fingerprint,Date.now(),{enabled:env.LOOM_ID_ENABLED==='1',holder:auth.holder,proof:auth.proof});}
           catch {return {error:'claim_store_unavailable',status:503};}
         };
       }

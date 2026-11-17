@@ -1,3 +1,4 @@
+import {checkHolder,getCard} from './id-layer.mjs';
 import {addressKey} from './address.mjs';
 const RESERVED = new Set(['collator','admin','administrator','support','pointcast','mike','ada','astra','sid','tess','lou','loom','loomdesk','loomcheck','shwa']);
 export const normalizeHandle = value => typeof value === 'string' && /^@?[a-z0-9][a-z0-9_.-]{0,31}$/i.test(value)
@@ -26,7 +27,7 @@ export async function claimHandle(db, kv, input, principal, proof, now=new Date(
   const row=await db.prepare('SELECT * FROM loom_handles WHERE handle = ?').bind(handle).first();
   return row?.principal===principal ? {claim:publicClaim(row)} : {error:'handle_or_principal_unavailable',status:409};
 }
-export async function authorizeHandle(db, from, rawAddress, principal, fingerprint=null, now=Date.now()) {
+export async function authorizeHandle(db, from, rawAddress, principal, fingerprint=null, now=Date.now(), id=null) {
   const effective = typeof rawAddress==='string' && rawAddress.trim().startsWith('@') ? rawAddress.trim() :
     from.address || '@'+(from.name.toLowerCase().replace(/[^a-z0-9_.-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,32)||'anon');
   if(!effective.startsWith('@'))return {from};
@@ -37,14 +38,25 @@ export async function authorizeHandle(db, from, rawAddress, principal, fingerpri
   const row=await db.prepare('SELECT * FROM loom_handles WHERE handle = ?').bind(handle).first();
   if(!row)return {error:'claim_store_unavailable',status:503};
   if(!row.principal)return {from};
-  if(row.principal!==principal)return {error:'claimed_handle_requires_owner',status:403};
-  if(row.proof==='agent_key') {
+  let held = null;
+  if (id) {
+    const enrollment = await db.prepare('SELECT holder FROM loom_id_holders WHERE handle = ?').bind(handle).first();
+    if (id.enabled || enrollment) {
+      held = await checkHolder(db,handle,id.holder);
+      if (!held.ok) return held;
+    }
+  }
+  if(!held && row.principal!==principal)return {error:'claimed_handle_requires_owner',status:403};
+  if((held ? id.proof : row.proof)==='agent_key') {
     if(!fingerprint)return {error:'agent_proof_required',status:401};
     await db.prepare('DELETE FROM loom_handle_requests WHERE expires_at < ?').bind(now).run();
     const used=await db.prepare('INSERT OR IGNORE INTO loom_handle_requests (fingerprint,expires_at) VALUES (?,?)').bind(fingerprint,now+11*60*1000).run();
     if(used.meta?.changes!==1)return {error:'claimed_request_replayed',status:409};
   }
-  return {from:{...from,address:'@'+handle,claimed:publicClaim(row)}};
+  const claimed = publicClaim(row);
+  if (held) { claimed.proof=id.proof; claimed.epoch=held.epoch; }
+  const card = held ? await getCard(db,handle) : null;
+  return {from:{...from,address:'@'+handle,claimed,...(card ? {card} : {})}};
 }
 
 export async function reserveDestinations(db, addresses) {

@@ -8,7 +8,7 @@ import {handlePrincipal} from '../functions/_lib/loom-handle-auth.ts';
 import {hashAgentActionRequest,buildAgentRequestPayload} from '../functions/_lib/agent-identity.ts';
 function setup({ready=true}={}) {
  const sql=new DatabaseSync(':memory:');
- for(const f of ['0001_init.sql','0007_post_office_aliases.sql','0012_paid_action_intents.sql','0014_agent_contract.sql','0035_loom_handles.sql'])sql.exec(readFileSync(new URL('../migrations/auth/'+f,import.meta.url),'utf8'));
+ for(const f of ['0001_init.sql','0007_post_office_aliases.sql','0012_paid_action_intents.sql','0014_agent_contract.sql','0035_loom_handles.sql','0036_loom_id_layer.sql'])sql.exec(readFileSync(new URL('../migrations/auth/'+f,import.meta.url),'utf8'));
  if(ready)sql.exec('UPDATE loom_handle_policy SET legacy_ready=1');
  const db={prepare(query){
    let args=[];

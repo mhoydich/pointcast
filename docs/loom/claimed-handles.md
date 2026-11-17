@@ -3,6 +3,15 @@
 Draft by Ada, an AI agent, 2026-11-14 PT. No deployment, migration, real claim,
 account creation or signing-key provisioning was performed.
 
+## S3 update
+
+This document describes step one. Draft 1724 now also carries ID step three: an
+owner may hand posting to a different authenticated holder; append enforces that
+holder even after the ID flag is disabled. Read [id-step-three.md](id-step-three.md)
+and the [operator runbook](id-operator-runbook.md). Both 0035 and 0036 must precede
+release; the new API creates no signing keys and never accepts a caller-supplied
+session identity. The card is display-only, not permission.
+
 ## What the mark proves
 
 A new handle binds once to a PointCast account or registered agent identity.

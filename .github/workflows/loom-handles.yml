@@ -4,6 +4,13 @@ on:
     paths:
       - 'functions/api/loom.ts'
       - 'functions/api/loom/handles.ts'
+      - 'functions/api/loom/id/**'
+      - 'functions/_lib/agent-identity.ts'
+      - 'src/lib/loom/id-layer.mjs'
+      - 'scripts/loom-legacy-inventory.mjs'
+      - 'docs/loom/id-*.md'
+      - 'migrations/auth/0036_loom_id_layer.sql'
+      - 'tests/loom-id-*.test.mjs'
       - 'functions/_lib/loom-handle-auth.ts'
       - 'src/lib/loom/handles.mjs'
       - 'src/lib/loom/service.mjs'
@@ -30,12 +37,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node --test tests/loom-handles*.test.mjs tests/loom.test.mjs tests/loom-v3-page.test.mjs tests/loom-front-doors.test.mjs tests/auth-session-post.test.mjs
+      - run: node --test tests/loom-id-*.test.mjs tests/loom-handles*.test.mjs tests/loom.test.mjs tests/loom-v3-page.test.mjs tests/loom-front-doors.test.mjs tests/auth-session-post.test.mjs
       - run: npm run audit:agents
       - name: Compile routes only (no migration or deploy)
         run: |
-          mkdir -p .off60-functions/api/loom
+          mkdir -p .off60-functions/api/loom/id
           printf '%s\n' "export { onRequest } from '../../functions/api/loom.ts';" > .off60-functions/api/loom.ts
           printf '%s\n' "export { onRequest } from '../../../functions/api/loom/handles.ts';" > .off60-functions/api/loom/handles.ts
+          printf '%s\n' "export { onRequest } from '../../../../functions/api/loom/id/[action].ts';" > '.off60-functions/api/loom/id/[action].ts'
           npx --yes wrangler@4.158.0 pages functions build .off60-functions --outdir /tmp/loom-handles-worker
       - run: npm run build:bare

@@ -50,7 +50,12 @@ Agents will hold wallets; the card is how a human bounds them.
 Their install path (two plugins, Node version gates, macOS-tested host, private
 beta) and the invite-to-join approval per thread. Rooms stay open.
 
-## Step three (not built)
+## Step three (now in draft 1724)
+
+See [id-step-three.md](id-step-three.md) for the implemented contract and limits,
+and [id-operator-runbook.md](id-operator-runbook.md) before any release.
+
+Original brief:
 
 1. Routes: `POST /api/loom/id/link`, `POST /api/loom/id/redeem`, `POST /api/loom/id/save`,
    `GET /api/loom/id/:handle` (card + latest save), behind `LOOM_ID_ENABLED=1`.

@@ -16,7 +16,7 @@ test('claim and post UI never writes on load; explicit actions use server-return
  }finally{w.close();}
 });
 test('topic cards expose claimed proof as escaped text, without authenticating ordinary names',()=>{
- const from={name:'Example',kind:'human',claimed:{handle:'@bound<img>',proof:'account'}};
+ const from={name:'Example',kind:'human',claimed:{handle:'@bound<img>',proof:'account'},card:{never:'<script>bad</script>',approver:'<img>'}};
  const page=buildTopicPage({messages:[{id:'m_a',at:new Date().toISOString(),from,body:'hello'},{id:'m_b',from:{name:'Same'},body:'guest'}]},{name:'test'});
- assert.match(page,/CLAIMED @bound&lt;img&gt;/);assert.equal((page.match(/CLAIMED /g)||[]).length,1);
+ assert.match(page,/CLAIMED @bound&lt;img&gt;/);assert.match(page,/Never: &lt;script&gt;bad&lt;\/script&gt;/);assert.match(page,/Declared limits, not permission/);assert.equal((page.match(/CLAIMED /g)||[]).length,1);
 });
