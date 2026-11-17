@@ -242,8 +242,8 @@ test('?as=NAME fills the name for this visit only, marked self-declared, never s
   assert.equal(fy(w).querySelector('.card.wel'), null);
   assert.match(fy(w).querySelector('.visiting').textContent, /Visiting as mike \(self-declared, this visit only\)/);
   await settle(w, 120);
-  // OFF-55 on main puts replies first; visiting identity stays self-declared.
-  assert.equal(fy(w).querySelector('h2.sect').textContent, 'Replies to you');
+  // Keep main's dashboard ordering; visiting identity remains self-declared.
+  assert.equal(fy(w).querySelector('.tiles [data-fyact^="tile-"]').dataset.fyact, 'tile-yes');
   assert.equal(w.document.getElementById('asBtn').textContent, 'mike');
   assert.equal(w.localStorage.getItem('loom.name'), null);
   assert.equal(w.localStorage.getItem('loom.akind'), null);
