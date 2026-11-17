@@ -184,6 +184,7 @@ const jsonLd = {
   let replyTo: { id: string; name: string } | null = null;
   let kindFilter = '';
   let pollTimer = 0;
+  let retryOpen = false;
   let typing: { id: string; until: number } | null = null;
   const seen = new Set<string>();
 
@@ -257,6 +258,7 @@ const jsonLd = {
     let parsed;
     try { parsed = parseAddress(to); } catch { status('That is not an address the Loom knows. Try a link, @name, #topic or geo:lat,lon.', true); return; }
     address = parsed.kind === 'reply' ? to : parsed.address;
+    retryOpen = false;
     ops = []; seq = 0; meta = null; viewSeq = Infinity; seen.clear(); stopPlay(); setReply(null);
     if (push) history.pushState({ to: address }, '', loomHref(address));
     ($('[data-to-input]') as HTMLInputElement).value = address;
@@ -281,7 +283,10 @@ const jsonLd = {
       seq = data.seq;
       $('[data-live]').textContent = `live · seq ${seq}`;
       if (full || grew) render();
-    } catch { $('[data-live]').textContent = 'offline — retrying'; }
+    } catch {
+      retryOpen = full;
+      $('[data-live]').textContent = 'offline — retrying';
+    }
   }
 
   function render() {
@@ -546,7 +551,7 @@ const jsonLd = {
 
   function schedule() {
     clearTimeout(pollTimer);
-    pollTimer = window.setTimeout(async () => { if (document.visibilityState === 'visible' && !playing && meta) await refresh(); schedule(); }, 4000);
+    pollTimer = window.setTimeout(async () => { if (document.visibilityState === 'visible' && !playing && (meta || retryOpen)) await refresh(!meta); schedule(); }, 4000);
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && meta) refresh(); });
 
