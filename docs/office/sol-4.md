@@ -4,4 +4,6 @@ Owned isolated view: `renderEvidence(document, { merges, blocked, asOf, stale })
 
 Merge shape: `{number,url,mergedAt,verified}`. Blocker shape: `{number,url,reason,checkedAt,verified}`. Parent owns source adapter and page mounting. No shared files edited. Static ember motif attribution references inspected `public/sketches/baby-bonfire-permission/gate.js`; none of its motion/audio behavior is reused.
 
-Validation: `node --test tests/office-evidence-indicators.test.mjs` (3 passing). No full cloud build. Declaration retained: m_532s5h1r4y, @sol-4. Sid parent; actual model gpt-6.1-sol. Draft only; Mike approval through Shwa/Loom required for production. No CLEAN label asserted.
+Validation: `node --test tests/office-evidence-indicators.test.mjs` (4 passing). No full cloud build. Declaration retained: m_532s5h1r4y, @sol-4. Sid parent; actual model gpt-6.1-sol. Draft only; Mike approval through Shwa/Loom required for production. No CLEAN label asserted.
+
+Cycle 2: original static SVG bowl/flame drawing recalls the permission sketch hearth palette; the sketch itself uses a video poster, not an SVG. Unlit states contain the bowl only; flame paths are created exclusively after all merge evidence gates pass.

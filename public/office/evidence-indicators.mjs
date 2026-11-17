@@ -17,8 +17,23 @@ export function renderEvidence(document, { merges = [], blocked = [], asOf, stal
     const lit = fresh && verified;
     const row = el('li', undefined, 'office-evidence__merge');
     row.dataset.state = lit ? 'verified-merged' : 'unknown';
-    const ember = el('span', lit ? '♨' : '◇', `office-evidence__ember${lit ? ' is-lit' : ''}`);
-    ember.setAttribute('aria-hidden', 'true'); row.append(ember);
+    const ember = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    ember.setAttribute('viewBox', '0 0 48 48');
+    ember.setAttribute('class', `office-evidence__ember${lit ? ' is-lit' : ''}`);
+    ember.setAttribute('aria-hidden', 'true');
+    ember.setAttribute('focusable', 'false');
+    ember.dataset.state = lit ? 'lit' : 'unlit';
+    const shape = (d, fill) => {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d); path.setAttribute('fill', fill); ember.append(path);
+    };
+    // Original static drawing recalling the permission sketch's warm hearth/bowl.
+    shape('M7 31H41C40 40 34 44 24 44S8 40 7 31Z', '#65564a');
+    if (lit) {
+      shape('M24 3C30 13 38 17 35 25C33 32 15 33 12 25C9 17 20 14 24 3Z', '#ad3e16');
+      shape('M25 16C29 22 32 24 29 28C26 32 19 29 20 25C21 22 24 20 25 16Z', '#f6b779');
+    }
+    row.append(ember);
     row.append(el('span', `#${item.number ?? '?'} · ${lit ? 'Provider-verified merged' : verified ? 'Historical merge evidence · snapshot stale' : 'Merge unverified / unknown'} · ${time(item.mergedAt) ? item.mergedAt : 'merge time unknown'}`));
     if (url) { const a = el('a', 'Source'); a.href = url; row.append(a); }
     mergeList.append(row);
