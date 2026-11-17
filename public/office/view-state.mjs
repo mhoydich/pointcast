@@ -54,3 +54,10 @@ export function restoreView(document,saved) {
     target.focus({preventScroll:true});
   }
 }
+
+/** Use the same restoration boundary for every content replacement, including errors. */
+export function withViewState(document,change) {
+  const saved=rememberView(document);
+  try { return change(); }
+  finally { bindViewKeys(document); restoreView(document,saved); }
+}

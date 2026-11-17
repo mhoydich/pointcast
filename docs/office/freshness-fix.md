@@ -28,7 +28,7 @@ Validation:
   evidence/source-time preservation, no-snapshot cutoff, late response, clock
   rollback, suspended-timer resume/earlier expiry and both awaited source phases
   crossing the cutoff.
-- Sixteen local Chromium cases at390/1440px, using explicitly synthetic loopback test
+- Twenty-six local Chromium cases at390/1440px, using explicitly synthetic loopback test
   data only: watch-off page held open past15 minutes; experiment cutoff (including
   stopping existing opt-in watch); late JSON deliberately ignoring abort; hidden
   timers then foreground/pageshow. Each checks exactly one initial source-read
@@ -36,7 +36,7 @@ Validation:
   invented production activity, physical-phone or heard-audio claim.
 
 The same browser harness against the unmodified8204f99 app fails the idle case
-(one lit desk remains when zero is expected); the repaired app passes all sixteen.
+(one lit desk remains when zero is expected); the repaired app passes all twenty-six.
 
 Commands:
 
@@ -63,7 +63,24 @@ the focused evidence link, focus moves to its existing evidence section instead
 of the body; the removed control is not recreated. Unaffected navigation/controls
 keep focus, and an idle page with no focused control does not gain focus.
 
-The sixteen browser cases include desk source/summary and evidence source focus,
+The browser cases include desk source/summary and evidence source focus,
 open details through evidence/post aging, cutoff and visibility/pageshow, and the
 removed-evidence fallback. All retain the one-initial-read/no-writes/silent-arrival
 assertions. The97eeb18 app fails the added focus/detail regression.
+
+## Final targeted follow-up: failed reads and resize
+
+Terra's review of4432280 found the two remaining unguarded replacement paths.
+The common synchronous withViewState boundary now wraps both successful paints
+and failed-read clearing. Failure removes old lit content and falls back to the
+reader's floor/activity/evidence section. It does not restore stale controls or
+start a retry. Resize replaces only SVG geometry, keeping the exact existing
+thread source-link nodes and focus. No dependency-lock or sound/watch edit.
+
+The26 browser cases include automatic failed reads with focus on desk, evidence,
+activity and thread sources, plus resize preserving thread-node identity while
+geometry changes. Overlay thread sources are normally visually suppressed; the
+loopback fixture surfaces the actual controls to exercise that renderer path.
+Failure tests permit precisely the initial read plus one existing opt-in watch
+read, then verify no retry; all other cases permit only the initial read.
+The4432280 app fails the new failed-read focus regression.

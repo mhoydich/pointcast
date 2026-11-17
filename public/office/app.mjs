@@ -6,7 +6,7 @@ import { createPhoneNav } from './phone-nav.mjs';
 import { createMotionControls } from './motion-ui.mjs';
 import { roomControls } from './room-controls.mjs';
 import { createFreshnessGuard } from './freshness.mjs';
-import { bindViewKeys, rememberView, restoreView } from './view-state.mjs';
+import { withViewState } from './view-state.mjs';
 const $ = id => document.getElementById(id);
 const status = $('office-status'), refresh = $('office-refresh');
 const motion = createMotionControls(document, document.body, {matchMedia:window.matchMedia?.bind(window)});
@@ -16,13 +16,12 @@ $('office-nav').append(nav.element);
 let current = null, busy = false, pendingRead = null;
 const live = roomControls({ read, sound: $('office-sound'), watch: $('office-watch') });
 const freshness = createFreshnessGuard({onChange(data, reason) {
-  const view=rememberView(document);
-  if (data.state === 'ended') pendingRead?.abort();
-  paint(data);
-  // Local aging is not a new observation: do not chime or reschedule watch.
-  if (reason === 'read' || data.state === 'ended') live.observe(data);
-  bindViewKeys(document);
-  restoreView(document,view);
+  withViewState(document,()=>{
+    if (data.state === 'ended') pendingRead?.abort();
+    paint(data);
+    // Local aging is not a new observation: do not chime or reschedule watch.
+    if (reason === 'read' || data.state === 'ended') live.observe(data);
+  });
 }});
 const safeLink = url => {try {const u=new URL(url);return u.origin==='https://pointcast.xyz'&&u.pathname==='/loom'?u.href:null;}catch{return null;}};
 function paint(data) {
@@ -55,10 +54,15 @@ function paint(data) {
   refresh.disabled=data.state==='ended';drawEdges();
 }
 function drawEdges(){
-  document.querySelector('.floor-threads')?.remove();if(!current?.edges?.length)return;
+  const previous=document.querySelector('.floor-threads');
+  if(!current?.edges?.length){previous?.remove();return;}
   const root=$('office-floor'),box=root.getBoundingClientRect(),positions={};
   root.querySelectorAll('[data-desk-handle]').forEach(el=>{const r=el.getBoundingClientRect();positions[el.dataset.deskHandle]={x:r.left-box.left+r.width/2,y:r.top-box.top+45};});
-  const lines=renderReplyThreads(document,current.edges,positions);lines.classList.add('floor-threads');root.append(lines);
+  const lines=renderReplyThreads(document,current.edges,positions);
+  if(previous){
+    // Resize changes geometry only. Keep the existing source-link controls and focus.
+    previous.querySelector('svg').replaceWith(lines.querySelector('svg'));
+  }else{lines.classList.add('floor-threads');root.append(lines);}
 }
 async function read(){
   if(freshness.expired()){freshness.recheck();return;}
@@ -70,12 +74,14 @@ async function read(){
     freshness.accept(data); // Recheck wall time after the complete response, including JSON.
   }catch{
     if(freshness.expired()){freshness.recheck();return;}
-    // Never keep an old lit floor on a failed read.
-    freshness.forget();
-    live.observe(null);
-    current=null;$('office-floor').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Floor unavailable. Read the source board or try again.'}));
-    $('office-events').replaceChildren();$('office-evidence').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Provider evidence unavailable; no fire or red lamp asserted.'}));
-    status.textContent='Source read failed. No live activity or running count is asserted.';
+    // Failure removes old content too: retain the reader's section as fallback.
+    withViewState(document,()=>{
+      freshness.forget();
+      live.observe(null);
+      current=null;$('office-floor').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Floor unavailable. Read the source board or try again.'}));
+      $('office-events').replaceChildren();$('office-evidence').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Provider evidence unavailable; no fire or red lamp asserted.'}));
+      status.textContent='Source read failed. No live activity or running count is asserted.';
+    });
   }finally{clearTimeout(deadline);pendingRead=null;busy=false;if(current?.state!=='ended')refresh.disabled=false;}
 }
 refresh.addEventListener('click',read);window.addEventListener('resize',drawEdges);

@@ -24,24 +24,30 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
 try{
  browser=await chromium.launch({executablePath:process.env.PROGRESS_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  for(const width of [390,1440]){
-  async function open(at,delayed=false){
+  async function open(at,delayed=false,threads=false){
    const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'}),errors=[],writes=[];
    page.on('pageerror',e=>errors.push(String(e)));page.on('request',r=>{if(r.method()!=='GET')writes.push(r.method());});
    await page.clock.install({time:new Date(at)});
+   const snapshot=fixture(at);
+   if(threads){
+    snapshot.desks.push({...snapshot.desks[0],handle:'@sol-2',name:'TEST FIXTURE 2'});
+    snapshot.edges=[{id:'fixture-thread',parentId:'fixture-parent',fromHandle:'@sol-1',toHandle:'@sol-2',sourceUrl:'https://pointcast.xyz/loom?to=%40sol-1'}];
+   }
    await page.addInitScript(({snapshot,delayed})=>{
     const native=window.fetch.bind(window);window.fixtureReads=0;
     window.fetch=(url,init)=>{
      if(url!=='/api/office')return native(url,init);
      window.fixtureReads++;
+     if(window.failFixture)return Promise.resolve({ok:false,status:503});
      // JSON can finish after a fetch signal is aborted. Deliberately ignore
      // cancellation here to prove completion-time rejection, not just abort.
      return Promise.resolve({ok:true,json:()=>delayed?new Promise(r=>window.releaseFixture=()=>r(snapshot)):Promise.resolve(snapshot)});
     };
-   },{snapshot:fixture(at),delayed});
+   },{snapshot,delayed});
    await page.goto('http://127.0.0.1:'+server.address().port+'/office');
    await page.waitForFunction(()=>window.fixtureReads===1);
-   if(!delayed)await page.waitForFunction(()=>document.querySelectorAll('.office-desk[data-activity="recent"]').length===1);
-   return{page,finish:async()=>{assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.equal(await page.evaluate(()=>window.fixtureReads),1,'local invalidation must not fetch');assert.equal(await page.locator('#office-sound').getAttribute('aria-pressed'),'false');await page.close();}};
+   if(!delayed)await page.waitForFunction(n=>document.querySelectorAll('.office-desk[data-activity="recent"]').length===n,snapshot.desks.length);
+   return{page,finish:async(expectedReads=1)=>{assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.equal(await page.evaluate(()=>window.fixtureReads),expectedReads,'only explicitly expected source reads may occur');assert.equal(await page.locator('#office-sound').getAttribute('aria-pressed'),'false');await page.close();}};
   }
   {
    const at=OFFICE_END-20*60_000,{page,finish}=await open(at);
@@ -131,6 +137,41 @@ try{
    assert.equal(await page.locator('.office-desk details').evaluate(e=>e.open),true);
    await finish();
   }
+  for(const control of [
+   {selector:'.office-desk__source',section:'office-floor'},
+   {selector:'.office-evidence__merge a',section:'office-evidence'},
+   {selector:'#office-events > ul a',section:'office-activity'},
+   {selector:'.floor-threads a',section:'office-floor',threads:true}
+  ]){
+   const {page,finish}=await open(OFFICE_END-20*60_000,false,control.threads);
+   if(control.threads)await page.addStyleTag({content:'.floor-threads{display:block!important;pointer-events:auto!important}.floor-threads .office-reply-threads__sources{display:block!important}'});
+   else if(control.selector==='.office-desk__source')await page.locator('.office-desk details > summary').click();
+   await page.locator('#office-watch').click();
+   await page.locator(control.selector).first().focus();
+   await page.evaluate(()=>window.failFixture=true);
+   await page.clock.runFor(60_000); // Exactly the existing opted-in automatic read.
+   await page.waitForFunction(()=>document.querySelector('#office-status').textContent.includes('Source read failed'));
+   assert.equal(await page.evaluate(()=>document.activeElement.id),control.section,'failed read retains focus in the source section');
+   assert.equal(await page.locator('.office-desk[data-activity="recent"]').count(),0);
+   assert.equal(await page.locator('#office-watch').getAttribute('aria-pressed'),'false');
+   await page.clock.runFor(90_000); // No failure retry or focus-triggered network read.
+   await finish(2);
+  }
+  {
+   const {page,finish}=await open(OFFICE_END-20*60_000,false,true);
+   // Overlay sources are normally visually suppressed. Surface their actual
+   // controls in this isolated fixture to exercise the renderer's resize path.
+   await page.addStyleTag({content:'.floor-threads{display:block!important;pointer-events:auto!important}.floor-threads .office-reply-threads__sources{display:block!important}'});
+   const thread=page.locator('.floor-threads a').first();await thread.focus();
+   await thread.evaluate(el=>window.focusedThread=el);
+   const oldX=await page.locator('.floor-threads line').getAttribute('x2');
+   await page.setViewportSize({width:width-20,height:901});
+   await page.evaluate(()=>window.dispatchEvent(new Event('resize')));
+   assert.equal(await page.evaluate(()=>document.activeElement===window.focusedThread),true,'resize preserves exact focused thread node');
+   assert.equal(await page.evaluate(()=>window.focusedThread.isConnected),true);
+   assert.notEqual(await page.locator('.floor-threads line').getAttribute('x2'),oldX,'resize still updates line geometry');
+   await finish();
+  }
  }
- console.log('PASS: 16 browser regressions at390/1440px: idle aging, cutoff/watch cancellation, late JSON crossing cutoff, hidden/foreground/BFCache, desk/evidence focus and expanded details across age/cutoff/resume; no extra reads/writes or unsolicited sound.');
+ console.log('PASS: 26 browser regressions at390/1440px: idle aging, cutoff/watch cancellation, late JSON crossing cutoff, hidden/foreground/BFCache, desk/evidence focus/details, automatic failure fallback and in-place resize thread focus; no extra reads/writes or unsolicited sound.');
 }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}
