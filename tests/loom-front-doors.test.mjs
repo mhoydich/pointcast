@@ -129,6 +129,12 @@ test('sitemap caps at the directory size (400) and skips thin topics', () => {
   assert.equal((buildSitemap({ logs }).match(/<loc>/g) ?? []).length, 402); // directory cap is 400 (MAX_ROOMS)
 });
 
+test('classic replay controls have 44px tap targets at phone widths', () => {
+  const css = readFileSync(new URL('../src/styles/loom.css', import.meta.url), 'utf8');
+  const mobile = css.split('@media (max-width: 760px) {')[1].split('@media')[0];
+  assert.match(mobile, /\.lm-play button \{ min-width: 44px; height: 44px; \}/);
+});
+
 test('topic index escapes titles and skips non-topics', () => {
   const html = buildTopicIndex(dir);
   assert.ok(html.includes('href="/loom/topic/a"') && html.includes('href="/loom/topic/b"'));
