@@ -5,8 +5,8 @@
  */
 import { handleLoom } from './service.mjs';
 
-const unavailable = (error = 'loom_storage_unavailable') => new Response(JSON.stringify({ ok: false, error }), {
-  status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' },
+const unavailable = (error = 'loom_storage_unavailable', retryAfter) => new Response(JSON.stringify({ ok: false, error }), {
+  status: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', ...(retryAfter ? { 'Retry-After': retryAfter } : {}) },
 });
 const memoize = (fn) => {
   const calls = new Map();
@@ -68,7 +68,7 @@ export async function handleAtomicLoom(request, { db, kv: archive = null, attemp
       return response; // no 201 until all destination writes have committed
     } catch { return unavailable(); }
   }
-  return unavailable('loom_write_contention');
+  return unavailable('loom_write_contention', '1');
 }
 
 /** One read path for bot, For You, topic and sitemap server routes. */

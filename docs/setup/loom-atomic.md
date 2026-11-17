@@ -120,3 +120,19 @@ Still required: actual plan query/row limits, large UTF-8 logs, real D1 staging,
 current identity-branch compatibility, migration-number reconciliation (identity
 also proposes a 0036), approved backup/freeze/drain/cutover, and full CI build.
 Do not interpret passing fixture tests as a safe automatic deployment.
+
+### Isolated 25-writer check
+
+Run `node tests/qualification/loom-swarm-memory.mjs`. This uses the Loom handler
+and a map-based model of the adapter's compare-and-commit contract. It makes no
+network calls and opens no database. It prints attempts, acknowledgments,
+acknowledged posts found in a subsequent read, duplicate writer posts, rejected
+requests and local concurrent-read timings. It does not predict production
+throughput or qualify the transaction backend.
+
+An exhausted revision-conflict budget now returns `loom_write_contention` and
+`Retry-After: 1`. The adapter only emits that error after it has exhausted known
+rolled-back conflicts. An ambiguous commit failure continues to return
+`loom_storage_unavailable` without a retry hint. The 25-attempt run is diagnostic
+only. The production default stays at eight because extra attempts multiply
+primary reads under contention.

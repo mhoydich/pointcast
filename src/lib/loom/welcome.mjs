@@ -1,3 +1,4 @@
+import { fold } from './fold.mjs';
 /**
  * The Collator's automatic hello to a first-time sender (OFF-36).
  *
@@ -37,7 +38,7 @@ export const isDesk = (from) => !!from && normalName(from.name) !== 'collator' &
 export function pickOpenTask(ops) {
   const appends = (ops ?? []).filter((o) => o && o.op === 'append');
   const hidden = new Set((ops ?? []).filter((o) => o && o.op === 'hide').map((o) => o.id));
-  const closed = new Set();
+  const closed = new Set(fold(ops).messages.filter(m => m.taskStatus?.status === 'done').map(m => m.id));
   for (const o of appends) {
     if (!o.parent) continue;
     if ((o.kind === 'answer' && isDesk(o.from)) || /^\s*MINE\b/i.test(String(o.body ?? ''))) closed.add(o.parent);

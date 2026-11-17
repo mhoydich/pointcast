@@ -15,6 +15,7 @@
  * but it only shows while the edited body's first line still says the word; edit the word back and
  * the original fact returns (an edit can never re-roll the dice).
  */
+import { taskSummaries } from '../../../public/loom-task-status.mjs';
 import { magicStillSays } from './magic.mjs';
 
 export function fold(ops, { until = Infinity } = {}) {
@@ -78,5 +79,7 @@ export function fold(ops, { until = Infinity } = {}) {
   walk('');
   for (const m of threaded) if (m.poll) delete m.poll.voters;
   const visible = threaded.filter((m) => !m.hidden);
+  const statuses = taskSummaries(visible);
+  for (const m of visible) if (statuses.has(m.id)) m.taskStatus = statuses.get(m.id);
   return { messages: visible, count: visible.length, participants: [...participants.values()].sort((a, b) => b.count - a.count) };
 }
