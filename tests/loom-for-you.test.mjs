@@ -284,20 +284,22 @@ test('page: three piles in order, a human post under People, Collator hidden fro
   await post(kv, { to: '#court', from: human('Sam'), body: 'court is open' });
   const w = await page(kv, { sent: { [mine.message.id]: mine.editToken } });
   await settle(w, 900);
+  // the dashboard: one tile per pile, most urgent first, then panels; the old lists sit in the fold
+  const tiles = [...fy(w).querySelectorAll('.tiles [data-fyact^="tile-"]')].map((x) => x.dataset.fyact);
+  assert.deepEqual(tiles.filter((k) => k !== 'tile-waiting'), ['tile-yes', 'tile-replies', 'tile-people', 'tile-done', 'tile-unanswered', 'tile-new']);
   const heads = [...fy(w).querySelectorAll('h2.sect')].map((x) => x.textContent);
-  assert.deepEqual(heads.slice(0, 3), ['People', 'Needs your yes', 'New arrivals']);
-  assert.ok(heads.indexOf('Waiting on you') > 2, 'the old lists are inside the fold');
+  assert.ok(heads.indexOf('Waiting on you') > heads.indexOf('Start something'), 'the old lists are inside the fold');
   const more = fy(w).querySelector('details#fyMore');
   assert.ok(more && !more.open, 'Everything else is folded');
   assert.match(more.querySelector('summary').textContent, /^Everything else/);
   const people = [...fy(w).querySelectorAll('button[data-fy^="people|"]')].map((b) => b.textContent);
   assert.ok(people.some((t) => /Sam/.test(t) && /court is open/.test(t)), 'Sam is under People');
   assert.ok(!people.some((t) => /Collator/.test(t)));
-  assert.equal(fy(w).querySelector('[data-pile="yes"] + p').textContent, 'Nothing needs your yes.');
+  assert.match(fy(w).querySelector('[data-pile="clear"]').textContent, /Needs your yes/, 'an empty pile folds into the Clear line');
   // the browser's own lists: the Collator reply to tester's post is counted, not listed
   assert.ok(!more.textContent.includes('Also threaded elsewhere'));
   assert.equal(w.document.getElementById('fyRobots').textContent, '1 house robot line hidden');
-  assert.match(w.document.getElementById('fyNew').textContent, /^New since you last looked: \d+ · last looked never$/);
+  assert.match(w.document.getElementById('fyNew').textContent, /^(?:\d+ new things?\.|All caught up\.)Last looked never\.$/);
   assert.equal(fy(w).querySelector('[data-fyact="feed"]').getAttribute('href'), '/loom/for/tester?format=rss');
   const seen = () => w.posts.filter((p) => p.action === 'seen');
   assert.equal(seen().length, 1);
@@ -317,10 +319,12 @@ test('page: a NEEDS line shows under Needs your yes; untrusted text stays text',
   await post(kv, { to: done.address, from: agent('Build desk'), body: 'NEEDS TESTER · <img src=x onerror=alert(1)> · here' });
   const w = await page(kv);
   await settle(w, 300);
-  const yes = [...fy(w).querySelectorAll('button[data-fy^="yes|"]')];
+  // a NEEDS line is a gate card (Up next here), shown once, its text kept as text
+  const yes = [...fy(w).querySelectorAll('.gate .gask')];
   assert.equal(yes.length, 1);
   assert.match(yes[0].textContent, /NEEDS TESTER · <img/);
-  assert.equal(fy(w).querySelectorAll('img').length, 0);
+  assert.equal(fy(w).querySelectorAll('img[src="x"], [onerror]').length, 0);
+  assert.ok([...fy(w).querySelectorAll('img')].every((i) => i.closest('.hearth')), 'the only picture is the hearth');
 });
 
 test('page: if the for= read fails, today\'s lists show unfolded with no error noise', async () => {
@@ -385,7 +389,7 @@ test('page: New tags stay for the page view after its own seen mark and a refres
   w.ticks.filter((t) => t.ms === 60000).forEach((t) => t.fn());
   await settle(w, 300);
   assert.equal(news(), 1, 'still New after the refresh');
-  assert.match(w.document.getElementById('fyNew').textContent, /^New since you last looked: 1 · last looked never$/);
+  assert.match(w.document.getElementById('fyNew').textContent, /^1 new thing\.Last looked never\.$/);
   assert.equal(w.posts.filter((p) => p.action === 'seen').length, 1);
 });
 
@@ -410,13 +414,41 @@ test('recent top-level agent relays asking for a yes are open until a later owne
   assert.deepEqual(new Set(result.piles.needsYes.map((x) => x.id)), new Set(asks.map((x) => x.id)));
 });
 
+test('a status receipt that names the Needs your yes pile is not an ask', () => {
+  const working = msg(agent('Claude Code'), 'WORKING · shipped gate cards for Needs your yes today. Nothing here is an approval.', 2);
+  const done = msg(agent('Desk'), 'DONE: the needs your yes pile now has hearth cards', 2);
+  const ask = msg(agent('Desk'), 'Ready to publish; needs your yes', 2);
+  const explicit = msg(agent('Desk'), 'NEEDS MIKE · DONE review · #work', 2);
+  const r = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#work', 'k', [working, done, ask, explicit])] });
+  assert.deepEqual(new Set(r.piles.needsYes.map((x) => x.id)), new Set([ask.id, explicit.id]));
+});
+
 test('new count includes unanswered inbox notes and deduplicates items also in a pile', () => {
   const a = msg(agent('Desk'), 'Please look', 1);
   const b = msg(human('Sam'), 'Hello', 2);
   const answered = msg(agent('Desk'), 'Already answered', 3);
   const answer = msg(human('Mike'), 'Done', 1, { parent: answered.id });
   const r = buildPiles({ owner: 'mike', now: NOW, threads: [thread('@mike', 'inbox', [a, b, answered, answer])] });
-  assert.equal(r.newCount, 2);
+  assert.equal(r.newCount, 3, 'answered messages are still new inbox activity');
   assert.equal(r.newWaiting.length, 2);
-  assert.match(forYouText(r, { generatedAt: NOW.toISOString() }), /New since then: 2/);
+  assert.match(forYouText(r, { generatedAt: NOW.toISOString() }), /New since then: 3/);
+});
+
+
+test('OFF-55: agent replies to old posts, unanswered posts, DONE media and counts', () => {
+  const mine = msg(human('Mike'), 'old question', 100);
+  const noAnswer = msg(human('Mike'), 'still waiting', 50);
+  const agentReply = msg(agent('Desk'), 'Here is the answer', 1, { parent: mine.id });
+  const nested = msg(agent('Other'), 'another answer', 0.5, { parent: agentReply.id });
+  const robot = msg(COLLATOR, 'automated', 0.5, { parent: noAnswer.id });
+  const done = msg(agent('Desk'), 'DONE draft https://example.com/pr/1 https://example.com/card.png', 2);
+  const echo = msg(agent('Desk'), done.body, 2, { via: { key: 'room', address: '#room', id: done.id } });
+  const inbox = msg(agent('Agent'), 'Hi Mike', 1);
+  const r = buildPiles({ owner: 'mike', now: NOW, seenAt: ago(3), threads: [thread('#room', 'room', [mine, noAnswer, agentReply, nested, robot, done]), thread('@mike', 'inbox', [echo, inbox])] });
+  assert.deepEqual(r.activity.replies.map((x) => x.id), [nested.id, agentReply.id]);
+  assert.deepEqual(r.activity.unanswered.map((x) => x.id), [noAnswer.id]);
+  assert.equal(r.activity.done.length, 1);
+  assert.equal(r.activity.done[0].externalUrl, 'https://example.com/pr/1');
+  assert.equal(r.activity.done[0].imageUrl, 'https://example.com/card.png');
+  assert.equal(r.newCount, 4);
 });

@@ -30,6 +30,8 @@
  *   hours count as new, so a first visit is not a wall of "New" tags.
  */
 
+import { splitStamp } from './stamp.mjs';
+
 export const WINDOW_MS = 7 * 86400000;
 export const NEEDS_WINDOW_MS = 14 * 86400000;
 export const ARRIVAL_MS = 48 * 3600000;
@@ -43,6 +45,9 @@ export const GO_AHEAD_PHRASES = [
   () => /\bget his yes\b/i,
   () => /\brelay[,;:]?\s+not his signature\b/i,
 ];
+// A post that opens with a status receipt reports work; it is not an ask, even when it names the
+// "Needs your yes" pile in passing (OFF-45 relay rule). Explicit NEEDS <OWNER> lines are unaffected.
+export const RECEIPT_RE = /^\s*(?:WORKING|MINE|PARTIAL|DONE|REVIEW|CLOSED|CLEARED|SHIPPED|FYI)\b/i;
 
 /** "@Mike", "mike", " MIKE " -> "mike". Same rule as the /loom page's handleOf. */
 export const normHandle = (s) => String(s ?? '').trim().replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_.-]/g, '');
@@ -50,6 +55,8 @@ export const isCollator = (from) => !!from && (from.kind === 'robot' || normHand
 export const isOwner = (from, owner) => !!owner && !!from && (normHandle(from.name) === owner || normHandle(from.address) === owner);
 
 const oneLine = (s, n = 160) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+/* OFF-64: lead the preview with the first real words; the name/date stamp rides along, small */
+const preview = (body) => { const p = splitStamp(body); return p.stamp ? { snippet: oneLine(p.text), stamp: oneLine(p.stamp, 80) } : { snippet: oneLine(body) }; };
 const firstLine = (s) => String(s ?? '').split('\n').find((l) => l.trim()) ?? '';
 const time = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? t : 0; };
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
@@ -74,11 +81,12 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
     return {
       address: o.address, label: o.label, id: o.id, seq: m.seq ?? null, at: m.at,
       from: { name: m.from?.name ?? 'anonymous', kind: m.from?.kind ?? 'human', verified: !!m.from?.verified },
-      snippet: oneLine(m.poll?.question ?? m.body), link: `loom:${o.key}#${o.id}`, url: pageUrl(o.address, o.id), isNew: isNewAt(m.at),
+      ...preview(m.poll?.question ?? m.body), link: `loom:${o.key}#${o.id}`, url: pageUrl(o.address, o.id), isNew: isNewAt(m.at),
     };
   };
 
   const people = [], needsYes = [], seen = new Set(), waiting = new Set(), newWaiting = new Set();
+  const activity = { replies: [], unanswered: [], done: [] }, activitySeen = new Set(), addressed = new Set();
   const goAhead = GO_AHEAD_PHRASES.map((make) => make(escapeRe(me)));
   let restCount = 0, collatorCount = 0;
   for (const thread of threads) {
@@ -104,6 +112,49 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
       waiting.add(link);
       if (isNewAt(m.at)) newWaiting.add(link);
     }
+    // Resolve ancestry in this thread; copies are linked to their original below.
+    const belongsUnderOwner = (m) => {
+      const visited = new Set(); let parent = m.parent;
+      while (parent && !visited.has(parent)) {
+        visited.add(parent); const p = byId.get(parent); if (!p) break;
+        if (isOwner(p.from, me)) return true;
+        parent = p.parent;
+      }
+      return false;
+    };
+    const hasOtherAnswer = (m) => {
+      const stack = [...(kids.get(m.id) ?? [])], visited = new Set();
+      while (stack.length) {
+        const r = stack.pop(); if (visited.has(r.id)) continue; visited.add(r.id);
+        if (!isOwner(r.from, me) && !isCollator(r.from)) return true;
+        stack.push(...(kids.get(r.id) ?? []));
+      }
+      return false;
+    };
+    for (const m of msgs) {
+      if (isCollator(m.from)) continue;
+      const o = origin(thread, m), link = `loom:${o.key}#${o.id}`;
+      if (m.via && threads.some((t) => t.key === m.via.key)) continue;
+      const own = isOwner(m.from, me), reply = !own && belongsUnderOwner(m);
+      if (!own && isNewAt(m.at) && (reply || inbox || mentionsOwner(m.body, me))) addressed.add(link);
+      if (activitySeen.has(link)) continue;
+      activitySeen.add(link);
+      if (reply && isNewAt(m.at)) activity.replies.push(item(thread, m));
+      if (own && !m.via && !hasOtherAnswer(m)) activity.unanswered.push(item(thread, m));
+      if (!own && isNewAt(m.at) && /^\s*DONE\b/i.test(m.body ?? '')) {
+        const it = item(thread, m);
+        const urls = String(m.body ?? '').match(/https?:\/\/[^\s<>"']+/gi) ?? [];
+        const safe = (s) => { try { const u = new URL(String(s).replace(/[.,;!?)]+$/, '')); return /^https?:$/.test(u.protocol) ? u.href : null; } catch { return null; } };
+        const links = urls.map(safe).filter(Boolean);
+        const image = (url) => /\.(?:png|jpe?g|gif|webp|avif|svg)(?:[?#]|$)/i.test(url);
+        it.externalUrl = links.find((url) => !image(url)) || links[0] || null;
+        it.imageUrl = safe(m.media?.url) || links.find(image) || null;
+        const pd = splitStamp(String(m.body ?? ''));
+        it.snippet = oneLine(pd.text.replace(/https?:\/\/[^\s<>"']+/gi, ''));
+        if (pd.stamp) it.stamp = oneLine(pd.stamp, 80); else delete it.stamp;
+        activity.done.push(it);
+      }
+    }
     const relayClosed = (m, anyClear = true) => {
       const stack = [...(kids.get(m.id) ?? [])];
       while (stack.length) {
@@ -127,7 +178,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
         continue;
       }
       const explicitNeeds = needsRe && needsRe.test(firstLine(m.body)) && at >= nowMs - NEEDS_WINDOW_MS && !cleared(m) && (m.parent || m.depth >= 1 || m.from?.kind !== 'agent' || !relayClosed(m, goAhead.some((re) => re.test(m.body ?? ''))));
-      const relay = me && !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent' && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && goAhead.some((re) => re.test(m.body ?? '')) && !relayClosed(m);
+      const relay = me && !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent' && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && !RECEIPT_RE.test(firstLine(m.body)) && goAhead.some((re) => re.test(m.body ?? '')) && !relayClosed(m);
       if (!m.via && (explicitNeeds || relay)) {
         needsYes.push(item(thread, m)); continue;
       }
@@ -148,7 +199,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
     if (thread && m && (m.hidden || m.withdrawn)) continue;
     const it = m ? item(thread, m) : {
       address: f.address, label: f.label || f.address, id: f.id, seq: null, at: f.at, from: { name: from.name, kind: from.kind, verified: from.verified },
-      snippet: oneLine(f.body), link: `loom:${f.key}#${f.id}`, url: pageUrl(f.address, f.id), isNew: isNewAt(f.at),
+      ...preview(f.body), link: `loom:${f.key}#${f.id}`, url: pageUrl(f.address, f.id), isNew: isNewAt(f.at),
     };
     arrivals.push(it);
     // A first post that is also in People stays in both piles; it was never part of "rest".
@@ -159,10 +210,12 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
   const piles = { people: people.slice(0, CAPS.people), needsYes: needsYes.slice(0, CAPS.needsYes), arrivals: arrivals.slice(0, CAPS.arrivals) };
   // Anything over a cap is still something; count it with the rest so nothing silently disappears.
   restCount += (people.length - piles.people.length) + (needsYes.length - piles.needsYes.length);
-  const fresh = new Set();
+  for (const list of Object.values(activity)) list.sort(newest);
+  const fresh = new Set(addressed);
   for (const list of Object.values(piles)) for (const it of list) if (it.isNew) fresh.add(it.link);
   for (const link of newWaiting) fresh.add(link);
-  return { waiting: [...waiting], newWaiting: [...newWaiting], owner: me ? `@${me}` : '', seenAt: seenAt ?? null, piles, rest: { count: restCount }, collatorCount, newCount: fresh.size };
+  for (const it of activity.done) fresh.add(it.link);
+  return { activity, newLinks: [...fresh], waiting: [...waiting], newWaiting: [...newWaiting], owner: me ? `@${me}` : '', seenAt: seenAt ?? null, piles, rest: { count: restCount }, collatorCount, newCount: fresh.size };
 }
 
 const stamp = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`; };

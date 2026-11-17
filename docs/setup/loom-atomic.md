@@ -89,3 +89,34 @@ Covers simultaneous accepted appends/echoes/outboxes, mutation races, batch
 rollback, missing schema, corrupted JSON/read failures, archive edit tokens,
 welcome deduplication, retry budget memoization, seed import and authoritative
 readers. No full build in the small cloud sandbox (per OPERATIONS.md).
+
+## Reconciliation checkpoint — 2026-11-17
+
+Merged main `f334e50ff5a058f2553dbbda1dd9425875e7a8ef` into this draft
+without rebasing. The current bot source-refresh path, away marks, For You and
+one-next-step welcome behavior are retained. Two old welcome tests were updated
+to assert that shipped copy rather than the retired two-step/three-item text.
+
+Qualification command (Node 24):
+
+```
+node --test tests/loom-atomic.test.mjs tests/loom.test.mjs tests/loom-welcome.test.mjs tests/loom-for-you.test.mjs tests/loom-bot-page.test.mjs tests/loom-availability.test.mjs tests/loom-stamp.test.mjs tests/qualification/loom-atomic-miniflare.mjs
+```
+
+104 tests pass. The explicit qualification file requires `miniflare@4.20260730.0`
+(installed in an isolated temporary dependency directory for this run) in
+addition to the existing UI-test dependency `jsdom` (31.0.1 used). It is outside
+the default test glob so ordinary repository installs are not given a hidden
+new dependency. No package manifest or lockfile was changed.
+
+The local Miniflare/workerd D1 test uses the repository's compatibility date
+2026-07-22, a temporary local database and fixture messages. It verifies four
+concurrent accepted source posts, all four echoes and outbox entries, named
+CHECK rollback of a batch, and missing-schema refusal. No remote database,
+production write, migration, merge to main or deployment is exercised.
+
+This closes a local-runtime qualification gap, NOT the production release gate.
+Still required: actual plan query/row limits, large UTF-8 logs, real D1 staging,
+current identity-branch compatibility, migration-number reconciliation (identity
+also proposes a 0036), approved backup/freeze/drain/cutover, and full CI build.
+Do not interpret passing fixture tests as a safe automatic deployment.

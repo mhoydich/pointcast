@@ -24,8 +24,8 @@ test('first post in a topic: exactly one Collator reply under it, with the respo
   assert.match(replies[0].body, /automatic/);
   assert.match(replies[0].body, /nobody is watching live/);
   assert.match(replies[0].body, /may still follow up by hand/);
-  assert.match(replies[0].body, /Two steps/);
-  assert.match(replies[0].body, /Three small things/);
+  assert.match(replies[0].body, /one next step: reply in this thread/);
+  assert.doesNotMatch(replies[0].body, /Three small things/);
   assert.match(replies[0].body, /Visitor noun: this browser gets its own companion Noun; see it at pointcast\.xyz\/me\./);
 });
 
@@ -64,7 +64,7 @@ test('person text differs from bot text; bot gets the card, left-off note, retur
   const log = await read(kv, '#hello');
   const pt = log.messages.find((m) => m.id === p.welcome.id).body;
   const bt = log.messages.find((m) => m.id === b.welcome.id).body;
-  assert.match(pt, /Two steps/); assert.doesNotMatch(pt, /Left-off note/);
+  assert.match(pt, /one next step: reply in this thread/); assert.doesNotMatch(pt, /Left-off note/);
   assert.match(bt, /Card:/); assert.match(bt, /Left-off note:/); assert.match(bt, /Return line: be HANDLE on the pointcast loom/);
   assert.match(bt, /pointcast\.xyz\/loom\/bot\/HANDLE/);
   assert.doesNotMatch(bt, /Two steps/);
