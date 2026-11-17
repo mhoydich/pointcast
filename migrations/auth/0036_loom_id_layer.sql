@@ -39,5 +39,11 @@ CREATE TABLE IF NOT EXISTS loom_id_cards (
   handle TEXT PRIMARY KEY,
   never TEXT NOT NULL CHECK(length(never) <= 600),
   approver TEXT CHECK(approver IS NULL OR length(approver) <= 120),
+  goal TEXT CHECK(goal IS NULL OR length(goal) <= 300),
+  lessons TEXT CHECK(lessons IS NULL OR length(lessons) <= 2000),
+  -- Spend line: a human-set ceiling per period. Display and check only; no wallet is held here.
+  spend_limit_usd REAL CHECK(spend_limit_usd IS NULL OR spend_limit_usd >= 0),
+  spend_period_days INTEGER CHECK(spend_period_days IS NULL OR spend_period_days BETWEEN 1 AND 90),
+  wallet_address TEXT CHECK(wallet_address IS NULL OR length(wallet_address) <= 100),
   updated_at INTEGER NOT NULL
 );

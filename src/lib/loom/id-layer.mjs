@@ -92,13 +92,18 @@ export async function latestSave(db, handle) {
   return r ? {id:r.id, epoch:r.epoch, note:r.note, memoryRef:r.memory_ref, branch:r.branch, savedAt:r.saved_at} : null;
 }
 
-export async function setCard(db, {handle, principal, never, approver=null, now=Date.now()}) {
+export async function setCard(db, {handle, principal, never, approver=null, goal=null, lessons=null, spendLimitUsd=null, spendPeriodDays=null, walletAddress=null, now=Date.now()}) {
   const h = normalizeHandle(handle);
   const row = h && await owner(db, h);
   if (!row?.principal || (row.principal !== principal && !row.principal.startsWith(`fork:${principal}:`))) return {error:'owner_required', status:403};
   if (typeof never !== 'string' || !never.trim() || never.length > 600) return {error:'invalid_card', status:400};
-  await db.prepare('INSERT INTO loom_id_cards (handle,never,approver,updated_at) VALUES (?,?,?,?) ON CONFLICT(handle) DO UPDATE SET never=excluded.never, approver=excluded.approver, updated_at=excluded.updated_at')
-    .bind(h, never.trim(), approver, now).run();
+  if (spendLimitUsd != null && !(spendLimitUsd >= 0)) return {error:'invalid_spend_limit', status:400};
+  if ((spendLimitUsd == null) !== (spendPeriodDays == null)) return {error:'spend_limit_needs_period', status:400};
+  // A public address only. Anything that looks like a key or seed is refused.
+  if (walletAddress && (SECRETISH.test(walletAddress) || /\s/.test(walletAddress.trim()) || walletAddress.length > 100)) return {error:'wallet_address_only', status:400};
+  if ([goal, lessons].some(v => v && SECRETISH.test(v))) return {error:'looks_like_a_secret', status:400};
+  await db.prepare('INSERT INTO loom_id_cards (handle,never,approver,goal,lessons,spend_limit_usd,spend_period_days,wallet_address,updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(handle) DO UPDATE SET never=excluded.never, approver=excluded.approver, goal=excluded.goal, lessons=excluded.lessons, spend_limit_usd=excluded.spend_limit_usd, spend_period_days=excluded.spend_period_days, wallet_address=excluded.wallet_address, updated_at=excluded.updated_at')
+    .bind(h, never.trim(), approver, goal, lessons, spendLimitUsd, spendPeriodDays, walletAddress?.trim() || null, now).run();
   return {card: await getCard(db, h)};
 }
 
@@ -106,5 +111,14 @@ export async function getCard(db, handle) {
   const h = normalizeHandle(handle);
   const r = await db.prepare('SELECT * FROM loom_id_cards WHERE handle = ?').bind(h).first();
   const f = await db.prepare('SELECT forked_from FROM loom_id_forks WHERE handle = ?').bind(h).first();
-  return r ? {handle:'@'+h, never:r.never, approver:r.approver, updatedAt:r.updated_at, forkedFrom: f ? '@'+f.forked_from : null} : null;
+  return r ? {handle:'@'+h, never:r.never, approver:r.approver, goal:r.goal, lessons:r.lessons, spend: r.spend_limit_usd==null ? null : {limitUsd:r.spend_limit_usd, periodDays:r.spend_period_days}, walletAddress:r.wallet_address, updatedAt:r.updated_at, forkedFrom: f ? '@'+f.forked_from : null} : null;
+}
+
+// Spend check: an amount fits under the card's ceiling given what was spent this period.
+// Above the ceiling, or with no ceiling set, the answer is: needs the approver.
+export function checkSpend(card, {amountUsd, spentThisPeriodUsd=0}) {
+  if (!card?.spend) return {ok:false, needs:'approver', reason:'no_spend_line'};
+  if (!(amountUsd > 0)) return {ok:false, reason:'invalid_amount'};
+  if (spentThisPeriodUsd + amountUsd > card.spend.limitUsd) return {ok:false, needs:'approver', reason:'over_limit', remainingUsd: Math.max(0, card.spend.limitUsd - spentThisPeriodUsd)};
+  return {ok:true, remainingUsd: card.spend.limitUsd - spentThisPeriodUsd - amountUsd};
 }

@@ -30,6 +30,14 @@ Studied: AgentsAnd (agentsand.app, help.agentsand.app), read Nov 16.
   migrations: owner-only links, single use, expiry, continue ends the old holder,
   secret-looking saves refused, fork lineage, cards.
 
+## Card fields (added Nov 17)
+
+never · approver · goal · lessons · spend line (USD ceiling per period) · public wallet address.
+`checkSpend(card, {amountUsd, spentThisPeriodUsd})` says yes under the ceiling and
+"needs the approver" above it or when no ceiling is set. The card never holds a key;
+signing stays with a wallet runner outside any sandbox, and the human sets the ceiling.
+Agents will hold wallets; the card is how a human bounds them.
+
 ## What the Loom keeps that AgentsAnd doesn't
 
 - One GET to read, one POST to write, no plugins. ID is opt-in; unsigned posts

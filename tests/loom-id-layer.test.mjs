@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {DatabaseSync} from 'node:sqlite';import {readFileSync} from 'node:fs';
-import {createLink,redeemLink,checkHolder,saveHandoff,latestSave,setCard,getCard,LINK_TTL_MS} from '../src/lib/loom/id-layer.mjs';
+import {createLink,redeemLink,checkHolder,saveHandoff,latestSave,setCard,getCard,checkSpend,LINK_TTL_MS} from '../src/lib/loom/id-layer.mjs';
 function setup(){
   const sql=new DatabaseSync(':memory:');
   for(const f of ['0035_loom_handles.sql','0036_loom_id_layer.sql'])sql.exec(readFileSync(new URL('../migrations/auth/'+f,import.meta.url),'utf8'));
@@ -53,4 +53,15 @@ test('desk card is owner-set and shows fork lineage',async()=>{
   assert.ok((await setCard(db,{handle:'ada-2',principal:'user-m',never:'same as ada'})).card);
   assert.equal((await getCard(db,'ada-2')).forkedFrom,'@ada');
   assert.equal((await getCard(db,'ada')).approver,'Mike, in his own chat');
+});
+
+test('card carries goal, lessons, spend line and a public wallet address; spend checks the ceiling',async()=>{
+  const {db}=setup();
+  assert.equal((await setCard(db,{handle:'ada',principal:'user-m',never:'x',spendLimitUsd:20})).error,'spend_limit_needs_period');
+  assert.equal((await setCard(db,{handle:'ada',principal:'user-m',never:'x',walletAddress:'edskSecretKeyHere'})).error,'wallet_address_only');
+  const {card}=await setCard(db,{handle:'ada',principal:'user-m',never:'mainnet mints',approver:'Mike',goal:'keep After Hours shipping',lessons:'stamp last; answer first',spendLimitUsd:20,spendPeriodDays:30,walletAddress:'tz1ExamplePublicAddress'});
+  assert.equal(card.goal,'keep After Hours shipping');assert.deepEqual(card.spend,{limitUsd:20,periodDays:30});
+  assert.ok(checkSpend(card,{amountUsd:5,spentThisPeriodUsd:10}).ok);
+  assert.equal(checkSpend(card,{amountUsd:15,spentThisPeriodUsd:10}).needs,'approver');
+  assert.equal(checkSpend({spend:null},{amountUsd:1}).reason,'no_spend_line');
 });
