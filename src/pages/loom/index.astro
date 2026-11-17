@@ -1087,6 +1087,7 @@ const store = {
    ========================================================================== */
 const KIND_MAP = { note: 'note', ask: 'question', claim: 'claim', poll: 'poll', answer: 'answer' };
 const state = {
+  forHandle: '', // public view target; never a posting identity or seen-mark authority
   dir: [],
   threads: {},
   addr: '#loom',
@@ -1158,6 +1159,8 @@ function cleanVisitName(v) {
 
 /* identity helpers: "@Name" and "name" are the same handle */
 function handleOf(name) { return String(name || '').trim().replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_.-]/g, ''); }
+function forYouHandle() { return state.forHandle || handleOf(state.name); }
+function forYouPath(v) { return LOOM_PATH + (state.forHandle ? '?for=' + encodeURIComponent(state.forHandle) : '') + '#' + v; }
 function myHandle() { const h0 = handleOf(state.name); return h0 ? '@' + h0 : ''; }
 function mentions(body, handle) {
   if (!handle) return false;
@@ -2222,7 +2225,7 @@ function setView(v) {
     try { location.hash = v; } catch (e) { /* ignore */ }
   }
   /* leaving a thread: the list views are not one thread's link */
-  if (v !== 'thread' && location.search) { try { history.replaceState(null, '', LOOM_PATH + '#' + v); } catch (e) { /* ignore */ } }
+  if (v !== 'thread' && location.search) { try { history.replaceState(null, '', forYouPath(v)); } catch (e) { /* ignore */ } }
 }
 const isWide = () => window.innerWidth >= 900;
 /* Leaving the thread on a phone: put focus on that thread's row (or the active tab), not on <body>. */
@@ -2295,20 +2298,20 @@ return splitStamp;
 /* the house robot (Collator) never shows in Replies to you; it is counted instead */
 const isHouseRobot = (from) => !!from && (from.kind === 'robot' || handleOf(from.name) === 'collator' || from.address === '@collator');
 function collectForYou() {
-  const me = myHandle(), waiting = [], replies = [];
+  const target = forYouHandle(), me = target ? '@' + target : '', waiting = [], replies = [];
   let robots = 0;
   if (!me) return { me, waiting, replies, robots };
   Object.keys(state.threads).forEach((addr) => {
     const t = state.threads[addr];
     if (!t || !t.messages) return;
     t.messages.forEach((m) => {
-      if (m.withdrawn || m._pending || m.via || hasOwn(state.sent, m.id)) return;
+      if (m.withdrawn || m._pending || m.via || (!state.forHandle && hasOwn(state.sent, m.id))) return;
       if ('@' + handleOf(m.from.name) === me) return;
       const ment = mentions(m.body, me);
       const robot = isHouseRobot(m.from);
       if (!robot && questionStatus(t, m) === 'open' && (addr.toLowerCase() === me || ment)) { waiting.push({ t, m }); return; }
       const pid = parentOf(t, m);
-      if ((pid && hasOwn(state.sent, pid)) || ment) { if (robot) robots++; else replies.push({ t, m }); }
+      if ((pid && (state.forHandle ? t.messages.some((p) => p.id === pid && ('@' + handleOf(p.from.address || p.from.name)) === me) : hasOwn(state.sent, pid))) || ment) { if (robot) robots++; else replies.push({ t, m }); }
     });
   });
   const newest = (x, y) => (Date.parse(y.m.at) - Date.parse(x.m.at)) || ((y.m.seq || 0) - (x.m.seq || 0));
@@ -2318,11 +2321,11 @@ function collectForYou() {
 /* the server's piles for the current name, or null */
 function pilesNow() {
   const p = state.fy;
-  return p.data && p.name && p.name === handleOf(state.name) ? p.data : null;
+  return p.data && p.name && p.name === forYouHandle() ? p.data : null;
 }
 /* fetch the piles at most once a minute; renderForYou calls this on every paint */
 function ensurePiles() {
-  const me = handleOf(state.name), p = state.fy;
+  const me = forYouHandle(), p = state.fy;
   if (!me || loomApi.mode !== 'live') return;
   if (p.name !== me) { p.name = me; p.data = null; p.failed = false; p.at = 0; p.seenFor = ''; p.fresh = {}; p.looked = undefined; }
   if (p.loading || Date.now() - p.at < 60000) return;
@@ -2360,13 +2363,13 @@ function keepNew(p, j) {
 function maybeMarkSeen() {
   const p = state.fy, me = handleOf(state.name), d = pilesNow();
   /* a ?as=NAME visit name is self-declared for one visit: it never moves that name's server mark */
-  if (!d || state.visitName || p.seenFor === me || p.seenTimer || loomApi.mode !== 'live') return;
+  if (!d || state.forHandle || state.visitName || p.seenFor === me || p.seenTimer || loomApi.mode !== 'live') return;
   if (state.tab !== 'for-you' || ($('app').dataset.view !== 'for-you' && !isWide()) || document.hidden) return;
   if (!$('fyDyn') || !$('fyDyn').querySelector('[data-pile]')) return;
   const at = d.generatedAt;
   p.seenTimer = setTimeout(() => {
     p.seenTimer = null;
-    if (p.seenFor === me || handleOf(state.name) !== me) return;
+    if (state.forHandle || p.seenFor === me || handleOf(state.name) !== me) return;
     if (document.hidden || state.tab !== 'for-you') return;  /* left within the beat: the next paint tries again */
     p.seenFor = me;  /* once per page view, even if this one fails */
     loomApi.seen(me, at).catch(() => { /* quiet: the mark is a convenience */ });
@@ -2492,7 +2495,7 @@ function fyItemBtn(it, wait) {
 }
 function drawForYou(box, f) {
   box.textContent = '';
-  const wel = !state.welcomeGone && !store.get('welcome') && !state.name && !state.hasTo;
+  const wel = !state.welcomeGone && !store.get('welcome') && !state.name && !state.hasTo && !state.forHandle;
   if (wel) $('app').setAttribute('data-welcome', ''); else $('app').removeAttribute('data-welcome');
   /* one primary action per screen: add a name, answer what is waiting, or start a thread */
   if (wel) box.append(welcomeCard(!!f.me && !f.waiting.length));
@@ -2507,11 +2510,12 @@ function drawForYou(box, f) {
       h('p', {}, h('button', { type: 'button', id: 'fyName', class: 'linkbtn', 'data-fyact': 'name', text: 'Add your name to see what is waiting on you.', onclick: () => openIdentitySheet() }))));
     return;
   }
+  if (state.forHandle) box.append(h('p', { class: 'visiting', id: 'fyPublicView', text: 'Public For you for @' + state.forHandle + '. This does not sign you in or change your posting name.' }));
   const d = pilesNow();
   if (!d && loomApi.mode !== 'offline' && !state.fy.failed) { box.append(h('p', { class: 'fyempty', text: 'Checking what needs you…' })); return; }
   /* no piles (offline, or the for= read failed): today's lists, unfolded, no error noise */
   if (!d) { drawLists(box, f); return; }
-  const me = handleOf(state.name);
+  const me = forYouHandle();
   const activity = d.activity || { replies: [], unanswered: [], done: [] };
   /* the dashboard: one tile per pile, most urgent first; each tile opens its panel below */
   const PANELS = [
@@ -2519,7 +2523,7 @@ function drawForYou(box, f) {
     { key: 'replies', title: 'Replies to you', list: activity.replies, kind: 'activity', urgent: true, empty: 'No new replies to your posts.' },
     { key: 'people', title: 'People', list: d.piles.people, kind: 'pile', empty: 'No new posts from people.' },
     { key: 'done', title: 'What got done', list: activity.done, kind: 'activity', empty: 'No new DONE posts.' },
-    { key: 'unanswered', title: 'Not answered yet', list: activity.unanswered, kind: 'activity', empty: 'Your posts have answers.' },
+    { key: 'unanswered', title: 'Not answered yet · last 24 hours', list: activity.unanswered, kind: 'activity', empty: 'Your posts have answers.' },
     { key: 'new', title: 'New arrivals', list: d.piles.arrivals, kind: 'pile', empty: 'No new arrivals.' }
   ];
   const newIn = (list) => list.filter((it) => it.isNew).length;
@@ -2578,6 +2582,17 @@ function drawForYou(box, f) {
       onclick: () => { state.fyAll[p.key] = true; state.fyOpen[p.key] = true; renderForYou(); } }));
     box.append(panel);
   });
+  const older = activity.olderUnanswered || [];
+  if (older.length) {
+    const panel = h('details', { id: 'fyOlder', class: 'dpanel', open: !!state.fyOpen.older,
+      ontoggle: (ev) => { state.fyOpen.older = ev.currentTarget.open; } },
+      h('summary', { 'data-fyact': 'older' }, h('span', { class: 'pt', text: 'Older unanswered posts · over 24 hours' }), h('span', { class: 'pc', text: String(older.length) })));
+    const shown = state.fyAll.older ? older : older.slice(0, 3);
+    shown.forEach((it) => panel.append(activityItem(it, 'unanswered')));
+    if (shown.length < older.length) panel.append(h('button', { type: 'button', class: 'linkbtn showall', text: 'Show all ' + older.length,
+      onclick: () => { state.fyAll.older = true; state.fyOpen.older = true; renderForYou(); } }));
+    box.append(panel);
+  }
   if (clear.length) box.append(h('p', { class: 'fyempty clearline', 'data-pile': 'clear', text: 'Clear: ' + clear.join(' · ') }));
   box.append(h('h2', { class: 'sect', text: 'Start something' }),
     h('div', { class: 'fyacts', 'aria-label': 'Starter prompts' },
@@ -2592,6 +2607,7 @@ function drawForYou(box, f) {
   box.append(h('p', { class: 'fyempty', text: 'Quick replies post publicly. Names are self-declared; a board post is not an approval.' }));
   /* the first alert that leaves the page: a feed reader that notifies on new items (no keys, no signups) */
   box.append(h('p', { class: 'fyempty fyfeed' },
+    h('a', { href: '/loom/for/' + encodeURIComponent(me), 'data-fyact': 'share', text: 'Public share link' }), ' · ',
     h('a', { href: '/loom/for/' + encodeURIComponent(me) + '?format=rss', 'data-fyact': 'feed', text: 'Get alerts: follow this feed' })));
   const parts = ['Everything else'];
   if (f.waiting.length) parts.push(f.waiting.length + ' waiting on you');
@@ -3295,7 +3311,7 @@ window.addEventListener('hashchange', () => {
   if (location.hash !== '#' + v) { try { history.replaceState(null, '', '#' + v); } catch (e) { /* ignore */ } }
   if (sheetEl) closeSheet(true);
   const was = $('app').dataset.view;
-  if (v !== 'thread' && location.search) { try { history.replaceState(null, '', LOOM_PATH + '#' + v); } catch (e) { /* ignore */ } }
+  if (v !== 'thread' && location.search) { try { history.replaceState(null, '', forYouPath(v)); } catch (e) { /* ignore */ } }
   if (v !== 'thread') { state.tab = v; $('app').dataset.tab = v; }
   $('app').dataset.view = v;
   renderTabs();
@@ -3442,6 +3458,8 @@ let pendingReveal = null;
   /* ?as=NAME: a self-declared name for this visit only. Never written to storage. */
   try {
     const q0 = new URLSearchParams(location.search);
+    const target = (q0.get('for') || '').toLowerCase();
+    if (/^[a-z0-9][a-z0-9_.-]{0,31}$/.test(target)) state.forHandle = target;
     state.hasTo = !!(q0.get('to') || '').trim();
     const asName = cleanVisitName(q0.get('as') || '');
     if (asName && !state.name) { state.name = asName; state.visitName = true; }
