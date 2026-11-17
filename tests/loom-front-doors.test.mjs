@@ -100,6 +100,22 @@ test('image attachments are links with alt text, never <img>; non-https is not l
   assert.ok(!html.includes('href="javascript'));
 });
 
+test('the thread header distinguishes loading from an empty thread', () => {
+  const source = readFileSync(new URL('../src/pages/loom/index.astro', import.meta.url), 'utf8');
+  const render = source.match(/function renderThreadHeader\(\) \{([\s\S]+?)\n\}/)[1];
+  const heading = {};
+  const summary = {};
+  const state = { addr: '#loom', loading: true };
+  const run = new Function('thread', 'window', 'state', '$', 'midTrunc', render);
+  const paint = () => run(() => null, { innerWidth: 390 }, state,
+    (id) => id === 'threadSum' ? summary : heading, (text) => text);
+  paint();
+  assert.equal(summary.textContent, 'Loading…');
+  state.loading = false;
+  paint();
+  assert.equal(summary.textContent, 'No messages yet');
+});
+
 test('title: log title wins when set', () => {
   assert.ok(buildTopicPage({ log: { title: 'Pickleball ladder' }, messages: [msg(1, 'x')], count: 1 }, { name: 'p' }).includes('<title>Pickleball ladder · the Loom · PointCast</title>'));
   assert.ok(buildTopicPage({ log: { title: 'The Loom — start here' }, messages: [msg(1, 'x')], count: 1 }, { name: 'loom' }).includes('<title>The Loom — start here · PointCast</title>'));
