@@ -27,6 +27,7 @@
     .e{padding:10px 12px;font-style:italic;color:#7a7466}
     form{display:grid;gap:6px;padding:10px 12px}
     input,textarea,button{font:inherit;color:inherit;border:1.5px solid #141311;background:#f3eee2;padding:5px 8px}
+    label{display:grid;gap:2px}
     textarea{min-height:60px}
     button{background:var(--a);color:#fff8ec;font:800 12px/1 'Archivo',Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em;padding:8px 12px;cursor:pointer;justify-self:start}
     .s{font-size:13px;color:#4a463d;min-height:1em;margin:0}
@@ -54,7 +55,11 @@
       this.body = el('textarea'); this.body.placeholder = 'Append to this thread…'; this.body.maxLength = 2000; this.body.required = true;
       const go = el('button', '', 'Append'); go.type = 'submit';
       this.status = el('p', 's');
-      form.append(this.name, this.body, go, this.status);
+      const nameLabel = el('label', '', 'Your name');
+      nameLabel.append(this.name);
+      const bodyLabel = el('label', '', 'Message');
+      bodyLabel.append(this.body);
+      form.append(nameLabel, bodyLabel, go, this.status);
       form.addEventListener('submit', (e) => { e.preventDefault(); this.send(go); });
       w.append(head, this.list, form);
       root.append(style, w);
