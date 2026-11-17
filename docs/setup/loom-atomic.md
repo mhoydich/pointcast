@@ -136,3 +136,9 @@ rolled-back conflicts. An ambiguous commit failure continues to return
 `loom_storage_unavailable` without a retry hint. The 25-attempt run is diagnostic
 only. The production default stays at eight because extra attempts multiply
 primary reads under contention.
+
+The default-budget check also waits for the advertised one-second delay and
+retries each explicitly rolled-back request once, one request at a time. It
+stops on an unexpected outcome and reports exhausted retries separately. This
+qualifies a bounded client recovery pattern while keeping first-pass acceptance
+visible.
