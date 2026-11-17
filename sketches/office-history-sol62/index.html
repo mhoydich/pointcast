@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>The Office · A day in replay</title>
+<style>
+:root{color-scheme:dark;--ink:#e8e8d8;--dim:#afbdad;--line:#435047;--green:#c8f685;font:16px/1.5 system-ui,sans-serif;background:#101813;color:var(--ink)}
+*{box-sizing:border-box}body{margin:0}main{width:min(100% - 2rem,62rem);margin:2.25rem auto 8rem}header{padding-bottom:1rem;border-bottom:1px solid var(--line)}h1,h2,p{margin:0}h1{font-family:Georgia,serif;font-weight:400;font-size:clamp(2.6rem,10vw,6rem);line-height:1.04;letter-spacing:-.055em;margin:.4rem 0 .85rem}h2{font-size:1.1rem;margin-bottom:.75rem}.kicker,.clock{font:700 .78rem/1.5 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--green)}.subtitle,.quiet{color:var(--dim)}.floor{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));gap:.6rem;margin:1rem 0 1.5rem;padding:0}.desk{border:1px solid var(--line);padding:.85rem 1rem;border-radius:.6rem;background:#17231a}.desk.active{border-color:var(--green);color:var(--green);background:#23361d}.desk b,.desk span{display:block}.desk span{font-size:.9rem;margin-top:.25rem}.feed{display:grid;gap:.3rem;margin:0;padding:0;list-style:none}.feed li{padding:.5rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.feed time{color:var(--dim);font: .85rem ui-monospace,monospace;margin-right:.65rem}.controls{position:fixed;inset:auto 0 0;background:#17231a;border-top:1px solid var(--line);padding:.65rem 1rem max(.65rem,env(safe-area-inset-bottom))}.transport{max-width:62rem;margin:auto;display:grid;grid-template-columns:auto minmax(6rem,1fr) auto;gap:.6rem;align-items:center}.track{display:grid;gap:.2rem}.track label{display:flex;justify-content:space-between;gap:.5rem;font-size:.75rem;color:var(--dim)}button{font:inherit;font-weight:700;color:var(--ink);min-height:44px;min-width:62px;border:1px solid var(--line);border-radius:.4rem;background:#223027;padding:.4rem .7rem}button[aria-pressed="true"]{color:var(--green)}button:focus-visible,input:focus-visible{outline:2px solid var(--green);outline-offset:3px}input{width:100%;height:24px;margin:0;accent-color:var(--green)}@media(max-width:390px){main{margin-top:1rem}.transport{gap:.4rem}button{min-width:50px;padding:.3rem .45rem}.track label{font-size:.68rem}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<p class="kicker">PointCast · Office replay prototype</p>
+<h1>A day in the office</h1>
+<p class="subtitle">A fictional 24-hour timeline. Posts and replies light their desks for 15 replay minutes. The feed keeps the day’s record.</p>
+</header>
+<ul id="floor" class="floor" aria-label="Synthetic desks"></ul>
+<section aria-labelledby="activity"><h2 id="activity">Activity through this minute</h2><p id="empty" class="quiet">The room is quiet.</p><ol id="feed" class="feed"></ol></section>
+</main>
+<div class="controls" aria-label="Replay controls">
+<div class="transport">
+<button id="play" type="button">Play</button>
+<div class="track"><label for="timeline">Replay time <output class="clock" id="clock" for="timeline">00:00</output></label><input id="timeline" type="range" min="0" max="1439" step="1" value="0"></div>
+<button id="sound" type="button" aria-pressed="false" aria-label="Room tones">Sound off</button>
+</div>
+</div>
+<script type="module">
+const desks = ['Front desk', 'Archive', 'Phone desk', 'Workshop'];
+const events = [
+  { minute: 393, desk: 0, body: 'Opened the queue for morning receipts.' },
+  { minute: 401, desk: 1, type: 'reply', parent: 0, body: 'Linked yesterday’s handoff.' },
+  { minute: 507, desk: 2, body: 'Checked the floor at narrow widths.' },
+  { minute: 516, desk: 3, type: 'reply', parent: 2, body: 'Moved the replay controls within reach.' },
+  { minute: 740, desk: 1, body: 'Filed the noon review.' },
+  { minute: 874, desk: 3, type: 'merge', body: 'Fixture merge · floor controls.' },
+  { minute: 1112, desk: 0, body: 'Left the evening queue with the archive.' },
+  { minute: 1119, desk: 1, type: 'reply', parent: 6, body: 'Picked up the queue and marked the next review.' },
+];
+const $ = id => document.getElementById(id);
+const slider = $('timeline'), play = $('play'), sound = $('sound');
+const format = minute => String(Math.floor(minute / 60)).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0');
+const floor = desks.map(name => {
+  const li = document.createElement('li');
+  li.className = 'desk';
+  const title = document.createElement('b'), status = document.createElement('span');
+  title.textContent = name;
+  li.append(title, status);
+  $('floor').append(li);
+  return { li, status };
+});
+let timer = null, minute = 0, context = null, soundOn = false, audioEpoch = 0, requestedSound = false;
+function render(next) {
+  minute = next;
+  slider.value = String(minute);
+  slider.setAttribute('aria-valuetext', format(minute));
+  $('clock').value = format(minute);
+  const shown = events.filter(event => event.minute <= minute);
+  for (const [index, { li, status }] of floor.entries()) {
+    const last = shown.findLast(event => event.desk === index && event.type !== 'merge');
+    const active = last && minute - last.minute < 15;
+    li.classList.toggle('active', Boolean(active));
+    status.textContent = active ? (last.type === 'reply' ? 'Reply observed' : 'Post observed') : 'Quiet';
+  }
+  $('empty').hidden = Boolean(shown.length);
+  $('feed').replaceChildren(...shown.toReversed().map(event => {
+    const row = document.createElement('li'), time = document.createElement('time');
+    time.textContent = format(event.minute);
+    let label = desks[event.desk];
+    if (event.type === 'reply') label += ' → ' + desks[events[event.parent].desk];
+    if (event.type === 'merge') label += ' · merge';
+    row.append(time, label + ' · ' + event.body);
+    return row;
+  }));
+}
+function cue(type) {
+  if (!soundOn || context?.state !== 'running') return;
+  const now = context.currentTime;
+  const note = context.createOscillator(), volume = context.createGain();
+  note.frequency.value = type === 'merge' ? 392 : type === 'reply' ? 330 : 261.63;
+  volume.gain.setValueAtTime(0, now);
+  volume.gain.linearRampToValueAtTime(0.035, now + 0.02);
+  volume.gain.linearRampToValueAtTime(0, now + 0.14);
+  note.connect(volume).connect(context.destination);
+  note.start(now);
+  note.stop(now + 0.15);
+}
+function pause() {
+  clearInterval(timer);
+  timer = null;
+  play.textContent = 'Play';
+}
+play.addEventListener('click', () => {
+  if (timer !== null) { pause(); return; }
+  if (minute === 1439) render(0);
+  play.textContent = 'Pause';
+  timer = setInterval(() => {
+    const next = Math.min(1439, minute + 10);
+    for (const event of events) if (event.minute > minute && event.minute <= next) cue(event.type);
+    render(next);
+    if (minute === 1439) pause();
+  }, 250);
+});
+slider.addEventListener('input', () => render(Number(slider.value)));
+async function setSound(enabled) {
+  requestedSound = enabled;
+  const epoch = ++audioEpoch;
+  if (!enabled) soundOn = false;
+  if (enabled) {
+    try {
+      context ??= new AudioContext();
+      await context.resume();
+    } catch { enabled = false; }
+  } else if (context?.state === 'running') {
+    await context.suspend().catch(() => {});
+  }
+  if (epoch !== audioEpoch) {
+    if (!requestedSound && context?.state === 'running') await context.suspend().catch(() => {});
+    return;
+  }
+  requestedSound = enabled;
+  soundOn = enabled;
+  sound.setAttribute('aria-pressed', String(enabled));
+  sound.textContent = enabled ? 'Sound on' : 'Sound off';
+}
+sound.addEventListener('click', () => { void setSound(!requestedSound); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { pause(); void setSound(false); }
+});
+window.addEventListener('pagehide', () => { pause(); void setSound(false); });
+render(0);
+</script>
+</body>
+</html>
