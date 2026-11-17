@@ -53,3 +53,29 @@ test('elapsed clock still rejects genuinely future and stale observations', asyn
     assert.equal(r.observedAt, null);
   }
 });
+
+test('consistent draft conflicts retain draft state and verified conflict evidence', async () => {
+  const conflict = { ...base, draft: true, mergeable: false, mergeable_state: 'dirty' };
+  const result = await run([conflict, conflict]);
+  const row = result.data.pullRequests[0];
+  assert.equal(result.state, 'ok');
+  assert.equal(row.state, 'draft');
+  assert.equal(row.blocked, true);
+  assert.deepEqual(row.evidence, [{ type: 'conflict', headSha: base.head.sha, sourceUrl: 'https://api.github.com/repos/mhoydich/pointcast/pulls/123' }]);
+});
+test('draft conflicts need two confirmed consistent observations', async () => {
+  const conflict = { ...base, draft: true, mergeable: false, mergeable_state: 'dirty' };
+  for (const patch of [
+    { mergeable: null }, { mergeable: true }, { mergeable: undefined },
+    { mergeable_state: 'unknown' }, { mergeable_state: 'blocked' }, { mergeable_state: undefined },
+    { draft: false }, { state: 'closed' }, { head: { sha: 'b'.repeat(40) } },
+  ]) {
+    for (const values of [[conflict, { ...conflict, ...patch }], [{ ...conflict, ...patch }, conflict]]) {
+      const row = (await run(values)).data.pullRequests[0];
+      assert.equal(row.blocked, null, JSON.stringify(patch));
+      assert.deepEqual(row.evidence, []);
+    }
+  }
+  const closed = { ...conflict, state: 'closed' };
+  assert.equal((await run([closed, closed])).data.pullRequests[0].blocked, null);
+});

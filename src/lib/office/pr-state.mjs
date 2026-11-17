@@ -61,7 +61,7 @@ export async function readPrStates({ prs, fetcher = fetch, now = Date.now(), max
       } else {
         if ([first, pr].some(p => p.merged !== false || p.merged_at !== null || !['open', 'closed'].includes(p.state) || typeof p.draft !== 'boolean') || first.state !== pr.state || first.draft !== pr.draft) throw new Error('contradictory_state');
         row.state = pr.state === 'closed' ? 'closed' : pr.draft ? 'draft' : 'open';
-        if (row.state === 'open' && [first, pr].every(p => p.mergeable === false && p.mergeable_state === 'dirty')) {
+        if (pr.state === 'open' && [first, pr].every(p => p.mergeable === false && p.mergeable_state === 'dirty')) {
           row.blocked = true;
           row.evidence.push({ type: 'conflict', headSha: row.headSha, sourceUrl: `${API}/pulls/${number}` });
         }
