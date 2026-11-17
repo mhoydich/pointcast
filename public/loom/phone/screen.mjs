@@ -142,7 +142,7 @@ function drawCard(row, group) {
 
 async function read(query) {
   const response = await fetch(`${api}?${new URLSearchParams(query)}`, {
-    credentials: 'omit', cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(8000),
+    credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(12000),
   });
   if (!response.ok) throw new Error('read_failed');
   return response.json();
@@ -160,7 +160,7 @@ async function load() {
   syncControls();
   feedback.textContent = 'Checking the Loom…';
   const [feed, board] = await Promise.allSettled([
-    read({ for: OWNER }).then(inbox), read({ to: BOARD }).then(blockedPulls),
+    read({ for: OWNER, format: 'json' }).then(inbox), read({ to: BOARD }).then(blockedPulls),
   ]);
   const { gates = null, replies = null } = feed.status === 'fulfilled' ? feed.value : {};
   const blocked = board.status === 'fulfilled' ? board.value : null;
