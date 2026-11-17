@@ -140,7 +140,16 @@ for (const c of fixture.cases) {
     assert.ok(c.note.length > 0);
     checks[c.id](c);
     if (c.adapter === 'validateDeclaration') {
-      assert.match(c.input.declaration.handle, /^@fixture-/);
+      if (c.id === 'declaration-valid-over-120s') {
+        // Reserved fixture number keeps the positive example in the accepted
+        // family without borrowing any of the six real Astra child handles.
+        const { handle, model, parentSeat, runtimeId } = c.input.declaration;
+        assert.deepEqual({ handle, model, parentSeat, runtimeId }, {
+          handle: '@astra-900001', model: 'gpt-6-astra', parentSeat: '@ada', runtimeId: '/root/astra_900001',
+        });
+      } else {
+        assert.match(c.input.declaration.handle, /^@fixture-/);
+      }
       assert.equal(c.expected.verified, c.id === 'declaration-valid-over-120s');
     }
     if (c.adapter === 'normalizeLoomEvents') {
