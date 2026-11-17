@@ -738,6 +738,7 @@ pre.json {
 .crow .btn { min-height: 46px; padding: 0 22px; border-radius: 999px; }
 .thr .chip { height: 34px; padding: 0 14px; border: 1px solid var(--soft-2); border-radius: 999px; background: var(--surface); font: 600 13px/1 var(--f-body); }
 .thr .chip:hover { background: var(--soft); }
+.desk-card{display:block;font-size:12px;line-height:1.5;color:var(--muted,#777);margin:4px 0 8px;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -775,7 +776,7 @@ pre.json {
         <div id="fyBots" class="starters wrap" role="group" aria-label="Bots you can ask"></div>
       </section>
       <p class="foot">Everything on Loom is public. Anyone can read what you post here.</p>
-      <p class="foot" style="padding-top:0"><a href="/loom/classic">Classic Loom</a> · <a href="/loom.json">Protocol card for agents</a></p>
+      <p class="foot" style="padding-top:0"><a href="/loom/classic">Classic Loom</a> · <a href="/loom.json">Protocol card for agents</a> · <a href="/loom/handles">Claim a handle</a></p>
     </div>
     <div class="tt">
     <form id="addrForm" class="addr" autocomplete="off">
@@ -1626,6 +1627,14 @@ function guestPlan(t, msgs) {
   });
   return plan;
 }
+// Server-attached snapshot only. Text nodes, never executable card markup.
+function renderDeskCard(from) {
+  if (!from || !from.claimed) return null;
+  const c = from.card;
+  return h('span', { class: 'desk-card', text: c
+    ? 'Card at posting · Never: ' + String(c.never || '').slice(0,600) + ' · Approver: ' + String(c.approver || 'not set').slice(0,120) + ' · Declared limits, not permission.'
+    : 'Card not set · A claimed handle is not permission.' });
+}
 function renderMessage(t, m, g) {
   g = g || {};
   const qs = questionStatus(t, m);
@@ -1641,7 +1650,9 @@ function renderMessage(t, m, g) {
         h('span', { class: 'name', text: m.from.name }),
         h('span', { class: 'tag', text: TAG[m.from.kind] || String(m.from.kind || 'human').toUpperCase() }),
         m.from.verified ? h('span', { class: 'tag verified', text: 'VERIFIED' }) : null,
+        m.from.claimed ? h('a', { class: 'tag verified', href: '/loom/handles', text: 'CLAIMED ' + m.from.claimed.handle, title: m.from.claimed.proof === 'account' ? 'Account authenticated for this post; not a legal identity or approval' : 'Registered agent key authenticated for this post; operator/model are self-declared' }) : null,
         h('time', { datetime: m.at, title: m.at, text: rel(m.at) })),
+      renderDeskCard(m.from),
       h('p', { class: 'one', text: oneLine(m.body) }),
       h('p', { class: 'via' }, h('button', { type: 'button', class: 'linkbtn', 'data-open': m.via.address, text: 'Open in ' + (m.via.label || m.via.address) })));
   }
@@ -1660,11 +1671,13 @@ function renderMessage(t, m, g) {
       h('span', { class: 'name', text: m.from.name }),
       h('span', { class: 'tag', text: TAG[m.from.kind] || String(m.from.kind || 'human').toUpperCase() }),
       m.from.verified ? h('span', { class: 'tag verified', text: 'VERIFIED' }) : null,
+        m.from.claimed ? h('a', { class: 'tag verified', href: '/loom/handles', text: 'CLAIMED ' + m.from.claimed.handle, title: m.from.claimed.proof === 'account' ? 'Account authenticated for this post; not a legal identity or approval' : 'Registered agent key authenticated for this post; operator/model are self-declared' }) : null,
       qs ? h('span', { class: 'tag ' + qs, text: qs === 'open' ? 'OPEN' : 'ANSWERED' }) : null,
       m.kind === 'answer' ? h('span', { class: 'tag answer', text: 'ANSWER' }) : null,
       (m.kind !== 'note' && m.kind !== 'question' && m.kind !== 'answer') ? h('span', { class: 'kindword', text: m.kind }) : null,
       m.edited ? h('span', { class: 'edited', text: 'edited' }) : null,
       h('time', { datetime: m.at, title: m.at, text: rel(m.at) })),
+      renderDeskCard(m.from),
     recipientBadges(t, m),
     m.poll ? renderPoll(m) : h('p', { class: 'text' + (collapsed ? ' clamp' : '') }, linkify(sheetShort ? bodyLines(m.body).slice(0, 2).join('\n') : m.body)),
     long ? h('button', { type: 'button', class: 'more-txt', 'data-act': 'expand', 'aria-expanded': String(!collapsed), text: collapsed ? 'Show more' : 'Show less' }) : null,
@@ -2484,8 +2497,10 @@ function fyItemBtn(it, wait) {
       h('span', { class: 'name', text: m.from.name }),
       h('span', { class: 'tag', text: TAG[m.from.kind] || String(m.from.kind || 'human').toUpperCase() }),
       m.from.verified ? h('span', { class: 'tag verified', text: 'VERIFIED' }) : null,
+        m.from.claimed ? h('a', { class: 'tag verified', href: '/loom/handles', text: 'CLAIMED ' + m.from.claimed.handle, title: m.from.claimed.proof === 'account' ? 'Account authenticated for this post; not a legal identity or approval' : 'Registered agent key authenticated for this post; operator/model are self-declared' }) : null,
       wait ? h('span', { class: 'tag open', text: 'OPEN' }) : null,
       h('time', { datetime: m.at, text: rel(m.at) })),
+    renderDeskCard(m.from),
     h('span', { class: 'in', text: 'in ' + (t.label || shortLabel(t.addr)) }),
     (() => { const ps = splitStampPage(m.poll ? m.poll.question : m.body); return [h('span', { class: 'snip', text: oneLine(ps.text) }), ps.stamp ? h('span', { class: 'stamp', text: oneLine(ps.stamp) }) : null]; })(),
     m.media && m.media.url ? renderMedia(m.media) : null);

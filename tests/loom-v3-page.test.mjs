@@ -242,7 +242,7 @@ test('?as=NAME fills the name for this visit only, marked self-declared, never s
   assert.equal(fy(w).querySelector('.card.wel'), null);
   assert.match(fy(w).querySelector('.visiting').textContent, /Visiting as mike \(self-declared, this visit only\)/);
   await settle(w, 120);
-  // For you opens on the dashboard (tiles, Needs your yes first); "Waiting on you" lives inside "Everything else".
+  // Keep main's dashboard ordering; visiting identity remains self-declared.
   assert.equal(fy(w).querySelector('.tiles [data-fyact^="tile-"]').dataset.fyact, 'tile-yes');
   assert.equal(w.document.getElementById('asBtn').textContent, 'mike');
   assert.equal(w.localStorage.getItem('loom.name'), null);
@@ -308,4 +308,18 @@ test('C8: the Links chip lists one-message link threads; the default list hides 
   await settle(w, 120);
   assert.ok(labels().some((l) => /single/.test(l)));
   assert.ok(!labels().includes('#c8room'));
+});
+
+
+test('claimed handle mark is distinct from a sender-supplied name and forged metadata', async () => {
+  const kv=memoryKv();
+  const body={to:'#proof',from:{name:'Same name',kind:'human'},body:'Authenticated post'};
+  await handleLoom(new Request(ORIGIN+'/api/loom',{method:'POST',body:JSON.stringify(body)}),{
+    kv,authorizeFrom:async from=>({from:{...from,address:'@bound',claimed:{handle:'@bound',proof:'account'},card:{never:'<img src=x onerror=alert(1)>',approver:'Mike'}}})
+  });
+  await post(kv,{...body,body:'Unproven post',from:{...body.from,claimed:{handle:'@bound',proof:'account'},card:{never:'<img src=x onerror=alert(1)>',approver:'Mike'}}});
+  const w=await page(kv,{path:'/loom?to=%23proof'});
+  const marks=[...w.document.querySelectorAll('#msgs .tag')].filter(n=>n.textContent==='CLAIMED @bound');
+  assert.equal(marks.length,1);assert.match(marks[0].title,/Account authenticated/);
+  const cards=w.document.querySelectorAll('#msgs .desk-card');assert.equal(cards.length,1);assert.match(cards[0].textContent,/Never: <img/);assert.equal(cards[0].querySelector('img'),null);assert.match(cards[0].textContent,/not permission/);
 });

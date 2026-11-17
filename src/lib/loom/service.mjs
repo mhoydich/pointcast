@@ -443,12 +443,17 @@ async function resolveTarget(kv, to) {
 }
 
 /** Echo a message into every log it reaches (mentions, topics, cited URLs). */
-async function ripple(kv, source, op, now) {
+function rippleTargets(op, sourceAddress) {
   const { links, mentions, topics } = extractAddresses(op.body);
   const targets = [];
   for (const raw of [...mentions, ...topics, ...op.cites, ...links]) {
-    try { const a = parseAddress(raw).address; if (a !== source.address && a !== '@collator' && !targets.includes(a)) targets.push(a); } catch { /* not an address; leave the text alone */ }
+    try { const a = parseAddress(raw).address; if (a !== sourceAddress && a !== '@collator' && !targets.includes(a)) targets.push(a); } catch { /* not an address; leave the text alone */ }
   }
+  return targets.slice(0, RIPPLE_MAX);
+}
+
+async function ripple(kv, source, op, now) {
+  const targets = rippleTargets(op, source.address);
   const reached = [];
   const elsewhere = new Map();
   for (const address of targets.slice(0, RIPPLE_MAX)) {
@@ -517,7 +522,7 @@ async function firstHello(kv, { log, op, from, now, limit }) {
  * Options: `drumCount` is an optional async () => number|null, read only when a message's first
  * line is the magic word "drum" (OFF-49); functions/api/loom.ts wires it to the drum counter.
  */
-export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '', firstHelloEnabled = true, drumCount = null } = {}) {
+export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, authorizeFrom = null, authorizeMutation = null, reserveAddresses = null, adminKey = '', firstHelloEnabled = true, drumCount = null } = {}) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   const url = new URL(request.url);
   try {
@@ -614,7 +619,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     const now = clock().toISOString();
 
     if (action === 'append') {
-      const from = validateFrom(body.from, verifiedAgent);
+      let from = validateFrom(body.from, verifiedAgent);
       // Budget per sender, not per caller IP: MCP callers all arrive from one server IP. Verified agents
       // are keyed on their agent id; unsigned senders on a hash of name+operator, plus a looser per-IP
       // ceiling so rotating names cannot flood.
@@ -629,6 +634,15 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       }
       const { truncated, ...message } = validateMessage(body);
       const { log, parent } = await resolveTarget(kv, body.to);
+      if (authorizeFrom) {
+        const result = await authorizeFrom(from, body.from?.address);
+        if (result.error) return fail(result.error, result.status ?? 403);
+        from = result.from;
+      }
+      if (reserveAddresses) {
+        try { await reserveAddresses([log.address, ...rippleTargets(message, log.address)]); }
+        catch { return fail('claim_store_unavailable', 503); }
+      }
       // A title sticks on a new log, or late on an untitled #topic; otherwise say why not.
       let title;
       const wanted = clean(body.title, 90);
@@ -687,6 +701,10 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
 
     if (action === 'edit' || action === 'withdraw') {
       if (!original.tokenHash || !safeEqual(await sha(String(body.token ?? '')), original.tokenHash)) return fail('edit_token_invalid', 403);
+      if (original.from?.claimed && authorizeMutation) {
+        const result = await authorizeMutation(original.from, original.from.address);
+        if (result.error) return fail(result.error, result.status ?? 403);
+      }
       if (action === 'edit') {
         if (clean(body.body, Infinity).length > BODY_MAX) return fail('body_too_long', 400, { bodyMax: BODY_MAX });
         const text = clean(body.body, BODY_MAX);
