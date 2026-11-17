@@ -4,7 +4,7 @@ import { validateDeclaration } from '../../src/lib/office/declarations.mjs';
 
 // Synthetic fixtures only: these records identify no real worker.
 const now = Date.parse('2026-11-17T18:00:00Z');
-const fixture = () => ({ schema: 'pointcast.office-declaration/v1', handle: '@fixture-child', name: 'Synthetic fixture', parentSeat: '@ada', model: 'fixture-model', runtimeId: '/fixture/child', job: 'Test only', ownedFiles: ['tests/fixture.mjs'], never: ['deploy'], approver: { name: 'Mike', via: ['Shwa', 'Loom desk'], boardIdentityIsApproval: false }, maxCycles: 3, cycle: 1, expiresAt: '2026-11-18T17:00:00Z' });
+const fixture = () => ({ schema: 'pointcast.office-declaration/v1', handle: '@astra-999', name: 'Synthetic fixture', parentSeat: '@ada', model: 'gpt-6-astra', runtimeId: '/root/astra_999', job: 'Test only', ownedFiles: ['tests/fixture.mjs'], never: ['deploy'], approver: { name: 'Mike', via: ['Shwa', 'Loom desk'], boardIdentityIsApproval: false }, maxCycles: 3, cycle: 1, expiresAt: '2026-11-18T17:00:00Z' });
 const trusted = (d = fixture()) => ({ ...Object.fromEntries(['handle', 'parentSeat', 'model', 'runtimeId', 'job', 'ownedFiles'].map(k => [k, structuredClone(d[k])])), verifiedAt: '2026-11-17T17:30:00Z', declarationReceipt: { messageId: 'm_fixture', sourceUrl: 'https://pointcast.xyz/loom?to=loom%3A000000000000000000000000%23m_fixture' } });
 const run = (d = fixture(), attestation = null, time = now) => validateDeclaration(d, { now: time, attestation });
 
@@ -47,3 +47,32 @@ test('malformed inputs and invalid clock return bounded non-payload errors', () 
 test('result is detached from caller-owned nested arrays and approval record', () => {
   const d = fixture(); const r = run(d, trusted(d)); d.ownedFiles[0] = 'changed'; d.never[0] = 'changed'; d.approver.via[0] = 'changed'; assert.deepEqual(r.declaration, fixture());
 });
+
+const families = [
+  ['@ada', 'astra', 'gpt-6-astra'], ['@sid', 'sol', 'gpt-6.1-sol'],
+  ['@tess', 'terra', 'gpt-6.1-terra'], ['@lou', 'luna', 'gpt-6-luna'],
+];
+// All four family records here are synthetic; no actual runtime is attested.
+for (const [parentSeat, prefix, model] of families) {
+  const declaration = () => ({ ...fixture(), parentSeat, handle: `@${prefix}-999`, runtimeId: `/root/${prefix}_999`, model });
+  test(`${parentSeat} family needs separate exact trusted evidence`, () => {
+    const d = declaration();
+    assert.equal(run(d).valid, true); assert.equal(run(d).verified, false);
+    assert.equal(run(d, trusted(d)).verified, true);
+    assert.equal(run(d, { ...trusted(d), parentSeat: '@unknown' }).verified, false);
+  });
+  test(`${parentSeat} rejects spoofed or malformed family identity`, () => {
+    for (const patch of [
+      { parentSeat: '@unknown' }, { parentSeat: '__proto__' },
+      { parentSeat: parentSeat === '@ada' ? '@sid' : '@ada' },
+      { handle: `@${prefix}-0999` }, { handle: `@${prefix}-0` },
+      { handle: `@${prefix}-999-extra` }, { handle: `@${prefix}-999\n` },
+      { runtimeId: `/root/${prefix}_998` }, { runtimeId: `/root/${prefix}_0999` },
+      { runtimeId: `/root/${prefix}_999/child` }, { model: 'unproven-model' },
+    ]) {
+      const d = { ...declaration(), ...patch }; const result = run(d, trusted(d));
+      assert.equal(result.valid, false, JSON.stringify(patch)); assert.equal(result.verified, false);
+      assert.ok(result.errors.some(e => ['invalid_parent', 'invalid_parentage'].includes(e)));
+    }
+  });
+}

@@ -36,7 +36,7 @@ The schema is `src/lib/office/declaration.schema.json`:
 ```js
 {
   schema: 'pointcast.office-declaration/v1',
-  handle: '@lowercase-handle', name: 'Public name', parentSeat: '@ada',
+  handle: '@astra-1', name: 'Public name', parentSeat: '@ada',
   model: 'Actual configured model', runtimeId: 'Canonical runtime ID',
   job: 'One assigned job', ownedFiles: ['relative/file.mjs'],
   never: ['Explicit prohibited action'],
@@ -44,6 +44,34 @@ The schema is `src/lib/office/declaration.schema.json`:
   maxCycles: 3, cycle: 1, expiresAt: 'ISO UTC'
 }
 ```
+
+Parent-family correction receipt: <https://pointcast.xyz/loom?to=loom%3A0c4fe73d9b7a2a11f5f75e2b%23m_2q6f4h4d4j>.
+
+The structural S4 family mapping is explicit:
+
+| Parent | Child handle | Canonical runtime ID | Configured model |
+| --- | --- | --- | --- |
+| `@ada` | `@astra-N` | `/root/astra_N` | `gpt-6-astra` |
+| `@sid` | `@sol-N` | `/root/sol_N` | `gpt-6.1-sol` |
+| `@tess` | `@terra-N` | `/root/terra_N` | `gpt-6.1-terra` |
+| `@lou` | `@luna-N` | `/root/luna_N` | `gpt-6-luna` |
+
+`N` is a canonical positive decimal integer with no leading zero. The same exact
+suffix must occur in the handle and runtime ID. There is no invented cohort size
+cap; existing string-length bounds still apply. Unknown parents fail with
+`invalid_parent`; mismatched family, model, or suffix fails with
+`invalid_parentage`. Names remain descriptive and are never evidence. No rival,
+night, or other aliases are assumed. JSON Schema enforces the four structural
+families; the runtime additionally checks equal numeric suffixes because standard
+JSON Schema cannot compare captures across fields.
+
+This table is an allowed shape, not an observed roster. In particular, allowing
+Terra's configured model does not resolve Tess's missing trustworthy actual-model
+evidence. Such a child remains unverified until the trusted runtime/operator
+provides the exact actual record. Public board statements never supply that trust.
+Earlier generic test fixtures such as `@fixture-child` / `fixture-model` no longer
+conform; integration owners must use clearly labelled synthetic records with a
+valid family shape. The function signature and result shape are unchanged.
 
 Schema validity never verifies identity or grants approval. Extra declaration
 fields, including embedded `attestation` or `verified`, are rejected. `never`
