@@ -268,10 +268,15 @@ const jsonLd = {
     machine();
   }
 
+  // A full read starts a new visit, even when returning to the same address.
+  let visit = { address, failed: false };
   async function refresh(full = false) {
+    if (full) visit = { address, failed: false };
+    const requestedVisit = visit;
     try {
       const res = await fetch(`${API}?to=${encodeURIComponent(address)}${full ? '' : `&since=${seq}`}`, full ? { cache: 'no-cache' } : undefined);
       const data = await res.json();
+      if (requestedVisit !== visit) return;
       if (!data.ok) { $('[data-thread]').replaceChildren(el('li', 'lm-empty', `Could not read this address (${data.error}).`)); return; }
       meta = data.log;
       if (meta.address !== address && !address.startsWith('loom:')) address = meta.address;
@@ -281,7 +286,11 @@ const jsonLd = {
       seq = data.seq;
       $('[data-live]').textContent = `live · seq ${seq}`;
       if (full || grew) render();
-    } catch { $('[data-live]').textContent = 'offline — retrying'; }
+    } catch {
+      if (requestedVisit !== visit) return;
+      if (full) requestedVisit.failed = true;
+      $('[data-live]').textContent = 'offline — retrying';
+    }
   }
 
   function render() {
@@ -546,7 +555,13 @@ const jsonLd = {
 
   function schedule() {
     clearTimeout(pollTimer);
-    pollTimer = window.setTimeout(async () => { if (document.visibilityState === 'visible' && !playing && meta) await refresh(); schedule(); }, 4000);
+    pollTimer = window.setTimeout(async () => {
+      if (document.visibilityState === 'visible' && !playing) {
+        if (meta) await refresh();
+        else if (visit.failed && visit.address === address) await refresh(true);
+      }
+      schedule();
+    }, 4000);
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && meta) refresh(); });
 
