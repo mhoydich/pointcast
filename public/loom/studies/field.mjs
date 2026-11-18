@@ -100,11 +100,17 @@ void main() {
   float lit = max(dot(n, light),0.);
   float facing = clamp(dot(softN,eye),0.,1.);
   float rim = pow(1.-facing,2.05);
+  float vein = sin(11.*vLocal.x + 4.*sin(5.*vLocal.z) + 6.*vLocal.y) +
+               .63*sin(13.*vLocal.z - 2.*vLocal.x + 4.*sin(6.*vLocal.y));
+  float seam = exp(-abs(vein)*14.);
+  float bloom = .5 + .5*sin(7.*vLocal.x + 2.*sin(4.*vLocal.y) + 8.*vLocal.z);
   float inner = pow(clamp(dot(n,normalize(vec3(.15,.68,-.7)))*.5+.5,0.,1.),2.);
   float glint = pow(max(dot(reflect(-light,n),eye),0.),21.);
-  vec3 base = mix(vec3(.011,.071,.052),uTint, .17+.73*lit);
+  vec3 base = mix(vec3(.003,.024,.020),uTint, .065+.82*pow(lit,1.48));
+  base *= .84 + .20*bloom;
+  base += vec3(.005,.056,.032)*seam*(.26+lit);
   base += vec3(.016,.17,.091) * inner;
-  base += vec3(.115,.57,.34)*rim + vec3(.38,.46,.32)*glint;
+  base += vec3(.20,.73,.42)*rim + vec3(.49,.60,.44)*glint;
   gl_FragColor = vec4(base*uLevel,.95);
   #include <colorspace_fragment>
 }`;
@@ -114,11 +120,23 @@ function cellForm() {
   const p = shape.attributes.position;
   for (let i=0; i<p.count; i++) {
     const x=p.getX(i)/RAD, y=p.getY(i)/RAD, z=p.getZ(i)/RAD;
-    const swell=1+.085*Math.sin(3.2*x+1.7*z)*Math.cos(3*y-.7*x)+.035*Math.cos(4*z-2*y);
-    p.setXYZ(i,x*swell*RAD,y*swell*RAD*.93,z*swell*RAD);
+    const swell=1+.125*Math.sin(3.2*x+1.7*z)*Math.cos(3*y-.7*x)+.077*Math.cos(4*z-2*y);
+    p.setXYZ(i,x*swell*RAD,y*swell*RAD*.87,z*swell*RAD);
   }
   shape.computeBoundingSphere();
   return shape;
+}
+
+function contactTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const context = canvas.getContext('2d');
+  const grad = context.createRadialGradient(32,32,4,32,32,32);
+  grad.addColorStop(0,'rgba(0,5,4,0.7)');
+  grad.addColorStop(.45,'rgba(0,4,3,0.47)');
+  grad.addColorStop(1,'rgba(0,3,2,0)');
+  context.fillStyle=grad; context.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(canvas);
 }
 
 function gridTexture() {
@@ -166,6 +184,10 @@ export function drawField(canvas, model, selected, onPick) {
   materialSet.add(traces);
   const cells=[], byId=new Map(), bounds=new THREE.Box3();
   let picked=null;
+  const contact=contactTexture(); textureSet.add(contact);
+  const shadowMat=new THREE.MeshBasicMaterial({map:contact,transparent:true,depthWrite:false});
+  const shadowGeo=new THREE.PlaneGeometry(2.12,2.0);
+  materialSet.add(shadowMat); geometrySet.add(shadowGeo);
   for (const [j,group] of islands.entries()) {
     const tint = new THREE.Color().setHSL(.408 + .072*(.5+.5*Math.sin(j*3.3)),.61,.4);
     group.skin = new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:surface,
@@ -185,6 +207,9 @@ export function drawField(canvas, model, selected, onPick) {
     perimeter.forEach(p=>bounds.expandByPoint(p));
     group.messages.forEach((message,i)=>{
       const p=group.points[i];
+      const shadow=add(shadowGeo,shadowMat);
+      shadow.rotation.x=-Math.PI/2;
+      shadow.position.set(group.x+p.x+.09,.089,group.z+p.z+.09);
       const cell=add(form,group.skin);
       cell.position.set(group.x+p.x,.67+.055*Math.sin(i*2.1),group.z+p.z);
       cell.rotation.y=i*2.4+j*.48;
