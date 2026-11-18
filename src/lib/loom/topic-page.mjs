@@ -190,14 +190,48 @@ export function buildTopicIndex(directory) {
   const description = topics.length
     ? `${plural(topics.length, 'public topic')} on the PointCast Loom, open to people and AI agents. Each has its own page, live thread and RSS feed.`
     : 'Public topics on the PointCast Loom. None have been started yet.';
-  const items = topics.map((t) => `<li><a class="who" href="/loom/topic/${esc(t.name)}">#${esc(t.name)}</a>${t.title ? ` <span>${esc(t.title)}</span>` : ''} <span class="meta">${esc(plural(t.count, 'message'))}${t.updatedAt ? ` · ${esc(day(t.updatedAt))}` : ''}</span></li>`).join('\n');
-  return head({ title, description, canonical, noindex: topics.length === 0, rss: '/api/loom?to=%23loom&format=rss' }) + `<body>
+  const items = topics.map((t) => `<li><span class="topic-label"><a class="who" href="/loom/topic/${esc(t.name)}">#${esc(t.name)}</a>${t.title ? ` <span>${esc(t.title)}</span>` : ''}</span> <span class="meta">${esc(plural(t.count, 'message'))}${t.updatedAt ? ` · ${esc(day(t.updatedAt))}` : ''}</span></li>`).join('\n');
+  const extra = `<style>
+#topic-filter{margin-top:16px}
+#topic-filter label{display:block;font-weight:600}
+#topic-query{width:100%;min-height:44px;margin-top:4px;padding:8px 12px;border:2px solid var(--rule);background:var(--surface);color:var(--ink);font:inherit}
+.topic-label{overflow-wrap:anywhere}
+</style>`;
+  return head({ title, description, canonical, noindex: topics.length === 0, rss: '/api/loom?to=%23loom&format=rss', extra }) + `<body>
 <main>
 <p class="crumb"><a href="/loom">the Loom</a> / topics</p>
 <h1>Loom topics</h1>
-<p class="meta">${esc(plural(topics.length, 'public topic'))}</p>
-<p><a class="cta" href="/loom#directory">Open the live Loom</a></p>
-${topics.length ? `<ol>\n${items}\n</ol>` : '<div class="empty"><p>No topics yet. Start one by appending to a #name in the live Loom.</p></div>'}
+${topics.length ? `<div id="topic-filter" hidden>
+<label for="topic-query">Filter topics by name or title</label>
+<input id="topic-query" type="search" aria-controls="topic-list">
+</div>` : ''}
+<p class="meta" id="topic-count" role="status">${esc(plural(topics.length, 'public topic'))}</p>
+${topics.length ? `<ol id="topic-list">\n${items}\n</ol>
+<script>
+(() => {
+  const input = document.getElementById('topic-query');
+  const status = document.getElementById('topic-count');
+  const total = status.textContent;
+  const topics = Array.from(document.querySelectorAll('#topic-list li'), row => ({
+    row, label: row.querySelector('.topic-label').textContent.toLowerCase()
+  }));
+  function filterTopics() {
+    const query = input.value.trim().toLowerCase();
+    let count = 0;
+    for (const {row, label} of topics) {
+      row.hidden = !label.includes(query);
+      if (!row.hidden) count++;
+    }
+    if (!query) status.textContent = total;
+    else if (count) status.textContent = count + ' of ' + total;
+    else status.textContent = 'No topics match. Try another name or title.';
+  }
+  input.addEventListener('input', filterTopics);
+  window.addEventListener('pageshow', filterTopics);
+  document.getElementById('topic-filter').hidden = false;
+})();
+</script>` : '<div class="empty"><p>No topics yet. Start one by appending to a #name in the live Loom.</p></div>'}
+<p><a href="/loom#directory">Open the live Loom</a></p>
 <p class="foot">Protocol card <a href="/loom.json">/loom.json</a> · API <a href="/api/loom?kind=topic">/api/loom?kind=topic</a></p>
 </main>
 </body>
