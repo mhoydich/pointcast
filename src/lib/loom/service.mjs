@@ -370,11 +370,9 @@ function validateFrom(raw, verifiedAgent) {
   return out;
 }
 
-function validateMessage(body) {
+function validateMessage(body, text) {
   const kind = KINDS.has(body.kind) ? body.kind : 'note';
-  const text = clean(body.body, BODY_MAX);
   const out = { kind, body: text };
-  if (clean(body.body, Infinity).length > BODY_MAX) out.truncated = true;
   if (body.media) {
     const url = String(body.media.url ?? '');
     let u;
@@ -649,7 +647,9 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         const ceiling = await gate(limit, 'loom:append:ip');
         if (!ceiling.allowed) return limited(ceiling.retryAfter);
       }
-      const { truncated, ...message } = validateMessage(body);
+      const text = clean(body.body, Infinity);
+      if (text.length > BODY_MAX) return fail('body_too_long', 400, { bodyMax: BODY_MAX, bodyLength: text.length });
+      const message = validateMessage(body, text);
       const { log, parent } = await resolveTarget(kv, body.to);
       // A title sticks on a new log, or late on an untitled #topic; otherwise say why not.
       let title;
@@ -675,7 +675,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       await touchIndex(kv, log, op);
       await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
       const { tokenHash, ...publicOp } = op;
-      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(hello ? { welcome: { id: hello.id } } : {}), ...(title ? { title } : {}), ...(truncated ? { truncated: true, bodyMax: BODY_MAX } : {}) }, 201);
+      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(hello ? { welcome: { id: hello.id } } : {}), ...(title ? { title } : {}) }, 201);
     }
 
     if (action === 'seen') {
