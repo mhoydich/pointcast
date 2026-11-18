@@ -33,7 +33,7 @@ function openClassic(t, readThread) {
     if (!query.has('to')) return { json: async () => ({ ok: true, logs: [] }) };
     requests.push([query.get('to'), query.get('since')]);
     const result = await readThread(query.get('to'), requests.length);
-    return { json: async () => result };
+    return result instanceof Response ? result : Response.json(result);
   };
   window.Function('fold', 'parseAddress', outputText)(fold, parseAddress);
   return {
@@ -88,4 +88,41 @@ test('late results from earlier visits cannot retry or replace the current room'
   assert.equal(document.querySelector('[data-live]').textContent, 'live · seq 2');
   await poll();
   assert.deepEqual(requests, [['#a', null], ['#b', null], ['#a', null], ['#a', '2']]);
+});
+
+test('server errors retry a full read and preserve an already loaded thread', async t => {
+  const unavailable = status => Response.json({ ok: false, error: 'loom_unavailable' }, { status });
+  const { document, requests, poll } = openClassic(t, (address, attempt) => {
+    if (attempt === 1) return unavailable(500);
+    if (attempt === 3) return unavailable(503);
+    const log = room(address, 'Restored');
+    if (attempt === 2) log.ops.push({
+      op: 'append', id: 'm_first', seq: 2, kind: 'note', body: 'The pool opens Monday.',
+      from: { name: 'Reader', kind: 'human' }, at: '2026-11-18T18:00:00Z',
+    });
+    return log;
+  });
+  await settle();
+  const live = document.querySelector('[data-live]');
+  const thread = document.querySelector('[data-thread]');
+  assert.match(live.textContent, /retrying/);
+  await poll();
+  assert.equal(live.textContent, 'live · seq 2');
+  assert.match(thread.textContent, /The pool opens Monday\./);
+  await poll();
+  assert.match(live.textContent, /retrying/);
+  assert.match(thread.textContent, /The pool opens Monday\./);
+  await poll();
+  assert.equal(live.textContent, 'live · seq 2');
+  assert.deepEqual(requests, [['#a', null], ['#a', null], ['#a', '2'], ['#a', '2']]);
+});
+
+test('a missing log reports the failure and does not retry the first read', async t => {
+  const { document, requests, poll } = openClassic(t, () =>
+    Response.json({ ok: false, error: 'log_not_found' }, { status: 404 }));
+  await settle();
+  assert.match(document.querySelector('[data-thread]').textContent, /log_not_found/);
+  assert.doesNotMatch(document.querySelector('[data-live]').textContent, /connecting|retrying/);
+  await poll();
+  assert.deepEqual(requests, [['#a', null]]);
 });

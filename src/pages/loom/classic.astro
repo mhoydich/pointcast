@@ -277,7 +277,12 @@ const jsonLd = {
       const res = await fetch(`${API}?to=${encodeURIComponent(address)}${full ? '' : `&since=${seq}`}`, full ? { cache: 'no-cache' } : undefined);
       const data = await res.json();
       if (requestedVisit !== visit) return;
-      if (!data.ok) { $('[data-thread]').replaceChildren(el('li', 'lm-empty', `Could not read this address (${data.error}).`)); return; }
+      if (res.status >= 500) throw new Error(`Thread read failed (HTTP ${res.status})`);
+      if (!data.ok) {
+        if (full) $('[data-live]').textContent = 'unavailable';
+        $('[data-thread]').replaceChildren(el('li', 'lm-empty', `Could not read this address (${data.error}).`));
+        return;
+      }
       meta = data.log;
       if (meta.address !== address && !address.startsWith('loom:')) address = meta.address;
       const fresh = full ? data.ops : data.ops.filter((o: any) => o.seq > seq);
