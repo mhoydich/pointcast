@@ -155,8 +155,16 @@ window.addEventListener('pagehide', e => {
 });
 window.addEventListener('pageshow', e => { if (e.persisted) syncScore(); });
 
+// Only the pinned public sketch assembles its two draft modules from the preview host.
+const hostedPreview = location.origin === 'https://raw.githack.com' &&
+  /^\/mhoydich\/pointcast\/[a-f0-9]{40}\/sketches\/loom-fire-family\/(?:index\.html)?$/.test(location.pathname);
 const [flameModule,soundModule] = await Promise.allSettled([
-  import('/loom/kit/flame.mjs'), import('/loom/kit/sound.mjs'),
+  hostedPreview
+    ? import('/mhoydich/pointcast/f5787a1d1ac5113ab10268f0fe267dd2694d75e0/public/loom/kit/flame.mjs')
+    : import('/loom/kit/flame.mjs'),
+  hostedPreview
+    ? import('/mhoydich/pointcast/fefc09da6210de06a87f4eff6b6eab892f0eade3/public/loom/kit/sound.mjs')
+    : import('/loom/kit/sound.mjs'),
 ]);
 if (flameModule.status === 'fulfilled') mountFlame = flameModule.value.mountFlame;
 if (soundModule.status === 'fulfilled') sound = soundModule.value.createLoomSound({storage:null});
