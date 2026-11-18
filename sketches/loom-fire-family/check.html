@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Room fire integration check</title>
+<p id="result" role="status">Checking the six assembled fires…</p>
+<iframe title="390 pixel room study" width="390" height="844" ></iframe>
+<script type="module">
+const frame = document.querySelector('iframe');
+const status = document.querySelector('#result');
+const assert = (value, message) => { if (!value) throw Error(message); };
+const nextPaint = () => new Promise(resolve => requestAnimationFrame(resolve));
+try {
+  await new Promise(resolve => { frame.onload = resolve; frame.src = './'; });
+  const doc = frame.contentDocument;
+  const deadline = performance.now() + 5000;
+  while (!doc.querySelector('#description')?.textContent && performance.now() < deadline) await nextPaint();
+  const buttons = [...doc.querySelectorAll('nav button')];
+  assert(buttons.length === 6, 'Missing room choices');
+  const captions = new Set();
+  for (const [i, button] of buttons.entries()) {
+    button.click();
+    const empty = doc.querySelector('#empty');
+    assert(!doc.querySelector('#sound').disabled, 'Missing sound module');
+    assert(doc.querySelector('#fire-name').textContent === button.textContent, 'Wrong room name');
+    assert(doc.querySelector('#flame canvas'), 'Missing item 24 flame');
+    captions.add(doc.querySelector('#description').textContent);
+    empty.click();
+    await nextPaint();
+    assert(empty.getAttribute('aria-pressed') === 'true', 'Empty control failed');
+    captions.add(doc.querySelector('#description').textContent);
+    const state = doc.querySelector('#flame figure')?.dataset.state;
+    assert(state === ['embers', 'embers', undefined, undefined, undefined, 'steady'][i], 'Wrong empty state');
+    assert(doc.documentElement.scrollWidth === doc.documentElement.clientWidth, 'Horizontal overflow');
+    empty.click();
+  }
+  assert(captions.size === 12, 'Missing room-specific descriptions');
+  status.textContent = 'Passed all twelve assembled room states.';
+} catch (error) {
+  status.textContent = 'Failed · ' + error.message;
+}
+</script>
