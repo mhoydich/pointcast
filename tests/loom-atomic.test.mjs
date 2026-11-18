@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { handleAtomicLoom, atomicReader } from '../src/lib/loom/atomic.mjs';
-import { BODY_MAX, handleLoom } from '../src/lib/loom/service.mjs';
+import { BODY_MAX, MAX_OPS, handleLoom } from '../src/lib/loom/service.mjs';
 
 const migration = readFileSync(new URL('../migrations/auth/0037_loom_atomic.sql', import.meta.url), 'utf8');
 const lag = () => new Promise(resolve => setTimeout(resolve, 1));
@@ -184,4 +184,124 @@ test('real revision conflicts exhaust retry budget without writing partial state
  assert.equal(db.sqlite.prepare('SELECT revision FROM loom_atomic_state').get().revision,3);
  assert.ok(limits>0 && limits<3,'rate limit callbacks must be memoized across attempts');
  assert.equal(kv.writes,0);
+});
+
+const archiveRoom = '#archive-contract';
+
+async function roomAtRetentionLimit(t) {
+  const env = { db: database(), kv: archive() };
+  t.after(() => env.db.sqlite.close());
+  const created = await post(env, note('fixture marker', archiveRoom));
+  assert.equal(created.status, 201);
+  const receipt = await created.json();
+  const room = await get(env, archiveRoom);
+
+  // Start with one full synthetic room in the test database. All subsequent
+  // operations go through the atomic handler and its real SQLite transaction.
+  const key = `loom:log:${room.log.key}`;
+  const stored = JSON.parse(env.db.sqlite.prepare(
+    'SELECT value FROM loom_atomic_values WHERE key = ?'
+  ).get(key).value);
+  const first = stored.ops[0];
+  for (let seq = first.seq + 1; seq <= MAX_OPS; seq++) {
+    stored.ops.push({
+      op: 'append', id: `m_fixture_${seq}`, seq, at: first.at,
+      from: first.from, kind: 'note', body: `public fixture ${seq}`,
+    });
+  }
+  stored.seq = MAX_OPS;
+  env.db.sqlite.prepare('UPDATE loom_atomic_values SET value = ? WHERE key = ?')
+    .run(JSON.stringify(stored), key);
+  return { env, receipt };
+}
+
+async function advanceArchive(env) {
+  const response = await post(env, note('retained public fixture', archiveRoom));
+  assert.equal(response.status, 201);
+}
+
+function archiveRead(env, before) {
+  const url = new URL('https://loom.invalid/api/loom');
+  url.searchParams.set('to', archiveRoom);
+  url.searchParams.set('before', String(before));
+  return handleAtomicLoom(new Request(url), env);
+}
+
+async function readArchiveMessages(env, before) {
+  const response = await archiveRead(env, before);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.ok(Array.isArray(body.archive?.messages), 'expected an archive page');
+  return body.archive.messages;
+}
+
+test('atomic archive and withdrawal preserve committed history', async (t) => {
+  await t.test('a withdrawal overlaps archiving of older public notes', async (t) => {
+    const { env } = await roomAtRetentionLimit(t);
+    const recent = await post(env, note('another public fixture', archiveRoom));
+    assert.equal(recent.status, 201);
+    const receipt = await recent.json();
+
+    const [withdrawal, append] = await Promise.all([
+      post(env, { action: 'withdraw', to: receipt.address, token: receipt.editToken }),
+      post(env, note('public receipt marker', archiveRoom)),
+    ]);
+    assert.equal(withdrawal.status, 200);
+    assert.equal(append.status, 201);
+    const accepted = await append.json();
+    const live = await get(env, archiveRoom);
+    assert.ok(live.messages.some(m => m.id === accepted.message.id));
+    assert.ok(!live.messages.some(m => m.id === receipt.message.id));
+    const archived = await readArchiveMessages(env, live.log.trimmedBefore);
+    assert.deepEqual(archived.map(m => m.seq), [1, 2, 3]);
+  });
+
+
+  for (const order of ['withdraw first', 'trim first']) {
+    await t.test(order, async (t) => {
+      const { env, receipt } = await roomAtRetentionLimit(t);
+      if (order === 'trim first') await advanceArchive(env);
+      const withdrawn = await post(env, {
+        action: 'withdraw', to: receipt.address, token: receipt.editToken,
+      });
+      assert.equal(withdrawn.status, 200);
+      await advanceArchive(env);
+      await advanceArchive(env);
+
+      const live = await get(env, archiveRoom);
+      assert.ok(live.log.trimmedBefore > 2, 'withdrew across a real retention boundary');
+      const messages = await readArchiveMessages(env, live.log.trimmedBefore);
+      assert.ok(messages.some(m => m.id === 'm_fixture_2'), 'neighbor remains readable');
+      assert.ok(!messages.some(m => m.id === receipt.message.id), 'withdrawal survives archiving');
+      assert.ok(!live.messages.some(m => m.id === receipt.message.id));
+    });
+  }
+});
+
+test('a missing expected archive row stops paging until the same cursor can be retried', async (t) => {
+  const { env } = await roomAtRetentionLimit(t);
+  await advanceArchive(env);
+  await advanceArchive(env);
+  await advanceArchive(env);
+  const room = await get(env, archiveRoom);
+  const before = room.log.trimmedBefore;
+  const healthy = await readArchiveMessages(env, before);
+  assert.deepEqual(healthy.map(m => m.seq), [1, 2, 3]);
+
+  // A previously readable append is known to exist. Unlike an edit-only
+  // sequence or a tombstone, its disappearance makes the page incomplete.
+  const key = `loom:arch:${room.log.key}:2`;
+  const removed = env.db.sqlite.prepare(
+    'DELETE FROM loom_atomic_values WHERE key = ? RETURNING value'
+  ).get(key);
+  assert.ok(removed, 'fixture removed an actual archived record');
+  const unavailable = await archiveRead(env, before);
+  const body = await unavailable.json();
+
+  env.db.sqlite.prepare('INSERT INTO loom_atomic_values(key, value) VALUES (?, ?)')
+    .run(key, removed.value);
+  assert.deepEqual(await readArchiveMessages(env, before), healthy);
+  assert.equal(unavailable.status, 503);
+  assert.equal(body.archive, undefined, 'no partial page or continuation');
+  assert.equal(body.nextBefore, undefined);
 });
