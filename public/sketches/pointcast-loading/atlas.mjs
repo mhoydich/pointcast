@@ -17,29 +17,32 @@ let loading = false;
 let mountFlame;
 let flame;
 
-function showFlame(state) {
-  if (state === 'results') {
-    flame?.destroy();
-    flame = undefined;
-    delete flameView.dataset.mounted;
-    return;
-  }
+function unmountFlame() {
+  flame?.destroy();
+  flame = undefined;
+  delete flameView.dataset.mounted;
+}
 
+function showFlame(state) {
+  if (state === 'results') { unmountFlame(); return; }
   const pose = state === 'loading' ? 'steady' : 'embers';
-  still.src = './flame-' + pose + '.png';
+  const asset = './flame-' + pose + '.png';
+  if (still.getAttribute('src') !== asset) still.src = asset;
   if (!mountFlame) return;
-  if (!flame) {
-    flame = mountFlame(flameView, pose, {bare: true, particles: false});
-    if (!flameView.querySelector('canvas')?.getContext('2d')) {
-      flame.destroy();
-      flame = undefined;
-      mountFlame = undefined;
-      return;
+  try {
+    if (!flame) {
+      flame = mountFlame(flameView, pose, {bare: true, particles: false});
+      if (!flameView.querySelector('canvas')?.getContext('2d')) throw new Error('Canvas unavailable');
+      flameView.dataset.mounted = 'true';
     }
-    flameView.dataset.mounted = 'true';
+    flame.setState(pose);
+    flame.setAvailable(state !== 'error');
+  } catch {
+    // Artwork is optional; the Atlas state still comes from its own request.
+    unmountFlame();
+    flameView.querySelector('figure')?.remove();
+    mountFlame = undefined;
   }
-  flame.setState(pose);
-  flame.setAvailable(state !== 'error');
 }
 
 function show(state, heading, more = '', button = '') {
@@ -82,8 +85,9 @@ function showMatches() {
 async function load(preview = false) {
   if (loading) return;
   loading = true;
-  if (action === document.activeElement) title.focus();
+  const focusStatus = action === document.activeElement || replay === document.activeElement;
   show('loading', 'Loading the atlas…');
+  if (focusStatus) title.focus({preventScroll: true});
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   // Only a requested replay holds the frame long enough to inspect the flame.
@@ -118,7 +122,7 @@ action.addEventListener('click', () => {
 });
 search.addEventListener('input', showMatches);
 replay.addEventListener('click', () => void load(true));
-window.addEventListener('pagehide', event => { if (!event.persisted) flame?.destroy(); });
+window.addEventListener('pagehide', event => { if (!event.persisted) unmountFlame(); });
 
 element('sketch').hidden = false;
 void load();
@@ -127,7 +131,5 @@ import('/loom/kit/flame.mjs').then(kit => {
   showFlame(card.dataset.state);
 }).catch(() => {
   // Before the shared kit is released, the local stills show its two resting poses.
-  flame?.destroy();
-  flame = mountFlame = undefined;
-  delete flameView.dataset.mounted;
+  mountFlame = undefined;
 });
