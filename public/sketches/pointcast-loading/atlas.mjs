@@ -1,5 +1,3 @@
-import { stills } from './flame-stills.mjs';
-
 const element = id => document.getElementById(id);
 const search = element('search-input');
 const card = element('state-card');
@@ -16,6 +14,7 @@ const resultLimit = 6;
 
 let blocks;
 let loading = false;
+let stills;
 let mountFlame;
 let flame;
 
@@ -28,7 +27,7 @@ function unmountFlame() {
 function showFlame(state) {
   if (state === 'results') { unmountFlame(); return; }
   const pose = state === 'loading' ? 'steady' : 'embers';
-  if (still.dataset.pose !== pose) {
+  if (stills && still.dataset.pose !== pose) {
     still.src = stills[pose];
     still.dataset.pose = pose;
   }
@@ -129,7 +128,14 @@ replay.addEventListener('click', () => void load(true));
 window.addEventListener('pagehide', event => { if (!event.persisted) unmountFlame(); });
 
 element('sketch').hidden = false;
+replay.hidden = false;
 void load();
+import('./flame-stills.mjs').then(art => {
+  stills = art.stills;
+  showFlame(card.dataset.state);
+}).catch(() => {
+  // The shared flame and the Atlas work independently of the still images.
+});
 import('/loom/kit/flame.mjs').then(kit => {
   mountFlame = kit.mountFlame;
   showFlame(card.dataset.state);
