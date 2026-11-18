@@ -33,7 +33,7 @@ try{
    const snapshot=assembled ?? fixture(at);
    if(threads){
     snapshot.desks.push({...snapshot.desks[0],handle:'@sol-2',name:'TEST FIXTURE 2'});
-    snapshot.edges=[{id:'fixture-thread',parentId:'fixture-parent',fromHandle:'@sol-1',toHandle:'@sol-2',sourceUrl:'https://pointcast.xyz/loom?to=%40sol-1'}];
+    snapshot.edges=[{id:'fixture-thread',at:iso(at),parentId:'fixture-parent',fromHandle:'@sol-1',toHandle:'@sol-2',sourceUrl:'https://pointcast.xyz/loom?to=%40sol-1'}];
    }
    await page.addInitScript(({snapshot,delayed})=>{
     const native=window.fetch.bind(window);window.fixtureReads=0;

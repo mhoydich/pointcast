@@ -22,7 +22,7 @@ export function projectFreshness(data, now) {
   const evidenceOld = !Number.isFinite(observed) || observed > now || now >= observed + EVIDENCE_FRESHNESS_MS;
   const edges = source.edges.filter(edge => {
     const at = instant(edge.at);
-    return !Number.isFinite(at) || (at <= now && now < at + POST_FRESHNESS_MS);
+    return Number.isFinite(at) && at <= observed && at <= now && now < at + POST_FRESHNESS_MS;
   });
   return {...source, desks, edges,
     state:ended ? 'ended' : (aged || evidenceOld) && !['degraded','error'].includes(source.state) ? 'stale' : source.state,
@@ -45,7 +45,7 @@ export function createFreshnessGuard({onChange,clock=Date.now,schedule=setTimeou
     }
     for (const edge of source?.edges || []) {
       const expires = instant(edge.at) + POST_FRESHNESS_MS;
-      if (Number.isFinite(expires) && expires > at) deadlines.push(expires);
+      if (Number.isFinite(expires) && instant(edge.at) <= instant(source?.observedAt) && expires > at) deadlines.push(expires);
     }
     const evidenceEnd = instant(source?.observedAt) + EVIDENCE_FRESHNESS_MS;
     if (source?.evidenceFresh && Number.isFinite(evidenceEnd) && evidenceEnd > at) deadlines.push(evidenceEnd);

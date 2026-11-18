@@ -53,7 +53,7 @@ test('resume after suspended timers immediately ages the page and observes an ea
 });
 test('reply edge expires on its own local deadline even when author has newer activity',()=>{
  const h=harness(),source=snapshot();
- source.edges=[{id:'reply',at:iso(start-60000)}];
+ source.edges=[{id:'reply',at:iso(start-60000)},{id:'unknown-time'},{id:'future',at:iso(start+1)}];
  const before=structuredClone(source);h.guard.accept(source);
  assert.equal(h.changes.at(-1).data.edges.length,1);
  h.advance(start+POST_FRESHNESS_MS-60000);

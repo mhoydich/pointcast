@@ -96,7 +96,8 @@ room-qualified parent lookup only. Fresh events alone still supply desk timestam
 activity and chime IDs; context never lights its author or becomes a new post.
 Both edge endpoints still require eligible declarations. Reply edges retain their
 source timestamp and locally expire on that deadline, even when the author has
-a newer post. The existing one-shot alarm handles this without network reads.
+a newer post. Missing/invalid/future-to-observation edge times fail closed.
+The existing one-shot alarm handles this without network reads.
 
 Validation of the assembled dependencies:15 Node tests, plus28 Chromium cases
 at390/1440px. The two new browser cases use actual provider adapters with local
