@@ -138,6 +138,45 @@ try {
     console.log(width + 'px: loading, no matches, results, retry and genuinely empty atlas passed');
     await page.close();
   }
+
+  for (const blocked of ['flame-stills.mjs', 'atlas.mjs', 'all scripts']) {
+    const page = await browser.newPage({
+      viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+      javaScriptEnabled: blocked !== 'all scripts',
+    });
+    const errors = [];
+    await page.route('**/*', route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (request.method() !== 'GET' || url.origin !== origin) {
+        errors.push(request.method() + ' ' + url.href);
+        return route.abort();
+      }
+      if (url.pathname === '/sketches/pointcast-loading/' + blocked) return route.abort();
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame() && url.href === origin + '/atlas/') {
+        return route.fulfill({ contentType: 'text/html', body: '<title>Block Atlas</title>' });
+      }
+      return route.continue();
+    });
+    await page.goto(origin + '/sketches/pointcast-loading/');
+    if (blocked === 'flame-stills.mjs') {
+      await page.getByRole('heading', { name: 'No matching blocks' }).waitFor();
+      await page.getByRole('button', { name: 'Clear search' }).tap();
+      const matches = page.locator('#matches a');
+      await matches.first().waitFor();
+      const title = await matches.first().innerText();
+      const search = page.getByLabel('Search titles');
+      await search.fill('Moon orchard');
+      await page.getByRole('heading', { name: 'No matching blocks' }).waitFor();
+      await search.fill(title);
+      assert.equal(await matches.first().innerText(), title);
+    }
+    await page.getByRole('link', { name: 'Open the full atlas', exact: true }).tap();
+    await page.waitForURL(origin + '/atlas/');
+    assert.deepEqual(errors, []);
+    console.log('390px: reached the full Atlas with ' + blocked + ' disabled');
+    await page.close();
+  }
 } finally {
   await browser.close();
 }
