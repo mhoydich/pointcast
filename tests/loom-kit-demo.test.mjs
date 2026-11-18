@@ -38,35 +38,35 @@ test('the static sketch labels four slots and keeps every missing demo readable'
 
 test('a pending or broken demo only affects its own slot', async () => {
   const { document, content, status } = openSketch();
-  const sound = Promise.withResolvers();
+  const flame = Promise.withResolvers();
   const modules = {
-    sound: { async mountDemo(container) {
-      container.textContent = 'Sound controls';
-      await sound.promise;
-    } },
+    sound: { createLoomSound() { throw new Error('No audio'); } },
     motion: { mountDemo(container) {
       container.textContent = 'Motion controls';
     } },
     flame: { async mountDemo(container) {
+      container.textContent = 'Flame controls';
+      await flame.promise;
+    } },
+    'card-stack': { mountDemo(container) {
       container.textContent = 'Partial controls';
       throw new Error('Mount failed');
     } },
-    'card-stack': {},
   };
   const mounting = mountKit(document, path => modules[path.split('/').at(-1).replace('.mjs', '')]);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(content('motion').hidden, false);
   assert.equal(status('motion').hidden, true);
-  assert.equal(content('sound').hidden, true);
-  assert.equal(status('sound').hidden, false);
-  sound.resolve();
+  assert.equal(content('flame').hidden, true);
+  assert.equal(status('flame').hidden, false);
+  flame.resolve();
   await mounting;
-  for (const name of ['sound', 'motion']) {
+  for (const name of ['flame', 'motion']) {
     assert.equal(status(name).hidden, true);
     assert.equal(content(name).hidden, false);
     assert.match(content(name).textContent, /controls/);
   }
-  for (const name of ['flame', 'card-stack']) {
+  for (const name of ['sound', 'card-stack']) {
     assert.equal(content(name).textContent, '');
     assert.equal(content(name).hidden, true);
     assert.equal(status(name).hidden, false);
@@ -98,7 +98,7 @@ test('only the same-repository phone preview loads the submitted component revis
     raw + 'fefc09da6210de06a87f4eff6b6eab892f0eade3/public/loom/kit/sound.mjs',
     raw + 'dd5bc90659b691543a73936da813ecbea250b263/public/loom/kit/motion.mjs',
     raw + 'f5787a1d1ac5113ab10268f0fe267dd2694d75e0/public/loom/kit/flame.mjs',
-    raw + 'df301ad1549c933c9c6d8cb08d4b4e0673e7c6fc/public/loom/kit/card-stack.mjs',
+    raw + '688ed328380335ca2e45a4ff8caf4809cbf5ad29/public/loom/kit/card-stack.mjs',
   ];
   for (const [url, expected] of [
     [raw + 'shell-head' + route, submitted],
@@ -110,8 +110,10 @@ test('only the same-repository phone preview loads the submitted component revis
     const { document } = openSketch(url);
     const loaded = [];
     const mountOptions = {};
+    const engine = { enabled: false, fireBed: false, dispose() {} };
     await mountKit(document, path => {
       loaded.push(path);
+      if (path.endsWith('/sound.mjs')) return { SOUND_NAMES: ['tap'], createLoomSound: () => engine };
       return { mountDemo(container, options) {
         mountOptions[container.closest('[data-kit-slot]').dataset.kitSlot] = options;
       } };
@@ -119,8 +121,8 @@ test('only the same-repository phone preview loads the submitted component revis
     assert.deepEqual(loaded.sort(), [...expected].sort());
     const [sound, motion, flame] = submitted;
     assert.deepEqual(mountOptions, {
-      sound: undefined, motion: undefined, flame: undefined,
-      'card-stack': expected === submitted ? { kit: { sound, motion, flame } } : undefined,
+      motion: undefined, flame: undefined,
+      'card-stack': expected === submitted ? { sound: engine, kit: { sound, motion, flame } } : { sound: engine },
     });
   }
 });
@@ -145,7 +147,7 @@ test('cached pages keep their demo; leaving cleans completed and pending mounts 
 
   view.dispatchEvent(new view.PageTransitionEvent('pagehide', { persisted: false }));
   assert.deepEqual(calls, ['clean motion']);
-  slowImport.resolve({ mountDemo() { calls.push('mounted sound after leaving'); } });
+  slowImport.resolve({ createLoomSound() { calls.push('created sound after leaving'); } });
   slowMount.resolve();
   await mounting;
   view.dispatchEvent(new view.PageTransitionEvent('pagehide', { persisted: false }));

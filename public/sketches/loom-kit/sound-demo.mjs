@@ -1,7 +1,6 @@
 // The sketch owns these controls. The sound kit owns playback and saved preferences.
-export function mountSoundDemo(container, { createLoomSound, SOUND_NAMES }) {
+export function mountSoundDemo(container, sound, names, signal) {
   const page = container.ownerDocument;
-  const view = page.defaultView;
   container.innerHTML = `<div class="sound-demo">
     <button type="button" data-sound-toggle role="switch">Sound <span data-sound-state aria-hidden="true"></span></button>
     <div data-sound-options hidden>
@@ -16,14 +15,13 @@ export function mountSoundDemo(container, { createLoomSound, SOUND_NAMES }) {
   const select = options.querySelector('select');
   const bed = options.querySelector('[data-sound-bed]');
   const feedback = container.querySelector('[data-sound-feedback]');
-  for (const name of SOUND_NAMES.filter(name => name !== 'fire-bed')) {
+  for (const name of names.filter(name => name !== 'fire-bed')) {
     const option = page.createElement('option');
     option.value = name;
     option.textContent = (name[0].toUpperCase() + name.slice(1)).replaceAll('-', ' ');
     select.append(option);
   }
 
-  let sound = createLoomSound();
   function setSwitch(button, on) {
     button.setAttribute('aria-checked', String(on));
     button.querySelector('[data-sound-state]').textContent = on ? 'On' : 'Off';
@@ -36,38 +34,26 @@ export function mountSoundDemo(container, { createLoomSound, SOUND_NAMES }) {
   }
   showPreferences();
 
-  async function reportUnlock(instance, pending, cue) {
+  async function reportUnlock(pending, cue) {
     const ready = await pending;
-    if (instance !== sound || !instance.enabled) return;
+    if (signal.aborted || !sound.enabled) return;
     feedback.hidden = ready;
     if (!ready) feedback.textContent = 'Audio couldn’t start. Tap Play to try again.';
-    if (ready && cue) instance.play(cue);
+    if (ready && cue) sound.play(cue);
   }
 
   toggle.addEventListener('click', () => {
-    if (!sound) return;
     const pending = sound.setEnabled(!sound.enabled);
     showPreferences();
-    if (sound.enabled) reportUnlock(sound, pending);
-  });
+    if (sound.enabled) reportUnlock(pending);
+  }, { signal });
   options.querySelector('[data-sound-play]').addEventListener('click', () => {
-    if (sound?.enabled) reportUnlock(sound, sound.unlock(), select.value);
-  });
+    if (sound.enabled) reportUnlock(sound.unlock(), select.value);
+  }, { signal });
   bed.addEventListener('click', () => {
-    if (!sound?.enabled) return;
+    if (!sound.enabled) return;
     const pending = sound.setFireBed(!sound.fireBed);
     showPreferences();
-    if (sound.fireBed) reportUnlock(sound, pending);
-  });
-
-  view.addEventListener('pagehide', () => {
-    sound?.dispose();
-    sound = null;
-  });
-  view.addEventListener('pageshow', event => {
-    if (event.persisted && !sound) {
-      sound = createLoomSound();
-      showPreferences();
-    }
-  });
+    if (sound.fireBed) reportUnlock(pending);
+  }, { signal });
 }

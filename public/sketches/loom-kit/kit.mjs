@@ -5,7 +5,7 @@ const previewHeads = {
   sound: 'fefc09da6210de06a87f4eff6b6eab892f0eade3',
   motion: 'dd5bc90659b691543a73936da813ecbea250b263',
   flame: 'f5787a1d1ac5113ab10268f0fe267dd2694d75e0',
-  'card-stack': 'df301ad1549c933c9c6d8cb08d4b4e0673e7c6fc',
+  'card-stack': '688ed328380335ca2e45a4ff8caf4809cbf5ad29',
 };
 
 export function mountKit(root, loadModule = path => import(path)) {
@@ -23,9 +23,35 @@ export function mountKit(root, loadModule = path => import(path)) {
       ? `https://raw.githack.com/mhoydich/pointcast/${previewHeads[name]}/public/loom/kit/${name}.mjs`
       : `../../loom/kit/${name}.mjs`;
   }
+  const soundModule = Promise.resolve().then(() => loadModule(modulePath('sound')));
+  const sharedSound = soundModule.then(module => {
+    if (signal.aborted) return null;
+    const sound = module.createLoomSound();
+    signal.addEventListener('abort', () => sound.dispose(), { once: true });
+    return sound;
+  }).catch(() => null);
+  const silentSound = { enabled: false, play: () => false };
   const stackOptions = preview ? {
     kit: { sound: modulePath('sound'), motion: modulePath('motion'), flame: modulePath('flame') },
   } : undefined;
+
+  async function mount(name, demo, content) {
+    if (name !== 'sound' && name !== 'card-stack') return demo.mountDemo(content);
+    const sound = await sharedSound;
+    if (signal.aborted) return;
+    if (name === 'card-stack') {
+      // Saved sound consent still needs a user gesture to unlock a fresh context.
+      if (sound) {
+        const unlock = () => { if (sound.enabled) void sound.unlock(); };
+        content.addEventListener('pointerup', unlock, { capture: true, signal });
+        content.addEventListener('keydown', unlock, { capture: true, signal });
+      }
+      // A silent host prevents the standalone stack from retrying a broken sound kit.
+      return demo.mountDemo(content, { ...stackOptions, sound: sound ?? silentSound });
+    }
+    if (!sound) throw new Error('Sound kit could not start');
+    return mountSoundDemo(content, sound, demo.SOUND_NAMES, signal);
+  }
 
   return Promise.all(Object.keys(previewHeads).map(async name => {
     const slot = root.querySelector(`[data-kit-slot="${name}"]`);
@@ -35,7 +61,7 @@ export function mountKit(root, loadModule = path => import(path)) {
 
     let demo;
     try {
-      demo = await loadModule(modulePath(name));
+      demo = await (name === 'sound' ? soundModule : loadModule(modulePath(name)));
     } catch (error) {
       // Browsers reject missing optional module URLs with a TypeError.
       if (!signal.aborted && !(error instanceof TypeError)) status.textContent = 'Demo couldn’t load.';
@@ -44,9 +70,7 @@ export function mountKit(root, loadModule = path => import(path)) {
 
     if (signal.aborted) return;
     try {
-      const cleanup = name === 'sound' && typeof demo.mountDemo !== 'function'
-        ? mountSoundDemo(content, demo)
-        : await demo.mountDemo(content, name === 'card-stack' ? stackOptions : undefined);
+      const cleanup = await mount(name, demo, content);
       if (signal.aborted) {
         if (typeof cleanup === 'function') cleanup();
         return;
