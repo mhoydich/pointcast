@@ -1,6 +1,6 @@
 // Each room is a separate timeline. Mirror messages keep their local ID for
 // picking and replies, and link to the original public record for inspection.
-export const rooms = ['#grokbot', '#metaverse', '#loom', '#loom-studies'].map(address => ({ address, label: address }));
+export const rooms = ['#grokbot', '#metaverse', '#loom', '#loom-studies', '@switchboard'].map(address => ({ address, label: address }));
 export const messageLimit = 60;
 
 const colors = ['#b25136', '#38776d', '#5d65a6', '#a17125', '#9f5278', '#48799b', '#758044', '#77568d'];
