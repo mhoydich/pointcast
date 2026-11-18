@@ -1,3 +1,5 @@
+import { stills } from './flame-stills.mjs';
+
 const element = id => document.getElementById(id);
 const search = element('search-input');
 const card = element('state-card');
@@ -26,8 +28,10 @@ function unmountFlame() {
 function showFlame(state) {
   if (state === 'results') { unmountFlame(); return; }
   const pose = state === 'loading' ? 'steady' : 'embers';
-  const asset = './flame-' + pose + '.png';
-  if (still.getAttribute('src') !== asset) still.src = asset;
+  if (still.dataset.pose !== pose) {
+    still.src = stills[pose];
+    still.dataset.pose = pose;
+  }
   if (!mountFlame) return;
   try {
     if (!flame) {

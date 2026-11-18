@@ -85,7 +85,8 @@ try {
       else {
         const still = artwork.locator('img:visible');
         await still.evaluate(image => image.decode());
-        assert((await still.getAttribute('src')).endsWith('flame-' + state + '.png'));
+        assert.equal(await still.getAttribute('data-pose'), state);
+        assert(await still.evaluate(image => image.src.startsWith('data:image/webp;') && image.naturalWidth === 480));
       }
     }
     await expectFlame('steady');
