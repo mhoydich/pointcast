@@ -221,7 +221,7 @@ export function drawField(canvas, model, selected, onPick) {
       cells.push(cell); byId.set(message.id,cell);
     });
   }
-  // These are the only inter-message connectors. A missing source record never yields an edge.
+  // Dashed links encode only recorded replies whose endpoints are visible.
   const linkMaterial=new THREE.LineDashedMaterial({color:'#c2d4bf',transparent:true,opacity:.68,dashSize:.11,gapSize:.10});
   materialSet.add(linkMaterial);
   for (const message of model.messages || []) {
@@ -232,6 +232,87 @@ export function drawField(canvas, model, selected, onPick) {
     const arc=new THREE.QuadraticBezierCurve3(a.position,mid,b.position);
     add(new THREE.BufferGeometry().setFromPoints(arc.getPoints(40)),linkMaterial,THREE.Line).computeLineDistances();
   }
+  const pathGroup = new THREE.Group();
+  scene.add(pathGroup);
+  const pathMaterial = new THREE.MeshBasicMaterial({ color: '#ffcc83', transparent: true, depthTest: false, depthWrite: false });
+  materialSet.add(pathMaterial);
+  const mutedSkin = new THREE.ShaderMaterial({
+    vertexShader: vertex, fragmentShader: surface,
+    uniforms: { uLevel: {value: .055}, uTint: {value: new THREE.Color('#72857a')} },
+    transparent: true
+  });
+  materialSet.add(mutedSkin);
+  let trailCells = [], trailBadges = [];
+  const pathGeometries = [], badgeMaterials = [], badgeTextures = [];
+
+  function clearPath() {
+    pathGroup.clear();
+    for (const resources of [pathGeometries, badgeMaterials, badgeTextures]) {
+      for (const resource of resources) resource.dispose();
+      resources.length = 0;
+    }
+    trailBadges = [];
+  }
+
+  function addStepBadge(cell, index) {
+    const stamp = document.createElement('canvas');
+    stamp.width = stamp.height = 96;
+    const ctx = stamp.getContext('2d');
+    ctx.beginPath();
+    ctx.arc(48, 48, 40, 0, TAU);
+    ctx.fillStyle = '#202820';
+    ctx.fill();
+    ctx.strokeStyle = '#ffcc83';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.fillStyle = '#fff0d5';
+    ctx.font = 'bold 51px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(index + 1), 48, 50);
+    const texture = new THREE.CanvasTexture(stamp);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    badgeTextures.push(texture);
+    const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false });
+    badgeMaterials.push(material);
+    const sprite = new THREE.Sprite(material);
+    sprite.position.copy(cell.position);
+    sprite.position.y += .76;
+    sprite.renderOrder = 5;
+    sprite.userData.messageId = cell.userData.messageId;
+    pathGroup.add(sprite);
+    trailBadges.push(sprite);
+  }
+
+  function connectSteps(start, end) {
+    const midpoint = start.position.clone().lerp(end.position, .5);
+    midpoint.y += Math.min(2.2, .9 + start.position.distanceTo(end.position) * .13);
+    const curve = new THREE.QuadraticBezierCurve3(start.position, midpoint, end.position);
+    const edge = new THREE.TubeGeometry(curve, 40, .034, 6, false);
+    const link = new THREE.Mesh(edge, pathMaterial);
+    link.renderOrder = 2;
+    pathGroup.add(link);
+    pathGeometries.push(edge);
+  }
+
+  function setTrail(ids = []) {
+    const next = [...new Set(ids || [])].map(id => byId.get(id)).filter(Boolean);
+    if (next.length === trailCells.length && next.every((cell, i) => cell === trailCells[i])) return;
+    clearPath();
+    trailCells = next;
+    for (const [index, cell] of trailCells.entries()) {
+      if (index) connectSteps(trailCells[index - 1], cell);
+      addStepBadge(cell, index);
+    }
+    for (const cell of cells) {
+      const muted = trailCells.length > 0 && !trailCells.includes(cell);
+      cell.material = muted ? mutedSkin : cell.userData.island.skin;
+      cell.children[0].visible = !muted;
+    }
+    linkMaterial.opacity = next.length ? .14 : .68;
+    setSelected(picked?.userData.messageId);
+  }
+
   const selectMat=new THREE.LineBasicMaterial({color:'#e1ffe9',transparent:true,opacity:.93,depthTest:false});
   const selection=add(new THREE.BufferGeometry().setFromPoints(Array.from({length:65},(_,i)=>
     new THREE.Vector3(Math.cos(i*TAU/64)*RAD*1.21,Math.sin(i*TAU/64)*RAD*1.21,0)
@@ -253,6 +334,11 @@ export function drawField(canvas, model, selected, onPick) {
     raf=requestAnimationFrame(()=>{
       raf=0;
       if (selection.visible) selection.quaternion.copy(camera.quaternion);
+      if (trailBadges.length) {
+        const unitsPerPixel = (camera.top - camera.bottom) / (camera.zoom * Math.max(1, canvas.clientHeight));
+        const badgeSize = THREE.MathUtils.clamp(unitsPerPixel * 26, .29, 1.65);
+        for (const badge of trailBadges) badge.scale.setScalar(badgeSize);
+      }
       gl.render(scene,camera);
     });
   }
@@ -262,8 +348,14 @@ export function drawField(canvas, model, selected, onPick) {
     if (picked) selection.position.copy(picked.position);
     for (const group of islands) {
       const on=group===picked?.userData.island;
-      group.skin.uniforms.uLevel.value=on || !picked ? 1 : .47;
-      group.copper.color.set(on ? '#ecab78' : '#906a4f');
+      if (trailCells.length) {
+        const onPath = trailCells.some(cell => cell.userData.island === group);
+        group.skin.uniforms.uLevel.value = on ? 1.2 : 1;
+        group.copper.color.set(onPath ? '#c99666' : '#414b43');
+      } else {
+        group.skin.uniforms.uLevel.value = on || !picked ? 1 : .47;
+        group.copper.color.set(on ? '#ecab78' : '#906a4f');
+      }
     }
     render();
   }
@@ -315,7 +407,9 @@ export function drawField(canvas, model, selected, onPick) {
     const box=canvas.getBoundingClientRect();
     mouse.set((e.clientX-box.left)/box.width*2-1,1-(e.clientY-box.top)/box.height*2);
     ray.setFromCamera(mouse,camera);
-    const hit=ray.intersectObjects(cells,false)[0];
+    const hit = trailCells.length
+      ? ray.intersectObjects(trailBadges, false)[0] || ray.intersectObjects(trailCells, false)[0]
+      : ray.intersectObjects(cells, false)[0];
     if(hit) onPick?.(hit.object.userData.messageId);
   }
   function cancel() { press=null; }
@@ -327,10 +421,11 @@ export function drawField(canvas, model, selected, onPick) {
   controls.addEventListener('change',render);
   const observer=new ResizeObserver(resize); observer.observe(canvas);
   resize();reset();setSelected(selected);
-  return {setSelected,resize,reset,rotate,zoom,destroy(){
+  return {setSelected,setTrail,resize,reset,rotate,zoom,destroy(){
     dead=true; cancelAnimationFrame(raf); observer.disconnect();
     controls.removeEventListener('change',render); controls.dispose();
     for(const [name,fn] of Object.entries(listeners)) canvas.removeEventListener(name,fn);
+    clearPath();
     for(const store of [geometrySet,materialSet,textureSet]) for(const item of store) item.dispose();
     gl.dispose();gl.forceContextLoss();
   }};
