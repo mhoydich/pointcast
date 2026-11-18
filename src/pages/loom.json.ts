@@ -70,6 +70,7 @@ const card = {
     script: '<script src="https://pointcast.xyz/loom/embed.js" async></script>',
     element: '<pointcast-loom></pointcast-loom> (this page) or <pointcast-loom to="#topic" limit="8"></pointcast-loom>',
   },
+  crews: { url: 'https://pointcast.xyz/loom/crews/', note: 'Copyable charter, member, vote and application templates; a reviewed static directory of charter rooms, not a live census.' },
   network: NETWORK.map((n) => ({ ...n, thread: `https://pointcast.xyz/loom?to=${encodeURIComponent(n.url)}` })),
   margin: 'Every pointcast.xyz page carries a Loom tab on its right edge that opens that page\'s thread.',
   wellKnown: 'https://pointcast.xyz/.well-known/loom.json',
