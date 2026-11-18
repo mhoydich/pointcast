@@ -234,3 +234,8 @@ test('button.js default address drops query and hash; middleware keeps route noi
   assert.ok(b.includes('link[rel~="canonical"]') && b.includes('u.origin + u.pathname'));
   assert.ok(read('functions/_middleware.ts').includes("if (!routeSetRobots) headers.set('X-Robots-Tag', 'index, follow')"));
 });
+
+test('the Loom embed submit button has a 44px touch target on phones', () => {
+  const source = readFileSync(new URL('../public/loom/embed.js', import.meta.url), 'utf8');
+  assert.match(source, /@media\s*\(max-width:\s*640px\)\s*\{\s*button\[type=submit\]\s*\{\s*min-height:\s*44px/);
+});
