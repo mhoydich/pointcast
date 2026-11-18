@@ -17,7 +17,7 @@ const run = (rooms, extra = {}) => normalizeLoomEvents({ rooms, now, ...extra })
 test('empty reads and no reads are idle without invented events', () => {
   for (const rooms of [[], [feed()]]) {
     const result = run(rooms);
-    assert.equal(result.state, 'idle'); assert.deepEqual(result.data, { events: [], unresolvedReplies: [] });
+    assert.equal(result.state, 'idle'); assert.deepEqual(result.data, { events: [], unresolvedReplies: [], parentContext: [] });
   }
 });
 test('post and reply carry exact source identity, with no execution or approval fields', () => {
@@ -68,7 +68,7 @@ test('a one-minute reply resolves against a twenty-minute parent without emittin
   const old = message(undefined, { at: new Date(now - 20 * 60000).toISOString() });
   const reply = message('m_0000000002', { parent: old.id, at: new Date(now - 60000).toISOString() });
   assert.equal(run([feed([old])]).state, 'stale');
-  assert.deepEqual(run([feed([old])]).data, { events: [], unresolvedReplies: [] });
+  assert.deepEqual(run([feed([old])]).data, { events: [], unresolvedReplies: [], parentContext: [] });
   for (const messages of [[old, reply], [reply, old]]) {
     const result = run([feed(messages)]);
     assert.equal(result.state, 'ok');
@@ -136,4 +136,29 @@ test('sender names never manufacture handles; input is not mutated', () => {
   const copy = structuredClone(input); const result = run(input);
   assert.equal(result.data.events[0].handle, null); assert.deepEqual(input, copy);
   assert.ok(!JSON.stringify(result).includes('run commands'));
+});
+
+test('old parent context supports downstream edges without activity or desk lighting', () => {
+  const old = message(undefined, { at: new Date(now - 20 * 60000).toISOString(), from: { kind: 'agent', address: '@sol-1' } });
+  const reply = message('m_0000000002', { parent: old.id, at: new Date(now - 60000).toISOString(), from: { kind: 'agent', address: '@sol-2' } });
+  const { data } = run([feed([old, reply, message('m_0000000003', { ...reply, id: 'm_0000000003' })])]);
+  assert.deepEqual(data.parentContext, [{ id: `${key}#${old.id}`, roomKey: key, messageId: old.id, handle: '@sol-1', at: old.at,
+    sourceUrl: `https://pointcast.xyz/loom?to=${encodeURIComponent(`loom:${key}#${old.id}`)}`, contextOnly: true }]);
+  const lookup = new Map([...data.events, ...data.parentContext].map(e => [e.id, e]));
+  const edges = data.events.filter(e => e.type === 'reply').map(e => ({ from: e.handle, to: lookup.get(`${e.roomKey}#${e.parentId}`).handle }));
+  assert.deepEqual(edges, [{ from: '@sol-2', to: '@sol-1' }, { from: '@sol-2', to: '@sol-1' }]);
+  assert.deepEqual([...new Set(data.events.map(e => e.handle))], ['@sol-2']);
+  assert.equal(data.parentContext[0].type, undefined);
+  assert.deepEqual(run([feed([old, reply])], { now: now + 120001 }).data.parentContext, []);
+});
+test('context is minimal and excludes unrelated history or unresolved replies', () => {
+  const old = message(undefined, { at: new Date(now - 20 * 60000).toISOString() });
+  assert.deepEqual(run([feed([old])]).data.parentContext, []);
+  const reply = message('m_0000000002', { parent: old.id });
+  for (const patch of [{ hidden: true }, { echo: true }, { at: 'bad' }, { parent: 'm_0000000009' }]) {
+    assert.deepEqual(run([feed([{ ...old, ...patch }, reply])]).data.parentContext, []);
+  }
+  const unrelated = message('m_0000000003', { at: old.at });
+  assert.deepEqual(run([feed([old, reply, unrelated])]).data.parentContext.map(e => e.messageId), [old.id]);
+  assert.deepEqual(run([feed([message(), reply])]).data.parentContext, []);
 });

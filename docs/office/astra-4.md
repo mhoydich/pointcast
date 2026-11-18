@@ -49,3 +49,39 @@ Contract: https://pointcast.xyz/loom?to=loom%3A0c4fe73d9b7a2a11f5f75e2b%23m_505c
 
 Status: READY FOR TERRA REVIEW. Final cycle 3 fixes fresh replies to older
 parents. Cycle 2 followed a cycle 1 declaration transport failure before repo work. This branch does not merge, deploy, or change PR1724.
+
+## Parent-owned integration amendment
+
+`data.parentContext` is an additive array, always present (including empty/error
+results). It contains only validated older immediate parents needed by resolved
+fresh reply events, deduplicated by room-qualified ID. Each entry is
+`{id, roomKey, messageId, handle, at, sourceUrl, contextOnly: true}`. Original
+source time/link are preserved; no event `type` is provided. Unrelated history,
+unresolved ancestry, invalid/conflicting parents and stale/failed feeds are not
+exported as context. Older ancestors still resolve internally, but only the
+immediate edge target is exported. This does not authenticate sender handles.
+
+Integration usage (Sid owns projection and rendering):
+
+```js
+const lookup = new Map([
+  ...observed.data.events,
+  ...(observed.data.parentContext ?? []),
+].map(record => [record.id, record]));
+const edges = observed.data.events.filter(e => e.type === 'reply').flatMap(e => {
+  const parent = lookup.get(`${e.roomKey}#${e.parentId}`);
+  return eligible.has(e.handle) && parent && eligible.has(parent.handle)
+    ? [{ id: e.id, parentId: e.parentId, fromHandle: e.handle,
+         toHandle: parent.handle, sourceUrl: e.sourceUrl }]
+    : [];
+});
+```
+
+Use `events` alone for activity counts, desk last-seen/light state, arrival IDs,
+and chimes. Never concatenate context into that activity stream. Context may
+locate an edge target but does not light its desk or refresh its timestamp.
+Recompute/drop edges with the fresh event snapshot and expiry rules; never cache
+context as current activity. Parent context is not an independent execution or
+approval signal. The adapter now has 16 passing focused tests. These include a
+projection-shaped lookup test, not an assembled browser/source-to-screen claim;
+Sid's refreshed integration and independent review remain required.

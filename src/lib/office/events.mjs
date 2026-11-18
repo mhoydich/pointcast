@@ -22,7 +22,7 @@ function provenance(sourceUrl, room) {
 
 export function normalizeLoomEvents({ rooms, now = Date.now(), maxAgeMs = 120000 } = {}) {
   const result = { schema: SCHEMA, state: 'idle', observedAt: null, sourceUrl: null,
-    data: { events: [], unresolvedReplies: [] }, errors: [] };
+    data: { events: [], unresolvedReplies: [], parentContext: [] }, errors: [] };
   const errors = new Set();
   let failed = false, stale = false;
   const reject = (code, isStale = false) => { errors.add(code); if (isStale) stale = true; else failed = true; };
@@ -84,7 +84,19 @@ export function normalizeLoomEvents({ rooms, now = Date.now(), maxAgeMs = 120000
     if (now - Date.parse(event.at) > maxAgeMs) continue;
     (resolved(event) ? result.data.events : result.data.unresolvedReplies).push(event);
   }
+  // Only edge targets for resolved fresh replies leave the internal ancestry map.
+  // These are context, never activity; consumers must not merge them into events.
+  const targets = new Map();
+  for (const event of result.data.events) {
+    if (event.type !== 'reply') continue;
+    const parent = records.get(`${event.roomKey}#${event.parentId}`);
+    if (now - Date.parse(parent.at) <= maxAgeMs) continue;
+    const { id, roomKey, messageId, handle, at, sourceUrl } = parent;
+    targets.set(id, { id, roomKey, messageId, handle, at, sourceUrl, contextOnly: true });
+  }
+  result.data.parentContext = [...targets.values()];
   const order = (a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id);
+  result.data.parentContext.sort(order);
   result.data.events.sort(order); result.data.unresolvedReplies.sort(order);
   result.observedAt = observations.length ? new Date(Math.min(...observations)).toISOString() : null;
   result.sourceUrl = sources.size === 1 ? [...sources][0] : null;
