@@ -254,30 +254,52 @@ async function read(address, keep = false) {
   loadController = controller;
   const previous = keep ? selectedId : null;
   const previousSource = model?.messages.find(record => record.id === selectedId)?.sourceUrl;
-  room = address; el('room').value = address;
-  clearDrawing(); model = roomModel = undefined; trailIds = []; clearReader();
-  freshCanvas(); viewChrome();
-  el('record-author').textContent = 'Reading…';
-  for (const id of ['byline','record-body','provenance','stats','legend','position','record-list','field-authors']) el(id).replaceChildren();
-  el('record-source').hidden = true;
-  for (const id of ['play','prev','next']) el(id).disabled = true;
-  el('room-source').href = '/loom?to=' + encodeURIComponent(address);
-  notice('Reading ' + address + '…');
+  const refreshing = keep && address === room && Boolean(roomModel);
+  const refreshStatus = el('refresh-status');
+  refreshStatus.textContent = refreshing ? 'Refreshing records…' : '';
+  if (!refreshing) {
+    room = address; el('room').value = address;
+    clearDrawing(); model = roomModel = undefined; trailIds = []; clearReader();
+    freshCanvas(); viewChrome();
+    el('record-author').textContent = 'Reading…';
+    for (const id of ['byline','record-body','provenance','stats','legend','position','record-list','field-authors']) el(id).replaceChildren();
+    el('record-source').hidden = true;
+    for (const id of ['play','prev','next']) el(id).disabled = true;
+    el('room-source').href = '/loom?to=' + encodeURIComponent(address);
+    notice('Reading ' + address + '…');
+  }
+  let data;
   try {
-    const data = await loadRoom(address,{signal:controller.signal});
-    if (controller !== loadController) return;
-    roomModel = data;
-    setProjection(); populate(); viewChrome();
-    if (!model.shown) { emptyRoom(); return; }
-    const match = model.messages.find(message => message.id === previous || message.sourceUrl === previousSource);
-    select(trailIndex >= 0 ? trailIds[trailIndex] : (match ?? model.messages[0]).id);
-    await paint();
+    data = await loadRoom(address,{signal:controller.signal});
   } catch {
     if (controller !== loadController) return;
-    notice('Could not read the Loom. Use Refresh records to retry.');
-    el('record-author').textContent = 'Room unavailable';
-    saveView();
+    if (refreshing) {
+      refreshStatus.textContent = 'Refresh failed. Showing the last loaded records. Use Refresh records to retry.';
+    } else {
+      notice('Could not read the Loom. Use Refresh records to retry.');
+      el('record-author').textContent = 'Room unavailable';
+      saveView();
+    }
+    return;
   }
+  if (controller !== loadController) return;
+  const currentId = refreshing ? selectedId : previous;
+  const currentSource = refreshing
+    ? model?.messages.find(record => record.id === currentId)?.sourceUrl
+    : previousSource;
+  stop();
+  refreshStatus.textContent = refreshing ? 'Records refreshed.' : '';
+  roomModel = data;
+  setProjection(); populate(); viewChrome();
+  if (!model.shown) {
+    if (refreshing) { clearDrawing(); freshCanvas(); }
+    emptyRoom();
+    return;
+  }
+  const match = model.messages.find(message => message.id === currentId)
+    ?? model.messages.find(message => message.sourceUrl === currentSource);
+  select(trailIndex >= 0 ? trailIds[trailIndex] : (match ?? model.messages[0]).id);
+  await paint();
 }
 el('follow-handoff').onclick = () => openTrail();
 el('exit-handoff').onclick = () => {
