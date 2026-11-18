@@ -169,8 +169,13 @@ async function load() {
   cardCount += drawSection('blocked', blocked, 'No blocked PRs in the retained board reports.');
   get('queue').hidden = false;
   get('identity').hidden = !canPost || !cardCount;
-  const partial = !gates || !replies || !blocked;
-  feedback.textContent = `${cardCount} ${cardCount === 1 ? 'item' : 'items'} to review${partial ? ' in the sections that loaded' : ''}.`;
+  const loadedSections = [gates, replies, blocked].filter(Array.isArray).length;
+  if (loadedSections === 0) {
+    feedback.textContent = 'Couldn’t load the inbox. Tap Refresh to retry.';
+  } else {
+    const scope = loadedSections < 3 ? ' in the sections that loaded' : '';
+    feedback.textContent = `${cardCount} ${cardCount === 1 ? 'item' : 'items'} to review${scope}.`;
+  }
   loading = false;
   syncControls();
 }
