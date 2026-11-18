@@ -40,6 +40,7 @@ const mounts = new WeakMap();
 export async function mountDemo(container, options = {}) {
   mounts.get(container)?.();
   const doc = container.ownerDocument;
+  const hostSound = options.sound;
   const css = new URL('./card-stack.css',import.meta.url).href;
   if (![...doc.querySelectorAll('link[rel="stylesheet"]')].some(link => link.href === css)) {
     const link = doc.createElement('link'); link.rel = 'stylesheet'; link.href = css; doc.head.append(link);
@@ -52,7 +53,7 @@ export async function mountDemo(container, options = {}) {
     <header class="lk-top">
       <div class="lk-fire" data-fire><img alt="" width="40" height="40"></div>
       <div class="lk-brand"><h2>For You</h2><small>Local sketch</small></div>
-      <button type="button" class="lk-sound" data-sound aria-pressed="false" disabled>Sound off</button>
+      ${hostSound ? '' : '<button type="button" class="lk-sound" data-sound aria-pressed="false" disabled>Sound off</button>'}
     </header>
     <div class="lk-stage">
       <article class="lk-card" data-card>
@@ -75,7 +76,8 @@ export async function mountDemo(container, options = {}) {
   let state = Object.hasOwn(resting,options.state) ? options.state : 'loading';
   let notes = [], skipped = false;
   let index = 0, saved = null, undoTimer, sparkTimer, disposed = false;
-  let sound, flame, motion, gesture, animation, departing, flameState = 'steady';
+  let sound = hostSound;
+  let flame, motion, gesture, animation, departing, flameState = 'steady';
   const listeners = new AbortController();
   function play(name) { if (sound?.enabled) sound.play(name); }
   function setFire(value) {
@@ -274,7 +276,7 @@ export async function mountDemo(container, options = {}) {
     if (flick) advance(false,{x,y,vx:x/dt,vy:y/dt}); else resetDrag();
   });
   card.addEventListener('pointercancel',resetDrag);
-  toggle.onclick = async () => {
+  if (toggle) toggle.onclick = async () => {
     if (!sound) return;
     const enable = !sound.enabled;
     if (!await sound.setEnabled(enable) && enable) {
@@ -289,22 +291,26 @@ export async function mountDemo(container, options = {}) {
     toggle.setAttribute('aria-pressed',String(Boolean(sound?.enabled)));
   }
   function unlock() { if (sound?.enabled) void sound.unlock(); }
-  root.addEventListener('pointerdown',unlock); root.addEventListener('keydown',unlock);
+  if (toggle) {
+    root.addEventListener('pointerdown',unlock); root.addEventListener('keydown',unlock);
+  }
   function destroy() {
     if (disposed) return;
     disposed = true; clearUndo(); clearTimeout(sparkTimer);  animation?.cancel();
     listeners.abort();
-    sound?.dispose(); flame?.destroy?.(); root.remove(); mounts.delete(container);
+    if (!hostSound) sound?.dispose();
+    flame?.destroy?.(); root.remove(); mounts.delete(container);
   }
   mounts.set(container,destroy);
   draw();
   const initialRead = options.state && Object.hasOwn(resting,options.state) ? Promise.resolve() : load(false);
   const [soundModule, flameModule, motionModule] = await Promise.all([
-    optional(options.kit?.sound || './sound.mjs'), optional(options.kit?.flame || './flame.mjs'), optional(options.kit?.motion || './motion.mjs')
+    hostSound ? null : optional(options.kit?.sound || './sound.mjs'),
+    optional(options.kit?.flame || './flame.mjs'), optional(options.kit?.motion || './motion.mjs')
   ]);
   if (disposed) return destroy;
   if (soundModule?.createLoomSound) sound = soundModule.createLoomSound();
-  updateSound();
+  if (toggle) updateSound();
   if (flameModule?.mountFlame) {
     fire.replaceChildren();
     flame = flameModule.mountFlame(fire,steadyState(),{bare:true});
