@@ -18,7 +18,10 @@ try {
   const picture = card.getByRole('img');
   assert.equal(decodeURIComponent((await picture.getAttribute('src')).split(',')[1]), svg);
   assert.ok(await picture.evaluate(img => img.complete && img.naturalWidth > 0));
-  assert.match(await card.innerText(), /public/);
+  const note = await card.locator('.public-note').innerText();
+  assert.match(note, /Your name and post will be public\./);
+  assert.match(note, /not a minted token, and names are self-declared\./);
+  assert.doesNotMatch(await page.locator('footer').innerText(), /names are self-declared/i);
   const action = card.getByRole('link');
   assert.equal(await action.count(), 1);
   const box = await action.boundingBox();
