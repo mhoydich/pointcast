@@ -184,12 +184,13 @@ function runCompanion(document) {
     if (refreshing || posting) return;
     refreshing = true;
     refreshButton.disabled = true;
+    queueStatus.textContent = 'Reading decision asks… This can take up to 12 seconds.';
     syncControls();
     try {
       const asks = await readCallAsks(environment.endpoint);
       renderAsks(asks);
       current = true;
-      const summary = asks.length === 0 ? 'Loom returned no open asks.' : `${asks.length} open ${asks.length === 1 ? 'ask' : 'asks'} from the Loom.`;
+      const summary = asks.length === 0 ? 'No decision asks for Mike right now. Other messages may still be waiting in the full inbox.' : `${asks.length} decision ${asks.length === 1 ? 'ask' : 'asks'} for Mike.`;
       if (queueStatus.textContent !== summary) queueStatus.textContent = summary;
     } catch {
       current = false;
