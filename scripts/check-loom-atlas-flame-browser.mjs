@@ -29,6 +29,10 @@ try {
         errors.push(request.method() + ' ' + url.href);
         return route.abort();
       }
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame() && url.href === origin + '/') {
+        // Verify the exit without including the homepage's assets in the sketch audit.
+        return route.fulfill({ contentType: 'text/html', body: '<title>PointCast home</title>' });
+      }
       if (url.pathname === '/atlas/blocks-atlas.json') {
         if (nextResponse === 'hold') {
           await held.promise;
