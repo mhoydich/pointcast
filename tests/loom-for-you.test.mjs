@@ -434,15 +434,26 @@ test('quoting or naming the confirm card does not turn a note into a decision', 
     "Read the 'needs your yes' section.",
     'Look under Needs your yes.',
     'Nothing needs your yes.',
+    'The **Needs your yes** card now has a larger button.',
+    'See the _Needs your yes_ decision cards.',
+    'There are no items in Needs your yes.',
+    'Two entries in **Needs your yes** are still visible.',
     'The needs your yes pile now has two entries.',
     'The screenshot shows the `needs your yes` text.',
     'Copy example:\n> Needs your yes before release',
   ].map((body) => msg(desk, body, 2));
-  const ask = msg(desk, 'The “night edition” needs your yes before release.', 2);
-  const both = msg(desk, designExample + '\nThe poster itself still needs your yes.', 2);
-  const explicit = msg(desk, 'NEEDS MIKE · Review the “needs your yes” card · reply here', 2);
-  const result = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#loom-ux', 'k', [...notes, ask, both, explicit])] });
-  assert.deepEqual(new Set(result.piles.needsYes.map((it) => it.id)), new Set([ask.id, both.id, explicit.id]));
+  const requests = [
+    'The “night edition” needs your yes before release.',
+    designExample + '\nThe poster itself still needs your yes.',
+    'NEEDS MIKE · Review the “needs your yes” card · reply here',
+    'The release needs your yes\nCard: see the preview.',
+    'The release needs your yes\r\nDecision card: see the preview.',
+    'Signing in needs your yes before we can publish.',
+    'There are no items in Needs your yes. The reprint still needs your yes.',
+    'The release **needs your yes** before noon.',
+  ].map((body) => msg(desk, body, 2));
+  const result = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#loom-ux', 'k', [...notes, ...requests])] });
+  assert.deepEqual(new Set(result.piles.needsYes.map((it) => it.id)), new Set(requests.map((it) => it.id)));
   assert.equal(result.rest.count, notes.length);
 });
 
