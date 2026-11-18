@@ -5,30 +5,8 @@ import { JSDOM } from 'jsdom';
 import { mountKit } from '../public/sketches/loom-kit/kit.mjs';
 
 const html = readFileSync(new URL('../public/sketches/loom-kit/index.html', import.meta.url), 'utf8');
-const raw = 'https://raw.githack.com/mhoydich/pointcast/';
 const cues = ['tap', 'send', 'receive', 'yes', 'undo', 'error', 'stack-cleared'];
 const settled = () => new Promise(resolve => setImmediate(resolve));
-
-test('only the same-repo phone sketch requests the submitted sound revision', async () => {
-  const route = '/public/sketches/loom-kit/index.html';
-  const pinned = raw + 'fefc09da6210de06a87f4eff6b6eab892f0eade3/public/loom/kit/sound.mjs';
-  const local = '../../loom/kit/sound.mjs';
-  for (const [url, expected] of [
-    [raw + 'shell-head' + route, pinned],
-    ['https://pointcast.xyz/sketches/loom-kit/', local],
-    ['http://localhost:8000/sketches/loom-kit/', local],
-    ['https://raw.githack.com/other/pointcast/branch' + route, local],
-    [raw + 'shell-head/public/other/', local],
-  ]) {
-    const { document } = new JSDOM(html, { url }).window;
-    const loaded = [];
-    await mountKit(document, path => {
-      loaded.push(path);
-      throw new TypeError('Missing');
-    });
-    assert.deepEqual(loaded.sort(), [expected, '../../loom/kit/motion.mjs', '../../loom/kit/flame.mjs', '../../loom/kit/card-stack.mjs'].sort());
-  }
-});
 
 test('sound starts quiet, unlocks on gestures and restores preferences without autoplay', async () => {
   const { window } = new JSDOM(html, { url: 'https://pointcast.xyz/sketches/loom-kit/' });

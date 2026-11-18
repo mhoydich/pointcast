@@ -8,8 +8,8 @@ const page = new URL('../public/sketches/loom-kit/index.html', import.meta.url);
 const preview = 'https://pointcast.xyz/sketches/loom-kit/';
 const names = ['sound', 'motion', 'flame', 'card-stack'];
 
-function openSketch() {
-  const { document } = new JSDOM(readFileSync(page, 'utf8'), { url: preview }).window;
+function openSketch(url = preview) {
+  const { document } = new JSDOM(readFileSync(page, 'utf8'), { url }).window;
   const slot = name => document.querySelector(`[data-kit-slot="${name}"]`);
   return {
     document,
@@ -72,4 +72,76 @@ test('a pending or broken demo only affects its own slot', async () => {
     assert.equal(status(name).hidden, false);
     assert.equal(status(name).textContent, 'Demo couldn’t start.');
   }
+});
+
+test('the motion slot keeps one heading and preserves distinct demo and dialog headings', async () => {
+  for (const name of ['Motion', 'Try the spring']) {
+    const { document, content } = openSketch();
+    await mountKit(document, async path => {
+      if (!path.endsWith('/motion.mjs')) throw new TypeError('Missing');
+      return { mountDemo(target) {
+        target.innerHTML = `<section class="lm-motion-demo"><h3 class="lm-motion-title">${name}</h3>
+          <dialog><h3>Sheet details</h3></dialog></section>`;
+      } };
+    });
+    assert.equal(document.getElementById('heading-motion').hidden, false);
+    assert.equal(content('motion').querySelector('.lm-motion-title').hidden, name === 'Motion');
+    assert.equal(content('motion').querySelector('dialog h3').hidden, false);
+  }
+});
+
+test('only the same-repository phone preview loads the submitted component revisions', async () => {
+  const raw = 'https://raw.githack.com/mhoydich/pointcast/';
+  const route = '/public/sketches/loom-kit/index.html';
+  const local = names.map(name => `../../loom/kit/${name}.mjs`);
+  const submitted = [
+    raw + 'fefc09da6210de06a87f4eff6b6eab892f0eade3/public/loom/kit/sound.mjs',
+    raw + 'dd5bc90659b691543a73936da813ecbea250b263/public/loom/kit/motion.mjs',
+    raw + 'fb24cd9c3f4b1607d62b58f7b30777f692fa28c0/public/loom/kit/flame.mjs',
+    '../../loom/kit/card-stack.mjs',
+  ];
+  for (const [url, expected] of [
+    [raw + 'shell-head' + route, submitted],
+    [preview, local],
+    ['http://localhost:8000/sketches/loom-kit/', local],
+    ['https://raw.githack.com/other/pointcast/branch' + route, local],
+    [raw + 'shell-head/public/other/', local],
+  ]) {
+    const { document } = openSketch(url);
+    const loaded = [];
+    await mountKit(document, path => {
+      loaded.push(path);
+      throw new TypeError('Missing');
+    });
+    assert.deepEqual(loaded.sort(), [...expected].sort());
+  }
+});
+
+test('cached pages keep their demo; leaving cleans completed and pending mounts exactly once', async () => {
+  const { document, content } = openSketch();
+  const view = document.defaultView;
+  const slowImport = Promise.withResolvers();
+  const slowMount = Promise.withResolvers();
+  const calls = [];
+  const modules = {
+    sound: slowImport.promise,
+    motion: { mountDemo() { return () => calls.push('clean motion'); } },
+    flame: { async mountDemo() { await slowMount.promise; return () => calls.push('clean flame'); } },
+  };
+  const mounting = mountKit(document, path => modules[path.split('/').at(-1).replace('.mjs', '')]);
+  await new Promise(resolve => setImmediate(resolve));
+  view.dispatchEvent(new view.PageTransitionEvent('pagehide', { persisted: true }));
+  view.dispatchEvent(new view.PageTransitionEvent('pageshow', { persisted: true }));
+  assert.equal(content('motion').hidden, false);
+  assert.deepEqual(calls, []);
+
+  view.dispatchEvent(new view.PageTransitionEvent('pagehide', { persisted: false }));
+  assert.deepEqual(calls, ['clean motion']);
+  slowImport.resolve({ mountDemo() { calls.push('mounted sound after leaving'); } });
+  slowMount.resolve();
+  await mounting;
+  view.dispatchEvent(new view.PageTransitionEvent('pagehide', { persisted: false }));
+  assert.deepEqual(calls, ['clean motion', 'clean flame']);
+  assert.equal(content('sound').hidden, true);
+  assert.equal(content('flame').hidden, true);
 });
