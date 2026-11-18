@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
+import { Buffer } from 'node:buffer';
 import { join } from 'node:path';
+import { cwd } from 'node:process';
 import sharp from 'sharp';
 import { ads } from '../../../../lib/ad-department/registry';
 
@@ -9,7 +11,7 @@ export function getStaticPaths() {
 
 const paper = '#f6f1e7';
 const ink = '#211e19';
-const fontfile = join(process.cwd(), 'src/assets/currency-builder/fonts/BodoniModa-opsz-wght.ttf');
+const fontfile = join(cwd(), 'src/assets/currency-builder/fonts/BodoniModa-opsz-wght.ttf');
 
 function type(text: string, font: string, width: number, height?: number) {
   const escaped = text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -24,7 +26,7 @@ export const GET: APIRoute = async ({ props }) => {
   let headline = await type(title, 'Bodoni Moda Medium 72 @opsz=11,wght=520', 525);
   if (headline.info.height > 396) headline = await type(title, 'Bodoni Moda Medium 72 @opsz=11,wght=520', 525, 396);
   const masthead = await type('PointCast Ad Department', 'Bodoni Moda Bold 26 @opsz=10,wght=650', 520);
-  const picture = await sharp(join(process.cwd(), 'public', art), { density: 144 })
+  const picture = await sharp(join(cwd(), 'public', art), { density: 144 })
     .resize(520, 550, { fit: 'contain', background: '#0000' })
     .png().toBuffer();
 

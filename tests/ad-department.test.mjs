@@ -43,6 +43,13 @@ before(async () => {
     await cp(join(repo, input), destination, { recursive: true });
   }
   await symlink(join(repo, 'node_modules'), join(root, 'node_modules'), 'dir');
+  // Match astro.config.mjs: the site's browser polyfills also reach static PNG generation.
+  await writeFile(join(root, 'astro.config.mjs'), `import { nodePolyfills } from 'vite-plugin-node-polyfills';
+export default { vite: { plugins: [nodePolyfills({
+  include: ['buffer', 'process', 'util', 'stream', 'events'],
+  globals: { Buffer: true, global: true, process: true },
+  protocolImports: false,
+})] } };`);
 
   // A seventh file exercises the full discovery path, including the share route.
   await writeFile(join(root, 'src/components/ad-department/posters/99-test.astro'), `---
