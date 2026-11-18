@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { addressKey } from '../src/lib/loom/address.mjs';
-import { directoryResponse, LOGS_PER_PAGE } from '../src/lib/loom/directory.mjs';
+import { directoryResponse, LOGS_PER_PAGE, readDirectory } from '../src/lib/loom/directory.mjs';
+import { MAX_INDEX, MAX_ROOMS } from '../src/lib/loom/service.mjs';
 
 const origin = 'https://pointcast.xyz';
 const request = path => new Request(new URL(path, origin));
@@ -12,15 +13,19 @@ const log = (address, ops) => ({ address, ops, seq: ops.length, createdAt: '2026
 async function board(logs) {
   const keys = [];
   const data = new Map();
+  const index = [];
   for (const log of logs) {
     const key = await addressKey(log.address);
     const name = 'loom:log:' + key;
     keys.push({ name });
     data.set(name, { ...log, key });
+    index.push({ key, address: log.address, kind: log.kind, title: 'Inbox for ' + log.address, count: log.ops.length });
   }
-  const rooms = logs.filter(log => log.address.startsWith('@')).map(log => ({
-    kind: log.kind, title: 'Inbox for ' + log.address, address: log.address, key: log.address, count: log.ops.length,
-  }));
+  const newest = index.reverse();
+  const topics = newest.filter(entry => entry.kind === 'topic').slice(0, MAX_ROOMS);
+  const rooms = [...topics, ...newest.filter(entry => entry.kind !== 'topic').slice(0, MAX_ROOMS - topics.length)];
+  data.set('loom:index', newest.slice(0, MAX_INDEX));
+  data.set('loom:rooms', rooms);
   const stats = { lists: 0, reads: 0, inFlight: 0, peak: 0 };
   const kv = {
     async list({ cursor, limit, prefix }) {
@@ -34,12 +39,11 @@ async function board(logs) {
       stats.peak = Math.max(stats.peak, ++stats.inFlight);
       await new Promise(resolve => setImmediate(resolve));
       stats.inFlight--;
-      if (key === 'loom:rooms') return JSON.stringify(rooms);
       const stored = data.get(key);
       return stored ? (type === 'json' ? stored : JSON.stringify(stored)) : null;
     },
   };
-  return { kv, stats };
+  return { kv, stats, rooms };
 }
 
 test('visible self-posted cards, current edits, introductions and source links survive folding', async () => {
@@ -67,7 +71,7 @@ test('visible self-posted cards, current edits, introductions and source links s
 test('2,000 rooms / 10,000 posts: bounded reads, shared cache and usable continuation even after zero matches', async () => {
   const logs = Array.from({ length: 2000 }, (_, i) => log('#room-' + i, Array.from({ length: 5 }, (_, n) =>
     ({ ...card, seq: n + 1, id: 'm_person' + n, from: { name: 'Reader ' + (i * 5 + n), kind: 'human' } }))));
-  const { kv, stats } = await board(logs);
+  const { kv, stats, rooms } = await board(logs);
   const entries = new Map();
   const cache = { match: async key => entries.get(key)?.clone(), put: async (key, response) => entries.set(key, response) };
   const query = encodeURIComponent('Reader 84');
@@ -83,6 +87,28 @@ test('2,000 rooms / 10,000 posts: bounded reads, shared cache and usable continu
   const second = await run(next);
   assert.equal(second.querySelector('h2').textContent, 'Reader 84');
   assert.deepEqual([stats.lists, stats.reads, stats.peak], [2, 34, 2]);
+
+  // Lou's R5 fixture still has all 2,000 log records after the board directory
+  // retains only its newest 400 topics. Walk the real cold pagination path.
+  assert.equal(rooms.length, MAX_ROOMS);
+  assert.ok(!rooms.some(room => room.address === '#room-0'));
+  const baseline = { ...stats };
+  const names = new Set();
+  let cursor, pages = 0;
+  do {
+    const page = await readDirectory(kv, cursor);
+    assert.equal(page.scanned, LOGS_PER_PAGE);
+    assert.equal(page.people.length, 80);
+    assert.equal(page.trimmed, false);
+    assert.equal(Object.hasOwn(page, 'topics'), false);
+    for (const person of page.people) names.add(person.name);
+    pages++;
+    assert.ok(pages <= 125, 'the continuation must advance');
+    cursor = page.next;
+  } while (cursor);
+  assert.equal(pages, 125);
+  assert.deepEqual(names, new Set(Array.from({ length: 10_000 }, (_, i) => 'Reader ' + i)));
+  assert.deepEqual([stats.lists - baseline.lists, stats.reads - baseline.reads], [125, 2002]);
 });
 
 test('exact inbox search reads the inbox directly, including a card outside the first log page', async () => {
