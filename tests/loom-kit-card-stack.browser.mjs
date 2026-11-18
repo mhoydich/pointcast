@@ -119,6 +119,95 @@ async function verifyRapidTaps(reducedMotion) {
   await state(page,'note');
   await page.context().close();
 }
+// This plain host imports its kit separately so a card's private import is observable.
+async function verifySharedSound(soundModule, replaceStandalone) {
+  const page = await phone(soundModule), privateImports = [];
+  page.on('request',request=>{
+    if (request.url().includes('/loom/kit/sound.mjs')) privateImports.push(request.url());
+  });
+  await page.addInitScript(()=>{
+    window.soundAudit = {contexts:0, closed:0, tones:0, ownership:[], cues:[]};
+    const Native = window.AudioContext;
+    window.AudioContext = class extends Native {
+      constructor(...args) { super(...args); window.soundAudit.contexts++; }
+      createOscillator() {
+        const oscillator = super.createOscillator(), start = oscillator.start.bind(oscillator);
+        oscillator.start = (...args)=>{window.soundAudit.tones++; return start(...args);};
+        return oscillator;
+      }
+      close() { window.soundAudit.closed++; return super.close(); }
+    };
+  });
+  await page.route('**/host-sound.mjs',r=>r.fulfill({path:soundModule,contentType:'text/javascript'}));
+  await page.route('**/test-host',r=>r.fulfill({contentType:'text/html',body:
+    '<meta name="viewport" content="width=device-width,initial-scale=1"><button id="owner" aria-pressed="false">Host sound</button><main id="slot"></main>'}));
+  await page.goto(base+'/test-host');
+  await page.evaluate(async()=>{
+    const {createLoomSound} = await import('/host-sound.mjs');
+    const {mountDemo} = await import('/loom/kit/card-stack.mjs');
+    const sound = createLoomSound(), ownerToggle = sound.setEnabled, ownerPlay = sound.play;
+    const owner = document.querySelector('#owner'), slot = document.querySelector('#slot');
+    owner.onclick = async()=>{
+      await ownerToggle(!sound.enabled);
+      owner.setAttribute('aria-pressed',String(sound.enabled));
+    };
+    for (const method of ['unlock','setEnabled','setFireBed','dispose']) {
+      const original = sound[method];
+      sound[method] = (...args)=>{window.soundAudit.ownership.push(method); return original(...args);};
+    }
+    sound.play = name=>{
+      const played = ownerPlay(name);
+      window.soundAudit.cues.push({name,played}); return played;
+    };
+    window.host = {
+      local:()=>mountDemo(slot),
+      async mount(){ this.unmount = await mountDemo(slot,{sound}); },
+      play:()=>ownerPlay('receive')
+    };
+  });
+  if (replaceStandalone) {
+    await page.evaluate(()=>window.host.local().then(()=>true));
+    await page.locator('[data-sound]').tap();
+    await page.locator('[data-sound][aria-pressed=true]').waitFor();
+  }
+  const audit = ()=>page.evaluate(()=>window.soundAudit);
+  const old = await audit(), initialImports = privateImports.length;
+  assert.equal(old.contexts,replaceStandalone?1:0);
+  await page.evaluate(()=>window.host.mount());
+  await state(page,'note');
+  assert.equal(await page.locator('[data-stack] [data-sound]:visible').count(),0,'only the host owns a sound control');
+  assert.equal((await audit()).closed,replaceStandalone?1:0,'replacing an active standalone mount closes its own context');
+  const primary = page.locator('[data-primary]');
+  await primary.tap(); await state(page,'confirm');
+  assert.deepEqual((await audit()).cues,[],'muted host receives no play call');
+  assert.equal((await audit()).tones,old.tones);
+  const owner = page.locator('#owner');
+  await owner.tap(); await page.locator('#owner[aria-pressed=true]').waitFor();
+  await page.locator('.lk-departing').waitFor({state:'detached'});
+  await primary.tap(); await page.locator('[data-stack][data-card-type=reply]').waitFor();
+  const audible = await audit();
+  assert.deepEqual(audible.cues,[{name:'yes',played:true}]);
+  assert.ok(audible.tones>old.tones,'the real host kit started its chord');
+  await owner.tap(); await page.locator('#owner[aria-pressed=false]').waitFor();
+  await primary.tap(); await state(page,'empty');
+  assert.deepEqual((await audit()).cues,audible.cues,'host mute takes effect on the next card');
+  assert.equal((await audit()).tones,audible.tones);
+  await owner.tap(); await page.locator('#owner[aria-pressed=true]').waitFor();
+  await page.evaluate(()=>window.host.mount());
+  await state(page,'note'); await primary.tap();
+  const remounted = await audit();
+  assert.deepEqual(remounted.cues.at(-1),{name:'tap',played:true},'remounted cards use the same host instance');
+  await page.evaluate(()=>window.host.unmount());
+  assert.equal(await page.locator('[data-stack]').count(),0);
+  assert.equal(await page.evaluate(()=>window.host.play()),true,'the host can still play after unmount');
+  const final = await audit();
+  assert.ok(final.tones>remounted.tones);
+  assert.equal(final.contexts,old.contexts+1,'no additional card-owned context in shared mode');
+  assert.equal(final.closed,replaceStandalone?1:0,'borrowed context stays open');
+  assert.deepEqual(final.ownership,[],'cards may not change host preferences, unlock, or dispose');
+  assert.equal(privateImports.length,initialImports,'shared mount needs no private sound module import');
+  await page.context().close();
+}
 try {
   browser = await chromium.launch({executablePath:process.env.PROGRESS_CHROMIUM_PATH || '/usr/bin/chromium',args:['--no-sandbox']});
   // For the gallery use the real optional sound module if provided, so the exact shot stack is explicit.
@@ -204,6 +293,8 @@ try {
     await toggle.tap();
     assert.equal(await toggle.getAttribute('aria-pressed'),'false');
     await audio.context().close();
+    await verifySharedSound(process.env.CARD_SOUND_MODULE,false);
+    await verifySharedSound(process.env.CARD_SOUND_MODULE,true);
   }
   assert.deepEqual(errors,[]);
   assert.deepEqual(unexpectedRequests,[]);
