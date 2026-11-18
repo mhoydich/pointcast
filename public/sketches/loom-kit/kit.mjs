@@ -62,9 +62,8 @@ export function mountKit(root, loadModule = path => import(path)) {
     let demo;
     try {
       demo = await (name === 'sound' ? soundModule : loadModule(modulePath(name)));
-    } catch (error) {
-      // Browsers reject missing optional module URLs with a TypeError.
-      if (!signal.aborted && !(error instanceof TypeError)) status.textContent = 'Demo couldn’t load.';
+    } catch {
+      if (!signal.aborted) status.textContent = 'Demo couldn’t load.';
       return;
     }
 
@@ -89,6 +88,10 @@ export function mountKit(root, loadModule = path => import(path)) {
     }
     status.hidden = true;
     content.hidden = false;
+    if (name === 'card-stack') {
+      root.querySelector('.open-stack').hidden = false;
+      if (root.location.hash === '#for-you') content.focus();
+    }
   }));
 }
 

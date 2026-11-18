@@ -128,7 +128,7 @@ test('missing sound and a broken factory leave the stack and both visual demos u
     assert.equal(stackSound.enabled, false);
     assert.equal(stackSound.play('tap'), false);
     const soundStatus = document.querySelector('[data-kit-slot="sound"] [data-kit-status]');
-    assert.equal(soundStatus.textContent.trim(), failedImport ? 'not built yet' : 'Demo couldn’t start.');
+    assert.equal(soundStatus.textContent.trim(), failedImport ? 'Demo couldn’t load.' : 'Demo couldn’t start.');
     for (const name of ['card-stack', 'motion', 'flame']) {
       const content = document.querySelector(`[data-kit-slot="${name}"] [data-kit-content]`);
       assert.equal(content.hidden, false);

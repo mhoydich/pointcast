@@ -18,11 +18,15 @@ function openSketch(url = preview) {
   };
 }
 
-test('the static sketch labels four slots and keeps every missing demo readable', async () => {
+test('the static sketch labels four loading slots and reports failed imports', async () => {
   const { document, content, status } = openSketch();
   const slots = [...document.querySelectorAll('[data-kit-slot]')];
   assert.deepEqual(slots.map(slot => slot.dataset.kitSlot).sort(), [...names].sort());
   assert.ok([...document.querySelectorAll('script[type="module"][src]')].some(script => script.src === preview + 'kit.mjs'));
+  const link = document.querySelector('a[href="#for-you"]');
+  assert.equal(link.hidden, true);
+  assert.equal(document.getElementById('for-you'), content('card-stack'));
+  for (const name of names) assert.equal(status(name).textContent.trim(), 'Loading…');
   const requested = [];
   await mountKit(document, async path => {
     requested.push(path);
@@ -30,7 +34,7 @@ test('the static sketch labels four slots and keeps every missing demo readable'
   });
   assert.deepEqual(requested.sort(), names.map(name => `../../loom/kit/${name}.mjs`).sort());
   for (const name of names) {
-    assert.equal(status(name).textContent.trim(), 'not built yet');
+    assert.equal(status(name).textContent.trim(), 'Demo couldn’t load.');
     assert.equal(status(name).hidden, false);
     assert.equal(content(name).hidden, true);
   }
@@ -59,6 +63,8 @@ test('a pending or broken demo only affects its own slot', async () => {
   assert.equal(status('motion').hidden, true);
   assert.equal(content('flame').hidden, true);
   assert.equal(status('flame').hidden, false);
+  assert.equal(status('flame').textContent.trim(), 'Loading…');
+  assert.equal(document.querySelector('a[href="#for-you"]').hidden, true);
   flame.resolve();
   await mounting;
   for (const name of ['flame', 'motion']) {
@@ -119,6 +125,10 @@ test('only the same-repository phone preview loads the submitted component revis
       } };
     });
     assert.deepEqual(loaded.sort(), [...expected].sort());
+    const link = document.querySelector('a[href="#for-you"]');
+    assert.equal(link.hidden, false);
+    assert.equal(link.textContent, 'Open For You');
+    assert.equal(document.getElementById('for-you').tabIndex, -1);
     const [sound, motion, flame] = submitted;
     assert.deepEqual(mountOptions, {
       motion: undefined, flame: undefined,
