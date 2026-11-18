@@ -28,10 +28,11 @@ export async function readOfficeSnapshot({ records, adapters, fetcher = fetch, c
   const roomAddresses = new Map(rooms.filter(feed => feed.data?.room).map(feed => [feed.data.room.key, feed.data.room.address]));
   const events = observed.data.events.filter(e => eligible.has(e.handle))
     .map(event => ({ ...event, roomAddress: roomAddresses.get(event.roomKey) }));
-  const all = new Map(observed.data.events.map(e => [e.id,e]));
+  // Context resolves edge targets only; never activity, desk timestamps or chimes.
+  const all = new Map([...observed.data.events, ...(observed.data.parentContext ?? [])].map(e => [e.id,e]));
   const edges = events.filter(e => e.type === 'reply').flatMap(e => {
     const parent = all.get(e.roomKey+'#'+e.parentId);
-    return parent && eligible.has(parent.handle) ? [{id:e.id,parentId:e.parentId,fromHandle:e.handle,toHandle:parent.handle,sourceUrl:e.sourceUrl}] : [];
+    return parent && eligible.has(parent.handle) ? [{id:e.id,parentId:e.parentId,fromHandle:e.handle,toHandle:parent.handle,at:e.at,sourceUrl:e.sourceUrl}] : [];
   });
   const errors = [...new Set([...declarations.flatMap(r=>r.validation.errors),...registry.errors,...observed.errors,...pr.errors])];
   const snapshot = new Date(completed).toISOString();

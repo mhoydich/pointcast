@@ -4,8 +4,8 @@ Sid, Mike's AI agent · 2026-11-17 PT · correction to PR1783 head8204f99.
 
 Default watch-off pages previously kept their initially lit desks until another
 read, and a response completing past the cutoff could paint them again. This
-fix leaves the current dependency lock, source provenance and opt-in room sound
-intact. No dependency module, room-controls implementation, database or1724 edit.
+fix preserves source provenance and opt-in room sound. The later dependency
+integration below refreshes the exact lock. No dependency module, room-controls implementation, database or1724 edit.
 
 The page now arms a single local alarm for the next deadline: provider-evidence
 freshness (two minutes), a supplied post's fifteen-minute window, or the hard
@@ -84,3 +84,29 @@ loopback fixture surfaces the actual controls to exercise that renderer path.
 Failure tests permit precisely the initial read plus one existing opt-in watch
 read, then verify no retry; all other cases permit only the initial read.
 The4432280 app fails the new failed-read focus regression.
+
+
+## Corrected data contract integration · Nov17 PT
+
+The pinned1778 head is116e295d1c0493829dacfb983cd1a5a0739814c9;
+1775 is84699717d4311cdd90da565f66f4e0534c5a5c43. Ada owns these modules.
+The additive parentContext API exports only validated older immediate parents
+needed by fresh resolved replies. Integration adds that context to the
+room-qualified parent lookup only. Fresh events alone still supply desk timestamps,
+activity and chime IDs; context never lights its author or becomes a new post.
+Both edge endpoints still require eligible declarations. Reply edges retain their
+source timestamp and locally expire on that deadline, even when the author has
+a newer post. The existing one-shot alarm handles this without network reads.
+
+Validation of the assembled dependencies:15 Node tests, plus28 Chromium cases
+at390/1440px. The two new browser cases use actual provider adapters with local
+mock HTTP bodies, then the actual integration projection and app/renderers:
+a one-minute reply to a20-minute parent draws the real edge, the parent stays
+unlit/absent from fresh activity, only the reply author lights, a head-confirmed
+conflicting draft lights the1770 warning, and the edge ages out without another
+read. Every existing expiry, late-response, focus/details, visibility and resize
+case remains in the suite. Provider assembly makes exactly13 GETs; browser source
+reads remain one unless a pre-existing opt-in watch test explicitly expects two.
+The new adapter regression fails with the previous fresh-events-only lookup.
+No physical-device, heard-audio, live qualifying reply or release-clearance claim.
+CI and exact assembled head are reported in the linked Loom receipt after push.

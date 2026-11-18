@@ -51,3 +51,15 @@ test('resume after suspended timers immediately ages the page and observes an ea
  h.guard.accept(snapshot());assert.equal(h.changes.at(-1).data.state,'ended','a later response cannot extend the earlier cutoff');
  assert.equal(h.timers.size,0);
 });
+test('reply edge expires on its own local deadline even when author has newer activity',()=>{
+ const h=harness(),source=snapshot();
+ source.edges=[{id:'reply',at:iso(start-60000)}];
+ const before=structuredClone(source);h.guard.accept(source);
+ assert.equal(h.changes.at(-1).data.edges.length,1);
+ h.advance(start+POST_FRESHNESS_MS-60000);
+ assert.equal(h.changes.at(-1).data.edges.length,0);
+ assert.equal(h.changes.at(-1).data.desks[0].facts.stale,false,'newer desk post still fresh');
+ assert.equal(h.changes.filter(c=>c.reason==='read').length,1);
+ assert.deepEqual(source,before);
+ h.jump(OFFICE_END);h.guard.recheck();assert.deepEqual(h.changes.at(-1).data.edges,[]);
+});

@@ -1,35 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
 import {readOfficeSnapshot,OFFICE_END} from '../../src/lib/office-page.mjs';
-import {validateDeclaration} from '../../src/lib/office/declarations.mjs';
-import {buildDeskRegistry} from '../../src/lib/office/desk-registry.mjs';
-import {readLoom} from '../../src/lib/office/loom-read.mjs';
-import {normalizeLoomEvents} from '../../src/lib/office/events.mjs';
-import {readPrStates} from '../../src/lib/office/pr-state.mjs';
-const adapters={validateDeclaration,buildDeskRegistry,readLoom,normalizeLoomEvents,readPrStates};
-const records=JSON.parse(readFileSync(new URL('../../src/data/office-seat-records.json',import.meta.url))).records;
-const NOW=Date.parse('2026-11-17T18:00:00Z'),key='a'.repeat(24),sha='b'.repeat(40);
-function sources({fail=false}={}) {
- const requests=[];
- const fetcher=async(url,init)=>{
-  requests.push({url,method:init.method});
-  if(fail)return new Response('',{status:503});
-  const u=new URL(url);
-  if(u.hostname==='api.github.com'){
-   const number=Number(u.pathname.split('/').pop());
-   return Response.json({number,base:{repo:{full_name:'mhoydich/pointcast'}},head:{sha},state:number===1767?'closed':'open',draft:false,merged:number===1767,merged_at:number===1767?'2026-11-17T15:58:00Z':null,merge_commit_sha:number===1767?sha:null,mergeable:number===1770?false:true,mergeable_state:number===1770?'dirty':'clean'}, {headers:{date:new Date(NOW).toUTCString()}});
-  }
-  assert.equal(u.origin,'https://pointcast.xyz');
-  const address=u.searchParams.get('to'),shared=address==='#officenoun-tasks';
-  const messages=shared?[
-   {id:'m_test000001',body:'test-only fixture root',kind:'note',at:new Date(NOW-60000).toISOString(),from:{kind:'agent',address:'@sol-1'}},
-   {id:'m_test000002',parent:'m_test000001',body:'test-only fixture reply',kind:'note',at:new Date(NOW-30000).toISOString(),from:{kind:'agent',address:'@sol-2'}}
-  ]:[];
-  return Response.json({ok:true,spec:'pointcast.loom/v1',kvBound:true,log:{address,key:shared?key:'c'.repeat(24),seed:false},messages});
- };
- return{fetcher,requests};
-}
+import {adapters,records,NOW,sources} from './source-fixture.mjs';
 // Real parent-attested Sid records; HTTP bodies below are test-only fixtures.
 const fixtureRecords=structuredClone(records);
 function clock(){const started=performance.now();return()=>NOW+Math.ceil(performance.now()-started);}
@@ -97,4 +69,17 @@ test('PR completion crossing cutoff cannot return old eligible desks or merge li
  const pending=readOfficeSnapshot({records,adapters:delayed,fetcher:sources().fetcher,clock:()=>now});
  await started;now=OFFICE_END+1;release();const r=await pending;
  assert.equal(r.state,'ended');assert.deepEqual(r.desks,[]);assert.deepEqual(r.merges,[]);assert.deepEqual(r.events,[]);
+});
+
+test('old parent supplies edge context only and confirmed draft conflict survives actual adapters',async()=>{
+ const {fetcher,requests}=sources({oldParent:true,draftConflict:true});
+ const r=await readOfficeSnapshot({records,adapters,fetcher,clock:clock()});
+ assert.deepEqual(r.events.map(e=>e.messageId),['m_test000002']);
+ assert.equal(r.edges.length,1);assert.equal(r.edges[0].toHandle,'@sol-1');
+ assert.equal(r.edges[0].fromHandle,'@sol-2');
+ assert.equal(r.edges[0].at,new Date(NOW-60000).toISOString());
+ assert.equal(r.desks.find(d=>d.handle==='@sol-1').facts.lastPostAt,null);
+ assert.equal(r.desks.find(d=>d.handle==='@sol-2').facts.lastPostAt,new Date(NOW-60000).toISOString());
+ assert.deepEqual(r.blocked.map(p=>p.number),[1770]);
+ assert.equal(requests.length,13);assert.ok(requests.every(r=>r.method==='GET'));
 });

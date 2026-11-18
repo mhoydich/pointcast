@@ -5,6 +5,8 @@ import {resolve,extname} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import {OFFICE_END,POST_FRESHNESS_MS} from '../public/office/freshness.mjs';
+import {readOfficeSnapshot} from '../src/lib/office-page.mjs';
+import {adapters,records,NOW,sources} from '../tests/office-integration/source-fixture.mjs';
 const {chromium}=await import(process.env.PROGRESS_PLAYWRIGHT_MODULE?pathToFileURL(process.env.PROGRESS_PLAYWRIGHT_MODULE).href:'playwright-core');
 const root=resolve(new URL('..',import.meta.url).pathname);
 const html=readFileSync(resolve(root,'src/pages/office.astro'),'utf8').replace(/^---[\s\S]*?---\s*/,'').replace('{title}','Office expiry TEST FIXTURE').replace(' is:inline','');
@@ -24,11 +26,11 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
 try{
  browser=await chromium.launch({executablePath:process.env.PROGRESS_CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  for(const width of [390,1440]){
-  async function open(at,delayed=false,threads=false){
+  async function open(at,delayed=false,threads=false,assembled=null){
    const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'}),errors=[],writes=[];
    page.on('pageerror',e=>errors.push(String(e)));page.on('request',r=>{if(r.method()!=='GET')writes.push(r.method());});
    await page.clock.install({time:new Date(at)});
-   const snapshot=fixture(at);
+   const snapshot=assembled ?? fixture(at);
    if(threads){
     snapshot.desks.push({...snapshot.desks[0],handle:'@sol-2',name:'TEST FIXTURE 2'});
     snapshot.edges=[{id:'fixture-thread',parentId:'fixture-parent',fromHandle:'@sol-1',toHandle:'@sol-2',sourceUrl:'https://pointcast.xyz/loom?to=%40sol-1'}];
@@ -46,8 +48,29 @@ try{
    },{snapshot,delayed});
    await page.goto('http://127.0.0.1:'+server.address().port+'/office');
    await page.waitForFunction(()=>window.fixtureReads===1);
-   if(!delayed)await page.waitForFunction(n=>document.querySelectorAll('.office-desk[data-activity="recent"]').length===n,snapshot.desks.length);
+   if(!delayed)await page.waitForFunction(n=>document.querySelectorAll('.office-desk[data-activity="recent"]').length===n,snapshot.desks.filter(d=>d.facts.lastPostAt && !d.facts.stale).length);
    return{page,finish:async(expectedReads=1)=>{assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.equal(await page.evaluate(()=>window.fixtureReads),expectedReads,'only explicitly expected source reads may occur');assert.equal(await page.locator('#office-sound').getAttribute('aria-pressed'),'false');await page.close();}};
+  }
+  {
+   // Actual provider adapters -> integration projection -> actual app/renderers.
+   // Older context never enters the app's activity list or desk freshness facts.
+   const source=sources({oldParent:true,draftConflict:true});
+   const anchor=performance.now();
+   const assembled=await readOfficeSnapshot({records,adapters,fetcher:source.fetcher,clock:()=>NOW+Math.ceil(performance.now()-anchor)});
+   assert.equal(source.requests.length,13);
+   const {page,finish}=await open(Date.parse(assembled.observedAt),false,false,assembled);
+   const parent=page.locator('.office-desk').filter({hasText:'@sol-1'});
+   assert.equal(await parent.getAttribute('data-activity'),'unknown','old context never lights parent');
+   assert.equal(await page.locator('.office-desk[data-activity="recent"]').count(),1,'only reply author lights');
+   assert.equal(await page.locator('[data-reply-id]').count(),1,'actual fresh reply draws its old-parent edge');
+   assert.match(await page.locator('.floor-threads .office-reply-threads__sources').textContent(),/@sol-2 replied to @sol-1/);
+   assert.equal(await page.locator('#office-events > ul > li > a').count(),1,'old parent excluded from fresh activity');
+   assert.equal(await page.locator('[data-state="verified-blocked"]').count(),1,'confirmed conflicting draft lights lamp');
+   assert.match(await page.locator('[data-state="verified-blocked"]').textContent(),/1770/);
+   await page.clock.runFor(POST_FRESHNESS_MS);
+   assert.equal(await page.locator('[data-reply-id]').count(),0,'edge ages with reply, not old context');
+   assert.equal(await page.locator('.office-desk[data-activity="recent"]').count(),0);
+   await finish();
   }
   {
    const at=OFFICE_END-20*60_000,{page,finish}=await open(at);
@@ -173,5 +196,5 @@ try{
    await finish();
   }
  }
- console.log('PASS: 26 browser regressions at390/1440px: idle aging, cutoff/watch cancellation, late JSON crossing cutoff, hidden/foreground/BFCache, desk/evidence focus/details, automatic failure fallback and in-place resize thread focus; no extra reads/writes or unsolicited sound.');
+ console.log('PASS: 28 browser regressions at390/1440px: source-to-screen old-parent edge/dark context and confirmed draft conflict, idle aging, cutoff/watch cancellation, late JSON crossing cutoff, hidden/foreground/BFCache, desk/evidence focus/details, automatic failure fallback and in-place resize thread focus; no extra reads/writes or unsolicited sound.');
 }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}
