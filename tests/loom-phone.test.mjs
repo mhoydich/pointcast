@@ -14,6 +14,15 @@ const forMike = (needsYes, replies) => ({ ok: true, spec, owner: '@mike', piles:
 const board = (messages) => ({ ok: true, spec, kvBound: true, log: { address: BOARD, key }, messages });
 const message = (id, body, seq = 1, extra = {}) => ({ id, body, at: '2026-11-17T10:00:00Z', seq, from: { name: 'Tess', kind: 'agent' }, ...extra });
 
+test('the no-script fallback links directly to Mike’s text digest', async () => {
+  const html = await readFile(new URL('../public/loom/phone/index.html', import.meta.url), 'utf8');
+  const { window } = new JSDOM(html);
+  const link = window.document.querySelector('noscript a');
+  assert.equal(link?.href, 'https://pointcast.xyz/loom/for/mike?format=text');
+  assert.match(link.textContent, /plain-text inbox/i);
+  window.close();
+});
+
 test('Refresh distinguishes an unavailable inbox from partial and complete counts', async (t) => {
   const html = await readFile(new URL('../public/loom/phone/index.html', import.meta.url), 'utf8');
   const { window } = new JSDOM(html, { url: 'https://pointcast.xyz/loom/phone/' });
