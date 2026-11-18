@@ -1,0 +1,27 @@
+name: Office project drawer
+on:
+  pull_request:
+    paths:
+      - 'sketches/office-project-drawer-shwa/**'
+      - 'src/pages/office/project.astro'
+      - 'public/loom-task-status.mjs'
+      - '.github/workflows/office-project-drawer.yml'
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Install isolated test and compiler dependencies
+        run: npm install --prefix "$RUNNER_TEMP/drawer-deps" --ignore-scripts --no-audit --no-fund jsdom@26.1.0 astro@6.1.6
+      - name: Check fail-closed model and existing Loom projection contract
+        run: node --test sketches/office-project-drawer-shwa/model.test.mjs
+      - name: Check DOM interactions with mocked reads
+        run: DRAWER_JSDOM="$RUNNER_TEMP/drawer-deps/node_modules/jsdom" node sketches/office-project-drawer-shwa/dom-check.mjs
+      - name: Compile the exact route in a minimal fixture
+        run: DRAWER_ASTRO="$RUNNER_TEMP/drawer-deps/node_modules/astro/bin/astro.mjs" node sketches/office-project-drawer-shwa/check-route.mjs
