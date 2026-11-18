@@ -59,6 +59,26 @@ const oneLine = (s, n = 160) => { const t = String(s ?? '').replace(/\s+/g, ' ')
 const preview = (body) => { const p = splitStamp(body); return p.stamp ? { snippet: oneLine(p.text), stamp: oneLine(p.stamp, 80) } : { snippet: oneLine(body) }; };
 const firstLine = (s) => String(s ?? '').split('\n').find((l) => l.trim()) ?? '';
 const time = (iso) => { const t = Date.parse(iso); return Number.isFinite(t) ? t : 0; };
+const newest = (a, b) => time(b.at) - time(a.at) || (b.seq ?? 0) - (a.seq ?? 0);
+
+function replySummary(id, children) {
+  if (!children) return null; // The original thread of this echo was outside the scan.
+  const pending = [...(children.get(id) ?? [])];
+  const visited = new Set([id]);
+  let count = 0;
+  let latest = null;
+  while (pending.length) {
+    const reply = pending.pop();
+    if (visited.has(reply.id)) continue;
+    visited.add(reply.id);
+    pending.push(...(children.get(reply.id) ?? []));
+    if (reply.kind === 'link' || isCollator(reply.from)) continue;
+    count++;
+    if (!latest || newest(reply, latest) < 0) latest = reply;
+  }
+  const last = latest ? { name: latest.from?.name || 'anonymous', snippet: oneLine(firstLine(latest.body)) } : null;
+  return { count, last };
+}
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
 const mentionsOwner = (body, owner) => new RegExp(`(^|[^A-Za-z0-9_])@${escapeRe(owner)}(?![A-Za-z0-9_-])`, 'i').test(String(body ?? ''));
 
@@ -86,6 +106,7 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
   };
 
   const people = [], needsYes = [], seen = new Set(), waiting = new Set(), newWaiting = new Set();
+  const replyChildrenByRow = new WeakMap();
   const activity = { replies: [], unanswered: [], olderUnanswered: [], done: [] }, activitySeen = new Set(), addressed = new Set();
   const goAhead = GO_AHEAD_PHRASES.map((make) => make(escapeRe(me)));
   let restCount = 0, collatorCount = 0;
@@ -186,7 +207,12 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
         needsYes.push(item(thread, m)); continue;
       }
       if (at < nowMs - WINDOW_MS) continue;
-      if (m.from?.kind === 'human' && !isOwner(m.from, me)) { people.push(item(thread, m)); continue; }
+      if (m.from?.kind === 'human' && !isOwner(m.from, me)) {
+        const row = item(thread, m);
+        people.push(row);
+        if (!m.via) replyChildrenByRow.set(row, kids);
+        continue;
+      }
       restCount += 1;
     }
   }
@@ -208,9 +234,9 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
     // A first post that is also in People stays in both piles; it was never part of "rest".
   }
 
-  const newest = (a, b) => time(b.at) - time(a.at) || (b.seq ?? 0) - (a.seq ?? 0);
   people.sort(newest); needsYes.sort(newest); arrivals.sort(newest);
   const piles = { people: people.slice(0, CAPS.people), needsYes: needsYes.slice(0, CAPS.needsYes), arrivals: arrivals.slice(0, CAPS.arrivals) };
+  for (const row of piles.people) row.replies = replySummary(row.id, replyChildrenByRow.get(row));
   // Anything over a cap is still something; count it with the rest so nothing silently disappears.
   restCount += (people.length - piles.people.length) + (needsYes.length - piles.needsYes.length);
   for (const list of Object.values(activity)) list.sort(newest);
