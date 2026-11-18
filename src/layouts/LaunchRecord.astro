@@ -1,5 +1,14 @@
 ---
+import { labelLaunchTables } from '../lib/loom/launch-record-table.mjs';
+
 const { frontmatter } = Astro.props;
+const records = labelLaunchTables(await Astro.slots.render('default'));
+const page = Astro.url.pathname.replace(/\/$/, '');
+const pages = [
+  { href: '/loom/receipts', title: 'Receipts' },
+  { href: '/loom/receipts/routing', title: 'Routing' },
+  { href: '/loom/receipts/tally', title: 'Tally' },
+];
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -11,9 +20,11 @@ const { frontmatter } = Astro.props;
   </head>
   <body>
     <header><a href="/loom">The Loom</a><nav aria-label="Launch records">
-      <a href="/loom/receipts">Receipts</a><a href="/loom/receipts/routing">Routing</a><a href="/loom/receipts/tally">Tally</a>
+      {pages.map(({ href, title }) => (
+        <a href={href} aria-current={page === href ? 'page' : undefined}>{title}</a>
+      ))}
     </nav></header>
-    <main><slot /></main>
+    <main class:list={{ tally: page.endsWith('/tally') }} set:html={records} />
   </body>
 </html>
 <style is:global>
@@ -30,5 +41,24 @@ const { frontmatter } = Astro.props;
   th, td { text-align: left; vertical-align: top; border-bottom: 1px solid #c4c9c2; padding: .65rem .8rem .65rem 0; overflow-wrap: anywhere; }
   th { color: #435448; }
   code { overflow-wrap: anywhere; }
-  @media (max-width: 45rem) { table { display: block; overflow-x: auto; } th, td { min-width: 10rem; } }
+  nav a { display: inline-flex; align-items: center; min-height: 44px; }
+  nav a[aria-current] { color: inherit; font-weight: 700; text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid #235943; outline-offset: 3px; }
+
+  @media screen and (max-width: 45rem) {
+    table[role="table"], tbody[role="rowgroup"], tr[role="row"], th[scope="row"], td[role="cell"] { display: block; }
+    table { margin-block: 1.5rem; }
+    thead[role="rowgroup"] { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; }
+    tbody tr { border-top: 1px solid #91998d; padding: 1rem 0 1.3rem; }
+    th[scope="row"], td { border: 0; padding: 0; }
+    th[scope="row"] { color: #212723; font: bold 1.35rem/1.25 Georgia, serif; }
+    td { margin-top: .85rem; }
+    td[data-field]::before {
+      display: block; color: #435448; font-size: .875rem; font-weight: 650;
+      content: attr(data-field);
+      content: attr(data-field) / "";
+    }
+    .tally td { display: flex; gap: 1rem; align-items: baseline; justify-content: space-between; text-align: right; }
+    .tally td::before { text-align: left; }
+  }
 </style>
