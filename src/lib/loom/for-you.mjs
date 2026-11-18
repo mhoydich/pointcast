@@ -49,6 +49,18 @@ export const GO_AHEAD_PHRASES = [
 // "Needs your yes" pile in passing (OFF-45 relay rule). Explicit NEEDS <OWNER> lines are unaffected.
 export const RECEIPT_RE = /^\s*(?:WORKING|MINE|PARTIAL|DONE|REVIEW|CLOSED|CLEARED|SHIPPED|FYI)\b/i;
 
+// A relay can include someone else's words or name the UI. Match the request
+// in the sender's own prose, leaving the original message intact for display.
+const MARKDOWN_QUOTE_OR_CODE = /^[ \t]*>[^\n]*|```[\s\S]*?```|`[^`\n]*`/gm;
+const QUOTED_TEXT = /“[^”]*”|"[^"\n]*"|‘[^’\n]*’|(?<!\w)'[^'\n]+'(?!\w)/g;
+const LABEL_MENTION = /\b(?:the|under|called|named|labelled|labeled|titled|nothing)\s+needs your yes\b|\bneeds your yes\s+(?:(?:confirm|decision)\s+)?(?:cards?|piles?|sections?|labels?|buttons?|tiles?|tabs?)\b/gi;
+function asksForGoAhead(body, phrases) {
+  const text = String(body ?? '');
+  if (!phrases.some((re) => re.test(text))) return false;
+  const prose = text.replace(MARKDOWN_QUOTE_OR_CODE, '…').replace(QUOTED_TEXT, '…').replace(LABEL_MENTION, '…');
+  return prose === text || phrases.some((re) => re.test(prose));
+}
+
 /** "@Mike", "mike", " MIKE " -> "mike". Same rule as the /loom page's handleOf. */
 export const normHandle = (s) => String(s ?? '').trim().replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_.-]/g, '');
 export const isCollator = (from) => !!from && (from.kind === 'robot' || normHandle(from.name) === 'collator' || from.address === '@collator');
@@ -180,8 +192,10 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
         if (at >= nowMs - WINDOW_MS && (inbox || (parent && isOwner(parent.from, me)) || mentionsOwner(m.body, me))) collatorCount += 1;
         continue;
       }
-      const explicitNeeds = needsRe && needsRe.test(firstLine(m.body)) && at >= nowMs - NEEDS_WINDOW_MS && !cleared(m) && (m.parent || m.depth >= 1 || m.from?.kind !== 'agent' || !relayClosed(m, goAhead.some((re) => re.test(m.body ?? ''))));
-      const relay = me && !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent' && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && !RECEIPT_RE.test(firstLine(m.body)) && goAhead.some((re) => re.test(m.body ?? '')) && !relayClosed(m);
+      const topLevelAgent = !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent';
+      const asksForYes = topLevelAgent && at >= nowMs - NEEDS_WINDOW_MS && asksForGoAhead(m.body, goAhead);
+      const explicitNeeds = needsRe && needsRe.test(firstLine(m.body)) && at >= nowMs - NEEDS_WINDOW_MS && !cleared(m) && (!topLevelAgent || !relayClosed(m, asksForYes));
+      const relay = me && asksForYes && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && !RECEIPT_RE.test(firstLine(m.body)) && !relayClosed(m);
       if (!m.via && (explicitNeeds || relay)) {
         needsYes.push(item(thread, m)); continue;
       }

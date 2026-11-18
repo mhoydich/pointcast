@@ -423,6 +423,29 @@ test('a status receipt that names the Needs your yes pile is not an ask', () => 
   assert.deepEqual(new Set(r.piles.needsYes.map((x) => x.id)), new Set([ask.id, explicit.id]));
 });
 
+test('quoting or naming the confirm card does not turn a note into a decision', () => {
+  const desk = agent('X desk');
+  // Item 5 of the live queue note shown as a confirm card in the #1821 phone capture.
+  const designExample = '5. The "needs your yes" confirm card is the bar: picture, sound, one clear action.';
+  const notes = [
+    designExample,
+    'Item 10 · The live “needs your yes” card after scrolling.',
+    'The label is ‘needs your yes’.',
+    "Read the 'needs your yes' section.",
+    'Look under Needs your yes.',
+    'Nothing needs your yes.',
+    'The needs your yes pile now has two entries.',
+    'The screenshot shows the `needs your yes` text.',
+    'Copy example:\n> Needs your yes before release',
+  ].map((body) => msg(desk, body, 2));
+  const ask = msg(desk, 'The “night edition” needs your yes before release.', 2);
+  const both = msg(desk, designExample + '\nThe poster itself still needs your yes.', 2);
+  const explicit = msg(desk, 'NEEDS MIKE · Review the “needs your yes” card · reply here', 2);
+  const result = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#loom-ux', 'k', [...notes, ask, both, explicit])] });
+  assert.deepEqual(new Set(result.piles.needsYes.map((it) => it.id)), new Set([ask.id, both.id, explicit.id]));
+  assert.equal(result.rest.count, notes.length);
+});
+
 test('new count includes unanswered inbox notes and deduplicates items also in a pile', () => {
   const a = msg(agent('Desk'), 'Please look', 1);
   const b = msg(human('Sam'), 'Hello', 2);
