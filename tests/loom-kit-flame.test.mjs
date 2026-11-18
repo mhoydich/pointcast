@@ -71,6 +71,16 @@ test('reduced motion fades then stops painting, emits no particles, and honors v
   assert.ok(last > 1); assert.equal(frames.length, last); assert.deepEqual(particles, []);
 });
 
+test('the reduced-motion fade settles at its deadline without exceeding the paint cap', () => {
+  const { mount, advance, frames } = fixture(true);
+  const f = mountFlame(mount);
+  advance(13); f.setState('bright');
+  advance(149); assert.ok(frames.at(-1) < 163);
+  advance(1); assert.equal(frames.at(-1), 163);
+  advance(100); assert.equal(frames.at(-1), 163);
+  assert.ok(frames.slice(1).every((t, i) => t - frames[i] >= 1000 / 30));
+});
+
 test('demo exposes all four controls and disposes the flame', () => {
   const { mount } = fixture();
   const unmount = mountDemo(mount);

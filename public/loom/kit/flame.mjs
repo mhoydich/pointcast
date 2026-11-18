@@ -85,6 +85,12 @@ export function mountFlame(container, initialState = 'steady', shape = {}) {
     ticker = undefined;
     if (disposed || doc.hidden || !ctx) return;
     const t = now();
+    const remaining = motion.matches && previous !== current ? changedAt + fade - t : 0;
+    // Drawing this close to the end would push the settled sample outside the fade.
+    if (remaining > 0 && remaining < period) {
+      ticker = win.setTimeout(draw, Math.ceil(remaining));
+      return;
+    }
     if (t - lastDraw < period) {
       ticker = win.setTimeout(draw, Math.ceil(period - (t - lastDraw)));
       return;
@@ -106,7 +112,10 @@ export function mountFlame(container, initialState = 'steady', shape = {}) {
     };
     if (mix < 1) layer(previous, 1 - mix);
     layer(current, mix);
-    if (mix < 1 || !motion.matches) ticker = win.setTimeout(draw, period);
+    if (mix < 1 || !motion.matches) {
+      const next = remaining > 0 && remaining < 2 * period ? Math.ceil(remaining) : period;
+      ticker = win.setTimeout(draw, next);
+    }
   }
 
   function wake() {
