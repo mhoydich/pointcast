@@ -1,110 +1,119 @@
 ---
-/**
- * HomeNewToday — a compact strip right under the Shortwave hero that names
- * what shipped in the last seven town days, one tap each, with the blocks that
- * filed it. Data: src/data/new-today.json through src/lib/new-today.ts; no ids
- * or copy live in this component.
- *
- * Renders nothing when nothing is fresh at build. On load the script checks
- * each cell again against the visitor's clock, so the strip ages out (and a
- * cell past its `until` drops) without waiting for the next deploy. While the
- * strip shows, the hero's "What's new in town" link lands here; once it hides,
- * the link goes back to the drop deck (#new).
- */
-import { isFresh, shortDay, stripHeading, type NewTodayItem } from '../lib/new-today.ts';
-
+import { isFresh, shortDay, type NewTodayItem } from '../lib/new-today.ts';
+import { historyUrl } from '../lib/merged-today.mjs';
 interface Props { items: NewTodayItem[] }
-
 const now = new Date();
-const fresh = Astro.props.items.filter((item) => isFresh(item, now));
-const newest = fresh.map((item) => item.date).sort().at(-1) ?? '';
-const blocks = [...new Set(fresh.map((item) => item.block).filter((id): id is string => Boolean(id)))];
+const fresh = Astro.props.items.filter(item => isFresh(item, now));
 ---
-
-{fresh.length > 0 && (
-  <section class="nt" id="new-today" data-new-today aria-labelledby="new-today-title">
-    <div class="nt__head">
-      <h2 id="new-today-title"><span class="nt__dot" aria-hidden="true"></span><span data-new-heading>{stripHeading(fresh.map((item) => item.date), now)}</span></h2>
-      <p class="nt__meta">
-        <time datetime={newest}>{shortDay(newest)}</time>
-        {blocks.length > 0 && (
-          <span class="nt__blocks">Blocks <span class="nt__ids">{blocks.map((id) => <a href={`/b/${id}`}>{id}</a>)}</span></span>
-        )}
-      </p>
-    </div>
-    <ol class="nt__cells">
-      {fresh.map((item) => (
+<section class="merged" id="new-today" data-merged-today aria-labelledby="new-today-title">
+  <header>
+    <h2 id="new-today-title">What’s new today</h2>
+    <p>Pull requests merged into PointCast’s main branch.</p>
+  </header>
+  <p data-status role="status"></p>
+  <ul data-merges hidden></ul>
+  <a class="history" href={historyUrl}>View merge history on GitHub <span aria-hidden="true">↗</span></a>
+  {fresh.length > 0 && (
+    <details id="recent-launches">
+      <summary>Recent launches · past seven Pacific calendar days</summary>
+      <ul>{fresh.map(item => (
         <li data-new-cell data-date={item.date} data-until={item.until}>
-          <a href={item.link}>
-            <span class="nt__kicker">{item.kicker}</span>
-            <span class="nt__title">{item.title}</span>
-            <span class="nt__go" aria-hidden="true">→</span>
-          </a>
+          <a href={item.link}>{item.title}</a> <time datetime={item.date}>{shortDay(item.date)}</time>
+          {item.block && <a href={`/b/${item.block}`}>Block {item.block}</a>}
         </li>
-      ))}
-    </ol>
-  </section>
-)}
-
+      ))}</ul>
+    </details>
+  )}
+</section>
 <script>
-  import { isFresh, stripHeading } from '../lib/new-today.ts';
-
-  function mount() {
-    const root = document.querySelector<HTMLElement>('[data-new-today]');
-    if (!root) return;
-    const now = new Date();
-    const shown: string[] = [];
-    root.querySelectorAll<HTMLElement>('[data-new-cell]').forEach((cell) => {
-      const date = cell.dataset.date ?? '';
-      const fresh = isFresh({ date, until: cell.dataset.until }, now);
-      cell.hidden = !fresh;
-      if (fresh) shown.push(date);
-    });
-    root.hidden = shown.length === 0;
-    document.querySelectorAll<HTMLAnchorElement>('a[data-swh-new]').forEach((link) => {
-      link.setAttribute('href', root.hidden ? '#new' : '#new-today');
-    });
-    const heading = root.querySelector('[data-new-heading]');
-    if (heading && shown.length) heading.textContent = stripHeading(shown, now);
+  import { asOf, dayKey, readMergedToday } from '../lib/merged-today.mjs';
+  import { isFresh } from '../lib/new-today.ts';
+  const root = document.querySelector<HTMLElement>('[data-merged-today]');
+  if (root) {
+    const list = root.querySelector<HTMLUListElement>('[data-merges]')!;
+    const status = root.querySelector<HTMLElement>('[data-status]')!;
+    let checkedHour = -1;
+    const details = root.querySelector<HTMLDetailsElement>('#recent-launches');
+    const launchesLink = document.querySelector<HTMLAnchorElement>('[data-recent-launches]');
+    let loading = false;
+    function updateLaunches(now: Date) {
+      if (!details) return;
+      details.querySelectorAll<HTMLElement>('[data-new-cell]').forEach(cell => {
+        cell.hidden = !isFresh({ date: cell.dataset.date ?? '', until: cell.dataset.until }, now);
+      });
+      details.hidden = !details.querySelector('[data-new-cell]:not([hidden])');
+      if (launchesLink) {
+        launchesLink.href = details.hidden ? '/archive' : '#recent-launches';
+        const count = launchesLink.querySelector('strong');
+        if (count) count.textContent = String(details.querySelectorAll('[data-new-cell]:not([hidden])').length);
+      }
+    }
+    function openLaunches() {
+      if (details && !details.hidden) details.open = true;
+    }
+    async function refresh() {
+      const now = new Date(), day = dayKey(now);
+      updateLaunches(now);
+      const hour = Math.floor(now.getTime() / 3600000);
+      if (loading || checkedHour === hour) return;
+      loading = true;
+      list.replaceChildren();
+      list.hidden = true;
+      status.textContent = 'Checking today’s merges…';
+      try {
+        const { items, complete } = await readMergedToday(now);
+        if (dayKey(new Date()) !== day) return;
+        for (const item of items) {
+          const li = document.createElement('li'), a = document.createElement('a');
+          a.href = item.href;
+          a.textContent = item.title;
+          const number = document.createElement('small');
+          number.textContent = '#' + item.number;
+          a.append(' ', number);
+          li.append(a);
+          list.append(li);
+        }
+        list.hidden = !items.length;
+        const checked = asOf(now);
+        status.textContent = items.length ? 'Checked ' + checked
+          : complete ? 'No merges found as of ' + checked + '.'
+          : 'No merges found in the checked pages as of ' + checked + '.';
+        checkedHour = hour;
+      } catch {
+        status.textContent = 'Today’s merges are unavailable. You can check GitHub directly.';
+      } finally {
+        loading = false;
+        if (dayKey(new Date()) !== day) void refresh();
+      }
+    }
+    void refresh();
+    if (location.hash === '#recent-launches') openLaunches();
+    launchesLink?.addEventListener('click', openLaunches);
+    // A tab can stay open overnight. Clear the old date on return or the next
+    // hour boundary (Pacific midnight always falls on a UTC hour boundary).
+    function nextHour() {
+      window.setTimeout(() => { if (!document.hidden) void refresh(); nextHour(); }, 3600000 - Date.now() % 3600000 + 25);
+    }
+    nextHour();
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) void refresh(); });
+    window.addEventListener('hashchange', () => { if (location.hash === '#recent-launches') openLaunches(); });
   }
-
-  mount();
-  document.addEventListener('astro:page-load', mount);
 </script>
-
 <style>
-  .nt { --nt-ink: #111; --nt-night: #14201c; --nt-glow: #ffb547; --nt-rule: rgba(0, 0, 0, .18);
-    display: grid; grid-template-columns: 168px minmax(0, 1fr); margin-top: 16px; overflow: hidden;
-    border: 2px solid var(--nt-ink); background: #fffdf7; box-shadow: 5px 5px 0 var(--nt-glow); color: var(--nt-ink); }
-  .nt[hidden], .nt li[hidden] { display: none; }
-
-  .nt__head { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 12px 14px; background: var(--nt-night); color: #f4eed9; }
-  .nt h2 { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 11px/1.2 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--nt-glow); }
-  .nt__dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #e0452b; }
-  .nt__meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0; font: 500 9px/1.5 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #b9c2a8; }
-  .nt__ids { white-space: normal; }
-  .nt__ids a { display: inline-block; }
-  .nt__blocks a { color: #ffe2b0; text-decoration: underline; text-underline-offset: 3px; }
-  .nt__blocks a + a::before { content: '·'; display: inline-block; margin: 0 5px; color: #b9c2a8; text-decoration: none; }
-  .nt__blocks a:hover { color: var(--nt-glow); }
-
-  .nt__cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
-  /* Dividers on every cell's right and bottom edge; the section clips the outer ones, so any count lays out clean. */
-  .nt__cells li { min-width: 0; box-shadow: 1px 0 0 var(--nt-rule), 0 1px 0 var(--nt-rule); }
-  .nt__cells a { position: relative; display: flex; flex-direction: column; gap: 5px; height: 100%; min-height: 68px; padding: 12px 30px 12px 14px; color: var(--nt-ink); text-decoration: none; }
-  .nt__cells a:hover { background: #fff4dc; }
-  .nt__cells a:hover .nt__title, .nt__cells a:hover .nt__go { color: #c2410c; }
-  .nt__cells a:focus-visible { outline: 3px solid var(--nt-glow); outline-offset: -3px; }
-  .nt__kicker { font: 500 9px/1.4 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #9a5a12; }
-  .nt__title { font-size: 15px; font-weight: 500; line-height: 1.2; letter-spacing: -.02em; }
-  .nt__go { position: absolute; right: 12px; bottom: 11px; font: 500 13px/1 var(--pc-font-mono); color: #5f5e5a; }
-
-  @media (max-width: 760px) {
-    .nt { grid-template-columns: minmax(0, 1fr); box-shadow: 4px 4px 0 var(--nt-glow); }
-    .nt__head { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 9px 12px; }
-    .nt__cells { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
-    .nt__cells a { min-height: 64px; padding: 10px 26px 10px 12px; }
-    .nt__title { font-size: 14px; }
-    .nt__go { right: 10px; bottom: 10px; }
-  }
+  .merged { padding: 1rem clamp(1rem, 4vw, 2rem); background: #fffdf7; color: #14201c; border-block: 2px solid #14201c; }
+  .merged h2 { font-size: clamp(1.2rem, 3vw, 1.8rem); line-height: 1.15; margin: 0; }
+  .merged p { margin: .3rem 0; font-size: .9rem; }
+  .merged ul { padding: 0; margin: .4rem 0; list-style: none; }
+  .merged :global([data-merges] li) { border-top: 1px solid #d6d8ca; }
+  .merged :global(a), summary { color: #164634; overflow-wrap: anywhere; }
+  .merged :global([data-merges] a), .history, summary { display: flex; align-items: center; justify-content: space-between; gap: .8rem; min-height: 44px; }
+  .merged :global([data-merges] a) { font-weight: 650; }
+  .merged :global(small) { font-variant-numeric: tabular-nums; font-weight: 400; white-space: nowrap; }
+  .merged :global(a:focus-visible), summary:focus-visible { outline: 3px solid #176397; outline-offset: 2px; }
+  .history { width: fit-content; }
+  summary { cursor: pointer; display: list-item; align-content: center; }
+  details { border-top: 1px solid #d6d8ca; }
+  details a { display: inline-block; padding: .75rem 0; }
+  time { margin: 0 .5rem; }
+  [hidden] { display: none !important; }
 </style>

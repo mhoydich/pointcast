@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { ageInDays, isFresh, shortDay, stripHeading, NEW_TODAY_DAYS } from '../src/lib/new-today.ts';
+import { ageInDays, isFresh, shortDay, NEW_TODAY_DAYS } from '../src/lib/new-today.ts';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -16,10 +16,15 @@ test('"New today" sits right under the Shortwave hero, ahead of the drop deck', 
   assert.ok(strip < home.indexOf('<HomeV2SignalDeck'), 'strip comes before the drop deck');
   assert.match(home, /import newToday from '\.\.\/data\/new-today\.json'/);
   assert.match(home, /frontDoorNewsAll\.filter\(\(item\) => !newTodayLinks\.has\(item\.link\)\)/, 'the register below never repeats a strip item');
-  const [heroSource, stripSource] = await Promise.all([read('src/components/HomeShortwaveHero.astro'), read('src/components/HomeNewToday.astro')]);
-  assert.match(heroSource, /<a href="#new" data-swh-new>/, 'the hero link falls back to the drop deck');
+  const [heroSource, stripSource, dashboard] = await Promise.all([
+    read('src/components/HomeShortwaveHero.astro'), read('src/components/HomeNewToday.astro'), read('src/components/HomeNowDashboard.astro'),
+  ]);
+  assert.match(heroSource, /href="#new-today">What's new in town/);
   assert.match(stripSource, /id="new-today"/);
-  assert.match(stripSource, /link\.setAttribute\('href', root\.hidden \? '#new' : '#new-today'\)/, 'while the strip shows, the hero link lands on it');
+  assert.match(stripSource, /<details id="recent-launches">/);
+  assert.match(dashboard, /label: 'Recent launches'.*href: '#recent-launches'/);
+  assert.match(dashboard, /n.value === 0 && n.href === '#recent-launches' \? '\/archive'/);
+  assert.equal((home.match(/<HomeNewToday /g) || []).length, 1);
 });
 
 test('launch notes stay out of front-door-news.json while the strip shows them', async () => {
@@ -61,10 +66,6 @@ test('launches age out after seven town days, and `until` retires copy sooner', 
   assert.equal(isFresh({ date: 'soon' }, at('2026-09-28T12:00:00-07:00')), false);
 });
 
-test('the heading says today only when everything showing shipped today', () => {
-  const now = at('2026-09-28T17:00:00-07:00');
-  assert.equal(stripHeading(['2026-09-28', '2026-09-28'], now), 'New today');
-  assert.equal(stripHeading(['2026-09-28', '2026-09-26'], now), 'New this week');
-  assert.equal(stripHeading(['2026-09-28'], at('2026-09-30T09:00:00-07:00')), 'New this week');
+test('launch dates are labeled with the calendar day', () => {
   assert.equal(shortDay('2026-09-28'), 'Sep 28');
 });
