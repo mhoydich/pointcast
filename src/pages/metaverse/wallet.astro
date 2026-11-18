@@ -1,0 +1,153 @@
+---
+export const prerender = true;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f7f2" />
+    <title>Metaverse wallet · PointCast</title>
+    <meta name="description" content="Connect a Tezos Mainnet wallet to view your public address in the PointCast Metaverse." />
+    <link rel="canonical" href="https://pointcast.xyz/metaverse/wallet/" />
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="stylesheet" href="/metaverse/wallet/wallet.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/"><span aria-hidden="true">◩</span> PointCast</a>
+      <a href="/metaverse/">← Back to the district</a>
+    </header>
+    <main>
+      <p class="eyebrow">POINTCAST / METAVERSE</p>
+      <h1>Your Tezos wallet</h1>
+      <p class="intro">Connect a wallet you control to see the public address it shares with PointCast.</p>
+
+      <section class="wallet-panel" aria-labelledby="connection-title">
+        <h2 id="connection-title">Visitor wallet</h2>
+        <p class="network">Tezos Mainnet</p>
+        <p id="wallet-status" role="status">Checking your wallet connection…</p>
+        <button class="primary" type="button" id="connect-wallet" disabled>Connect Tezos wallet</button>
+        <div id="connected-wallet" hidden>
+          <label for="wallet-address">Connected public address</label>
+          <input id="wallet-address" type="text" readonly spellcheck="false" autocomplete="off" />
+          <div class="actions">
+            <button type="button" id="copy-address">Copy address</button>
+            <a id="wallet-explorer" target="_blank" rel="noopener noreferrer">View on TzKT ↗</a>
+          </div>
+          <button type="button" id="disconnect-wallet">Disconnect wallet</button>
+        </div>
+        <noscript><p>Enable JavaScript to connect here, or browse the <a href="/wallet">PointCast collector shelf</a>.</p></noscript>
+      </section>
+
+      <section class="wallet-help" aria-labelledby="help-title">
+        <h2 id="help-title">No browser extension?</h2>
+        <p>Choose Kukai in the wallet picker to use its web wallet. If you need to set up an account first, open <a href="https://wallet.kukai.app/" target="_blank" rel="noopener noreferrer">Kukai ↗</a>, then return here to connect.</p>
+        <p>Connection shares your public address. This page never requests a payment or signature. The address shown belongs to your visitor wallet. District funding is separate.</p>
+        <p><a href="/wallet">Browse the PointCast collector shelf →</a></p>
+      </section>
+    </main>
+  </body>
+</html>
+
+<script>
+  const connect = document.querySelector<HTMLButtonElement>('#connect-wallet')!;
+  const disconnect = document.querySelector<HTMLButtonElement>('#disconnect-wallet')!;
+  const copy = document.querySelector<HTMLButtonElement>('#copy-address')!;
+  const status = document.querySelector<HTMLElement>('#wallet-status')!;
+  const connected = document.querySelector<HTMLElement>('#connected-wallet')!;
+  const addressField = document.querySelector<HTMLInputElement>('#wallet-address')!;
+  const explorer = document.querySelector<HTMLAnchorElement>('#wallet-explorer')!;
+
+  let busy = true;
+  let address = '';
+  let revision = 0;
+
+  function showAddress(value: string) {
+    address = value;
+    addressField.value = value;
+    connected.hidden = !value;
+    connect.hidden = !!value;
+    if (value) explorer.href = 'https://tzkt.io/' + encodeURIComponent(value);
+    else explorer.removeAttribute('href');
+  }
+
+  function setBusy(value: boolean) {
+    busy = value;
+    connect.disabled = value;
+    disconnect.disabled = value;
+  }
+
+  async function readActiveWallet(preferFocus = false) {
+    const current = ++revision;
+    const { pointCastWallet } = await import('../../lib/tezos');
+    const wallet = await pointCastWallet();
+    const account = await wallet.client.getActiveAccount();
+    if (current !== revision) return;
+    const isMainnet = account?.network?.type === 'mainnet';
+    const publicAddress = isMainnet && /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/.test(account?.address || '') ? account!.address : '';
+    showAddress(publicAddress);
+    status.textContent = publicAddress ? 'Connected to Tezos Mainnet.' :
+      account && !isMainnet ? 'Choose a wallet account on Tezos Mainnet.' : 'No wallet connected.';
+    if (preferFocus && publicAddress) addressField.focus();
+  }
+
+  connect.addEventListener('click', async () => {
+    if (busy) return;
+    setBusy(true);
+    status.textContent = 'Choose a wallet and approve the connection in its window.';
+    try {
+      const { connectKukaiForSigning, pointCastWallet } = await import('../../lib/tezos');
+      const wallet = await pointCastWallet();
+      const account = await wallet.client.getActiveAccount();
+      if (account && account.network?.type !== 'mainnet') await wallet.clearActiveAccount();
+      await connectKukaiForSigning();
+      await readActiveWallet(true);
+    } catch {
+      status.textContent = 'The connection did not complete. Retry, or choose Kukai to connect without an extension.';
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  disconnect.addEventListener('click', async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { pointCastWallet } = await import('../../lib/tezos');
+      const wallet = await pointCastWallet();
+      await wallet.clearActiveAccount();
+      await readActiveWallet();
+    } catch {
+      status.textContent = 'Could not disconnect. Try again from this page or your wallet.';
+    } finally {
+      setBusy(false);
+      if (!address) connect.focus();
+    }
+  });
+
+  copy.addEventListener('click', async () => {
+    const currentAddress = address;
+    if (!currentAddress) return;
+    try {
+      await navigator.clipboard.writeText(currentAddress);
+      if (address === currentAddress) status.textContent = 'Public address copied.';
+    } catch {
+      if (address !== currentAddress) return;
+      addressField.focus();
+      addressField.select();
+      status.textContent = 'Public address selected. Use your device’s copy command.';
+    }
+  });
+
+  window.addEventListener('pc:wallet-change', () => {
+    if (!busy) void readActiveWallet().catch(() => {
+      status.textContent = 'Could not refresh the wallet connection.';
+    });
+  });
+
+  void readActiveWallet().catch(() => {
+    status.textContent = 'Could not check your wallet. Try connecting to open the wallet picker.';
+  }).finally(() => setBusy(false));
+</script>
