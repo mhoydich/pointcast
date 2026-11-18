@@ -106,24 +106,33 @@ async function loadLogByKey(kv, key) {
   return null;
 }
 const archiveKey = (key, seq) => `loom:arch:${key}:${seq}`;
+const archiveIdKey = (key, id) => `loom:archid:${key}:${id}`;
+/** Most messages one save will archive. A backlog (after archive outages) drains over the next saves instead of in one burst. */
+export const ARCHIVE_BATCH = 50;
 /**
- * Keep the live log at MAX_OPS for speed, but never drop a message on the floor: before the oldest
+ * Keep the live log near MAX_OPS for speed, but never drop a message on the floor: before the oldest
  * ops are trimmed, each trimmed message is written to its own archive key in its final public form
- * (folded with every later edit, +1, vote and hide still in the log; a hidden one leaves a tombstone).
- * One key per message means no read-modify-write, so two racing writers store the same value.
- * If the archive write fails, nothing is trimmed and the next save tries again.
+ * (folded with every later edit, +1, vote and hide still in the log; a hidden one leaves a tombstone),
+ * plus an id → seq pointer so its author can still withdraw it and a moderator can still hide it.
+ * One key per message means no read-modify-write. If the archive write fails, nothing is trimmed and
+ * the next save tries again. The record keeps the edit-token hash privately; reads never return it.
  */
 async function saveLog(kv, log) {
   if (log.ops.length > MAX_OPS) {
-    const cut = log.ops.length - MAX_OPS;
-    const leaving = log.ops.slice(0, cut).filter((op) => op.op === 'append');
+    let cut = log.ops.length - MAX_OPS;
+    let leaving = log.ops.slice(0, cut).filter((op) => op.op === 'append');
+    if (leaving.length > ARCHIVE_BATCH) {
+      leaving = leaving.slice(0, ARCHIVE_BATCH);
+      cut = log.ops.findIndex((op) => op.seq === leaving.at(-1).seq) + 1;
+    }
     let archived = true;
     if (leaving.length) {
       try {
         const final = new Map(fold(log.ops).messages.map((m) => [m.id, m]));
-        await Promise.all(leaving.map((op) => {
+        await Promise.all(leaving.flatMap((op) => {
           const m = final.get(op.id);
-          return writeJson(kv, archiveKey(log.key, op.seq), m ? { ...m, parent: op.parent ?? null } : { id: op.id, seq: op.seq, hidden: true });
+          const record = m ? { ...m, parent: op.parent ?? null, ...(op.tokenHash ? { tokenHash: op.tokenHash } : {}) } : { id: op.id, seq: op.seq, hidden: true };
+          return [writeJson(kv, archiveKey(log.key, op.seq), record), kv.put(archiveIdKey(log.key, op.id), String(op.seq))];
         }));
         log.archivedFrom ??= leaving[0].seq;
       } catch { archived = false; }
@@ -136,18 +145,35 @@ async function saveLog(kv, log) {
   delete log.seed;
   await writeJson(kv, `loom:log:${log.key}`, log);
 }
-/** One page of archived messages older than `before`, newest page first. Bounded so a read stays well inside a Worker's subrequest budget. */
+/**
+ * One page of archived messages older than `before`, newest page first. Bounded so a read stays well
+ * inside a Worker's subrequest budget. Unlike readJson this does not swallow errors: a failed or
+ * corrupt archive read throws, so the caller answers 503 instead of a short page with an advancing cursor.
+ */
 export const ARCHIVE_PAGE = 40;
 async function archivePage(kv, log, before, limit) {
   const top = Math.min(before, log.trimmedBefore ?? 0); // exclusive
   const floor = log.archivedFrom ?? top;
-  const from = Math.max(floor, top - Math.min(ARCHIVE_PAGE, Math.max(1, limit || ARCHIVE_PAGE)));
+  const from = Math.max(floor, top - limit);
   const seqs = [];
   for (let seq = from; seq < top; seq += 1) seqs.push(seq);
-  const got = kv ? await Promise.all(seqs.map((seq) => readJson(kv, archiveKey(log.key, seq), null))) : [];
-  const messages = got.filter((m) => m && !m.hidden);
+  const got = kv ? await Promise.all(seqs.map(async (seq) => { const raw = await kv.get(archiveKey(log.key, seq)); return raw ? JSON.parse(raw) : null; })) : [];
+  const messages = got.filter((m) => m && !m.hidden).map(({ tokenHash, ...m }) => m);
   const more = from > floor;
   return { from, to: top - 1, messages, count: messages.length, more, ...(more ? { nextBefore: from } : {}) };
+}
+/** Withdraw (author, edit token) or hide (moderator) a message that has already left the live log: its archive record becomes a tombstone. */
+async function redactArchived(kv, log, id, allow) {
+  const seq = Number(await kv.get(archiveIdKey(log.key, id)));
+  if (!Number.isInteger(seq) || seq < 1) return 'message_not_found';
+  const raw = await kv.get(archiveKey(log.key, seq));
+  const record = raw ? JSON.parse(raw) : null;
+  if (!record || record.id !== id) return 'message_not_found';
+  if (record.hidden) return null; // already gone
+  const refusal = await allow(record);
+  if (refusal) return refusal;
+  await writeJson(kv, archiveKey(log.key, seq), { id, seq, hidden: true });
+  return null;
 }
 function pushOp(log, op, now) {
   log.seq += 1;
@@ -600,9 +626,16 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         if (format === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8', 'Cache-Control': READ_CACHE });
         if (format === 'rss') return new Response(asRss(log), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
         // before=<seq> pages back into the archive: messages trimmed from the live log, oldest kept forever.
-        const before = Math.max(0, Number(url.searchParams.get('before')) || 0);
-        if (before > 0) {
-          const archive = await archivePage(kv, log, before, Number(url.searchParams.get('limit')) || 0);
+        const beforeRaw = url.searchParams.get('before');
+        if (beforeRaw !== null) {
+          const before = Number(beforeRaw);
+          const limitRaw = url.searchParams.get('limit');
+          const limit = limitRaw === null ? ARCHIVE_PAGE : Number(limitRaw);
+          if (!Number.isInteger(before) || before < 1 || !/^\d+$/.test(beforeRaw)) return fail('before_invalid', 400, { hint: 'before is a positive integer seq; start with log.trimmedBefore.' });
+          if (!Number.isInteger(limit) || limit < 1 || limit > ARCHIVE_PAGE) return fail('limit_invalid', 400, { limitMax: ARCHIVE_PAGE });
+          let archive;
+          try { archive = await archivePage(kv, log, before, limit); }
+          catch { return fail('archive_unavailable', 503, { retryAfterSec: 2, hint: 'Nothing was skipped. Retry the same before value.' }); }
           return json({ ok: true, spec: SPEC, kvBound: !!kv, log: { address: log.address, key: log.key, trimmedBefore: log.trimmedBefore ?? null, archivedFrom: log.archivedFrom ?? null }, archive }, 200, { 'Cache-Control': READ_CACHE });
         }
         const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
@@ -747,7 +780,21 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
     const id = target.kind === 'reply' ? target.parent : String(body.id ?? '');
     const original = log?.ops.find((op) => op.op === 'append' && op.id === id);
-    if (!original) return fail('message_not_found', 404);
+    if (!original) {
+      // The message may have left the live log. It is final there (no edit, +1 or vote), but it can still be taken down.
+      if (log && id && (action === 'withdraw' || action === 'hide')) {
+        let refusal;
+        try {
+          refusal = await redactArchived(kv, log, id, async (record) => {
+            if (action === 'hide') return adminKey && safeEqual(request.headers.get('X-Loom-Admin') ?? '', adminKey) ? null : 'admin_required';
+            return record.tokenHash && safeEqual(await sha(String(body.token ?? '')), record.tokenHash) ? null : 'edit_token_invalid';
+          });
+        } catch { return fail('archive_unavailable', 503, { retryAfterSec: 2 }); }
+        if (!refusal) return json({ ok: true, spec: SPEC, seq: log.seq, message: null, archived: true });
+        if (refusal !== 'message_not_found') return fail(refusal, 403);
+      }
+      return fail('message_not_found', 404);
+    }
 
     if (action === 'edit' || action === 'withdraw') {
       if (!original.tokenHash || !safeEqual(await sha(String(body.token ?? '')), original.tokenHash)) return fail('edit_token_invalid', 403);
