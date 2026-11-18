@@ -31,7 +31,7 @@ export function selectReport(payload, project) {
 export function view(data, report, now) {
   const e = data.evidence || {};
   const state = freshness(e.checkedAt, now, e.maxAgeHours);
-  const usable = state === 'checked' && safeUrl(e.pr?.url) && /^[a-f0-9]{40}$/.test(e.pr?.head || '');
+  const usable = state === 'checked' && typeof e.pr?.merged === 'boolean' && safeUrl(e.pr?.url) && /^[a-f0-9]{40}$/.test(e.pr?.head || '');
   return {
     reported: report ? (report.blocked ? 'Blocked · reported' : report.status === 'done' ? 'Done · reported' : 'Open · reported') : 'Unknown · no report',
     reportFreshness: freshness(report?.source?.at, now),

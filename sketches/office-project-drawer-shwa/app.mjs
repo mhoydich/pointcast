@@ -32,6 +32,8 @@ $('refresh').addEventListener('click',async()=>{
   finally{clearTimeout(timer);active=null;$('refresh').disabled=false;}
 });
 try{
-  const response=await fetch('./project.json',{credentials:'omit'});if(!response.ok)throw new Error();data=await response.json();report=data.report.value;render();
+  const embedded=$('project-data');
+  if(embedded){data=JSON.parse(embedded.textContent);}else{const response=await fetch('./project.json',{credentials:'omit'});if(!response.ok)throw new Error();data=await response.json();}
+  report=data.report.value;render();
   $('read-state').textContent=`Saved public snapshot read ${data.report.readAt}. Refresh is optional.`;
 }catch{$('reported').textContent='Snapshot unavailable';$('read-state').textContent='No project state available. Nothing has been written.';$('refresh').disabled=true;}
