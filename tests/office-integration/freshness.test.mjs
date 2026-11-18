@@ -63,3 +63,28 @@ test('reply edge expires on its own local deadline even when author has newer ac
  assert.deepEqual(source,before);
  h.jump(OFFICE_END);h.guard.recheck();assert.deepEqual(h.changes.at(-1).data.edges,[]);
 });
+test('timezone-free and normalized impossible timestamps never qualify as fresh snapshot facts',()=>{
+ const now=Date.parse('2026-03-01T18:05:00.000Z');
+ for(const invalid of ['2026-03-01T18:00:00','2026-02-29T18:00:00.000Z','2026-02-30T18:00:00.000Z','2026-03-01T24:00:00.000Z']){
+  const source=snapshot(now);source.edges=[{id:'malformed',at:invalid}];
+  source.desks[0].facts.lastPostAt=invalid;
+  const h=harness(now);h.guard.accept(source);
+  assert.deepEqual(h.changes.at(-1).data.edges,[],invalid);
+  assert.equal(h.changes.at(-1).data.desks[0].facts.stale,true,invalid);
+  assert.equal(h.changes.filter(c=>c.reason==='read').length,1);
+  source.desks[0].facts.lastPostAt=iso(now);source.desks[0].facts.asOf=invalid;
+  assert.equal(projectFreshness(source,now).desks[0].facts.stale,true);
+  source.observedAt=invalid;source.edges=[{id:'valid-edge',at:iso(now-60000)}];
+  const data=projectFreshness(source,now);
+  assert.equal(data.evidenceFresh,false);assert.deepEqual(data.edges,[]);
+  source.expiresAt=invalid;assert.equal(projectFreshness(source,now).state,'ended');
+ }
+});
+test('valid UTC seconds and leap-day milliseconds preserve source time and edge expiry',()=>{
+ const now=Date.parse('2024-02-29T18:05:00.000Z');
+ for(const at of ['2024-02-29T18:00:00Z','2024-02-29T18:00:00.123Z']){
+  const source=snapshot(now);source.edges=[{id:'valid',at}];
+  assert.equal(projectFreshness(source,now).edges[0].at,at);
+  assert.deepEqual(projectFreshness(source,Date.parse(at)+POST_FRESHNESS_MS).edges,[]);
+ }
+});

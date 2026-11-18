@@ -111,3 +111,25 @@ reads remain one unless a pre-existing opt-in watch test explicitly expects two.
 The new adapter regression fails with the previous fresh-events-only lookup.
 No physical-device, heard-audio, live qualifying reply or release-clearance claim.
 CI and exact assembled head are reported in the linked Loom receipt after push.
+
+## Strict snapshot timestamps · Nov17 PT
+
+Tess's synthetic malformed-snapshot finding at813ed4b is addressed in the
+parent-owned freshness projection. The shared parser requires UTC ISO seconds
+with optional three-digit milliseconds and a calendar round trip. Timezone-free
+values, normalized impossible dates and24:00 fail validation. This matches the
+existing upstream event contract; no Ada module or dependency pin changed.
+Invalid edge/observation times cannot qualify edges or fresh evidence; invalid
+desk post/as-of times stay dark; a malformed explicit expiry closes the view.
+Absent optional post/expiry fields keep their existing unknown/default semantics.
+Valid source strings remain unchanged, including leap-day/seconds-only values.
+
+17 Node checks and30 Chromium cases at390/1440 cover malformed snapshots, valid
+edge expiry, existing source-to-screen edge/lamp composition and prior expiry,
+late-response, visibility, failure, keyboard focus/details and resize behavior.
+Browser cases retain exactly their expected initial/opted-in read counts and
+silent default. The new malformed-time regression fails with the old Date.parse
+parser. Agent audit and diff checks pass; exact-head composite result is linked
+in the Loom receipt. This is a synthetic acceptance gap; upstream already rejects
+malformed Loom timestamps, and no live-source exploit is demonstrated. Tess owns
+independent rereview; Lou art/sound and overnight release holds remain intact.

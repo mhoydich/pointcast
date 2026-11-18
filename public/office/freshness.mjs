@@ -2,8 +2,15 @@
 export const OFFICE_END = Date.parse('2026-11-18T17:24:00.000Z');
 export const POST_FRESHNESS_MS = 15 * 60_000;
 const EVIDENCE_FRESHNESS_MS = 120_000;
-const instant = value => typeof value === 'string' ? Date.parse(value) : NaN;
-const cutoff = data => Math.min(OFFICE_END, Number.isFinite(instant(data?.expiresAt)) ? instant(data.expiresAt) : OFFICE_END);
+// Match the source contract: UTC ISO seconds, optional exact milliseconds.
+// Date.parse alone accepts local times and normalizes impossible calendar dates.
+const instant = value => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return NaN;
+  const parsed = Date.parse(value);
+  const canonical = value.includes('.') ? value : value.slice(0, -1) + '.000Z';
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === canonical ? parsed : NaN;
+};
+const cutoff = data => data?.expiresAt == null ? OFFICE_END : Math.min(OFFICE_END, Number.isFinite(instant(data.expiresAt)) ? instant(data.expiresAt) : -Infinity);
 const empty = () => ({schema:'pointcast.office-view/v1',observedAt:null,desks:[],events:[],edges:[],merges:[],blocked:[],errors:[]});
 
 export function projectFreshness(data, now) {
@@ -14,9 +21,9 @@ export function projectFreshness(data, now) {
   let aged = false;
   const desks = source.desks.map(desk => {
     const posted = instant(desk.facts?.lastPostAt);
-    const expired = Number.isFinite(posted) && (posted > now || now >= posted + POST_FRESHNESS_MS);
+    const expired = desk.facts?.lastPostAt != null && (!Number.isFinite(posted) || posted > now || now >= posted + POST_FRESHNESS_MS);
     aged ||= expired;
-    return {...desk, ...(ended ? {eligible:false} : {}), facts:{...desk.facts, stale:ended || expired || desk.facts?.stale === true}};
+    return {...desk, ...(ended ? {eligible:false} : {}), facts:{...desk.facts, stale:ended || expired || !Number.isFinite(instant(desk.facts?.asOf)) || desk.facts?.stale === true}};
   });
   const observed = instant(source.observedAt);
   const evidenceOld = !Number.isFinite(observed) || observed > now || now >= observed + EVIDENCE_FRESHNESS_MS;

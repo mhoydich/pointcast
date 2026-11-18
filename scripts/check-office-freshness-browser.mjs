@@ -53,6 +53,21 @@ try{
    return{page,finish:async(expectedReads=1)=>{assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.equal(await page.evaluate(()=>window.fixtureReads),expectedReads,'only explicitly expected source reads may occur');assert.equal(await page.locator('#office-sound').getAttribute('aria-pressed'),'false');await page.close();}};
   }
   {
+   // Synthetic malformed snapshot only; upstream Loom rejects these times.
+   const at=Date.parse('2026-03-02T18:05:00.000Z'),snapshot=fixture(at);
+   snapshot.desks.push({...snapshot.desks[0],handle:'@sol-2',name:'TEST FIXTURE 2'});
+   snapshot.edges=['2026-03-02T18:00:00','2026-02-30T18:00:00.000Z'].map((at,i)=>({id:'invalid-'+i,parentId:'parent',fromHandle:'@sol-1',toHandle:'@sol-2',at,sourceUrl:'https://pointcast.xyz/loom?to=%40sol-1'}));
+   const {page,finish}=await open(at,false,false,snapshot);
+   assert.equal(await page.locator('[data-reply-id]').count(),0,'malformed edge times rejected');
+   const desk=page.locator('.office-desk').first();
+   await desk.locator('details > summary').click();await desk.locator('.office-desk__source').focus();
+   await page.clock.runFor(POST_FRESHNESS_MS);
+   assert.equal(await page.evaluate(()=>document.activeElement.matches('.office-desk__source')),true);
+   assert.equal(await desk.locator('details').evaluate(e=>e.open),true);
+   assert.equal(await page.locator('[data-reply-id]').count(),0);
+   await finish();
+  }
+  {
    // Actual provider adapters -> integration projection -> actual app/renderers.
    // Older context never enters the app's activity list or desk freshness facts.
    const source=sources({oldParent:true,draftConflict:true});
@@ -197,5 +212,5 @@ try{
    await finish();
   }
  }
- console.log('PASS: 28 browser regressions at390/1440px: source-to-screen old-parent edge/dark context and confirmed draft conflict, idle aging, cutoff/watch cancellation, late JSON crossing cutoff, hidden/foreground/BFCache, desk/evidence focus/details, automatic failure fallback and in-place resize thread focus; no extra reads/writes or unsolicited sound.');
+ console.log('PASS: 30 browser regressions at390/1440px: source-to-screen old-parent edge/dark context and confirmed draft conflict, idle aging, cutoff/watch cancellation, late JSON crossing cutoff, hidden/foreground/BFCache, desk/evidence focus/details, automatic failure fallback and in-place resize thread focus; no extra reads/writes or unsolicited sound.');
 }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}
