@@ -30,6 +30,7 @@ try{
    const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'}),errors=[],writes=[];
    page.on('pageerror',e=>errors.push(String(e)));page.on('request',r=>{if(r.method()!=='GET')writes.push(r.method());});
    await page.clock.install({time:new Date(at)});
+   await page.clock.pauseAt(new Date(at)); // Host slowness must not consume the 1s cutoff fixture.
    const snapshot=assembled ?? fixture(at);
    if(threads){
     snapshot.desks.push({...snapshot.desks[0],handle:'@sol-2',name:'TEST FIXTURE 2'});
