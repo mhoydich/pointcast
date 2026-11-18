@@ -257,6 +257,20 @@ const FOR_CACHE = 'public, max-age=30';
 const FOR_HANDLE = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
 const seenKey = async (handle) => `loom:seen:${(await sha(handle)).slice(0, 32)}`;
 
+// Bound outstanding KV reads without changing scan limits or output order.
+const FOR_READ_CONCURRENCY = 6;
+async function readInOrder(items, read) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(FOR_READ_CONCURRENCY, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await read(items[index]);
+    }
+  }));
+  return results;
+}
+
 async function forYou(kv, owner, now) {
   const nowMs = now.getTime();
   const index = await readJson(kv, 'loom:index', []);
@@ -275,12 +289,14 @@ async function forYou(kv, owner, now) {
   }
   const logs = [];
   if (inbox) logs.push(inbox);
-  for (const e of picked) { const log = await readJson(kv, `loom:log:${e.key}`, null); if (log) logs.push(log); }
+  const readLogs = await readInOrder(picked, (e) => readJson(kv, `loom:log:${e.key}`, null));
+  for (const log of readLogs) if (log) logs.push(log);
   const threads = logs.map((log) => ({ address: log.address, key: log.key, label: log.label || log.address, title: log.title ?? null, messages: fold(log.ops).messages }));
 
   // First posts: for each sender seen in the last 48h, their outbox's oldest record, if the outbox is not full.
   const firstPosts = new Map();
   const asked = new Set();
+  const senders = [];
   for (const t of threads) {
     for (const m of t.messages) {
       if (asked.size >= FOR_OUTBOXES) break;
@@ -288,14 +304,20 @@ async function forYou(kv, owner, now) {
       const box = outboxAddress(m.from);
       if (asked.has(box)) continue;
       asked.add(box);
-      const out = await readJson(kv, `loom:out:${await addressKey(box)}`, []);
-      if (!Array.isArray(out) || !out.length || out.length >= MAX_OUTBOX) continue;
-      const first = out[out.length - 1];
-      if (!first?.id || Date.parse(first.at) < nowMs - ARRIVAL_MS) continue;
-      const where = threads.find((x) => x.key === first.key);
-      firstPosts.set(normHandle(m.from.name) || box, { name: m.from.name, kind: m.from.kind, verified: !!m.from.verified, fromAddress: m.from.address ?? null,
-        address: first.to, key: first.key, id: first.id, at: first.at, body: first.body, label: where?.label ?? describe(first.to).label });
+      senders.push({ box, from: m.from });
     }
+  }
+  const outboxes = await readInOrder(senders, async ({ box }) =>
+    readJson(kv, `loom:out:${await addressKey(box)}`, []));
+  // Apply results in the original encounter order, not completion order.
+  for (let i = 0; i < senders.length; i += 1) {
+    const { box, from } = senders[i], out = outboxes[i];
+    if (!Array.isArray(out) || !out.length || out.length >= MAX_OUTBOX) continue;
+    const first = out[out.length - 1];
+    if (!first?.id || Date.parse(first.at) < nowMs - ARRIVAL_MS) continue;
+    const where = threads.find((x) => x.key === first.key);
+    firstPosts.set(normHandle(from.name) || box, { name: from.name, kind: from.kind, verified: !!from.verified, fromAddress: from.address ?? null,
+      address: first.to, key: first.key, id: first.id, at: first.at, body: first.body, label: where?.label ?? describe(first.to).label });
   }
   const mark = kv ? await kv.get(await seenKey(owner)) : null;
   const seenAt = mark && Number.isFinite(Date.parse(mark)) ? mark : null;
@@ -348,11 +370,9 @@ function validateFrom(raw, verifiedAgent) {
   return out;
 }
 
-function validateMessage(body) {
+function validateMessage(body, text) {
   const kind = KINDS.has(body.kind) ? body.kind : 'note';
-  const text = clean(body.body, BODY_MAX);
   const out = { kind, body: text };
-  if (clean(body.body, Infinity).length > BODY_MAX) out.truncated = true;
   if (body.media) {
     const url = String(body.media.url ?? '');
     let u;
@@ -627,7 +647,9 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         const ceiling = await gate(limit, 'loom:append:ip');
         if (!ceiling.allowed) return limited(ceiling.retryAfter);
       }
-      const { truncated, ...message } = validateMessage(body);
+      const text = clean(body.body, Infinity);
+      if (text.length > BODY_MAX) return fail('body_too_long', 400, { bodyMax: BODY_MAX, bodyLength: text.length });
+      const message = validateMessage(body, text);
       const { log, parent } = await resolveTarget(kv, body.to);
       // A title sticks on a new log, or late on an untitled #topic; otherwise say why not.
       let title;
@@ -653,7 +675,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       await touchIndex(kv, log, op);
       await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
       const { tokenHash, ...publicOp } = op;
-      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(hello ? { welcome: { id: hello.id } } : {}), ...(title ? { title } : {}), ...(truncated ? { truncated: true, bodyMax: BODY_MAX } : {}) }, 201);
+      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(hello ? { welcome: { id: hello.id } } : {}), ...(title ? { title } : {}) }, 201);
     }
 
     if (action === 'seen') {

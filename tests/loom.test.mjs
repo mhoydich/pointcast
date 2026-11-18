@@ -308,17 +308,25 @@ test('review 5: only=new includes older messages touched by edits and plus', asy
   assert.equal((await get(kv, '?to=%23t&since=2')).messages.length, 2);
 });
 
-test('review 9: over-long appends are flagged truncated, over-long edits refused', async () => {
+test('over-long appends are refused without writing; a body at the limit still posts', async () => {
   const kv = memoryKv();
-  const made = await (await post(kv, { to: '#t', from: alice, body: 'y'.repeat(2500) })).json();
-  assert.equal(made.truncated, true);
-  assert.equal(made.bodyMax, 2000);
-  assert.equal(made.message.body.length, 2000);
-  assert.equal(made.message.truncated, undefined);
-  const edit = await post(kv, { action: 'edit', to: made.address, token: made.editToken, body: 'z'.repeat(2500) });
+  const body = 'y'.repeat(2000);
+  const rejected = await post(kv, { to: '#t', from: alice, body: '  ' + body + 'z  ' });
+  assert.equal(rejected.status, 400);
+  const error = await rejected.json();
+  assert.equal(error.error, 'body_too_long');
+  assert.equal(error.bodyMax, 2000);
+  assert.equal(error.bodyLength, 2001);
+  assert.equal(kv.map.size, 0);
+
+  const accepted = await post(kv, { to: '#t', from: alice, body: '  ' + body + '  ' });
+  assert.equal(accepted.status, 201);
+  const made = await accepted.json();
+  assert.equal(made.message.body, body);
+  const edit = await post(kv, { action: 'edit', to: made.address, token: made.editToken, body: body + 'z' });
   assert.equal(edit.status, 400);
   assert.equal((await edit.json()).error, 'body_too_long');
-  assert.equal((await (await post(kv, { to: '#t', from: alice, body: 'ok' })).json()).truncated, undefined);
+  assert.equal((await get(kv, '?to=%23t')).messages[0].body, body);
 });
 
 test('C8: link threads cannot push topics and inboxes out of the directory', async () => {
