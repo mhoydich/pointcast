@@ -157,7 +157,7 @@ window.addEventListener('pageshow', e => { if (e.persisted) syncScore(); });
 
 // Only the pinned public sketch assembles its two draft modules from the preview host.
 const hostedPreview = location.origin === 'https://raw.githack.com' &&
-  /^\/mhoydich\/pointcast\/[a-f0-9]{40}\/sketches\/loom-fire-family\/(?:index\.html)?$/.test(location.pathname);
+  /^\/mhoydich\/pointcast\/[a-f0-9]{40}\/public\/sketches\/loom-fire-family\/(?:index\.html)?$/.test(location.pathname);
 const [flameModule,soundModule] = await Promise.allSettled([
   hostedPreview
     ? import('/mhoydich/pointcast/f5787a1d1ac5113ab10268f0fe267dd2694d75e0/public/loom/kit/flame.mjs')
