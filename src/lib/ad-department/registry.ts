@@ -12,6 +12,6 @@ export const ads = Object.keys(posters).sort().map(path => {
   return { ...ad, Poster };
 });
 
-export const rackPath = '/ads/department/';
+export const rackPath = '/ad-department/';
 export const sourceUrl = 'https://github.com/mhoydich/brutalist-motor-art/tree/12f7d54';
 export const deckUrl = 'https://objkt.com/collections/KT19uYnRbBA7jnepfcqEr3rZHUoVeLHz2RkF';

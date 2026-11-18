@@ -10,7 +10,7 @@ import { JSDOM } from 'jsdom';
 import sharp from 'sharp';
 
 const repo = join(import.meta.dirname, '..');
-const rack = '/ads/department/';
+const rack = '/ad-department/';
 const base = 'https://pointcast.xyz';
 const deck = 'https://objkt.com/collections/KT19uYnRbBA7jnepfcqEr3rZHUoVeLHz2RkF';
 const normalize = (s) => s.replace(/\s+/g, ' ').trim();
@@ -36,7 +36,8 @@ async function getPage(route = rack) {
 before(async () => {
   root = await mkdtemp(join(tmpdir(), 'ad-department-'));
   const inputs = ['package.json', 'src/components/ad-department', 'src/lib/ad-department',
-    'src/pages/ads/department', 'src/assets/currency-builder/fonts/BodoniModa-opsz-wght.ttf', 'public/ad-department'];
+    'src/pages/ad-department', 'src/pages/ads/department/index.astro',
+    'src/assets/currency-builder/fonts/BodoniModa-opsz-wght.ttf', 'public/ad-department'];
   for (const input of inputs) {
     const destination = join(root, input);
     await mkdir(dirname(destination), { recursive: true });
@@ -63,6 +64,10 @@ after(async () => { if (root) await rm(root, { recursive: true, force: true }); 
 
 test('static rack exposes the original ads, native fragment paging, source and skate decks', async () => {
   const page = await getPage();
+  assert.equal(page.querySelector('[rel="canonical"]').href, base + rack);
+  const alias = await getPage('/ads/department/');
+  assert.equal(alias.querySelector('a').pathname, rack);
+  assert.match(alias.querySelector('meta[http-equiv="refresh" i]').content, /url=\/?ad-department\/$/i);
   assert.match(page.body.textContent, /El Segundo Auto Repair/);
   assert.ok(page.querySelector(`a[href="${deck}"]`));
   assert.ok(page.querySelector('a[href^="https://github.com/mhoydich/brutalist-motor-art"]'));

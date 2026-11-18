@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { join } from 'node:path';
 import { cwd } from 'node:process';
 import sharp from 'sharp';
-import { ads } from '../../../../lib/ad-department/registry';
+import { ads } from '../../../lib/ad-department/registry';
 
 export function getStaticPaths() {
   return ads.map(({ slug, title, art }) => ({ params: { slug }, props: { title, art } }));
