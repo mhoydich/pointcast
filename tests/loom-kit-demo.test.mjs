@@ -28,11 +28,7 @@ test('the static sketch labels four slots and keeps every missing demo readable'
     requested.push(path);
     throw new TypeError('Module unavailable');
   });
-  for (const base of ['https://pointcast.xyz/', 'https://raw.githack.com/mhoydich/pointcast/revision/public/']) {
-    const script = base + 'sketches/loom-kit/kit.mjs';
-    assert.deepEqual(requested.map(path => new URL(path, script).href).sort(),
-      names.map(name => base + `loom/kit/${name}.mjs`).sort());
-  }
+  assert.deepEqual(requested.sort(), names.map(name => `../../loom/kit/${name}.mjs`).sort());
   for (const name of names) {
     assert.equal(status(name).textContent.trim(), 'not built yet');
     assert.equal(status(name).hidden, false);
