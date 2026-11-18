@@ -3,17 +3,17 @@
  * src/lib/loom/share-card.mjs; this file reads the thread and rewrites tags.
  * Everything fails open: any error returns the static page untouched.
  */
-import { handleLoom } from '../../src/lib/loom/service.mjs';
+import { handleAtomicLoom } from '../../src/lib/loom/atomic.mjs';
 import { parseAddress } from '../../src/lib/loom/address.mjs';
 import { metaFor, summarize } from '../../src/lib/loom/share-card.mjs';
 
-export type LoomShareEnv = { PC_LOOM_KV?: KVNamespace; VISITS?: KVNamespace };
+export type LoomShareEnv = { PC_LOOM_KV?: KVNamespace; VISITS?: KVNamespace; AUTH_DB?: D1Database };
 
 /** Read a thread through the service itself (same kv binding as /api/loom). Null when missing or unreadable. */
 export async function readThread(origin: string, to: string, env: LoomShareEnv) {
   const kv = env.PC_LOOM_KV ?? env.VISITS ?? null;
-  if (!kv) return null;
-  const res = await handleLoom(new Request(`${origin}/api/loom?to=${encodeURIComponent(to)}`), { kv });
+  if (!env.AUTH_DB) return null;
+  const res = await handleAtomicLoom(new Request(`${origin}/api/loom?to=${encodeURIComponent(to)}`), { kv, db: env.AUTH_DB });
   if (!res.ok) return null;
   const data: any = await res.json();
   return data?.ok ? data : null;

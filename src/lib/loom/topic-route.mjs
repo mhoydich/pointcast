@@ -1,15 +1,17 @@
 /**
  * Thin request handlers for the topic front doors. They call the Loom's own
  * handleLoom with an internal GET, so there is no second storage path.
- * Functions in functions/loom/ pass the same kv binding as functions/api/loom.ts.
+ * Functions in functions/loom/ inject the atomic reader used by functions/api/loom.ts.
  */
 import { handleLoom } from './service.mjs';
+// Tests may supply legacy KV; production supplies the authoritative atomic reader.
+const read = (request, source) => typeof source === 'function' ? source(request) : handleLoom(request, { kv: source });
 import { buildSitemap, buildTopicIndex, buildTopicPage, canonicalTopicName, parseTopicName } from './topic-page.mjs';
 
 const API = 'https://pointcast.xyz/api/loom';
 const html = (body, status, cache, extra = {}) => new Response(body, { status, headers: {
   'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': cache, 'X-Content-Type-Options': 'nosniff', ...extra } });
-const internal = (query, kv) => handleLoom(new Request(`${API}${query}`), { kv });
+const internal = (query, kv) => read(new Request(`${API}${query}`), kv);
 
 export async function serveTopic(request, kv, rawName) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
@@ -34,10 +36,14 @@ async function directory(kv) {
 
 export async function serveTopicIndex(request, kv) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
-  return html(buildTopicIndex(await directory(kv)), 200, 'public, max-age=300');
+  const data = await directory(kv);
+  if (!data?.ok) return html('<p>The Loom is out of reach.</p>', 503, 'no-store');
+  return html(buildTopicIndex(data), 200, 'public, max-age=300');
 }
 
 export async function serveSitemap(request, kv) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
-  return new Response(buildSitemap(await directory(kv)), { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=900' } });
+  const data = await directory(kv);
+  if (!data?.ok) return new Response('The Loom is out of reach.', { status: 503, headers: { 'Cache-Control': 'no-store' } });
+  return new Response(buildSitemap(data), { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=900' } });
 }
