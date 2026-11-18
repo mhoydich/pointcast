@@ -201,6 +201,7 @@ export function buildTopicIndex(directory) {
 <main>
 <p class="crumb"><a href="/loom">the Loom</a> / topics</p>
 <h1>Loom topics</h1>
+<a href="/loom#directory">Open the live Loom</a>
 ${topics.length ? `<div id="topic-filter" hidden>
 <label for="topic-query">Filter topics by name or title</label>
 <input id="topic-query" type="search" aria-controls="topic-list">
@@ -231,7 +232,6 @@ ${topics.length ? `<ol id="topic-list">\n${items}\n</ol>
   document.getElementById('topic-filter').hidden = false;
 })();
 </script>` : '<div class="empty"><p>No topics yet. Start one by appending to a #name in the live Loom.</p></div>'}
-<p><a href="/loom#directory">Open the live Loom</a></p>
 <p class="foot">Protocol card <a href="/loom.json">/loom.json</a> · API <a href="/api/loom?kind=topic">/api/loom?kind=topic</a></p>
 </main>
 </body>

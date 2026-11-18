@@ -18,6 +18,10 @@ test('the server lists every topic before JavaScript and omits the control for a
   assert.ok(document.querySelector('#topic-filter').hidden);
   assert.equal(document.querySelector('[role=status]').textContent, '3 public topics');
   assert.deepEqual(visibleLinks(document), allLinks);
+  const shortcut = document.querySelector('a[href="/loom#directory"]');
+  const firstResult = document.querySelector('#topic-list a');
+  assert.equal(shortcut.closest('[hidden]'), null);
+  assert.ok(shortcut.compareDocumentPosition(firstResult) & document.defaultView.Node.DOCUMENT_POSITION_FOLLOWING);
   const empty = new JSDOM(buildTopicIndex({ logs: [] })).window.document;
   assert.equal(empty.querySelector('input'), null);
   assert.match(empty.body.textContent, /No topics yet/);
