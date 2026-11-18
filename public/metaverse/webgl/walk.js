@@ -2,7 +2,8 @@ const directionKeys = new Map([
   ['KeyW', 'forward'], ['ArrowUp', 'forward'],
   ['KeyS', 'backward'], ['ArrowDown', 'backward'],
   ['KeyA', 'left'], ['ArrowLeft', 'left'],
-  ['KeyD', 'right'], ['ArrowRight', 'right']
+  ['KeyD', 'right'], ['ArrowRight', 'right'],
+  ['KeyQ', 'turnLeft'], ['KeyE', 'turnRight']
 ]);
 const directions = {
   forward: [0, 1], backward: [0, -1], left: [-1, 0], right: [1, 0]
@@ -24,6 +25,7 @@ export function makeWalk(THREE, camera, canvas, { onMove, canMove = () => true }
   const speed = 7.5;
   const stepDistance = 1.35;
   const lookSensitivity = 0.005;
+  const turnSpeed = Math.PI / 2;
   const maxPitch = Math.PI / 2 - 0.06;
   let started = false;
   let active = false;
@@ -56,8 +58,6 @@ export function makeWalk(THREE, camera, canvas, { onMove, canMove = () => true }
 
   function keydown(event) {
     if (!directionKeys.has(event.code) || event.ctrlKey || event.altKey || event.metaKey) return;
-    const target = event.target;
-    if (target?.isContentEditable || target?.matches?.('input, select, textarea')) return;
     event.preventDefault();
     if (held.has(event.code)) return;
     held.add(event.code);
@@ -103,8 +103,8 @@ export function makeWalk(THREE, camera, canvas, { onMove, canMove = () => true }
     if (drag?.id === event.pointerId) drag = null;
   }
 
-  const viewEvents = { keydown, keyup, blur: clearInput, pointerup: pointerend, pointercancel: pointerend };
-  const canvasEvents = { pointerdown, pointermove, pointerup: pointerend, pointercancel: pointerend, lostpointercapture: pointerend };
+  const viewEvents = { blur: clearInput, pointerup: pointerend, pointercancel: pointerend };
+  const canvasEvents = { keydown, keyup, blur: clearInput, pointerdown, pointermove, pointerup: pointerend, pointercancel: pointerend, lostpointercapture: pointerend };
 
   function listen(method) {
     for (const [type, callback] of Object.entries(viewEvents)) view[method](type, callback);
@@ -182,7 +182,13 @@ export function makeWalk(THREE, camera, canvas, { onMove, canMove = () => true }
     const pressed = new Set(Array.from(held, code => directionKeys.get(code)));
     const right = Number(pressed.has('right')) - Number(pressed.has('left'));
     const forward = Number(pressed.has('forward')) - Number(pressed.has('backward'));
-    move(right, forward, Math.min(delta, 0.05) * speed);
+    const dt = Math.min(delta, 0.05);
+    const turning = Number(pressed.has('turnRight')) - Number(pressed.has('turnLeft'));
+    if (turning) {
+      yaw += turning * turnSpeed * dt;
+      pointCamera();
+    }
+    move(right, forward, dt * speed);
   }
 
   return {

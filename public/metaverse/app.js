@@ -12,7 +12,7 @@ async function startMetaverse() {
     el('step-pad').hidden = !walking;
     el('orbit-tools').hidden = walking;
     el('projection').textContent = walking ? 'STREET LEVEL' : 'WEBGL / ORBIT';
-    el('city-hint').textContent = walking ? 'WASD or arrows to walk · Drag to look' : 'Drag to orbit · Pinch or scroll to zoom';
+    el('city-hint').textContent = walking ? 'WASD to move · Q/E to turn · Drag to look' : 'Drag to orbit · Pinch or scroll to zoom';
     el('focus-plate').textContent = walking ? 'Walk to this building' : 'View building up close';
   }
   try {
