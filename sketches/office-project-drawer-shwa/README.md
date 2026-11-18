@@ -82,3 +82,14 @@ server/API secrets or database dependencies.
 compiles the exact route and checks its output/bundled script/embedded JSON. The
 focused GitHub workflow also runs the model and mocked DOM tests. Visual QA and
 independent release review remain separate gates.
+
+## Mac browser QA follow-up
+
+Generated `/office/project/` at `434a86dfa0edd30be7b6f00246f9264c0514c82e`
+passed desktop 1280×800 and emulated 390×844 visual inspection: no visual blocker,
+no overflow, scrolling, native modal, Close/Escape/focus return, repeated refresh,
+close-during-refresh and canceled-read retention. Reported DONE, stale source,
+checked merge and unknown production remained distinct. This is not a physical-phone
+check. Separate offline/HTTP-error/timeout browser cases and exact request counts
+were not tested. Later copy-only changes label fresh reports `recent` and retained
+reads `last available report`; model, DOM and route compilation are rerun for them.

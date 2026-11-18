@@ -4,7 +4,7 @@ const drawer = $('drawer'); let data, report, active;
 const link = (id,url) => { const el=$(id); const safe=safeUrl(url); if(safe){el.href=safe;el.hidden=false;}else{el.removeAttribute('href');el.hidden=true;} };
 function render(){
   const v=view(data,report,new Date().toISOString());
-  for(const [id,value] of Object.entries({reported:v.reported,'report-age':v.reportFreshness,'evidence-age':v.evidenceFreshness,merge:v.merge,tests:v.tests,deployment:v.deployment})) $(id).textContent=value;
+  for(const [id,value] of Object.entries({reported:v.reported,'report-age':v.reportFreshness === 'checked' ? 'recent' : v.reportFreshness,'evidence-age':v.evidenceFreshness,merge:v.merge,tests:v.tests,deployment:v.deployment})) $(id).textContent=value;
   $('reporter').textContent=report?.source?.by?.name || 'No retained source';
   $('reported-at').textContent=report?.source?.at ? `Reported ${report.source.at}` : 'Report time unknown';
   link('report-link', report?.source?.id ? `https://pointcast.xyz/loom?to=${encodeURIComponent(`loom:${data.project.roomKey}#${report.source.id}`)}` : null);
@@ -28,7 +28,7 @@ $('refresh').addEventListener('click',async()=>{
     if(!next)throw new Error('missing');
     if(controller.signal.aborted)return;
     report=next;render();$('read-state').textContent=`Public report read ${new Date().toISOString()}. Checked release evidence has not changed.`;
-  }catch{ $('read-state').textContent='Could not refresh. Showing the saved report; no live state claimed.'; }
+  }catch{ $('read-state').textContent='Could not refresh. Showing the last available report; no live state claimed.'; }
   finally{clearTimeout(timer);active=null;$('refresh').disabled=false;}
 });
 try{
