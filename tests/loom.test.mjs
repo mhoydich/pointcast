@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAddress, extractAddresses, addressKey } from '../src/lib/loom/address.mjs';
 import { fold } from '../src/lib/loom/fold.mjs';
-import { handleLoom, MAX_ROOMS } from '../src/lib/loom/service.mjs';
+import { handleLoom, MAX_OPS, MAX_ROOMS } from '../src/lib/loom/service.mjs';
 
 function memoryKv() {
   const map = new Map();
@@ -413,4 +413,69 @@ test('C8: over the room cap, a flood of new inboxes never pushes a topic out', a
   assert.equal(rooms.length, MAX_ROOMS);
   assert.ok(rooms.some((e) => e.address === '#quiet'));
   assert.ok(rooms.some((e) => e.address === '@newcomer'));
+});
+
+test('item 31: messages trimmed from the live log are archived first and can be paged back', async () => {
+  const kv = memoryKv();
+  const first = await (await post(kv, { to: '#deep', from: alice, body: 'post 1, the oldest' })).json();
+  await post(kv, { action: 'edit', to: first.address, token: first.editToken, body: 'post 1, edited before it left' });
+  const N = MAX_OPS + 60;
+  // Fill past the cap by writing the stored log directly (601 real posts would trip the rate limiter).
+  const key = `loom:log:${first.address.split('#')[0].slice(5)}`;
+  const stored = JSON.parse(kv.map.get(key));
+  for (let i = stored.seq + 1; i <= N; i += 1) stored.ops.push({ op: 'append', id: `m_fill${i}`, from: alice, kind: 'note', body: `post ${i}`, seq: i, at: '2026-11-18T00:00:00.000Z' });
+  stored.seq = N;
+  kv.map.set(key, JSON.stringify(stored));
+  // The next real append triggers the trim.
+  const last = await post(kv, { to: '#deep', from: alice, body: 'the newest post' });
+  assert.equal(last.status, 201);
+  const live = await get(kv, '?to=%23deep');
+  assert.equal(live.ops.length, MAX_OPS);
+  assert.equal(live.log.trimmedBefore, N + 1 - MAX_OPS + 1);
+  assert.equal(live.log.archivedFrom, 1);
+  assert.ok(!live.messages.some((m) => m.seq === 1), 'the oldest post has left the live log');
+
+  // Page back from the edge of the live log: every trimmed append is there, none twice, none lost.
+  const seen = [];
+  let before = live.log.trimmedBefore;
+  for (let guard = 0; guard < 10 && before; guard += 1) {
+    const page = (await get(kv, `?to=%23deep&before=${before}`)).archive;
+    assert.ok(page.messages.length <= 40);
+    seen.push(...page.messages);
+    before = page.more ? page.nextBefore : 0;
+  }
+  const seqs = seen.map((m) => m.seq).sort((a, b) => a - b);
+  // seq 2 is the edit op, not a message, so it has no archive entry of its own.
+  const expected = [1]; for (let s = 3; s < live.log.trimmedBefore; s += 1) expected.push(s);
+  assert.deepEqual(seqs, expected);
+  const oldest = seen.find((m) => m.seq === 1);
+  assert.equal(oldest.body, 'post 1, edited before it left', 'the archive holds the final edited text');
+  assert.equal(oldest.tokenHash, undefined, 'no edit-token hash leaves the server');
+  assert.ok(!JSON.stringify(seen).includes('tokenHash'));
+});
+
+test('item 31: a hidden message leaves a tombstone, and a failed archive write trims nothing', async () => {
+  const kv = memoryKv();
+  const first = await (await post(kv, { to: '#deep2', from: alice, body: 'this one gets hidden' })).json();
+  const key = `loom:log:${first.address.split('#')[0].slice(5)}`;
+  const stored = JSON.parse(kv.map.get(key));
+  stored.ops.push({ op: 'hide', id: first.message.id, reason: 'moderated', seq: 2, at: '2026-11-18T00:00:00.000Z' });
+  for (let i = 3; i <= MAX_OPS + 5; i += 1) stored.ops.push({ op: 'append', id: `m_fill${i}`, from: alice, kind: 'note', body: `post ${i}`, seq: i, at: '2026-11-18T00:00:00.000Z' });
+  stored.seq = MAX_OPS + 5;
+  kv.map.set(key, JSON.stringify(stored));
+
+  // Archive writes fail: the append still succeeds and the live log keeps everything.
+  const flaky = { map: kv.map, get: kv.get, put: async (k, v) => { if (k.startsWith('loom:arch:')) throw new Error('kv down'); kv.map.set(k, v); } };
+  assert.equal((await post(flaky, { to: '#deep2', from: alice, body: 'written while the archive is down' })).status, 201);
+  const kept = await get(kv, '?to=%23deep2');
+  assert.equal(kept.ops.length, MAX_OPS + 6);
+  assert.equal(kept.log.trimmedBefore, null);
+
+  // Archive back up: the next append trims, and the hidden message does not come back through the archive.
+  assert.equal((await post(kv, { to: '#deep2', from: alice, body: 'archive is back' })).status, 201);
+  const live = await get(kv, '?to=%23deep2');
+  assert.equal(live.ops.length, MAX_OPS);
+  const page = (await get(kv, `?to=%23deep2&before=${live.log.trimmedBefore}`)).archive;
+  assert.ok(!page.messages.some((m) => m.id === first.message.id));
+  assert.ok(!JSON.stringify(page).includes('this one gets hidden'));
 });

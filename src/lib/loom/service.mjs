@@ -105,13 +105,49 @@ async function loadLogByKey(kv, key) {
   for (const address of Object.keys(SEEDS)) if (await addressKey(address) === key) return seedLog(address, key);
   return null;
 }
+const archiveKey = (key, seq) => `loom:arch:${key}:${seq}`;
+/**
+ * Keep the live log at MAX_OPS for speed, but never drop a message on the floor: before the oldest
+ * ops are trimmed, each trimmed message is written to its own archive key in its final public form
+ * (folded with every later edit, +1, vote and hide still in the log; a hidden one leaves a tombstone).
+ * One key per message means no read-modify-write, so two racing writers store the same value.
+ * If the archive write fails, nothing is trimmed and the next save tries again.
+ */
 async function saveLog(kv, log) {
   if (log.ops.length > MAX_OPS) {
-    log.trimmedBefore = log.ops[log.ops.length - MAX_OPS].seq;
-    log.ops = log.ops.slice(-MAX_OPS);
+    const cut = log.ops.length - MAX_OPS;
+    const leaving = log.ops.slice(0, cut).filter((op) => op.op === 'append');
+    let archived = true;
+    if (leaving.length) {
+      try {
+        const final = new Map(fold(log.ops).messages.map((m) => [m.id, m]));
+        await Promise.all(leaving.map((op) => {
+          const m = final.get(op.id);
+          return writeJson(kv, archiveKey(log.key, op.seq), m ? { ...m, parent: op.parent ?? null } : { id: op.id, seq: op.seq, hidden: true });
+        }));
+        log.archivedFrom ??= leaving[0].seq;
+      } catch { archived = false; }
+    }
+    if (archived) {
+      log.trimmedBefore = log.ops[cut].seq;
+      log.ops = log.ops.slice(cut);
+    }
   }
   delete log.seed;
   await writeJson(kv, `loom:log:${log.key}`, log);
+}
+/** One page of archived messages older than `before`, newest page first. Bounded so a read stays well inside a Worker's subrequest budget. */
+export const ARCHIVE_PAGE = 40;
+async function archivePage(kv, log, before, limit) {
+  const top = Math.min(before, log.trimmedBefore ?? 0); // exclusive
+  const floor = log.archivedFrom ?? top;
+  const from = Math.max(floor, top - Math.min(ARCHIVE_PAGE, Math.max(1, limit || ARCHIVE_PAGE)));
+  const seqs = [];
+  for (let seq = from; seq < top; seq += 1) seqs.push(seq);
+  const got = kv ? await Promise.all(seqs.map((seq) => readJson(kv, archiveKey(log.key, seq), null))) : [];
+  const messages = got.filter((m) => m && !m.hidden);
+  const more = from > floor;
+  return { from, to: top - 1, messages, count: messages.length, more, ...(more ? { nextBefore: from } : {}) };
 }
 function pushOp(log, op, now) {
   log.seq += 1;
@@ -192,7 +228,7 @@ function publicView(log, { since = 0, onlyNew = false } = {}) {
   const newer = folded.messages.filter((m) => m.seq > since || touched.has(m.id));
   return {
     log: { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, createdAt: log.createdAt, updatedAt: log.updatedAt,
-      reply: `loom:${log.key}#<message id>`, url: `${SITE}/loom?to=${encodeURIComponent(log.address)}`, trimmedBefore: log.trimmedBefore ?? null, seed: !!log.seed },
+      reply: `loom:${log.key}#<message id>`, url: `${SITE}/loom?to=${encodeURIComponent(log.address)}`, trimmedBefore: log.trimmedBefore ?? null, archivedFrom: log.archivedFrom ?? null, seed: !!log.seed },
     seq: log.seq, ops, messages: onlyNew ? newer : folded.messages, count: folded.count, participants: folded.participants,
     ...(since ? { since, newCount: newer.length } : {}),
   };
@@ -563,6 +599,12 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         const format = url.searchParams.get('format');
         if (format === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8', 'Cache-Control': READ_CACHE });
         if (format === 'rss') return new Response(asRss(log), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
+        // before=<seq> pages back into the archive: messages trimmed from the live log, oldest kept forever.
+        const before = Math.max(0, Number(url.searchParams.get('before')) || 0);
+        if (before > 0) {
+          const archive = await archivePage(kv, log, before, Number(url.searchParams.get('limit')) || 0);
+          return json({ ok: true, spec: SPEC, kvBound: !!kv, log: { address: log.address, key: log.key, trimmedBefore: log.trimmedBefore ?? null, archivedFrom: log.archivedFrom ?? null }, archive }, 200, { 'Cache-Control': READ_CACHE });
+        }
         const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
         // since= alone keeps the whole folded thread in `messages` (the /loom page patches from it);
         // only=new (what the MCP tool sends) trims `messages` to seq > since.
