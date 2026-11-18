@@ -1,17 +1,11 @@
 import { mountSoundDemo } from './sound-demo.mjs';
 
-const modules = {
-  sound: '../../loom/kit/sound.mjs',
-  motion: '../../loom/kit/motion.mjs',
-  flame: '../../loom/kit/flame.mjs',
-  'card-stack': '../../loom/kit/card-stack.mjs',
-};
-
 // The phone preview combines the shell with its component owners' immutable PR heads.
 const previewHeads = {
   sound: 'fefc09da6210de06a87f4eff6b6eab892f0eade3',
   motion: 'dd5bc90659b691543a73936da813ecbea250b263',
   flame: 'f5787a1d1ac5113ab10268f0fe267dd2694d75e0',
+  'card-stack': 'df301ad1549c933c9c6d8cb08d4b4e0673e7c6fc',
 };
 
 export function mountKit(root, loadModule = path => import(path)) {
@@ -24,7 +18,16 @@ export function mountKit(root, loadModule = path => import(path)) {
     if (!event.persisted) lifetime.abort();
   }, { signal });
 
-  return Promise.all(Object.entries(modules).map(async ([name, path]) => {
+  function modulePath(name) {
+    return preview
+      ? `https://raw.githack.com/mhoydich/pointcast/${previewHeads[name]}/public/loom/kit/${name}.mjs`
+      : `../../loom/kit/${name}.mjs`;
+  }
+  const stackOptions = preview ? {
+    kit: { sound: modulePath('sound'), motion: modulePath('motion'), flame: modulePath('flame') },
+  } : undefined;
+
+  return Promise.all(Object.keys(previewHeads).map(async name => {
     const slot = root.querySelector(`[data-kit-slot="${name}"]`);
     const status = slot?.querySelector('[data-kit-status]');
     const content = slot?.querySelector('[data-kit-content]');
@@ -32,11 +35,7 @@ export function mountKit(root, loadModule = path => import(path)) {
 
     let demo;
     try {
-      const head = preview && previewHeads[name];
-      const source = head
-        ? `https://raw.githack.com/mhoydich/pointcast/${head}/public/loom/kit/${name}.mjs`
-        : path;
-      demo = await loadModule(source);
+      demo = await loadModule(modulePath(name));
     } catch (error) {
       // Browsers reject missing optional module URLs with a TypeError.
       if (!signal.aborted && !(error instanceof TypeError)) status.textContent = 'Demo couldn’t load.';
@@ -47,7 +46,7 @@ export function mountKit(root, loadModule = path => import(path)) {
     try {
       const cleanup = name === 'sound' && typeof demo.mountDemo !== 'function'
         ? mountSoundDemo(content, demo)
-        : await demo.mountDemo(content);
+        : await demo.mountDemo(content, name === 'card-stack' ? stackOptions : undefined);
       if (signal.aborted) {
         if (typeof cleanup === 'function') cleanup();
         return;

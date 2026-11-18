@@ -98,7 +98,7 @@ test('only the same-repository phone preview loads the submitted component revis
     raw + 'fefc09da6210de06a87f4eff6b6eab892f0eade3/public/loom/kit/sound.mjs',
     raw + 'dd5bc90659b691543a73936da813ecbea250b263/public/loom/kit/motion.mjs',
     raw + 'f5787a1d1ac5113ab10268f0fe267dd2694d75e0/public/loom/kit/flame.mjs',
-    '../../loom/kit/card-stack.mjs',
+    raw + 'df301ad1549c933c9c6d8cb08d4b4e0673e7c6fc/public/loom/kit/card-stack.mjs',
   ];
   for (const [url, expected] of [
     [raw + 'shell-head' + route, submitted],
@@ -109,11 +109,19 @@ test('only the same-repository phone preview loads the submitted component revis
   ]) {
     const { document } = openSketch(url);
     const loaded = [];
+    const mountOptions = {};
     await mountKit(document, path => {
       loaded.push(path);
-      throw new TypeError('Missing');
+      return { mountDemo(container, options) {
+        mountOptions[container.closest('[data-kit-slot]').dataset.kitSlot] = options;
+      } };
     });
     assert.deepEqual(loaded.sort(), [...expected].sort());
+    const [sound, motion, flame] = submitted;
+    assert.deepEqual(mountOptions, {
+      sound: undefined, motion: undefined, flame: undefined,
+      'card-stack': expected === submitted ? { kit: { sound, motion, flame } } : undefined,
+    });
   }
 });
 
