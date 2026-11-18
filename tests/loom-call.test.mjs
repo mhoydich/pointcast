@@ -72,3 +72,20 @@ test('rejects preview writes, missing names, and a receipt for the wrong parent'
     message: { id: 'm_receipt01', parent: 'm_other123' },
   })), /Unconfirmed Loom answer/);
 });
+
+test('call companion explains its manual, decision-only scope and always offers the full inbox', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const html = await readFile(new URL('../public/loom/call/index.html', import.meta.url), 'utf8');
+  assert.match(html, /does not connect to, listen to, or transcribe your call/);
+  assert.match(html, /Your spoken answers are not posted here/);
+  assert.match(html, /Only items marked as needing Mike’s decision appear here/);
+  assert.match(html, /href="https:\/\/pointcast.xyz\/loom\/for\/mike">Open Mike’s full Loom inbox/);
+  assert.match(html, /This can take up to 12 seconds/);
+});
+
+test('an empty decision pile is valid even with messages elsewhere in the inbox', async () => {
+  const asks = await readCallAsks('/api/loom', async () => Response.json({
+    ok: true, owner: '@mike', piles: { needsYes: [], people: [{ snippet: 'Other conversation' }] },
+  }));
+  assert.deepEqual(asks, []);
+});
