@@ -97,7 +97,7 @@ test('only the same-repository phone preview loads the submitted component revis
   const submitted = [
     raw + 'fefc09da6210de06a87f4eff6b6eab892f0eade3/public/loom/kit/sound.mjs',
     raw + 'dd5bc90659b691543a73936da813ecbea250b263/public/loom/kit/motion.mjs',
-    raw + 'fb24cd9c3f4b1607d62b58f7b30777f692fa28c0/public/loom/kit/flame.mjs',
+    raw + 'f5787a1d1ac5113ab10268f0fe267dd2694d75e0/public/loom/kit/flame.mjs',
     '../../loom/kit/card-stack.mjs',
   ];
   for (const [url, expected] of [

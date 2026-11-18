@@ -11,7 +11,7 @@ const modules = {
 const previewHeads = {
   sound: 'fefc09da6210de06a87f4eff6b6eab892f0eade3',
   motion: 'dd5bc90659b691543a73936da813ecbea250b263',
-  flame: 'fb24cd9c3f4b1607d62b58f7b30777f692fa28c0',
+  flame: 'f5787a1d1ac5113ab10268f0fe267dd2694d75e0',
 };
 
 export function mountKit(root, loadModule = path => import(path)) {
