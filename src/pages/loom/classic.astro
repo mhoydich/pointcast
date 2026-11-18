@@ -509,7 +509,14 @@ const jsonLd = {
     try {
       const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
       const data = await res.json();
-      if (!data.ok) { status(`Declined: ${String(data.error).replace(/_/g, ' ')}.`, true); return; }
+      if (!data.ok) {
+        const wait = Math.ceil(Number(data.retryAfterSec));
+        const message = data.error === 'rate_limited' && Number.isFinite(wait) && wait > 0
+          ? `Posting limit reached. Try again in ${wait} ${wait === 1 ? 'second' : 'seconds'}.`
+          : `Declined: ${String(data.error).replace(/_/g, ' ')}.`;
+        status(message, true);
+        return;
+      }
       tokens[`${data.address.slice(5).split('#')[0]}#${data.message.id}`] = data.editToken;
       store.set('tokens', tokens);
       ($('[data-body]') as HTMLTextAreaElement).value = '';
