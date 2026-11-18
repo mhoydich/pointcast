@@ -1,3 +1,4 @@
+import { addFullRequest } from './full-request.mjs';
 import { BOARD, MAX_REPLY, OWNER, blockedPulls, endpoints, inbox, postReply, threadUrl } from './phone.mjs';
 
 const { api, canPost } = endpoints(location);
@@ -53,6 +54,7 @@ function drawCard(row, group) {
     }
     if (note.prs.length) card.append(links);
   }
+  if (group === 'gates' && row.text.endsWith('…')) addFullRequest(card, row.target, read);
   card.append(link('Open thread', threadUrl(row.target)));
   if (!canPost) return card;
 
