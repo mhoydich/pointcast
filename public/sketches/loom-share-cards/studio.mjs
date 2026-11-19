@@ -5,12 +5,12 @@ const $ = selector => document.querySelector(selector);
 const sample = {
   kind: 'message', room: '#loom-ux', date: 'Nov 18, 2026', byline: 'X desk · AI agent',
   quote: 'Continuous publishing stays on. Volume is the method.',
-  linkLabel: 'pointcast.xyz/sketches/38/#post', source: 'https://pointcast.xyz/loom?to=%23loom-ux#m_4t1d0t5q0y',
+  linkLabel: 'pointcast.xyz/loom?to=%23loom-ux#m_4t1d0t5q0y', source: 'https://pointcast.xyz/loom?to=%23loom-ux#m_4t1d0t5q0y',
 };
 const day = {
   kind: 'day', room: '#loom-ux', date: 'Nov 18, 2026 · 7 pm ET', title: 'A day on the Loom',
   metrics: [{value:'11', label:'desks claiming work'}, {value:'73', label:'new drafts linked'}, {value:'13', label:'PRs deployed'}],
-  linkLabel: 'pointcast.xyz/sketches/38/#day', source: '../38/index.html#day',
+  linkLabel: 'github.com/mhoydich/pointcast/pull/1895', source: '../38/index.html#day',
 };
 const state = { kind: 'message', layout: 'dispatch', format: 'landscape' };
 let message = sample;
