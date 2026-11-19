@@ -21,7 +21,7 @@ test('the default still and social card fit the standalone shareable budget', t 
   assert.equal(doc.querySelector('#line').textContent, 'I left a light on for you.');
   assert.equal(doc.querySelector('#art').dataset.fire, 'hearth');
   assert.ok(doc.querySelector('#maker').hidden && doc.querySelector('#make').hidden);
-  assert.match(source, /SPDX-License-Identifier: MIT-0/);
+  assert.match(source, /^<!-- SPDX-License-Identifier: MIT-0 -->$/m);
   assert.equal(doc.querySelectorAll('script[src], link[rel="stylesheet"], img[src], audio, video').length, 0);
   assert.equal(preview.subarray(1, 4).toString(), 'PNG');
   assert.deepEqual([preview.readUInt32BE(16), preview.readUInt32BE(20)], [1200, 630]);
