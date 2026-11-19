@@ -457,6 +457,26 @@ test('quoting or naming the confirm card does not turn a note into a decision', 
   assert.equal(result.rest.count, notes.length);
 });
 
+test('feed titles stay ordinary notes, while requests about a feed still need a decision', () => {
+  const source = 'The For You alerts note and the current People/Needs your yes RSS are useful sources.';
+  const examples = [
+    [source, false],
+    ['Read from **Needs your yes** RSS for this report.', false],
+    ['Subscribe to Needs your yes feeds through RSS.', false],
+    ['Background source: People / Needs your yes.', false],
+    ['Read Needs your yes / New arrivals for context.', false],
+    ['The rollout still needs your yes. ' + source, true],
+    [source + '\nThe RSS feed itself needs your yes to launch.', true],
+    ['The change needs your yes\nRSS feed: see the preview.', true],
+    ['NEEDS MIKE · May we include the People/Needs your yes RSS?', true],
+  ];
+  for (const [body, expected] of examples) {
+    const relay = msg(agent('Launch'), body, 2);
+    const result = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#loom-ux', 'k', [relay])] });
+    assert.deepEqual(result.piles.needsYes.map((item) => item.id), expected ? [relay.id] : [], body);
+  }
+});
+
 test('new count includes unanswered inbox notes and deduplicates items also in a pile', () => {
   const a = msg(agent('Desk'), 'Please look', 1);
   const b = msg(human('Sam'), 'Hello', 2);

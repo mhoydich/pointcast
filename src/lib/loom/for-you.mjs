@@ -56,12 +56,13 @@ const QUOTED_TEXT = /“[^”]*”|"[^"\n]*"|‘[^’\n]*’|(?<!\w)'[^'\n]+'(?!
 const EMPHASIZED_LABEL = /(\*{1,3}|_{1,3})(needs your yes)\1/gi;
 // Keep context on the same line: “Card:” can start a new line after a genuine ask.
 const LABEL_PREFIX = /\b(?:the|under|called|named|labelled|labeled|titled|nothing|(?:items?|entr(?:y|ies)|rows?|cards?|requests?|nothing)[ \t]+in)[ \t]+needs your yes\b/gi;
-const LABEL_SUFFIX = /\bneeds your yes[ \t]+(?:(?:confirm|decision)[ \t]+)?(?:cards?|piles?|sections?|labels?|buttons?|tiles?|tabs?)\b/gi;
+const LABEL_SUFFIX = /\bneeds your yes[ \t]+(?:(?:confirm|decision)[ \t]+)?(?:cards?|piles?|sections?|labels?|buttons?|tiles?|tabs?|feeds?|digests?|rss|atom)\b/gi;
+const PAIRED_PILE_TITLES = /\b(?:people|new arrivals)[ \t]*\/[ \t]*needs your yes\b|\bneeds your yes[ \t]*\/[ \t]*(?:people|new arrivals)\b/gi;
 function asksForGoAhead(body, phrases) {
   const text = String(body ?? '').replace(EMPHASIZED_LABEL, '$2');
   if (!phrases.some((re) => re.test(text))) return false;
   const prose = text.replace(MARKDOWN_QUOTE_OR_CODE, '…').replace(QUOTED_TEXT, '…')
-    .replace(LABEL_PREFIX, '…').replace(LABEL_SUFFIX, '…');
+    .replace(PAIRED_PILE_TITLES, '…').replace(LABEL_PREFIX, '…').replace(LABEL_SUFFIX, '…');
   return prose === text || phrases.some((re) => re.test(prose));
 }
 
