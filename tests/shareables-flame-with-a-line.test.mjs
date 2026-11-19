@@ -23,6 +23,9 @@ test('the default still and social card fit the standalone shareable budget', t 
   assert.ok(doc.querySelector('#maker').hidden && doc.querySelector('#make').hidden);
   assert.match(source, /^<!-- SPDX-License-Identifier: MIT-0 -->$/m);
   assert.equal(doc.querySelectorAll('script[src], link[rel="stylesheet"], img[src], audio, video').length, 0);
+  const image = doc.querySelector('meta[property="og:image"]').content;
+  assert.match(image, /^https:\/\/raw\.githubusercontent\.com\/mhoydich\/pointcast\/[a-f0-9]{40}\/public\/sketches\/shareables\/flame-with-a-line\/preview\.png$/);
+  assert.equal(doc.querySelector('meta[name="twitter:image"]').content, image);
   assert.equal(preview.subarray(1, 4).toString(), 'PNG');
   assert.deepEqual([preview.readUInt32BE(16), preview.readUInt32BE(20)], [1200, 630]);
   assert.ok(Buffer.byteLength(source) + preview.length < 60_000);
