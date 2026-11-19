@@ -23,7 +23,7 @@ test('Back and Forward restore studies and records across pending room reads', a
     const data = {ok:true,log:{address:room},messages:['m_one','m_two','m_three'].map((id,index) => ({
       id, seq:index+1, at:'2026-11-18T10:00:00Z', body:room + ' ' + id
     }))};
-    return new Promise(resolve => pending.push({room,signal,finish:() => resolve(Response.json(data))}));
+    return new Promise(resolve => pending.push({room,signal,finish:(status = 200) => resolve(Response.json(data,{status}))}));
   });
   const tick = () => new Promise(resolve => setImmediate(resolve));
   const at = () => new URL(window.location.href);
@@ -68,5 +68,17 @@ test('Back and Forward restore studies and records across pending room reads', a
   assert.equal(el('#record-body').textContent,'#metaverse m_one');
   assert.equal(at().searchParams.get('src'),'desk');
   assert.equal(at().hash,'#reader');
+  assert.equal(window.history.length,length+2);
+
+  await traverse('back');
+  pending.shift().finish(503);
+  await tick();
+  assert.equal(el('#record-author').textContent,'Room unavailable');
+  assert.equal(at().searchParams.get('record'),'m_three');
+  el('#refresh').click();
+  pending.shift().finish();
+  await tick();
+  assert.equal(el('#record-body').textContent,'#grokbot m_three');
+  assert.equal(at().searchParams.get('record'),'m_three');
   assert.equal(window.history.length,length+2);
 });

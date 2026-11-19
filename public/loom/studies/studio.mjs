@@ -320,7 +320,10 @@ el('room').onchange = event => {
   saveView(true,address,null);
   void read(address);
 };
-el('refresh').onclick = () => void read(room,true);
+el('refresh').onclick = () => {
+  if (roomModel) void read(room,true);
+  else restoreView();
+};
 el('prev').onclick = () => move(-1);
 el('next').onclick = () => move(1);
 el('rotate-left').onclick = () => renderer?.rotate?.(-.32);
