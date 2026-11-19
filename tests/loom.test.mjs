@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAddress, extractAddresses, addressKey } from '../src/lib/loom/address.mjs';
 import { fold } from '../src/lib/loom/fold.mjs';
-import { handleLoom, MAX_ROOMS } from '../src/lib/loom/service.mjs';
+import { handleLoom, MAX_OPS, MAX_ROOMS } from '../src/lib/loom/service.mjs';
 
 function memoryKv() {
   const map = new Map();
@@ -413,4 +413,141 @@ test('C8: over the room cap, a flood of new inboxes never pushes a topic out', a
   assert.equal(rooms.length, MAX_ROOMS);
   assert.ok(rooms.some((e) => e.address === '#quiet'));
   assert.ok(rooms.some((e) => e.address === '@newcomer'));
+});
+
+test('item 31: messages trimmed from the live log are archived first and can be paged back', async () => {
+  const kv = memoryKv();
+  const first = await (await post(kv, { to: '#deep', from: alice, body: 'post 1, the oldest' })).json();
+  await post(kv, { action: 'edit', to: first.address, token: first.editToken, body: 'post 1, edited before it left' });
+  const N = MAX_OPS + 40; // under ARCHIVE_BATCH, so one save drains it
+  // Fill past the cap by writing the stored log directly (601 real posts would trip the rate limiter).
+  const key = `loom:log:${first.address.split('#')[0].slice(5)}`;
+  const stored = JSON.parse(kv.map.get(key));
+  for (let i = stored.seq + 1; i <= N; i += 1) stored.ops.push({ op: 'append', id: `m_fill${i}`, from: alice, kind: 'note', body: `post ${i}`, seq: i, at: '2026-11-18T00:00:00.000Z' });
+  stored.seq = N;
+  kv.map.set(key, JSON.stringify(stored));
+  // The next real append triggers the trim.
+  const last = await post(kv, { to: '#deep', from: alice, body: 'the newest post' });
+  assert.equal(last.status, 201);
+  const live = await get(kv, '?to=%23deep');
+  assert.equal(live.ops.length, MAX_OPS);
+  assert.equal(live.log.trimmedBefore, N + 1 - MAX_OPS + 1);
+  assert.equal(live.log.archivedFrom, 1);
+  assert.ok(!live.messages.some((m) => m.seq === 1), 'the oldest post has left the live log');
+
+  // Page back from the edge of the live log: every trimmed append is there, none twice, none lost.
+  const seen = [];
+  let before = live.log.trimmedBefore;
+  for (let guard = 0; guard < 10 && before; guard += 1) {
+    const page = (await get(kv, `?to=%23deep&before=${before}`)).archive;
+    assert.ok(page.messages.length <= 40);
+    seen.push(...page.messages);
+    before = page.more ? page.nextBefore : 0;
+  }
+  const seqs = seen.map((m) => m.seq).sort((a, b) => a - b);
+  // seq 2 is the edit op, not a message, so it has no archive entry of its own.
+  const expected = [1]; for (let s = 3; s < live.log.trimmedBefore; s += 1) expected.push(s);
+  assert.deepEqual(seqs, expected);
+  const oldest = seen.find((m) => m.seq === 1);
+  assert.equal(oldest.body, 'post 1, edited before it left', 'the archive holds the final edited text');
+  assert.equal(oldest.tokenHash, undefined, 'no edit-token hash leaves the server');
+  assert.ok(!JSON.stringify(seen).includes('tokenHash'));
+});
+
+test('item 31: a hidden message leaves a tombstone, and a failed archive write trims nothing', async () => {
+  const kv = memoryKv();
+  const first = await (await post(kv, { to: '#deep2', from: alice, body: 'this one gets hidden' })).json();
+  const key = `loom:log:${first.address.split('#')[0].slice(5)}`;
+  const stored = JSON.parse(kv.map.get(key));
+  stored.ops.push({ op: 'hide', id: first.message.id, reason: 'moderated', seq: 2, at: '2026-11-18T00:00:00.000Z' });
+  for (let i = 3; i <= MAX_OPS + 5; i += 1) stored.ops.push({ op: 'append', id: `m_fill${i}`, from: alice, kind: 'note', body: `post ${i}`, seq: i, at: '2026-11-18T00:00:00.000Z' });
+  stored.seq = MAX_OPS + 5;
+  kv.map.set(key, JSON.stringify(stored));
+
+  // Archive writes fail: the append still succeeds and the live log keeps everything.
+  const flaky = { map: kv.map, get: kv.get, put: async (k, v) => { if (k.startsWith('loom:arch:')) throw new Error('kv down'); kv.map.set(k, v); } };
+  assert.equal((await post(flaky, { to: '#deep2', from: alice, body: 'written while the archive is down' })).status, 201);
+  const kept = await get(kv, '?to=%23deep2');
+  assert.equal(kept.ops.length, MAX_OPS + 6);
+  assert.equal(kept.log.trimmedBefore, null);
+
+  // Archive back up: the next append trims, and the hidden message does not come back through the archive.
+  assert.equal((await post(kv, { to: '#deep2', from: alice, body: 'archive is back' })).status, 201);
+  const live = await get(kv, '?to=%23deep2');
+  assert.equal(live.ops.length, MAX_OPS);
+  const page = (await get(kv, `?to=%23deep2&before=${live.log.trimmedBefore}`)).archive;
+  assert.ok(!page.messages.some((m) => m.id === first.message.id));
+  assert.ok(!JSON.stringify(page).includes('this one gets hidden'));
+});
+
+test('item 31 review: bad cursors are refused, a failed archive read is a 503, and an archived post can still be withdrawn or hidden', async () => {
+  const kv = memoryKv();
+  const first = await (await post(kv, { to: '#deep3', from: alice, body: 'the author will take this back' })).json();
+  const second = await (await post(kv, { to: '#deep3', from: alice, body: 'a moderator will hide this' })).json();
+  const key = `loom:log:${first.address.split('#')[0].slice(5)}`;
+  const stored = JSON.parse(kv.map.get(key));
+  for (let i = 3; i <= MAX_OPS + 10; i += 1) stored.ops.push({ op: 'append', id: `m_fill${i}`, from: alice, kind: 'note', body: `post ${i}`, seq: i, at: '2026-11-18T00:00:00.000Z' });
+  stored.seq = MAX_OPS + 10;
+  kv.map.set(key, JSON.stringify(stored));
+  assert.equal((await post(kv, { to: '#deep3', from: alice, body: 'trigger the trim' })).status, 201);
+  const live = await get(kv, '?to=%23deep3');
+  const edge = live.log.trimmedBefore;
+  assert.ok(edge > 2);
+
+  // Bad cursors and limits are refused, not coerced.
+  for (const q of ['before=abc', 'before=0', 'before=-5', 'before=1.5', 'before=', `before=${edge}&limit=0`, `before=${edge}&limit=41`, `before=${edge}&limit=x`]) {
+    const res = await handleLoom(new Request(`${base}?to=%23deep3&${q}`), { kv });
+    assert.equal(res.status, 400, q);
+  }
+
+  // One archive record unreadable: the whole page fails with 503 and no cursor, instead of a short page.
+  const broken = { map: kv.map, put: kv.put, get: async (k) => { if (k.endsWith(':5') && k.startsWith('loom:arch:')) throw new Error('kv read failed'); return kv.get(k); } };
+  const failed = await handleLoom(new Request(`${base}?to=%23deep3&before=${edge}`), { kv: broken });
+  assert.equal(failed.status, 503);
+  const failedBody = await failed.json();
+  assert.equal(failedBody.error, 'archive_unavailable');
+  assert.equal(failedBody.archive, undefined);
+
+  // Both posts are in the archive to begin with.
+  let page = (await get(kv, `?to=%23deep3&before=${edge}`)).archive;
+  assert.ok(page.messages.some((m) => m.id === first.message.id));
+  assert.ok(page.messages.some((m) => m.id === second.message.id));
+
+  // The author withdraws an archived post: wrong token refused, right token leaves a tombstone.
+  assert.equal((await post(kv, { action: 'withdraw', to: first.address, token: 'not-the-token' })).status, 403);
+  const withdrawn = await post(kv, { action: 'withdraw', to: first.address, token: first.editToken });
+  assert.equal(withdrawn.status, 200);
+  assert.equal((await withdrawn.json()).archived, true);
+
+  // A moderator hides an archived post; without the admin key it is refused.
+  assert.equal((await post(kv, { action: 'hide', to: second.address })).status, 403);
+  const hide = (headers) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify({ action: 'hide', to: second.address }) }), { kv, adminKey: 'k', firstHelloEnabled: false });
+  assert.equal((await hide({ 'X-Loom-Admin': 'wrong' })).status, 403);
+  assert.equal((await hide({ 'X-Loom-Admin': 'k' })).status, 200);
+
+  page = (await get(kv, `?to=%23deep3&before=${edge}`)).archive;
+  assert.ok(!page.messages.some((m) => m.id === first.message.id || m.id === second.message.id));
+  const dump = JSON.stringify([...kv.map.entries()].filter(([k]) => k.startsWith('loom:arch:')));
+  assert.ok(!dump.includes('the author will take this back') && !dump.includes('a moderator will hide this'), 'the text is gone from storage, not only from the read');
+  // Editing an archived post is still refused.
+  assert.equal((await post(kv, { action: 'edit', to: first.address, token: first.editToken, body: 'too late' })).status, 404);
+});
+
+test('item 31 review: an archive backlog drains in bounded batches', async () => {
+  const kv = memoryKv();
+  const first = await (await post(kv, { to: '#deep4', from: alice, body: 'post 1' })).json();
+  const key = `loom:log:${first.address.split('#')[0].slice(5)}`;
+  const stored = JSON.parse(kv.map.get(key));
+  for (let i = 2; i <= MAX_OPS + 130; i += 1) stored.ops.push({ op: 'append', id: `m_fill${i}`, from: alice, kind: 'note', body: `post ${i}`, seq: i, at: '2026-11-18T00:00:00.000Z' });
+  stored.seq = MAX_OPS + 130;
+  kv.map.set(key, JSON.stringify(stored));
+  await post(kv, { to: '#deep4', from: alice, body: 'first save after the backlog' });
+  let live = await get(kv, '?to=%23deep4');
+  assert.equal(live.log.trimmedBefore, 51, 'one save archives at most 50 messages');
+  assert.equal(live.ops.length, MAX_OPS + 131 - 50);
+  await post(kv, { to: '#deep4', from: alice, body: 'second' });
+  await post(kv, { to: '#deep4', from: alice, body: 'third' });
+  live = await get(kv, '?to=%23deep4');
+  assert.equal(live.ops.length, MAX_OPS, 'the backlog is gone after three saves');
+  assert.equal([...kv.map.keys()].filter((k) => k.startsWith('loom:arch:')).length, 133);
 });
