@@ -46,7 +46,7 @@ import '../styles/shortwave-shared.css';
           Sign in to see the identities and Tezos wallets you linked to PointCast.
           Nothing on this page falls back to another person’s wallet.
         </p>
-        <AuthMenu autoOpen={true} />
+        <AuthMenu />
         <p class="me-door__privacy">The session cookie is HttpOnly. Holdings are public-chain data fetched only after this session is accepted.</p>
       </div>
     </section>
@@ -1011,6 +1011,7 @@ import '../styles/shortwave-shared.css';
   }
 
   function showSignedOut(root: HTMLElement): void {
+    const firstView = root.dataset.meState === 'loading';
     root.dataset.meState = 'signed-out';
     const loading = root.querySelector<HTMLElement>('[data-me-loading]');
     const door = root.querySelector<HTMLElement>('[data-me-signed-out]');
@@ -1018,6 +1019,12 @@ import '../styles/shortwave-shared.css';
     if (loading) loading.hidden = true;
     if (door) door.hidden = false;
     if (privateView) privateView.hidden = true;
+    if (firstView) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('link') === 'wallet' || params.has('auth_error')) {
+        window.requestAnimationFrame(() => window.dispatchEvent(new Event('pc:open-auth-menu')));
+      }
+    }
   }
 
   function showSignedIn(root: HTMLElement, payload: HoldingsPayload): void {
