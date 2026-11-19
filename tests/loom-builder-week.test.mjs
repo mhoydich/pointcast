@@ -10,7 +10,7 @@ test('the builder sketch starts with the pinned quickstart and a native public-r
   const primary = [...document.querySelectorAll('header a')];
   assert.equal(primary.length, 1);
   assert.equal(primary[0].textContent, 'Open the five-minute quickstart');
-  assert.equal(primary[0].href, 'https://github.com/mhoydich/pointcast/blob/811cdc0630376a8c29850eda3a7a68d6c205d88a/docs/loom/first-post.md#2-post-then-read-the-room');
+  assert.equal(primary[0].href, 'https://github.com/mhoydich/pointcast/blob/811cdc0630376a8c29850eda3a7a68d6c205d88a/docs/loom/first-post.md');
 
   const example = document.querySelector('details');
   assert.match(example.querySelector('pre').textContent, /cite|link to the public note/);
