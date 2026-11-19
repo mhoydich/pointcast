@@ -29,7 +29,8 @@ test('the default still and social card fit the standalone shareable budget', t 
 });
 
 test('a sender on another host can copy a portable link and a recipient sees just their card', async t => {
-  const doc = openPage(t, base + '?utm_source=private');
+  const customPath = 'https://example.org//another-app/light.html';
+  const doc = openPage(t, customPath + '?utm_source=private');
   let copied;
   Object.defineProperty(doc.defaultView.navigator, 'clipboard', {value: {writeText: async url => { copied = url; }}});
   const text = 'For Sam & Eli: <flowers> 🌻';
@@ -40,7 +41,7 @@ test('a sender on another host can copy a portable link and a recipient sees jus
   await setImmediate();
   assert.equal(doc.querySelector('#status').textContent, 'Link copied.');
   const url = new URL(copied);
-  assert.equal(url.origin + url.pathname, base);
+  assert.equal(url.origin + url.pathname, customPath);
   assert.equal(url.search, '');
   const received = openPage(t, copied);
   assert.equal(received.querySelector('#art').dataset.fire, 'campfire');
