@@ -81,6 +81,7 @@ function runCompanion(document) {
   const cards = new Map();
   const receipts = new Map();
   const uncertain = new Set();
+  let lastQueue;
   let refreshing = false;
   let current = false;
   let posting = false;
@@ -180,23 +181,32 @@ function runCompanion(document) {
     }
   }
 
-  async function refresh() {
+  async function refresh(manual = false) {
     if (refreshing || posting) return;
     refreshing = true;
     refreshButton.disabled = true;
-    queueStatus.textContent = 'Reading decision asks… This can take up to 12 seconds.';
+    if (manual) queueStatus.textContent = 'Reading decision asks… This can take up to 12 seconds.';
     syncControls();
     try {
       const asks = await readCallAsks(environment.endpoint);
-      renderAsks(asks);
+      const nextQueue = JSON.stringify(asks);
+      const changed = lastQueue !== nextQueue;
+      if (changed) renderAsks(asks);
+      if (changed || manual || !current) {
+        const summary = asks.length === 0
+          ? 'No decision asks for Mike right now. Other messages may still be waiting in the full inbox.'
+          : `${asks.length} decision ${asks.length === 1 ? 'ask' : 'asks'} for Mike.`;
+        const update = lastQueue !== undefined && changed ? 'Decision list updated. ' : '';
+        queueStatus.textContent = update + summary;
+      }
+      lastQueue = nextQueue;
       current = true;
-      const summary = asks.length === 0 ? 'No decision asks for Mike right now. Other messages may still be waiting in the full inbox.' : `${asks.length} decision ${asks.length === 1 ? 'ask' : 'asks'} for Mike.`;
-      if (queueStatus.textContent !== summary) queueStatus.textContent = summary;
     } catch {
       current = false;
-      queueStatus.textContent = cards.size
+      const error = cards.size
         ? 'Could not refresh the Loom. These asks may be out of date.'
         : 'Could not read the Loom. Try refreshing.';
+      if (queueStatus.textContent !== error) queueStatus.textContent = error;
     } finally {
       refreshButton.disabled = false;
       refreshing = false;
@@ -204,7 +214,7 @@ function runCompanion(document) {
     }
   }
 
-  refreshButton.addEventListener('click', refresh);
+  refreshButton.addEventListener('click', () => refresh(true));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
   refresh();
