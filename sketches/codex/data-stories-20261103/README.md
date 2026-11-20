@@ -1,0 +1,3 @@
+# Data stories provenance
+
+Source snapshots retrieved 2026-11-03 UTC. USGS query and ACS table links and SHA-256 hashes appear on the pages. The Census bulk file is not checked in (17 MB). Run `python3 extract_acs_rents.py /path/to/acsdt5y2024-b25064.dat` in this directory to regenerate the four rows; the script contains a fixed city-ID mapping. USGS `fetch_catalog.py` obtains the query and `build_analysis.py` validates and summarizes `comcat_2020_2024.csv`. `test_analysis.py` checks the snapshot. Both pages are static snapshots, not live feeds. The illustration assets are generated conceptual images, not observations.

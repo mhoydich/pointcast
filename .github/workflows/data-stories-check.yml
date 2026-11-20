@@ -1,0 +1,34 @@
+name: Data stories checks
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/data-stories-check.yml'
+      - 'src/pages/data-stories/**'
+      - 'public/data-stories/**'
+      - 'sketches/codex/data-stories-20261103/**'
+      - 'tests/data-stories-check.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: data-stories-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: python3 tests/data-stories-check.py
+      - run: python3 -m unittest discover -s sketches/codex/data-stories-20261103 -p 'test_*.py' -v
+      - run: npm run build:bare
