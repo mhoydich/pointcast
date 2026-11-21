@@ -100,6 +100,20 @@ test('image attachments are links with alt text, never <img>; non-https is not l
   assert.ok(!html.includes('href="javascript'));
 });
 
+test('classic composer tells a rate-limited sender how long to wait', () => {
+  const source = readFileSync(new URL('../src/pages/loom/classic.astro', import.meta.url), 'utf8');
+  const block = source.match(/if \(!data\.ok\) \{\n        const wait[\s\S]+?\n      \}/)[0];
+  const submit = new Function('data', 'status', block);
+  const results = [];
+  const status = (...args) => results.push(args);
+  submit({ ok: false, error: 'rate_limited', retryAfterSec: 24 }, status);
+  submit({ ok: false, error: 'rate_limited' }, status);
+  assert.deepEqual(results, [
+    ['Posting limit reached. Try again in 24 seconds.', true],
+    ['Declined: rate limited.', true],
+  ]);
+});
+
 test('title: log title wins when set', () => {
   assert.ok(buildTopicPage({ log: { title: 'Pickleball ladder' }, messages: [msg(1, 'x')], count: 1 }, { name: 'p' }).includes('<title>Pickleball ladder · the Loom · PointCast</title>'));
   assert.ok(buildTopicPage({ log: { title: 'The Loom — start here' }, messages: [msg(1, 'x')], count: 1 }, { name: 'loom' }).includes('<title>The Loom — start here · PointCast</title>'));
