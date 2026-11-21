@@ -1,0 +1,186 @@
+---
+/**
+ * /seedworks/<slug> — one Seedworks piece: the live piece at a seed, the
+ * features it reports, its parameters, its full code and how it would mint.
+ * The seed lives in this page's own ?seed= so a link keeps the iteration.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/seedworks.css';
+import {
+  SEEDWORKS_PIECES,
+  SEEDWORKS_MINT_PATHS,
+  SEEDWORKS_UPDATED,
+  pieceSrc,
+  piecePage,
+  type SeedworksPiece,
+} from '../../lib/seedworks';
+
+export function getStaticPaths() {
+  return SEEDWORKS_PIECES.map((piece) => ({ params: { slug: piece.slug }, props: { piece } }));
+}
+
+const { piece } = Astro.props as { piece: SeedworksPiece };
+const code = fs.readFileSync(path.join(process.cwd(), 'public', 'art', 'seedworks', piece.slug, 'index.html'), 'utf8');
+const lines = code.split('\n').length;
+const bytes = Buffer.byteLength(code, 'utf8');
+const canonical = `https://pointcast.xyz${piecePage(piece.slug)}`;
+const firstSeed = piece.exampleSeeds[0];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'VisualArtwork',
+  '@id': canonical,
+  name: piece.title,
+  description: piece.dek,
+  url: canonical,
+  artform: 'Generative art',
+  artMedium: 'HTML canvas and JavaScript',
+  dateModified: SEEDWORKS_UPDATED,
+  isPartOf: { '@type': 'CollectionPage', name: 'Seedworks', url: 'https://pointcast.xyz/seedworks' },
+  creator: { '@type': 'Organization', name: 'PointCast' },
+};
+---
+
+<BlockLayout
+  title={`${piece.title} · Seedworks`}
+  description={piece.dek}
+  author="PointCast"
+  creator="PointCast"
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[{ type: 'application/json', href: '/seedworks.json', title: 'Seedworks JSON' }]}
+>
+  <main class="sw-page" data-sw-piece data-src={pieceSrc(piece.slug)} data-first-seed={firstSeed} data-title={piece.title}>
+    <nav class="sw-crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span>/</span><a href="/seedworks">Seedworks</a><span>/</span><span>{piece.title}</span></nav>
+
+    <header class="sw-mast">
+      <p class="sw-kicker">Seedworks · {piece.world}</p>
+      <h1 class="sw-title">{piece.title}</h1>
+      <p class="sw-lede">{piece.dek}</p>
+    </header>
+
+    <div class="sw-piece">
+      <div>
+        <div class="sw-frame">
+          <iframe
+            data-sw-frame
+            title={`${piece.title}, seed ${firstSeed}`}
+            src={`${pieceSrc(piece.slug)}?seed=${encodeURIComponent(firstSeed)}`}
+            sandbox="allow-scripts allow-same-origin"
+            allow="autoplay"
+          ></iframe>
+        </div>
+        <form class="sw-seedbox" data-sw-form>
+          <label for="sw-seed">Seed</label>
+          <input id="sw-seed" name="seed" value={firstSeed} autocomplete="off" spellcheck="false" maxlength="80" data-sw-input />
+          <button type="submit" class="sw-btn sw-btn--ghost">Draw</button>
+          <button type="button" class="sw-btn" data-sw-new>New iteration</button>
+        </form>
+        <div class="sw-actions">
+          <button type="button" class="sw-btn sw-btn--ghost" data-sw-copy>Copy link</button>
+          <a class="sw-btn sw-btn--ghost" href={`${pieceSrc(piece.slug)}?seed=${encodeURIComponent(firstSeed)}`} data-sw-full>Full screen</a>
+        </div>
+        <p class="sw-status" role="status" data-sw-status></p>
+        {piece.interactive && <p class="sw-note">{piece.interactive}</p>}
+      </div>
+
+      <div>
+        <section>
+          <p class="sw-section__kicker">This iteration</p>
+          <dl class="sw-features" data-sw-features>
+            {piece.features.map((f) => (<><dt>{f}</dt><dd>…</dd></>))}
+          </dl>
+        </section>
+        <section class="sw-section">
+          <p class="sw-section__kicker">About the piece</p>
+          {piece.body.map((para) => <p>{para}</p>)}
+          <p>Try these seeds: {piece.exampleSeeds.map((s, i) => (<>{i > 0 && ', '}<a href={`?seed=${encodeURIComponent(s)}`} class="sw-mono">{s}</a></>))}.</p>
+        </section>
+      </div>
+    </div>
+
+    <section class="sw-section" id="params">
+      <p class="sw-section__kicker">Parameters</p>
+      <table class="sw-table">
+        <thead><tr><th>Parameter</th><th>Range</th><th>Note</th></tr></thead>
+        <tbody>
+          {piece.params.map((p) => (<tr><td><b>{p.name}</b></td><td>{p.values}</td><td>{p.note}</td></tr>))}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="sw-section" id="code">
+      <div class="sw-code-head">
+        <p class="sw-section__kicker">Code · index.html · {lines} lines · {(bytes / 1024).toFixed(1)} KB</p>
+        <a class="sw-mono" href={pieceSrc(piece.slug)} download={`${piece.slug}.html`}>Download</a>
+      </div>
+      <pre class="sw-code" tabindex="0"><code>{code}</code></pre>
+    </section>
+
+    <section class="sw-section" id="minting">
+      <p class="sw-section__kicker">Minting, later</p>
+      <p>
+        If this piece mints, each token keeps its seed, and these features become its attributes:
+        <b>{piece.features.join(', ')}</b>. The file already speaks fxhash's snippet, so it could go to fxhash as it is,
+        or mint from a PointCast FA2 contract. <a href="/seedworks#minting">Both paths</a>.
+      </p>
+      <p class="sw-note">Nothing here mints, connects a wallet or spends anything.</p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-sw-piece]');
+  if (root) {
+    const src = root.dataset.src || '';
+    const title = root.dataset.title || 'Piece';
+    const frame = root.querySelector<HTMLIFrameElement>('[data-sw-frame]');
+    const input = root.querySelector<HTMLInputElement>('[data-sw-input]');
+    const full = root.querySelector<HTMLAnchorElement>('[data-sw-full]');
+    const status = root.querySelector<HTMLElement>('[data-sw-status]');
+    const feats = root.querySelector<HTMLElement>('[data-sw-features]');
+
+    const freshSeed = () => {
+      const a = new Uint8Array(10);
+      crypto.getRandomValues(a);
+      return 'sw' + Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
+    };
+    const clean = (s: string) => s.trim().slice(0, 80);
+
+    function show(seed: string, push: boolean) {
+      seed = clean(seed) || freshSeed();
+      const url = `${src}?seed=${encodeURIComponent(seed)}`;
+      if (frame) { frame.src = url; frame.title = `${title}, seed ${seed}`; }
+      if (full) full.href = url;
+      if (input) input.value = seed;
+      const pageUrl = new URL(location.href);
+      pageUrl.searchParams.set('seed', seed);
+      if (push) history.pushState({ seed }, '', pageUrl); else history.replaceState({ seed }, '', pageUrl);
+      if (status) status.textContent = '';
+    }
+
+    window.addEventListener('message', (e) => {
+      if (!frame || e.source !== frame.contentWindow || e.origin !== location.origin) return;
+      const d = e.data;
+      if (!d || d.type !== 'seedworks:done' || !feats || typeof d.features !== 'object') return;
+      feats.replaceChildren();
+      for (const [k, v] of Object.entries(d.features as Record<string, unknown>)) {
+        const dt = document.createElement('dt'); dt.textContent = k;
+        const dd = document.createElement('dd'); dd.textContent = String(v);
+        feats.append(dt, dd);
+      }
+    });
+
+    root.querySelector('[data-sw-form]')?.addEventListener('submit', (e) => { e.preventDefault(); show(input?.value || '', true); });
+    root.querySelector('[data-sw-new]')?.addEventListener('click', () => show(freshSeed(), true));
+    root.querySelector('[data-sw-copy]')?.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(location.href); if (status) status.textContent = 'Link copied. The seed is in it.'; }
+      catch { if (status) status.textContent = location.href; }
+    });
+    window.addEventListener('popstate', () => show(new URL(location.href).searchParams.get('seed') || root.dataset.firstSeed || '', false));
+
+    show(new URL(location.href).searchParams.get('seed') || root.dataset.firstSeed || '', false);
+  }
+</script>

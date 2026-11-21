@@ -1,0 +1,148 @@
+---
+/**
+ * /seedworks — PointCast's room for generative art written in code.
+ * Each piece draws from a seed; "New iteration" asks for a fresh one.
+ * Pieces: public/art/seedworks/<slug>/index.html. Registry: src/lib/seedworks.ts.
+ * Nothing here mints. See the minting section and docs/seedworks/minting.md.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import '../styles/seedworks.css';
+import {
+  SEEDWORKS_PIECES,
+  SEEDWORKS_SPEC,
+  SEEDWORKS_MINT_PATHS,
+  SEEDWORKS_CANONICAL,
+  SEEDWORKS_UPDATED,
+  pieceSrc,
+  piecePage,
+} from '../lib/seedworks';
+
+const title = 'Seedworks · generative art from a seed';
+const description = `${SEEDWORKS_PIECES.length} generative pieces written in code, from PointCast's own world: Nouns Money notes, El Segundo tides and sun, drum rhythms and the town map. Same seed, same picture; new seed, new iteration.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': SEEDWORKS_CANONICAL,
+  name: 'Seedworks',
+  description,
+  url: SEEDWORKS_CANONICAL,
+  dateModified: SEEDWORKS_UPDATED,
+  publisher: { '@type': 'Organization', name: 'PointCast' },
+  hasPart: SEEDWORKS_PIECES.map((p) => ({
+    '@type': 'VisualArtwork',
+    name: p.title,
+    description: p.dek,
+    url: `https://pointcast.xyz${piecePage(p.slug)}`,
+    artform: 'Generative art',
+  })),
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  author="PointCast"
+  creator="PointCast"
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[{ type: 'application/json', href: '/seedworks.json', title: 'Seedworks JSON' }]}
+>
+  <main class="sw-page">
+    <nav class="sw-crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span>/</span><span>Seedworks</span></nav>
+
+    <header class="sw-mast">
+      <p class="sw-kicker">Seedworks · generative room</p>
+      <h1 class="sw-title">Art that grows from a <em>seed</em></h1>
+      <p class="sw-lede">
+        Each piece here is a small program. Give it a seed and it draws one picture, the same one every time.
+        Give it a new seed and you get a new iteration. Tap <b>New iteration</b> on any piece to see another,
+        and keep the link of one you like: the seed is in it.
+      </p>
+    </header>
+
+    <section class="sw-grid" aria-label="Pieces">
+      {SEEDWORKS_PIECES.map((p) => (
+        <article class="sw-card" data-sw-card data-slug={p.slug} data-src={pieceSrc(p.slug)} data-page={piecePage(p.slug)} data-seed={p.exampleSeeds[0]}>
+          <div class="sw-frame">
+            <iframe
+              title={`${p.title}, seed ${p.exampleSeeds[0]}`}
+              src={`${pieceSrc(p.slug)}?seed=${encodeURIComponent(p.exampleSeeds[0])}`}
+              loading="lazy"
+              sandbox="allow-scripts allow-same-origin"
+            ></iframe>
+          </div>
+          <div class="sw-card__body">
+            <p class="sw-card__world">{p.world}</p>
+            <h2 class="sw-card__title"><a href={`${piecePage(p.slug)}?seed=${encodeURIComponent(p.exampleSeeds[0])}`} data-sw-link>{p.title}</a></h2>
+            <p class="sw-card__dek">{p.dek}</p>
+            <p class="sw-seedline">seed <span data-sw-seed>{p.exampleSeeds[0]}</span></p>
+            <div class="sw-actions">
+              <button type="button" class="sw-btn" data-sw-new>New iteration</button>
+              <a class="sw-btn sw-btn--ghost" href={`${piecePage(p.slug)}?seed=${encodeURIComponent(p.exampleSeeds[0])}`} data-sw-link>Code and seed</a>
+            </div>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <section class="sw-section" id="how">
+      <p class="sw-section__kicker">How a seed works</p>
+      <h2>Same seed, same picture</h2>
+      <p>
+        A seed is a short string of letters and numbers. The piece turns it into a stream of numbers that looks random
+        but always comes out the same for the same seed. Every choice the piece makes, the ink, the hour, the rhythm,
+        the street grid, comes from that stream. So a seed is a complete record of one iteration, small enough to fit in a link.
+      </p>
+    </section>
+
+    <section class="sw-section" id="spec">
+      <p class="sw-section__kicker">Open spec · {SEEDWORKS_SPEC.version}</p>
+      <h2>Add a piece</h2>
+      <p>Anyone, person or agent, can propose a piece in a pull request. A piece follows six rules:</p>
+      <ol>
+        {SEEDWORKS_SPEC.rules.map((r) => <li>{r}</li>)}
+      </ol>
+      <p>The runtime is the same short block at the top of every piece. Copy it from any piece's code.</p>
+    </section>
+
+    <section class="sw-section" id="minting">
+      <p class="sw-section__kicker">Minting, later</p>
+      <h2>Two ways a piece could mint on Tezos</h2>
+      <div class="sw-paths">
+        {SEEDWORKS_MINT_PATHS.map((m) => (
+          <div class="sw-path">
+            <h3>{m.name}</h3>
+            <p>{m.summary}</p>
+            <ol>{m.steps.map((s) => <li>{s}</li>)}</ol>
+            <p class="sw-tradeoff">{m.tradeoff}</p>
+          </div>
+        ))}
+      </div>
+      <p class="sw-note">Nothing on this page mints, connects a wallet or spends anything. These pieces are free to look at and share.</p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  function freshSeed() {
+    const a = new Uint8Array(10);
+    crypto.getRandomValues(a);
+    return 'sw' + Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  document.querySelectorAll<HTMLElement>('[data-sw-card]').forEach((card) => {
+    const frame = card.querySelector('iframe');
+    const seedEl = card.querySelector('[data-sw-seed]');
+    const links = card.querySelectorAll<HTMLAnchorElement>('[data-sw-link]');
+    const title = card.querySelector('.sw-card__title')?.textContent || 'Piece';
+    card.querySelector('[data-sw-new]')?.addEventListener('click', () => {
+      const seed = freshSeed();
+      if (frame) {
+        frame.src = `${card.dataset.src}?seed=${encodeURIComponent(seed)}`;
+        frame.title = `${title}, seed ${seed}`;
+      }
+      if (seedEl) seedEl.textContent = seed;
+      links.forEach((l) => { l.href = `${card.dataset.page}?seed=${encodeURIComponent(seed)}`; });
+    });
+  });
+</script>
