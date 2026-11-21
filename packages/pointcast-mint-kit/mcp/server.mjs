@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Nounish Mint Kit — MCP server.
+// PointCast Mint Kit — MCP server.
 // Makes whole CC0 Nouns, writes mint tickets and token metadata, checks wallets,
 // and talks to the PointCast Loom. It never holds a key and never signs:
 // a separate signer (a person, or one agent with its own wallet) mints from the tickets.
@@ -91,7 +91,7 @@ function voiceCheck(text) {
   return BANNED.filter(r => r.test(text)).map(r => r.source.replace(/\\b/g, ""));
 }
 
-const server = new McpServer({ name: "nounish-mint-kit", version: "0.1.0" });
+const server = new McpServer({ name: "pointcast-mint-kit", version: "0.1.0" });
 const ok = obj => ({ content: [{ type: "text", text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2) }] });
 
 server.registerTool(

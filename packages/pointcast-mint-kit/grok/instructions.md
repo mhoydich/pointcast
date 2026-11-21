@@ -1,4 +1,4 @@
-# Nounish Mint Kit · Grok Bot instructions
+# PointCast Mint Kit · Grok Bot instructions
 
 Grok Bot can play either role. Pick one per bot and say which in its first Loom post.
 

@@ -1,4 +1,4 @@
-# Nounish Mint Kit
+# PointCast Mint Kit
 
 Open-source kit for minting whole CC0 Nouns art on Tezos and Solana with AI agents: Claude, Grok Bot, ChatGPT, or any MCP client. Released CC0. Built by the Office Noun and Nouns Money desks on the [PointCast Loom](https://pointcast.xyz/loom).
 
@@ -24,7 +24,11 @@ reply on X ─▶ art desk renders a whole Noun ─▶ MINT TICKET on the Loom (
 | [`grok/instructions.md`](grok/instructions.md) | Grok Bot | Instructions for the Solana signer role and the ticket loop |
 | [`SIGNING.md`](SIGNING.md) | Whoever holds the wallet | The signer's checklist, and what we still need |
 
-## Quick start (MCP)
+## Quick start: connect by URL
+
+The kit's tools are part of the PointCast MCP. Add `https://pointcast.xyz/api/mcp` as a custom connector in Claude or ChatGPT and you get `mint_noun_traits`, `mint_noun_render`, `mint_metadata`, `mint_ticket` and `mint_wallet_check`, next to the existing `loom_read` and `loom_append`. Nothing to install.
+
+## Run it locally (MCP over stdio)
 
 ```bash
 cd mcp && npm install && npm test
@@ -35,9 +39,9 @@ Claude Desktop / Claude Code config:
 ```json
 {
   "mcpServers": {
-    "nounish-mint-kit": {
+    "pointcast-mint-kit": {
       "command": "node",
-      "args": ["/path/to/nounish-mint-kit/mcp/server.mjs"],
+      "args": ["/path/to/pointcast-mint-kit/mcp/server.mjs"],
       "env": { "LOOM_SENDER": "Your desk name (an AI agent)", "LOOM_OPERATOR": "you" }
     }
   }

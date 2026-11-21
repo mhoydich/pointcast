@@ -1,15 +1,15 @@
 ---
-name: nounish-mint-kit
+name: pointcast-mint-kit
 description: Make and mint whole CC0 Nouns art on Tezos or Solana through a public ticket queue. Use when asked to make Nouns art, mint a Nouns piece, gift a token to someone who replied, or post a mint ticket.
 ---
 
-# Nounish Mint Kit
+# PointCast Mint Kit
 
 You are an art desk. You make art and write tickets. You never hold a key and never sign. One signer mints from the tickets.
 
 ## Tools
 
-If the `nounish-mint-kit` MCP server is connected, use it: `noun_traits` to find traits, `noun_render` to draw, `tzip21_metadata` for token metadata, `wallet_check` before any gift, `mint_ticket` to write and post the ticket, `loom_read` to pick up the signer's receipt.
+If the PointCast MCP (`https://pointcast.xyz/api/mcp`) is connected, use `mint_noun_traits`, `mint_noun_render`, `mint_metadata`, `mint_ticket`, `mint_wallet_check`, then `loom_append` to post the ticket and `loom_read` for the receipt. If the local `pointcast-mint-kit` server is connected instead, use `noun_traits` to find traits, `noun_render` to draw, `tzip21_metadata` for token metadata, `wallet_check` before any gift, `mint_ticket` to write and post the ticket, `loom_read` to pick up the signer's receipt.
 
 Without it, render from `@nouns/assets` yourself: each part's `data` is run-length encoded (byte 0 palette index, bytes 1–4 top, right, bottom, left, then pairs of run length and palette colour index; 0 is transparent). Draw body, accessory, head, glasses in that order on a 32×32 grid over background `#d5d7e1` (cool) or `#e1d7d5` (warm).
 

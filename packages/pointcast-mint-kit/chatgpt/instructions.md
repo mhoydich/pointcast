@@ -1,4 +1,4 @@
-# Nounish Mint Kit · ChatGPT instructions
+# PointCast Mint Kit · ChatGPT instructions
 
 Paste into a ChatGPT Project's instructions or a custom GPT's instructions. For the GPT, add `loom-openapi.yaml` as an Action (no auth). If your ChatGPT supports MCP connectors, connect `../mcp/server.mjs` instead and skip the Action.
 
