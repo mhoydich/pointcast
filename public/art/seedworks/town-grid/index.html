@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Town Grid · PointCast Seedworks</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #efe8d6; overflow: hidden; }
+  canvas { display: block; position: absolute; inset: 0; margin: auto; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A generative map of a small beach town"></canvas>
+<script>
+/* seedworks-runtime v1 — PointCast Seedworks. Self-contained, fxhash-compatible.
+   Seed comes from $fx.hash when fxhash is present, else ?seed= in the URL,
+   else a fresh random seed. All randomness goes through $sw.rand. */
+(function () {
+  var fx = window.$fx;
+  var q = new URLSearchParams(location.search);
+  function fresh() { var a = '0123456789abcdef', s = 'sw'; for (var i = 0; i < 30; i++) s += a[(Math.random() * 16) | 0]; return s; }
+  var seed = (fx && fx.hash) || q.get('seed') || q.get('fxhash') || fresh();
+  function xmur3(str) { for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return function () { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return (h ^= h >>> 16) >>> 0; }; }
+  function sfc32(a, b, c, d) { return function () { a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0; var t = (a + b) | 0; a = b ^ (b >>> 9); b = (c + (c << 3)) | 0; c = (c << 21) | (c >>> 11); d = (d + 1) | 0; t = (t + d) | 0; c = (c + t) | 0; return (t >>> 0) / 4294967296; }; }
+  var h = xmur3(seed);
+  var rand = fx && fx.rand ? fx.rand : sfc32(h(), h(), h(), h());
+  var sw = {
+    seed: seed,
+    rand: rand,
+    range: function (a, b) { return a + rand() * (b - a); },
+    int: function (a, b) { return Math.floor(a + rand() * (b - a + 1)); },
+    pick: function (arr) { return arr[Math.floor(rand() * arr.length)]; },
+    chance: function (p) { return rand() < p; },
+    done: function (features) {
+      try { if (fx && fx.features) fx.features(features); if (fx && fx.preview) fx.preview(); } catch (e) {}
+      try { if (window.parent !== window) window.parent.postMessage({ type: 'seedworks:done', seed: seed, features: features }, '*'); } catch (e) {}
+    }
+  };
+  window.$sw = sw;
+})();
+/* end seedworks-runtime */
+
+/* Town Grid — a small beach town drawn as a survey map, in the spirit of
+   El Segundo: ocean to the west, runways to the north, tanks to the south,
+   and a Main Street through the middle. Every street, park and block is seeded. */
+(function () {
+  var $ = window.$sw;
+  var STREET_N = ['Grand', 'Holly', 'Mariposa', 'Franklin', 'Palm', 'Oak', 'Walnut', 'Pine', 'Maple', 'Acacia', 'Sycamore', 'Elm', 'Imperial', 'Rosecrans', 'El Segundo', 'Sierra'];
+  var STREET_E = ['Main', 'Richmond', 'Concord', 'Penn', 'Virginia', 'Sheldon', 'Loma Vista', 'Center', 'Lomita', 'Eucalyptus', 'Arena', 'Bungalow'];
+  var INKS = [
+    { name: 'Survey', paper: '#efe8d6', ink: '#2c2a25', sea: '#9fc1c9', park: '#a9c08a', home: '#e3d3b4', shop: '#d79a7c', tank: '#b9b3a6' },
+    { name: 'Blueprint', paper: '#1d3a5f', ink: '#e7eef6', sea: '#14304f', park: '#2f5b6c', home: '#28507a', shop: '#3d6b96', tank: '#2a4a70' },
+    { name: 'Sunbleached', paper: '#f6eedc', ink: '#5a4a3a', sea: '#bcd9d6', park: '#cfd9a3', home: '#f0dcc0', shop: '#eab79a', tank: '#d6d0c2' }
+  ];
+  var ink = $.pick(INKS);
+  var cols = $.int(7, 12), rows = $.int(8, 13);
+  var coastX = $.range(150, 230);
+  var coastWobble = []; for (var i = 0; i < 12; i++) coastWobble.push($.range(-14, 14));
+  var mainCol = $.int(Math.floor(cols * 0.35), Math.floor(cols * 0.65));
+  var runways = $.int(1, 3);
+  var parkCount = 0;
+  var lotsX = [0], lotsY = [0];
+  for (var c = 0; c < cols; c++) lotsX.push(lotsX[lotsX.length - 1] + $.range(0.7, 1.3));
+  for (var r = 0; r < rows; r++) lotsY.push(lotsY[lotsY.length - 1] + $.range(0.7, 1.3));
+  var blocks = [];
+  for (var by = 0; by < rows; by++) for (var bx = 0; bx < cols; bx++) {
+    var south = by >= rows - 2, nearMain = Math.abs(bx - mainCol) <= 0 || Math.abs(bx + 1 - mainCol) <= 0;
+    var roll = $.rand(), use;
+    if (south && roll < 0.55) use = 'tank';
+    else if (nearMain && roll < 0.7) use = 'shop';
+    else if (roll < 0.1) use = 'park';
+    else use = 'home';
+    if (use === 'park') parkCount++;
+    blocks.push({ x: bx, y: by, use: use, sub: $.int(2, 5), tanks: $.int(1, 4) });
+  }
+  var namesN = shuffle(STREET_N.slice()), namesE = shuffle(STREET_E.slice());
+  namesE.splice(namesE.indexOf('Main'), 1);
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = $.int(0, i); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  var cv = document.getElementById('c');
+  var ctx = cv.getContext('2d');
+
+  function draw() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var S = Math.min(innerWidth, innerHeight);
+    cv.width = S * dpr; cv.height = S * dpr; cv.style.width = S + 'px'; cv.style.height = S + 'px';
+    ctx.setTransform(S * dpr / 1000, 0, 0, S * dpr / 1000, 0, 0);
+    ctx.fillStyle = ink.paper; ctx.fillRect(0, 0, 1000, 1000);
+
+    // ocean
+    ctx.fillStyle = ink.sea; ctx.beginPath(); ctx.moveTo(0, 0);
+    for (var k = 0; k <= 11; k++) ctx.lineTo(coastX + coastWobble[k], k / 11 * 1000);
+    ctx.lineTo(0, 1000); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = ink.ink; ctx.globalAlpha = 0.25; ctx.lineWidth = 1;
+    for (var wv = 1; wv < 6; wv++) { ctx.beginPath(); for (var k2 = 0; k2 <= 11; k2++) ctx.lineTo(coastX + coastWobble[k2] - wv * 18, k2 / 11 * 1000); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+
+    // town frame
+    var X0 = coastX + 50, X1 = 940, Y0 = 210, Y1 = 900;
+    var sx = (X1 - X0) / lotsX[cols], sy = (Y1 - Y0) / lotsY[rows];
+
+    // runways north of town
+    ctx.fillStyle = ink.ink; ctx.globalAlpha = 0.85;
+    for (var rw = 0; rw < runways; rw++) {
+      var ry = 40 + rw * 36;
+      ctx.fillRect(X0 - 30, ry, X1 - X0 + 30, 16);
+      ctx.fillStyle = ink.paper;
+      for (var d = X0; d < X1 - 20; d += 40) ctx.fillRect(d, ry + 7, 20, 2);
+      ctx.fillStyle = ink.ink;
+    }
+    ctx.globalAlpha = 1;
+
+    // blocks
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i], x = X0 + lotsX[b.x] * sx + 6, y = Y0 + lotsY[b.y] * sy + 6;
+      var w = (lotsX[b.x + 1] - lotsX[b.x]) * sx - 12, h = (lotsY[b.y + 1] - lotsY[b.y]) * sy - 12;
+      ctx.fillStyle = ink[b.use]; ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = ink.ink; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
+      if (b.use === 'home' || b.use === 'shop') {
+        ctx.globalAlpha = 0.35; ctx.beginPath();
+        for (var s = 1; s < b.sub; s++) { ctx.moveTo(x + w * s / b.sub, y); ctx.lineTo(x + w * s / b.sub, y + h); }
+        ctx.moveTo(x, y + h / 2); ctx.lineTo(x + w, y + h / 2); ctx.stroke(); ctx.globalAlpha = 1;
+      } else if (b.use === 'tank') {
+        var rr = Math.min(w, h) / (b.tanks + 1.2) * 0.9;
+        for (var t = 0; t < b.tanks; t++) { ctx.beginPath(); ctx.arc(x + w * (t + 1) / (b.tanks + 1), y + h / 2, rr, 0, 6.283); ctx.stroke(); }
+      } else if (b.use === 'park') {
+        ctx.fillStyle = ink.ink; ctx.globalAlpha = 0.4;
+        for (var tr = 0; tr < 6; tr++) { ctx.beginPath(); ctx.arc(x + w * ((tr * 0.37) % 1), y + h * ((tr * 0.61) % 1), 3, 0, 6.283); ctx.fill(); }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Main Street, drawn bold
+    var mx = X0 + lotsX[mainCol] * sx;
+    ctx.strokeStyle = ink.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(mx, Y0 - 20); ctx.lineTo(mx, Y1 + 20); ctx.stroke();
+
+    // labels
+    ctx.fillStyle = ink.ink; ctx.font = '600 11px ui-monospace, Menlo, monospace';
+    ctx.save(); ctx.translate(mx - 6, Y0 + 40); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'right'; ctx.fillText('MAIN ST', 0, 0); ctx.restore();
+    var labelE = 0;
+    for (var cc = 1; cc < cols; cc++) {
+      if (cc === mainCol || cc % 2) continue;
+      var lx = X0 + lotsX[cc] * sx;
+      ctx.save(); ctx.translate(lx - 4, Y1 - 6); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'left'; ctx.fillText((namesE[labelE++ % namesE.length]).toUpperCase(), 0, 0); ctx.restore();
+    }
+    for (var rr2 = 1; rr2 < rows; rr2 += 2) {
+      var ly = Y0 + lotsY[rr2] * sy;
+      ctx.textAlign = 'left'; ctx.fillText((namesN[(rr2 - 1) / 2 % namesN.length]).toUpperCase() + ' AVE', X0 + 8, ly + 4);
+    }
+
+    // title cartouche and compass
+    ctx.fillStyle = ink.paper; ctx.fillRect(X0, 140, 330, 50); ctx.strokeStyle = ink.ink; ctx.lineWidth = 1.5; ctx.strokeRect(X0, 140, 330, 50);
+    ctx.fillStyle = ink.ink; ctx.textAlign = 'left';
+    ctx.font = '600 20px Georgia, serif'; ctx.fillText('A Town by the Water', X0 + 12, 166);
+    ctx.font = '600 10px ui-monospace, Menlo, monospace'; ctx.fillText(cols + ' × ' + rows + ' BLOCKS · SHEET ' + $.seed.slice(0, 8).toUpperCase(), X0 + 12, 182);
+    ctx.save(); ctx.translate(900, 960); ctx.beginPath(); ctx.moveTo(0, -24); ctx.lineTo(7, 4); ctx.lineTo(-7, 4); ctx.closePath(); ctx.fill();
+    ctx.textAlign = 'center'; ctx.font = '700 12px Georgia, serif'; ctx.fillText('N', 0, 20); ctx.restore();
+    ctx.fillStyle = ink.ink; ctx.font = 'italic 14px Georgia, serif'; ctx.textAlign = 'left';
+    ctx.save(); ctx.translate(coastX - 70, 640); ctx.rotate(-Math.PI / 2); ctx.fillText('Pacific Ocean', 0, 0); ctx.restore();
+  }
+
+  draw();
+  addEventListener('resize', draw);
+  $.done({ Blocks: cols * rows, Parks: parkCount, Runways: runways, Ink: ink.name, 'Main Street': 'Column ' + (mainCol + 1) });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tide and Sun · PointCast Seedworks</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0f1620; overflow: hidden; }
+  canvas { display: block; position: absolute; inset: 0; margin: auto; }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="A generative beach horizon with sun, tide and planes"></canvas>
+<script>
+/* seedworks-runtime v1 — PointCast Seedworks. Self-contained, fxhash-compatible.
+   Seed comes from $fx.hash when fxhash is present, else ?seed= in the URL,
+   else a fresh random seed. All randomness goes through $sw.rand. */
+(function () {
+  var fx = window.$fx;
+  var q = new URLSearchParams(location.search);
+  function fresh() { var a = '0123456789abcdef', s = 'sw'; for (var i = 0; i < 30; i++) s += a[(Math.random() * 16) | 0]; return s; }
+  var seed = (fx && fx.hash) || q.get('seed') || q.get('fxhash') || fresh();
+  function xmur3(str) { for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return function () { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return (h ^= h >>> 16) >>> 0; }; }
+  function sfc32(a, b, c, d) { return function () { a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0; var t = (a + b) | 0; a = b ^ (b >>> 9); b = (c + (c << 3)) | 0; c = (c << 21) | (c >>> 11); d = (d + 1) | 0; t = (t + d) | 0; c = (c + t) | 0; return (t >>> 0) / 4294967296; }; }
+  var h = xmur3(seed);
+  var rand = fx && fx.rand ? fx.rand : sfc32(h(), h(), h(), h());
+  var sw = {
+    seed: seed,
+    rand: rand,
+    range: function (a, b) { return a + rand() * (b - a); },
+    int: function (a, b) { return Math.floor(a + rand() * (b - a + 1)); },
+    pick: function (arr) { return arr[Math.floor(rand() * arr.length)]; },
+    chance: function (p) { return rand() < p; },
+    done: function (features) {
+      try { if (fx && fx.features) fx.features(features); if (fx && fx.preview) fx.preview(); } catch (e) {}
+      try { if (window.parent !== window) window.parent.postMessage({ type: 'seedworks:done', seed: seed, features: features }, '*'); } catch (e) {}
+    }
+  };
+  window.$sw = sw;
+})();
+/* end seedworks-runtime */
+
+/* Tide and Sun — a made-up day on the El Segundo shore. The seed picks the
+   hour and a two-wave tide; the light, the waterline, the tide chart and the
+   LAX departures crossing the sky all follow from it. Not a real tide table. */
+(function () {
+  var $ = window.$sw;
+  var hour = $.chance(0.75) ? $.range(6, 20.5) : $.range(0, 24);
+  var dayOfYear = $.int(1, 365);
+  var m2 = $.range(0, Math.PI * 2), s2 = $.range(0, Math.PI * 2), ampM = $.range(2.2, 3.4), ampS = $.range(0.4, 1.1);
+  var swell = $.range(0.3, 1);
+  var planes = $.int(0, 4);
+  var planeSeeds = []; for (var i = 0; i < planes; i++) planeSeeds.push([$.range(0.1, 0.9), $.range(0.12, 0.42), $.range(-0.5, -0.2)]);
+  var waveSeeds = []; for (var j = 0; j < 46; j++) waveSeeds.push([$.range(0, 6.28), $.range(0.004, 0.02), $.range(0.5, 1.5)]);
+  var stars = []; for (var k = 0; k < 120; k++) stars.push([$.rand(), $.rand() * 0.5, $.range(0.4, 1.6)]);
+
+  function tideAt(h) { return ampM * Math.sin(h / 12.42 * Math.PI * 2 + m2) + ampS * Math.sin(h / 12 * Math.PI * 2 + s2); }
+  var tide = tideAt(hour), slope = tideAt(hour + 0.1) - tide;
+  var tideMax = ampM + ampS;
+  var tideName = tide > tideMax * 0.55 ? 'High' : tide < -tideMax * 0.55 ? 'Low' : slope > 0 ? 'Rising' : 'Falling';
+
+  // A rough sun: day length swings with the season, noon near 12:45 local.
+  var dayLen = 12 + 2.3 * Math.sin((dayOfYear - 80) / 365 * Math.PI * 2);
+  var rise = 12.75 - dayLen / 2, set = 12.75 + dayLen / 2;
+  var sunT = (hour - rise) / (set - rise); // 0 at sunrise, 1 at sunset
+  var elev = Math.sin(sunT * Math.PI); // > 0 when up
+  var light = elev < -0.15 ? 'Night' : elev < 0.05 ? (hour < 12 ? 'Dawn' : 'Dusk') : elev < 0.3 ? 'Golden' : 'Day';
+
+  var SKIES = {
+    Night: ['#070b16', '#14203a', '#1d2b48'],
+    Dawn: ['#2b3a66', '#c9839a', '#f2b98a'],
+    Dusk: ['#24234f', '#b0587a', '#f29b6b'],
+    Golden: ['#5f8fc4', '#f2c48a', '#f7dcae'],
+    Day: ['#4f8fd0', '#9cc6ea', '#dceaf2']
+  };
+  var sky = SKIES[light];
+  var sea = light === 'Night' ? ['#0b1830', '#12264a'] : light === 'Day' ? ['#1f5f8a', '#3b86a8'] : ['#2b3f6a', '#6a6f94'];
+
+  var cv = document.getElementById('c');
+  var ctx = cv.getContext('2d');
+
+  function draw() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var S = Math.min(innerWidth, innerHeight);
+    cv.width = S * dpr; cv.height = S * dpr; cv.style.width = S + 'px'; cv.style.height = S + 'px';
+    ctx.setTransform(S * dpr / 1000, 0, 0, S * dpr / 1000, 0, 0);
+
+    var horizon = 560;
+    var g = ctx.createLinearGradient(0, 0, 0, horizon);
+    g.addColorStop(0, sky[0]); g.addColorStop(0.65, sky[1]); g.addColorStop(1, sky[2]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 1000, horizon);
+
+    if (light === 'Night' || light === 'Dawn' || light === 'Dusk') {
+      ctx.fillStyle = 'rgba(255,255,255,' + (light === 'Night' ? 0.8 : 0.35) + ')';
+      for (var i = 0; i < stars.length; i++) { ctx.beginPath(); ctx.arc(stars[i][0] * 1000, stars[i][1] * 1000, stars[i][2], 0, 6.283); ctx.fill(); }
+    }
+
+    // sun or moon on an arc over the sea (we face west)
+    var bodyX = 140 + Math.min(Math.max(sunT, 0), 1) * 720;
+    var bodyY = horizon - Math.max(elev, -0.2) * 430;
+    if (elev > -0.12) {
+      var sg = ctx.createRadialGradient(bodyX, bodyY, 10, bodyX, bodyY, 160);
+      sg.addColorStop(0, 'rgba(255,236,190,.55)'); sg.addColorStop(1, 'rgba(255,236,190,0)');
+      ctx.fillStyle = sg; ctx.fillRect(0, 0, 1000, horizon);
+      ctx.fillStyle = elev < 0.3 ? '#ffb46a' : '#fff4d6';
+      ctx.beginPath(); ctx.arc(bodyX, bodyY, 34, 0, 6.283); ctx.fill();
+    } else {
+      var mx = 220 + ((hour + 12) % 24) / 24 * 560;
+      ctx.fillStyle = '#e8ecf4'; ctx.beginPath(); ctx.arc(mx, 150, 22, 0, 6.283); ctx.fill();
+      ctx.fillStyle = sky[0]; ctx.beginPath(); ctx.arc(mx + 9, 145, 20, 0, 6.283); ctx.fill();
+    }
+
+    // planes climbing out over the water
+    for (var p = 0; p < planeSeeds.length; p++) {
+      var ps = planeSeeds[p], px = ps[0] * 1000, py = ps[1] * 1000;
+      ctx.strokeStyle = light === 'Night' ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.55)';
+      ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(px + 260, py - ps[2] * 260); ctx.lineTo(px, py); ctx.stroke();
+      ctx.fillStyle = light === 'Night' ? '#ff5a5a' : '#2a2f3a';
+      ctx.beginPath(); ctx.arc(px, py, light === 'Night' ? 3 : 4, 0, 6.283); ctx.fill();
+    }
+
+    // sea
+    var sg2 = ctx.createLinearGradient(0, horizon, 0, 1000);
+    sg2.addColorStop(0, sea[0]); sg2.addColorStop(1, sea[1]);
+    ctx.fillStyle = sg2; ctx.fillRect(0, horizon, 1000, 440);
+
+    // waterline set by the tide: high tide brings the sand edge up the frame
+    var shore = 860 - (tide / tideMax) * 70;
+    for (var w = 0; w < waveSeeds.length; w++) {
+      var ws = waveSeeds[w], y = horizon + 6 + Math.pow(w / waveSeeds.length, 1.6) * (shore - horizon - 10);
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.08 + w / waveSeeds.length * 0.35 * swell) + ')';
+      ctx.lineWidth = 0.6 + w / waveSeeds.length * 2.2;
+      ctx.beginPath();
+      for (var x = 0; x <= 1000; x += 10) {
+        var yy = y + Math.sin(x * ws[1] + ws[0]) * ws[2] * (1 + w / 12) * swell;
+        if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+      }
+      ctx.stroke();
+    }
+    if (elev > -0.12) { // sun glitter
+      ctx.fillStyle = 'rgba(255,230,180,.35)';
+      for (var gl = 0; gl < 80; gl++) {
+        var gy = horizon + 4 + gl * 4, spread = 6 + gl * 1.4;
+        ctx.fillRect(bodyX - spread / 2 + Math.sin(gl * 7.1) * spread * 0.4, gy, spread * 0.6, 1.5);
+      }
+    }
+
+    // sand and foam
+    ctx.fillStyle = light === 'Night' ? '#3b3a3f' : '#d8c29a';
+    ctx.beginPath(); ctx.moveTo(0, 1000);
+    for (var sx = 0; sx <= 1000; sx += 10) ctx.lineTo(sx, shore + Math.sin(sx * 0.012 + m2) * 8);
+    ctx.lineTo(1000, 1000); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 3; ctx.beginPath();
+    for (var fx2 = 0; fx2 <= 1000; fx2 += 10) { var fy = shore + Math.sin(fx2 * 0.012 + m2) * 8 - 2; if (fx2 === 0) ctx.moveTo(fx2, fy); else ctx.lineTo(fx2, fy); }
+    ctx.stroke();
+
+    // two stacks on the shore, a nod to the generating station
+    ctx.fillStyle = light === 'Night' ? '#1a1d26' : '#5b5f68';
+    ctx.fillRect(892, horizon - 120, 14, 120); ctx.fillRect(918, horizon - 104, 14, 104); ctx.fillRect(870, horizon - 26, 90, 26);
+
+    // tide chart across the top
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(40, 30, 920, 96);
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2; ctx.beginPath();
+    for (var hh = 0; hh <= 24; hh += 0.1) { var cx = 60 + hh / 24 * 880, cy = 78 - tideAt(hh) / tideMax * 34; if (hh === 0) ctx.moveTo(cx, cy); else ctx.lineTo(cx, cy); }
+    ctx.stroke();
+    var nx = 60 + hour / 24 * 880, ny = 78 - tide / tideMax * 34;
+    ctx.fillStyle = '#ffd36a'; ctx.beginPath(); ctx.arc(nx, ny, 6, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = '600 13px ui-monospace, Menlo, monospace';
+    ctx.textAlign = 'left'; ctx.fillText('EL SEGUNDO · ' + clock(hour) + ' · TIDE ' + tideName.toUpperCase() + ' ' + (tide >= 0 ? '+' : '') + tide.toFixed(1) + ' FT', 60, 118);
+    ctx.textAlign = 'right'; ctx.fillText('DAY ' + dayOfYear + ' · ' + light.toUpperCase(), 940, 118);
+  }
+
+  function clock(h) { var hr = Math.floor(h), mn = Math.floor((h - hr) * 60); var ap = hr < 12 ? 'AM' : 'PM'; var h12 = hr % 12 === 0 ? 12 : hr % 12; return h12 + ':' + (mn < 10 ? '0' : '') + mn + ' ' + ap; }
+
+  draw();
+  addEventListener('resize', draw);
+  $.done({ Hour: clock(hour), Tide: tideName, Light: light, Planes: planes, Season: dayOfYear < 80 || dayOfYear > 355 ? 'Winter' : dayOfYear < 172 ? 'Spring' : dayOfYear < 266 ? 'Summer' : 'Fall' });
+})();
+</script>
+</body>
+</html>
