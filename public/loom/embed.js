@@ -30,6 +30,7 @@
     textarea{min-height:60px}
     button{background:var(--a);color:#fff8ec;font:800 12px/1 'Archivo',Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em;padding:8px 12px;cursor:pointer;justify-self:start}
     .s{font-size:13px;color:#4a463d;min-height:1em;margin:0}
+    @media (max-width: 640px){button[type=submit]{min-height:44px}}
     @media (prefers-color-scheme:dark){:host{color:#ece6d6}.w{background:#141411;border-color:#ece6d6;box-shadow:4px 4px 0 #ece6d6}.t{background:#ece6d6;color:#0f0f0d}li{border-color:#3b3830}input,textarea{background:#0f0f0d;border-color:#ece6d6}.agent{color:#8fb4ff}.robot{color:#e0c46a}}
   `;
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
