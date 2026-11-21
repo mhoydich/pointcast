@@ -361,6 +361,7 @@ const names = [
 
 const el = {
   field: document.querySelector("#field"),
+  prizeMoneyCard: document.querySelector('nouns-money-house-card[placement="battler"]'),
   leaguePhase: document.querySelector("#leaguePhase"),
   leagueDay: document.querySelector("#leagueDay"),
   leagueSlate: document.querySelector("#leagueSlate"),
@@ -1189,6 +1190,7 @@ function applyReenactmentBias(setup) {
 
 function resetMatch(setup = null) {
   clearTimeout(state.nextTimer);
+  el.prizeMoneyCard?.setAttribute("hidden", "");
   state.units.forEach((unit) => unit.node?.remove());
   document.querySelectorAll(".hit-pop, .spark, .amp-zone, .crown-zone, .terrain-zone").forEach((node) => node.remove());
   state.units = [];
@@ -2543,6 +2545,7 @@ function checkFinish() {
     applyLeagueResult(winner, loser, left, right);
     state.finished = true;
     state.running = false;
+    el.prizeMoneyCard?.removeAttribute("hidden");
     el.pauseButton.textContent = "Replay";
     el.matchTitle.textContent = state.league.phase === "champion" ? `${gangs[winner].name} win the Nouns Bowl` : `${gangs[winner].name} win`;
     addLog(`${gangs[winner].name} hold the open field with ${aliveUnits(winner).length} still standing.`);
@@ -3715,6 +3718,7 @@ window.addEventListener("keydown", (event) => {
   if (["INPUT", "TEXTAREA", "SELECT"].includes(event.target?.tagName)) return;
   const key = event.key.toLowerCase();
   if (key === " ") {
+    if (event.composedPath().includes(el.prizeMoneyCard)) return;
     event.preventDefault();
     el.pauseButton.click();
     flashTvHint("Space: pause/resume");

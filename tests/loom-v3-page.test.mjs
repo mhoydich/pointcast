@@ -309,3 +309,36 @@ test('C8: the Links chip lists one-message link threads; the default list hides 
   assert.ok(labels().some((l) => /single/.test(l)));
   assert.ok(!labels().includes('#c8room'));
 });
+
+test('the directory house card sits between real threads and stays dismissed across refreshes and filters', async () => {
+  const kv = memoryKv();
+  for (const to of ['#typesetter', '#payroll']) {
+    await post(kv, { to, from: { name: 'sam', kind: 'human' }, body: 'Testing the press.' });
+  }
+  const w = await page(kv, { path: '/loom#directory', small: true });
+  const list = w.document.getElementById('dirList');
+  const card = list.querySelector('nouns-money-house-card[placement="loom"]');
+  const rows = () => [...list.querySelectorAll('.row')].map(row => row.dataset.open);
+  const original = rows();
+  assert.equal(card.previousElementSibling.dataset.open, original[0]);
+  assert.equal(card.nextElementSibling.dataset.open, original[1]);
+  assert.equal(w.document.querySelector('#fy nouns-money-house-card, #threadPane nouns-money-house-card'), null);
+
+  card.tabIndex = -1;
+  card.focus();
+  w.document.querySelector('[data-f="all"]').click();
+  assert.equal(w.document.activeElement, card, 'directory redraw keeps the same focused host attached');
+  w.document.querySelector('[data-f="people"]').click();
+  assert.equal(list.contains(card), false);
+  w.document.querySelector('[data-f="all"]').click();
+  assert.equal(list.querySelector('nouns-money-house-card'), card);
+
+  card.hidden = true; // Shared card sets this on Skip or timeout.
+  w.document.querySelector('[data-f="topic"]').click();
+  w.document.querySelector('[data-f="all"]').click();
+  assert.equal(list.querySelector('nouns-money-house-card'), null);
+  assert.deepEqual(rows(), original);
+  list.querySelector('.row').click();
+  await settle(w);
+  assert.equal(w.document.getElementById('threadTitle').textContent, original[0]);
+});
