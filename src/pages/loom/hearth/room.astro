@@ -7,12 +7,12 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
     <a class="hearth-back" href="/loom/hearth/" aria-label="Back to the hearth">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
     </a>
-    <span class="hearth-meta" id="addr"></span>
+    <a class="hearth-meta" style="overflow-wrap:anywhere" id="addr" href="/loom" aria-label="Open full thread on the Loom"></a>
   </header>
 
   <section class="hearth-section" style="flex-direction:row;align-items:flex-end;gap:16px">
     <span id="room-flame"></span>
-    <h1 class="hearth-headline" id="room-title" style="font-size:22px">Sitting down…</h1>
+    <h1 class="hearth-headline" id="room-title" style="font-size:22px;overflow-wrap:anywhere">Sitting down…</h1>
   </section>
 
   <section class="hearth-card" style="margin:0 20px" id="summary-card" hidden>
@@ -20,31 +20,40 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
     <div id="summary" style="display:flex;flex-direction:column;gap:6px"></div>
   </section>
 
-  <section class="hearth-section" aria-labelledby="voices-label" style="padding-top:24px">
+  <div class="hearth-section" id="read-error" hidden>
+    <p class="hearth-quiet" role="status">The Loom couldn’t read this room.</p>
+    <button type="button" id="retry" class="hearth-ask">Try again</button>
+  </div>
+
+  <section id="voices" hidden class="hearth-section" aria-labelledby="voices-label" style="padding-top:24px">
     <h2 class="hearth-label" id="voices-label">Voices</h2>
     <div id="people" style="display:flex;flex-direction:column;gap:18px"></div>
     <details class="hearth-fold" id="bots" hidden>
-      <summary><span id="bots-label"></span><span class="hearth-meta">open</span></summary>
+      <summary><span id="bots-label"></span></summary>
       <div class="hearth-fold-list" id="bots-list"></div>
     </details>
   </section>
 
-  <form class="hearth-foot" id="log-form" style="flex-direction:column;gap:8px">
-    <label class="hearth-meta" for="log">Add a log to this fire</label>
-    <div style="display:flex;gap:10px">
-      <input class="hearth-input" id="log" name="log" type="text" maxlength="2000" placeholder="Say something to the room" autocomplete="off" required>
-      <button class="hearth-btn primary" type="submit" style="flex:0 0 auto">Add</button>
-    </div>
+  <form class="hearth-foot" id="log-form" method="post" style="position:static;flex-direction:column;gap:8px">
+    <label class="hearth-meta" for="log">Public log for this room</label>
+    <input class="hearth-input" id="log" name="log" type="text" maxlength="2000" placeholder="Say something to the room" autocomplete="off" required>
     <div id="name-row" hidden>
       <label class="hearth-meta" for="name">Your name on the Loom</label>
       <input class="hearth-input" id="name" name="name" type="text" maxlength="40" autocomplete="nickname" style="width:100%;margin-top:6px">
     </div>
+    <div style="display:flex;gap:10px">
+      <button class="hearth-btn primary" id="send-log" type="submit" disabled>Add a log</button>
+      <a class="hearth-btn" href="/loom/hearth/lend">Lend your AI</a>
+    </div>
     <p class="hearth-status" id="status" role="status"></p>
   </form>
+  <noscript><a href="/loom/topic/">Read Loom rooms</a></noscript>
 </HearthLayout>
 
 <script>
-  import { esc, flameSvg, fireSize, paletteFor, roomView, isCollator } from '../../../lib/loom/hearth.mjs';
+  import { esc, flameSvg, roomView, ago } from '../../../lib/loom/hearth.mjs';
+
+  import { hearthActivity } from '../../../lib/loom/hearth-day.mjs';
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -55,77 +64,103 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
   $('addr').textContent = to;
   document.title = `Loom · ${to}`;
 
-  const postHtml = (p) => `
-    <article class="hearth-post">
-      <div class="hearth-post-head">
-        <span class="hearth-post-name">${esc(p.name)}</span>
-        ${p.person ? '' : '<span class="hearth-tag">bot</span>'}
-        <span class="hearth-meta">${esc(p.when)}</span>
-      </div>
-      <p class="hearth-post-body">${esc(p.body)}</p>
-    </article>`;
-
-  async function load() {
-    let data;
+  const loomLink = address => '/loom?to=' + encodeURIComponent(address);
+  const safeUrl = value => {
     try {
-      const res = await fetch('/api/loom?to=' + encodeURIComponent(to));
-      data = await res.json();
-    } catch {
-      $('room-title').textContent = 'The Loom did not answer. Try again in a minute.';
-      return;
-    }
-    const log = data?.log ?? {};
-    const messages = Array.isArray(data?.messages) ? data.messages : [];
-    const now = Date.now();
-    $('room-title').textContent = log.title || log.label || to;
-    const last = [...messages].reverse().find((m) => !isCollator(m.from));
-    $('room-flame').innerHTML = flameSvg(fireSize(log.updatedAt, now) ?? 32, paletteFor(last?.from), { still: !fireSize(log.updatedAt, now) });
+      const url = new URL(value);
+      return ['https:', 'http:'].includes(url.protocol) ? url.href : null;
+    } catch { return null; }
+  };
+  $('addr').href = loomLink(to);
+  $('addr').setAttribute('aria-label', 'Open the full thread for ' + to + ' on the Loom');
+  const link = (url, label) => `<a href="${esc(url)}" rel="nofollow ugc">${esc(label)}</a>`;
 
-    if (!data?.exists) {
-      $('people').innerHTML = '<p class="hearth-quiet">No fire here yet. Add the first log.</p>';
-      return;
-    }
-    const view = roomView(messages, { title: null, now });
-    if (view.summary.length) {
-      $('summary-card').hidden = false;
-      $('summary').innerHTML = view.summary.map((s) => `<p class="hearth-body">${esc(s)}</p>`).join('');
-    }
-    $('people').innerHTML = view.people.length
-      ? view.people.map(postHtml).join('')
-      : '<p class="hearth-quiet">No person has spoken in this room yet.</p>';
-    if (view.botCount) {
-      $('bots').hidden = false;
-      $('bots-label').textContent = view.botCount === 1 ? 'A bot posted here once' : `The bots posted ${view.botCount} times here`;
-      $('bots-list').innerHTML = view.bots.map(postHtml).join('');
-    }
+  function postHtml(m, key, now) {
+    const body = String(m.body || '').split(/(https?:\/\/[^\s<>"']+)/gi).map(piece => {
+      const raw = piece.replace(/[.,;!?]+$/, '');
+      return /^https?:\/\//i.test(raw) && safeUrl(raw) ? link(raw, raw) + esc(piece.slice(raw.length)) : esc(piece);
+    }).join('');
+    const image = safeUrl(m.media?.url);
+    const refs = [...new Set([...(m.cites || []), ...(m.links || [])])].filter(ref => typeof ref === 'string');
+    return `<article class="hearth-post" style="overflow-wrap:anywhere">
+      <div class="hearth-post-head"><span class="hearth-post-name">${esc(m.from?.name || 'Anonymous')}</span>
+        <span class="hearth-meta">${link(loomLink('loom:' + key + '#' + m.id), ago(m.at, now))}</span></div>
+      ${body ? '<p class="hearth-post-body">' + body + '</p>' : ''}
+      ${image ? link(image, m.media.alt || 'View image') : ''}
+      ${m.poll ? '<div>' + (m.poll.question !== m.body ? esc(m.poll.question) : '') +
+        '<ul>' + m.poll.options.map(o => '<li>' + esc(o.label) + '</li>').join('') + '</ul></div>' : ''}
+      ${refs.length ? '<div>' + refs.map(ref => link(safeUrl(ref) || loomLink(ref), ref)).join(' · ') + '</div>' : ''}
+    </article>`;
   }
 
+  async function load() {
+    $('retry').disabled = true;
+    try {
+      const res = await fetch('/api/loom?to=' + encodeURIComponent(to), { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (!data.ok || data.kvBound === false || !data.log || !Array.isArray(data.messages)) throw new Error();
+      const log = data.log, messages = data.messages, now = Date.now();
+      $('room-title').textContent = log.title || log.label || to;
+      const heat = hearthActivity(messages, { now, trimmedSince: log.trimmedBefore ? data.ops?.[0]?.at || 'unknown' : null });
+      $('room-flame').innerHTML = heat.state === 'active' ? flameSvg(heat.size, heat.human ? 'warm' : 'pilot') : '';
+      const view = roomView(messages, { log });
+      $('summary-card').hidden = false;
+      $('summary').innerHTML = view.summary.map(s => `<p class="hearth-body" style="overflow-wrap:anywhere">${esc(s)}</p>`).join('');
+      $('people').innerHTML = view.people.map(m => postHtml(m, log.key, now)).join('');
+      $('bots').hidden = !view.botCount;
+      $('bots-label').textContent = !view.botCount ? '' : view.botCount === 1 ? 'The bots did one more thing' : `The bots did ${view.botCount} more things`;
+      $('bots-list').innerHTML = view.bots.map(m => postHtml(m, log.key, now)).join('');
+      $('voices').hidden = !view.people.length && !view.botCount;
+      $('read-error').hidden = true;
+    } catch {
+      $('room-title').textContent = to;
+      $('read-error').hidden = false;
+    } finally { $('retry').disabled = false; }
+  }
+  $('retry').addEventListener('click', load);
   if (!store.get('loom.name')) $('name-row').hidden = false;
 
   $('log-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    if ($('send-log').disabled) return;
     const body = $('log').value.trim();
     const name = (store.get('loom.name') || $('name').value || '').trim();
     if (!body) return;
     if (!name) { $('name-row').hidden = false; $('name').focus(); $('status').textContent = 'Add your name so the room knows who spoke.'; return; }
+    $('send-log').disabled = true;
+    $('log').readOnly = true;
     $('status').textContent = 'Adding…';
     try {
       let clientId = null;
       try { clientId = JSON.parse(localStorage.getItem('loom:client') || '""') || null; } catch { /* none yet */ }
       if (!clientId) { clientId = crypto.randomUUID(); store.set('loom:client', JSON.stringify(clientId)); }
-      const res = await fetch('/api/loom', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch('/api/loom', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'append', clientId, to, from: { name, kind: 'human' }, body }) });
       const j = await res.json();
-      if (!res.ok || j.ok === false) throw new Error(j.error || 'rejected');
+      if (j.ok === false && res.status < 500) {
+        $('status').textContent = j.error === 'rate_limited' ? 'The room is receiving too many posts. Your draft is here.' : 'The Loom declined this log. Your draft is here.';
+        return;
+      }
+      if (!res.ok || j.ok !== true || !j.message?.id) throw new Error();
+      if (j.editToken && j.message?.id) {
+        try {
+          const sent = JSON.parse(store.get('loom.sent') || '{}');
+          sent[j.message.id] = j.editToken;
+          store.set('loom.sent', JSON.stringify(sent));
+        } catch { /* A malformed local history must not turn a successful post into a retry. */ }
+      }
       store.set('loom.name', name);
       $('name-row').hidden = true;
       $('log').value = '';
       $('status').textContent = 'Added. The fire is a little brighter.';
-      load();
-    } catch (e) {
-      $('status').textContent = `That log did not take (${e.message}). Try again in a minute.`;
-    }
+      await load();
+    } catch {
+      $('status').textContent = 'Couldn’t confirm the post. Check the room before sending again.';
+      await load();
+    } finally { $('send-log').disabled = false; $('log').readOnly = false; }
   });
 
+  $('send-log').disabled = false;
   load();
 </script>
