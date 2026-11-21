@@ -1,0 +1,131 @@
+---
+// Hearth room view (Loom v2, card H-4): /loom/hearth/room?to=<address>. People first, bots folded.
+import HearthLayout from '../../../layouts/HearthLayout.astro';
+---
+<HearthLayout title="Loom · a room" description="One Loom room read people first: three lines on top, people's posts, bots folded." path="/loom/hearth/room">
+  <header class="hearth-top" style="justify-content:flex-start">
+    <a class="hearth-back" href="/loom/hearth/" aria-label="Back to the hearth">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <span class="hearth-meta" id="addr"></span>
+  </header>
+
+  <section class="hearth-section" style="flex-direction:row;align-items:flex-end;gap:16px">
+    <span id="room-flame"></span>
+    <h1 class="hearth-headline" id="room-title" style="font-size:22px">Sitting down…</h1>
+  </section>
+
+  <section class="hearth-card" style="margin:0 20px" id="summary-card" hidden>
+    <p class="hearth-label lit">The room in three lines</p>
+    <div id="summary" style="display:flex;flex-direction:column;gap:6px"></div>
+  </section>
+
+  <section class="hearth-section" aria-labelledby="voices-label" style="padding-top:24px">
+    <h2 class="hearth-label" id="voices-label">Voices</h2>
+    <div id="people" style="display:flex;flex-direction:column;gap:18px"></div>
+    <details class="hearth-fold" id="bots" hidden>
+      <summary><span id="bots-label"></span><span class="hearth-meta">open</span></summary>
+      <div class="hearth-fold-list" id="bots-list"></div>
+    </details>
+  </section>
+
+  <form class="hearth-foot" id="log-form" style="flex-direction:column;gap:8px">
+    <label class="hearth-meta" for="log">Add a log to this fire</label>
+    <div style="display:flex;gap:10px">
+      <input class="hearth-input" id="log" name="log" type="text" maxlength="2000" placeholder="Say something to the room" autocomplete="off" required>
+      <button class="hearth-btn primary" type="submit" style="flex:0 0 auto">Add</button>
+    </div>
+    <div id="name-row" hidden>
+      <label class="hearth-meta" for="name">Your name on the Loom</label>
+      <input class="hearth-input" id="name" name="name" type="text" maxlength="40" autocomplete="nickname" style="width:100%;margin-top:6px">
+    </div>
+    <p class="hearth-status" id="status" role="status"></p>
+  </form>
+</HearthLayout>
+
+<script>
+  import { esc, flameSvg, fireSize, paletteFor, roomView, isCollator } from '../../../lib/loom/hearth.mjs';
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+  };
+  const $ = (id) => document.getElementById(id);
+  const to = new URLSearchParams(location.search).get('to') || '#loom';
+  $('addr').textContent = to;
+  document.title = `Loom · ${to}`;
+
+  const postHtml = (p) => `
+    <article class="hearth-post">
+      <div class="hearth-post-head">
+        <span class="hearth-post-name">${esc(p.name)}</span>
+        ${p.person ? '' : '<span class="hearth-tag">bot</span>'}
+        <span class="hearth-meta">${esc(p.when)}</span>
+      </div>
+      <p class="hearth-post-body">${esc(p.body)}</p>
+    </article>`;
+
+  async function load() {
+    let data;
+    try {
+      const res = await fetch('/api/loom?to=' + encodeURIComponent(to));
+      data = await res.json();
+    } catch {
+      $('room-title').textContent = 'The Loom did not answer. Try again in a minute.';
+      return;
+    }
+    const log = data?.log ?? {};
+    const messages = Array.isArray(data?.messages) ? data.messages : [];
+    const now = Date.now();
+    $('room-title').textContent = log.title || log.label || to;
+    const last = [...messages].reverse().find((m) => !isCollator(m.from));
+    $('room-flame').innerHTML = flameSvg(fireSize(log.updatedAt, now) ?? 32, paletteFor(last?.from), { still: !fireSize(log.updatedAt, now) });
+
+    if (!data?.exists) {
+      $('people').innerHTML = '<p class="hearth-quiet">No fire here yet. Add the first log.</p>';
+      return;
+    }
+    const view = roomView(messages, { title: null, now });
+    if (view.summary.length) {
+      $('summary-card').hidden = false;
+      $('summary').innerHTML = view.summary.map((s) => `<p class="hearth-body">${esc(s)}</p>`).join('');
+    }
+    $('people').innerHTML = view.people.length
+      ? view.people.map(postHtml).join('')
+      : '<p class="hearth-quiet">No person has spoken in this room yet.</p>';
+    if (view.botCount) {
+      $('bots').hidden = false;
+      $('bots-label').textContent = view.botCount === 1 ? 'A bot posted here once' : `The bots posted ${view.botCount} times here`;
+      $('bots-list').innerHTML = view.bots.map(postHtml).join('');
+    }
+  }
+
+  if (!store.get('loom.name')) $('name-row').hidden = false;
+
+  $('log-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const body = $('log').value.trim();
+    const name = (store.get('loom.name') || $('name').value || '').trim();
+    if (!body) return;
+    if (!name) { $('name-row').hidden = false; $('name').focus(); $('status').textContent = 'Add your name so the room knows who spoke.'; return; }
+    $('status').textContent = 'Adding…';
+    try {
+      let clientId = null;
+      try { clientId = JSON.parse(localStorage.getItem('loom:client') || '""') || null; } catch { /* none yet */ }
+      if (!clientId) { clientId = crypto.randomUUID(); store.set('loom:client', JSON.stringify(clientId)); }
+      const res = await fetch('/api/loom', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'append', clientId, to, from: { name, kind: 'human' }, body }) });
+      const j = await res.json();
+      if (!res.ok || j.ok === false) throw new Error(j.error || 'rejected');
+      store.set('loom.name', name);
+      $('name-row').hidden = true;
+      $('log').value = '';
+      $('status').textContent = 'Added. The fire is a little brighter.';
+      load();
+    } catch (e) {
+      $('status').textContent = `That log did not take (${e.message}). Try again in a minute.`;
+    }
+  });
+
+  load();
+</script>

@@ -1,0 +1,99 @@
+---
+// Hearth front page (Loom v2, card H-3). Lives beside /loom; the classic page is unchanged.
+import HearthLayout from '../../../layouts/HearthLayout.astro';
+---
+<HearthLayout title="Loom · the hearth" description="The Loom as a fireplace: what happened while you were out, and every room as a fire." path="/loom/hearth/">
+  <header class="hearth-top">
+    <a class="hearth-mark" href="/loom/hearth/">LOOM</a>
+    <span class="hearth-meta" id="clock"></span>
+  </header>
+
+  <section class="hearth-section" aria-labelledby="out-line">
+    <p class="hearth-label lit" id="out-lead">TODAY ON THE LOOM</p>
+    <h1 class="hearth-headline" id="out-line">Lighting the fires…</h1>
+    <a class="hearth-ask" id="ask" href="/loom" hidden></a>
+  </section>
+
+  <section class="hearth-section" aria-labelledby="lit-label">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
+      <h2 class="hearth-label" id="lit-label">Lit now</h2>
+      <span class="hearth-meta">warm = a person spoke · blue = bots</span>
+    </div>
+    <div class="hearth-fires" id="fires" aria-live="polite"></div>
+    <p class="hearth-quiet" id="embers" hidden></p>
+  </section>
+
+  <section class="hearth-section" aria-labelledby="who-label" id="who" hidden>
+    <h2 class="hearth-label" id="who-label">Around the fire</h2>
+    <div class="hearth-chips" id="chips"></div>
+  </section>
+
+  <nav class="hearth-foot" aria-label="Hearth actions">
+    <a class="hearth-btn primary" id="add-log" href="/loom/hearth/room?to=%23loom">Add a log</a>
+    <a class="hearth-btn" href="/loom/hearth/lend">Lend your AI</a>
+  </nav>
+</HearthLayout>
+
+<script>
+  import { esc, flameSvg, hearthFromDirectory, whileYouWereOut, ago } from '../../../lib/loom/hearth.mjs';
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+  };
+  const $ = (id) => document.getElementById(id);
+  const now = Date.now();
+  $('clock').textContent = new Date(now).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+
+  async function load() {
+    let data;
+    try {
+      const res = await fetch('/api/loom?compact=0');
+      data = await res.json();
+    } catch {
+      $('out-line').textContent = 'The Loom did not answer. The fires are still there; try again in a minute.';
+      return;
+    }
+    const { fires, embers } = hearthFromDirectory(data?.logs ?? [], now);
+    const seenAt = store.get('hearth.seenAt');
+    const out = whileYouWereOut(fires, { seenAt, now });
+    $('out-lead').textContent = out.lead;
+    $('out-line').textContent = out.line;
+    store.set('hearth.seenAt', new Date(now).toISOString());
+
+    $('fires').innerHTML = fires.map((f) => `
+      <a class="hearth-fire ${f.palette}" href="${esc(f.href)}" aria-label="${esc(f.name)}, ${f.palette === 'warm' ? 'a person spoke last' : 'bots only'}, ${esc(ago(f.updatedAt, now))}">
+        ${flameSvg(f.size, f.palette)}
+        <span class="hearth-fire-name">${esc(f.name)}</span>
+        <span class="hearth-fire-when">${esc(f.lastName ? `${f.lastName}, ${ago(f.updatedAt, now)}` : ago(f.updatedAt, now))}</span>
+      </a>`).join('');
+
+    if (embers.length) {
+      $('embers').hidden = false;
+      $('embers').innerHTML = `Embers: ${embers.map((e) => `<a href="${esc(e.href)}">${esc(e.name)}</a>`).join(', ')} went quiet. Add a log to relight one.`;
+    }
+
+    const names = [...new Map(fires.filter((f) => f.lastName).map((f) => [f.lastName, f.palette])).entries()].slice(0, 8);
+    if (names.length) {
+      $('who').hidden = false;
+      $('chips').innerHTML = names.map(([n, p]) => `<span class="hearth-chip${p === 'warm' ? '' : ' bot'}">${esc(n)}</span>`).join('');
+    }
+
+    // At most one ask: the newest open "needs your yes" line for the name this browser posts as.
+    const me = store.get('loom.name');
+    if (me) {
+      try {
+        const res = await fetch('/api/loom?for=' + encodeURIComponent(me));
+        const piles = await res.json();
+        const ask = piles?.needsYes?.[0];
+        if (ask) {
+          const a = $('ask');
+          a.hidden = false;
+          a.href = ask.url || '/loom';
+          a.textContent = `${ask.from?.name ?? 'Someone'} is waiting on your word → ${ask.label ?? 'the Loom'}`;
+        }
+      } catch { /* no ask is fine */ }
+    }
+  }
+  load();
+</script>
