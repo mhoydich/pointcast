@@ -32,6 +32,13 @@ export const LEVELS = [
 ];
 export const LEVEL_VALUES = LEVELS.map(([v]) => v);
 export const isLevel = (v) => typeof v === 'number' && LEVEL_VALUES.includes(v);
+// A self-declared level may be any tenth from 2.0 to 8.0 (people say "I'm a 4.2").
+// The LEVELS lines stay the guide; the named level is still the nearest half step.
+export const DECLARE_STEP = 0.1;
+export const isDeclared = (v) => typeof v === 'number' && Number.isFinite(v)
+  && v >= MIN - 1e-9 && v <= MAX + 1e-9 && Math.abs(v * 10 - Math.round(v * 10)) < 1e-6;
+// One decimal, so 4.2 stored from 4.199999 or 4.2000001 reads back as 4.2.
+export const toTenth = (v) => Math.round(v * 10) / 10;
 
 // A finish says a little about level: gold reads a quarter step above the division, fourth a tenth below.
 export const PLACE_ADJ = { 1: 0.25, 2: 0.10, 3: 0, 4: -0.10 };
@@ -63,7 +70,8 @@ export function fromResults(results) {
 // Blend the results estimate with a self-declared level. Either side may be missing.
 export function blend({ est = null, weight = 0, declared = null } = {}) {
   const hasEst = Number.isFinite(est) && weight > 0;
-  const hasDec = isLevel(declared);
+  const hasDec = isDeclared(declared);
+  if (hasDec) declared = toTenth(declared);
   if (!hasEst && !hasDec) return null;
   const w = (hasEst ? weight : 0) + (hasDec ? DECLARED_WEIGHT : 0);
   const value = ((hasEst ? est * weight : 0) + (hasDec ? declared * DECLARED_WEIGHT : 0)) / w;
@@ -74,6 +82,10 @@ export function blend({ est = null, weight = 0, declared = null } = {}) {
     gap: hasEst && hasDec && Math.abs(declared - est) >= GAP_FLAG ? round2(declared - est) : null,
   };
 }
+
+// What the player says beside what results show, in words: "Says 4.2. Results say 3.85 from 2 finishes."
+export const saysLine = (declared, est, finishes) =>
+  `Says ${toTenth(declared).toFixed(1)}. Results say ${est.toFixed(2)} from ${finishes} finish${finishes === 1 ? '' : 'es'}.`;
 
 // The named level is the nearest half step.
 export const levelName = (r) => (Math.round(clamp(r) * 2) / 2).toFixed(1);
