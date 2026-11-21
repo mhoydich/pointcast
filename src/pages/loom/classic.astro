@@ -51,10 +51,13 @@ const jsonLd = {
           <form class="lm-goto" data-goto>
             <label for="lm-to">Go to any address</label>
             <div class="lm-goto-row">
-              <input id="lm-to" data-to-input placeholder="#loom · @someone · https://… · geo:33.918,-118.416" autocomplete="off" spellcheck="false" />
+              <input id="lm-to" data-to-input aria-describedby="lm-to-hint" placeholder="#loom · @someone · https://… · geo:33.918,-118.416" autocomplete="off" spellcheck="false" />
               <button type="submit">Open</button>
             </div>
-            <p class="lm-hint" data-goto-hint>Paste a link, type <code>@name</code>, <code>#topic</code>, <code>pc:/court</code>, a wallet, or <code>geo:lat,lon</code>.</p>
+            <div>
+              <p id="lm-to-hint" class="lm-hint" data-goto-hint>Paste a link, type <code>@name</code>, <code>#topic</code>, <code>pc:/court</code>, a wallet, or <code>geo:lat,lon</code>.</p>
+              <p id="lm-to-error" class="lm-goto-error" role="status"></p>
+            </div>
           </form>
           <div class="lm-chips" role="group" aria-label="Filter by kind" data-chips>
             <button type="button" class="lm-chip" data-kind="" aria-pressed="true">All</button>
@@ -164,6 +167,10 @@ const jsonLd = {
 
   const root = document.querySelector<HTMLElement>('[data-loom]')!;
   const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
+  const addressInput = $<HTMLInputElement>('[data-to-input]');
+  const addressHint = $('[data-goto-hint]');
+  const addressError = $('#lm-to-error');
+  const addressHelp = addressHint.textContent;
   const API = '/api/loom';
   const GLYPH: Record<string, string> = { url: '↗', handle: '@', agent: '⌁', wallet: '◇', did: '◈', geo: '⌖', hash: '#', topic: '§', reply: '↳', unknown: '·' };
   const KIND_LABEL: Record<string, string> = { url: 'A page', handle: 'An inbox', agent: 'An agent', wallet: 'A wallet', did: 'An identity', geo: 'A place', hash: 'A file', topic: 'A channel', reply: 'A message' };
@@ -253,13 +260,28 @@ const jsonLd = {
   }
 
   // ── a log ──────────────────────────────────────────────────────────────
-  async function open(to: string, { push = true } = {}) {
+  function describeAddressError(text = '') {
+    addressError.textContent = text;
+    addressHint.hidden = Boolean(text);
+    addressInput.setAttribute('aria-describedby', text ? 'lm-to-error' : 'lm-to-hint');
+    if (text) addressInput.setAttribute('aria-invalid', 'true');
+    else addressInput.removeAttribute('aria-invalid');
+  }
+
+  async function open(to: string, { push = true, fromInput = false } = {}) {
     let parsed;
-    try { parsed = parseAddress(to); } catch { status('That is not an address the Loom knows. Try a link, @name, #topic or geo:lat,lon.', true); return; }
+    try { parsed = parseAddress(to); } catch {
+      addressInput.value = to;
+      describeAddressError(to ? 'Try a link, an @name, a #topic, or a place like geo:33.918,-118.416.' : 'Enter an address to open.');
+      if (fromInput) addressInput.focus();
+      return;
+    }
+    if (addressError.textContent) addressHint.textContent = addressHelp;
+    describeAddressError();
     address = parsed.kind === 'reply' ? to : parsed.address;
     ops = []; seq = 0; meta = null; viewSeq = Infinity; seen.clear(); stopPlay(); setReply(null);
     if (push) history.pushState({ to: address }, '', loomHref(address));
-    ($('[data-to-input]') as HTMLInputElement).value = address;
+    addressInput.value = address;
     $('[data-log-title]').textContent = parsed.label;
     $('[data-log-kind]').textContent = KIND_LABEL[parsed.kind] ?? 'An address';
     $('[data-thread]').replaceChildren(el('li', 'lm-empty', 'Reading the log…'));
@@ -525,12 +547,15 @@ const jsonLd = {
   });
 
   // ── wiring ─────────────────────────────────────────────────────────────
-  $('[data-goto]').addEventListener('submit', (e) => { e.preventDefault(); const v = ($('[data-to-input]') as HTMLInputElement).value.trim(); if (v) open(v); });
-  ($('[data-to-input]') as HTMLInputElement).addEventListener('input', (e) => {
-    const v = (e.target as HTMLInputElement).value.trim();
-    const hint = $('[data-goto-hint]');
-    if (!v) { hint.textContent = 'Paste a link, type @name, #topic, pc:/court, a wallet, or geo:lat,lon.'; return; }
-    try { const a = parseAddress(v); hint.textContent = `${KIND_LABEL[a.kind] ?? 'Address'} → ${a.address}`; } catch { hint.textContent = 'Not an address yet…'; }
+  $('[data-goto]').addEventListener('submit', (e) => {
+    e.preventDefault();
+    open(addressInput.value.trim(), { fromInput: true });
+  });
+  addressInput.addEventListener('input', () => {
+    describeAddressError();
+    const v = addressInput.value.trim();
+    if (!v) { addressHint.textContent = addressHelp; return; }
+    try { const a = parseAddress(v); addressHint.textContent = `${KIND_LABEL[a.kind] ?? 'Address'} → ${a.address}`; } catch { addressHint.textContent = 'Not an address yet…'; }
   });
   $('[data-chips]').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('button'); if (!b) return;
