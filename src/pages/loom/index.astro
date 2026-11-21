@@ -47,6 +47,7 @@ const jsonLd = {
 <meta name="pc-agents-manifest" content="https://pointcast.xyz/agents.json">
 <meta name="pc-llms" content="https://pointcast.xyz/llms.txt">
 <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+<script is:inline defer src="/nouns-money/house-cards/card.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen&display=swap">
@@ -659,7 +660,8 @@ pre.json {
   border: 0; border-radius: 14px; background: var(--surface); box-shadow: var(--lift);
   transition: background-color .15s ease, transform .15s ease;
 }
-.tt .row + .row { margin-top: 8px; }
+.tt .row + .row, .tt nouns-money-house-card + .row { margin-top: 8px; }
+.tt nouns-money-house-card:defined:not([hidden]) { margin-top: 8px; }
 .tt .row .glyph { box-sizing: content-box; width: 18px; height: 18px; margin-top: 0; padding: 9px; border-radius: 50%; background: var(--soft); color: var(--ink-2); }
 .tt .row .label { font-weight: 600; letter-spacing: -.005em; }
 .tt .row .badge { padding: 3px 8px 2px; border: 0; border-radius: 999px; background: var(--tint); color: var(--signal); }
@@ -1403,11 +1405,17 @@ function dirRows() {
   }
   return state.dir.filter((r) => !(kindOf(r.address) === 'url' && (r.count || 0) < 2 && r.address !== state.addr));
 }
+const directoryHouseCard = h('nouns-money-house-card', { placement: 'loom' });
 function drawDirectory(list) {
-  list.textContent = '';
   const rows = dirRows()
     .filter((r) => matchFilter(r.address) && (!state.openOnly || (r.openQuestions || 0) > 0))
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const showCard = rows.length >= 2 && state.filter === 'all' && !state.openOnly && !directoryHouseCard.hidden;
+  // Keep the same card attached on refresh so its reading timer and keyboard focus survive.
+  for (const child of Array.from(list.children)) {
+    if (child !== directoryHouseCard || !showCard) child.remove();
+  }
+  if (showCard && !directoryHouseCard.isConnected) list.append(directoryHouseCard);
   const foot = h('p', { class: 'foot', text: 'Everything on Loom is public. Anyone can read what you post here.' });
   if (!rows.length) {
     const reset = () => { state.filter = 'all'; state.openOnly = false; renderFilters(); renderDirectory(); };
@@ -1429,14 +1437,14 @@ function drawDirectory(list) {
     return;
   }
   let prevKey = null;
-  rows.forEach((r) => {
+  rows.forEach((r, index) => {
     const last = r.last;
     const open = r.openQuestions || 0;
     const key = last ? last.name + '|' + oneLine(last.body).slice(0, 80) : null;
     const compact = !!key && key === prevKey;
     prevKey = key;
     const kw = ({ url: 'Page', handle: 'Inbox', agent: 'Inbox', topic: 'Topic', place: 'Place' })[kindOf(r.address)] || 'Thread';
-    list.append(h('button', {
+    const row = h('button', {
       type: 'button', class: 'row' + (compact ? ' compact' : ''), 'data-open': r.address,
       'aria-current': r.address === state.addr ? 'true' : null
     },
@@ -1448,7 +1456,8 @@ function drawDirectory(list) {
           h('span', { class: 'meta', text: rel(r.updatedAt) })),
         h('span', { class: 'l2' },
           h('span', { class: 'cnt', text: kw + ' · ' + plural(r.count || 0, 'message') + ' · ' }),
-          compact ? 'same note as above' : (last ? [h('b', { text: last.name }), ': ' + oneLine(last.body)] : 'No messages yet')))));
+          compact ? 'same note as above' : (last ? [h('b', { text: last.name }), ': ' + oneLine(last.body)] : 'No messages yet'))));
+    list.insertBefore(row, showCard && index === 0 ? directoryHouseCard : null);
   });
   list.append(foot);
 }
