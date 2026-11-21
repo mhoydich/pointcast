@@ -1923,13 +1923,39 @@ function openSheet(title, build, focusId) {
 }
 
 /* copy: clipboard only inside click handlers, always guarded */
-function copyText(text, done) {
+async function writeClipboard(text) {
   try {
-    navigator.clipboard.writeText(text).then(() => toast(done || 'Address copied'), () => toast('Couldn’t copy here. Select the text and copy it by hand.'));
-  } catch (e) { toast('Couldn’t copy here. Select the text and copy it by hand.'); }
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function copyText(text, done) {
+  const copied = await writeClipboard(text);
+  toast(copied ? (done || 'Address copied') : 'Couldn’t copy here. Select the text and copy it by hand.');
 }
 
 const loomLink = (addr) => SITE + '/loom?to=' + encodeURIComponent(addr);
+
+async function copyMessageLink(body, addr) {
+  const url = loomLink(addr);
+  const copied = await writeClipboard(url);
+  if (!body.isConnected) return; // The visitor may have closed or switched sheets.
+  if (copied) {
+    closeSheet();
+    toast('Link copied');
+    return;
+  }
+
+  const field = h('textarea', { readonly: true, text: url, 'aria-describedby': 'copyLinkHint' });
+  body.replaceChildren(
+    h('label', { class: 'field' }, h('span', { text: 'Message link' }), field),
+    h('p', { class: 'hint', id: 'copyLinkHint', text: 'Use your device’s Copy command on the selected link.' }));
+  field.focus();
+  field.select();
+}
 
 function openThreadMenu() {
   const t = thread(); const enc = encodeURIComponent(state.addr);
@@ -1993,7 +2019,7 @@ function openMessageSheet(m) {
     b.append(
       h('div', { class: 'addr-line', text: addr }),
       h('button', { type: 'button', class: 'opt', text: 'Copy address', onclick: () => { copyText(addr); closeSheet(); } }),
-      h('button', { type: 'button', class: 'opt', text: 'Copy link to message', onclick: () => { copyText(loomLink(addr), 'Link copied'); closeSheet(); } }),
+      h('button', { type: 'button', class: 'opt', text: 'Copy link to message', onclick: () => copyMessageLink(b, addr) }),
       h('button', { type: 'button', class: 'opt', text: 'Machine view', onclick: () => openMachineView(m, addr) }));
     if (mine && !m._pending) {
       if (!m.poll) b.append(h('button', { type: 'button', class: 'opt', text: 'Edit', onclick: () => openEditSheet(m) }));

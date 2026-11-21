@@ -125,6 +125,40 @@ test('append, reply as the answer, +1, edit and withdraw reach the server', asyn
   assert.equal(log.messages.some((m) => m.id === mine.id), false, 'withdrawn message is hidden');
 });
 
+test('message link remains selected in the sheet if clipboard access fails', async () => {
+  const kv = memoryKv();
+  const { message, address } = await post(kv, { to: '#sharing', from: { name: 'reader', kind: 'human' }, body: 'Share me' });
+  const w = await page(kv, { path: '/loom?to=%23sharing', small: true });
+  const doc = w.document;
+  const trigger = msgEl(w, message.id).querySelector('[data-act="more"]');
+  Object.defineProperty(trigger, 'offsetParent', { value: doc.body }); // jsdom has no layout.
+  const expected = ORIGIN + '/loom?to=' + encodeURIComponent(address);
+  const openMenu = () => {
+    trigger.focus();
+    trigger.click();
+    [...doc.querySelectorAll('.sheet .opt')].find(b => b.textContent === 'Copy link to message').click();
+  };
+
+  let output;
+  w.navigator.clipboard = { async writeText(value) { output = value; } };
+  openMenu();
+  await settle(w);
+  assert.equal(output, expected);
+  assert.equal(doc.querySelector('.sheet'), null);
+  assert.equal(doc.activeElement, trigger);
+
+  w.navigator.clipboard.writeText = async () => { throw new Error('Permission denied'); };
+  openMenu();
+  await settle(w);
+  const field = doc.querySelector('.sheet textarea');
+  assert.equal(field.readOnly, true);
+  assert.equal(field.value, expected);
+  assert.deepEqual([field.selectionStart, field.selectionEnd], [0, expected.length]);
+  assert.equal(doc.activeElement, field);
+  doc.querySelector('.sheet [aria-label="Close"]').click();
+  assert.equal(doc.activeElement, trigger);
+});
+
 test('a vote is recorded once per browser', async () => {
   const kv = memoryKv();
   const p = await post(kv, { to: '#officedesk', from: { name: 'mike', kind: 'human' }, kind: 'poll', body: 'Which first?', poll: { question: 'Which first?', options: ['Mint', 'Ship'] } });
