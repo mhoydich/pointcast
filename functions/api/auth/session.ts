@@ -553,6 +553,11 @@ export async function upsertUserForIdentity(
   return nextUser;
 }
 
+// The internal record contains a bearer token. Never return it in browser JSON.
+function publicSession(session: AuthSession): Pick<AuthSession, 'userId' | 'expiresAt'> {
+  return { userId: session.userId, expiresAt: session.expiresAt };
+}
+
 export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => {
   if (!hasAuthStorage(env)) {
     return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
@@ -565,7 +570,7 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
 
   const body = {
     ok: true,
-    session: current.session,
+    session: publicSession(current.session),
     user: current.user,
   };
 
@@ -584,7 +589,7 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
   );
   await deleteSession(env, current.session.sessionToken);
   return withSessionCookie(
-    authJson({ ...body, session: renewed, renewed: true }),
+    authJson({ ...body, session: publicSession(renewed), renewed: true }),
     renewed,
   );
 };

@@ -127,6 +127,11 @@ disconnect control deletes the encrypted credential immediately.
 
 - Store the minimum viable identity payload in KV: provider, provider-native id, display name, optional avatar, and verification timestamp.
 - Keep the session token in an `HttpOnly` cookie so client JS does not need raw session secrets.
+  `GET /api/auth/session` returns `ok`, `user`, and an allowlisted `session` with
+  only `userId` and `expiresAt`; renewal also returns `renewed: true`. Never
+  serialize the internal `AuthSession` record, including its bearer token or
+  fresh-authentication timestamp. Renewal rotates the bearer only through
+  `Set-Cookie` and preserves the original authentication time.
 - Wallet addresses are treated as provider ids; no additional profile enrichment is stored yet.
 - The identity map is provider-scoped, which makes single-provider disconnects straightforward when the unlink UI/API is added.
 - Logging out clears the PointCast session cookie; wallet disconnect remains wallet-specific so existing Kukai behavior is not broken.
