@@ -183,6 +183,7 @@ const jsonLd = {
   let playing = 0;
   let replyTo: { id: string; name: string } | null = null;
   let kindFilter = '';
+  let directoryRequestId = 0;
   let pollTimer = 0;
   let typing: { id: string; until: number } | null = null;
   const seen = new Set<string>();
@@ -226,9 +227,11 @@ const jsonLd = {
 
   // ── directory ──────────────────────────────────────────────────────────
   async function loadDirectory() {
+    const requestId = ++directoryRequestId;
     try {
       const res = await fetch(`${API}${kindFilter ? `?kind=${kindFilter}` : ''}`);
       const data = await res.json();
+      if (requestId !== directoryRequestId) return;
       const list = $('[data-logs]');
       list.replaceChildren();
       if (!data.logs?.length) list.append(el('li', 'lm-empty', 'Nothing here yet. Open any address and be first.'));
@@ -249,7 +252,10 @@ const jsonLd = {
       const cell = (num: number, label: string) => { const d = el('div'); d.append(el('b', '', String(num)), el('span', '', label)); return d; };
       grid.append(cell(n.logs, 'threads'), cell(n.hosts.length, 'sites'), cell(n.kinds.handle ?? 0, 'inboxes'), cell(n.kinds.topic ?? 0, 'channels'));
       $('[data-net]').textContent = data.kvBound ? `${n.logs} threads across ${n.hosts.length || 1} site${n.hosts.length === 1 ? '' : 's'}` : 'read-only preview (store not bound)';
-    } catch { $('[data-logs]').replaceChildren(el('li', 'lm-empty', 'The directory is out of reach. Try again in a moment.')); }
+    } catch {
+      if (requestId !== directoryRequestId) return;
+      $('[data-logs]').replaceChildren(el('li', 'lm-empty', 'The directory is out of reach. Try again in a moment.'));
+    }
   }
 
   // ── a log ──────────────────────────────────────────────────────────────
