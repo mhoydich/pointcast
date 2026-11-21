@@ -3,11 +3,11 @@
  * Logic lives in src/lib/loom/service.mjs (tested in tests/loom.test.mjs);
  * this wrapper supplies storage, rate limits and optional agent signatures.
  *
- * Storage: env.PC_LOOM_KV when bound, otherwise the shared VISITS namespace
- * under the `loom:` prefix. Moderation: set the LOOM_ADMIN_KEY Pages secret and
+ * Storage: atomic D1 transactions (migration0036); PC_LOOM_KV/VISITS
+ * are read-only legacy archives. Missing schema fails closed; no KV writes. Moderation: set the LOOM_ADMIN_KEY Pages secret and
  * send it as X-Loom-Admin with {action:"hide"}.
  */
-import { handleLoom } from '../../src/lib/loom/service.mjs';
+import { handleAtomicLoom } from '../../src/lib/loom/atomic.mjs';
 import { rateLimit } from '../_rate-limit';
 import { hashAgentActionRequest, verifyAgentRequest } from '../_lib/agent-identity';
 
@@ -65,7 +65,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     if (verified.response) return verified.response;
     verifiedAgent = verified.agentId;
   }
-  return handleLoom(request, {
+  return handleAtomicLoom(request, {
+    db: env.AUTH_DB,
     kv: env.PC_LOOM_KV ?? env.VISITS ?? null,
     verifiedAgent,
     adminKey: env.LOOM_ADMIN_KEY ?? '',
