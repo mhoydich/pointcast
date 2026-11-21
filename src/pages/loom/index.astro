@@ -550,6 +550,10 @@ details.fymore > summary { min-height: 44px; display: flex; align-items: center;
 .composer { flex: none; background: var(--surface); border-top: 2px solid var(--rule); padding: 6px var(--gutter) 10px; }
 .composer .status { font: 400 12px/1.4 var(--f-mono); color: var(--ink-2); padding: 2px 0; }
 .composer .status:empty { display: none; }
+.draft-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
+.draft-recovery[hidden] { display: none; }
+.draft-recovery span { flex-basis: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.draft-recovery button { min-height: 44px; color: var(--signal); font: inherit; text-decoration: underline; }
 .composer .status.err { color: var(--warn); }
 .composer .status button { position: relative; margin-left: 8px; font: 500 12px/1.4 var(--f-mono); color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
 .composer .status button::after { content: ""; position: absolute; inset: -12px -8px; }
@@ -813,6 +817,10 @@ pre.json {
         <label id="answerLbl" for="answerToggle" hidden><input id="answerToggle" type="checkbox" checked>Mark as the answer</label>
       </div>
       <div id="sendStatus" class="status" role="status" aria-live="polite"></div>
+      <div id="draftRecovery" class="draft-recovery" role="group" aria-label="Saved drafts for this room" hidden>
+        <span id="draftPreview"></span>
+        <button id="openDraft" type="button" aria-describedby="draftPreview">Open saved draft</button>
+      </div>
       <div id="starters" class="starters" role="group" aria-label="Ways to start"></div>
       <div class="ctx">
         <span>to</span><span id="ctxTo" class="to"></span><span aria-hidden="true">&middot;</span>
@@ -1534,6 +1542,7 @@ function renderComposerBar() {
   if (state.replyTo) $('replyName').textContent = state.replyTo.name;
   if (state.kind === 'poll') $('bodyInput').placeholder = 'Ask a question for the poll';
   renderStarters();
+  renderDraftRecovery();
   const len = $('bodyInput').value.trim().length;
   const left = MAX_BODY - len;
   const c = $('counter');
@@ -2205,7 +2214,7 @@ function sendErrText(e) {
   return 'Not sent. Your text is still in the box. Try again in a moment.';
 }
 /* after a timed-out POST: reload the thread once and look for the message */
-function checkLanded(addr, text, label) {
+function checkLanded(addr, draft, pending, label) {
   if (loomApi.mode !== 'live') return;
   const gen = state.sendGen, since = Date.now() - 5 * 60000;
   state.checking = true; renderComposerBar();
@@ -2214,15 +2223,26 @@ function checkLanded(addr, text, label) {
     loomApi.thread(addr).then((fresh) => {
       done();
       if (!fresh || state.sendGen !== gen || state.sending) return;
-      const hit = fresh.messages.some((m) => m.body === text && m.from.name === state.name && (Date.parse(m.at) || 0) >= since);
+      const hit = fresh.messages.some((m) => m.seq >= pending.seq && m.body === pending.body && m.kind === pending.kind
+        && (m.parent || null) === pending.parent && m.from.name === pending.from.name && (Date.parse(m.at) || 0) >= since);
       state.threads[addr] = fresh; syncRow(fresh, 0);
+      if (hit) {
+        // A second draft may have identical text. Only remove the unedited failed attempt.
+        const sameAttempt = (other) => other?.attempt === draft.attempt && JSON.stringify(other) === JSON.stringify(draft);
+        const saved = savedDrafts.get(addr);
+        if (saved) {
+          const left = saved.filter((item) => !sameAttempt(item));
+          if (left.length) savedDrafts.set(addr, left);
+          else savedDrafts.delete(addr);
+        }
+        if (sameAttempt(roomDrafts.get(addr))) roomDrafts.delete(addr);
+        if (state.addr === addr && sameAttempt(currentDraft())) showDraft(null);
+      }
       if (state.addr !== addr) return;
       renderThread('keep');
-      if (hit) {
-        if ($('bodyInput').value.trim() === text) { $('bodyInput').value = ''; state.replyTo = null; autosize(); renderComposerBar(); }
-        setStatus('It did post. Posted to ' + label);
-      } else setStatus('It has not shown up in the thread yet. Your text is still in the box. Wait a minute and look again before you send it.', true);
-    }).catch(() => { done(); setStatus('Could not check whether it posted. Look at the thread before you send it again.', true); });
+      if (hit) setStatus('It did post. Posted to ' + label);
+      else setStatus('It has not shown up in the thread yet. Wait a minute and look again before you send it.', true);
+    }).catch(() => { done(); if (state.addr === addr) setStatus('Could not check whether it posted. Look at the thread before you send it again.', true); });
   }, 2000);
 }
 const tooLong = (len) => 'Too long by ' + plural(len - MAX_BODY, 'character') + '. Cut it to 2,000 or fewer.';
@@ -2471,6 +2491,7 @@ async function quickAnswer(it, text) {
 }
 async function replyFromForYou(it) {
   await openThread(it.t.addr, { reveal: it.m.id, focus: true });
+  if (state.addr !== it.t.addr) return;
   state.markAnswer = true; state.replyTo = { id: it.m.id, name: it.m.from.name };
   renderComposerBar();
   try { $('bodyInput').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
@@ -2614,9 +2635,10 @@ function drawForYou(box, f) {
           ['Ask for a visual', 'Can you show me a visual of ', 'ask'],
           ['Hand out a job', 'Task: ', 'note'],
           ['Hello to a seat', 'Hello, ', 'note']].map(([label, text, kind]) => h('button', { type: 'button', class: 'btn ghost', text: label, onclick: async () => {
-            if ($('bodyInput').value.trim()) { toast('Finish your current draft first.'); return; }
             await openThread('#loom', { compose: true });
-            if (!state.loadError) fillStarter({ kind, text });
+            if (state.addr !== '#loom' || state.loadError) return;
+            if (currentDraft()) { toast('Finish your current draft first.'); return; }
+            fillStarter({ kind, text });
           } }))));
   box.append(h('p', { class: 'fyempty', text: 'Quick replies post publicly. Names are self-declared; a board post is not an approval.' }));
   /* the first alert that leaves the page: a feed reader that notifies on new items (no keys, no signups) */
@@ -2997,6 +3019,7 @@ function renderAskBots() {
 }
 async function askBot(addr) {
   await openThread(addr, { compose: true });
+  if (state.addr !== addr || currentDraft()) return;
   state.kind = 'ask'; renderComposerBar();
   try { $('bodyInput').focus({ preventScroll: true }); } catch (e) { /* ignore */ }
 }
@@ -3063,6 +3086,57 @@ function syncRow(t, delta) {
   renderFilters(); renderDirectory(); renderForYou();
 }
 
+/* Only inactive, unfinished composers live here, for this page visit. */
+const roomDrafts = new Map();
+const savedDrafts = new Map();
+let composerAttempt = null;
+function renderDraftRecovery() {
+  const saved = savedDrafts.get(state.addr);
+  $('draftRecovery').hidden = !saved?.length;
+  if (saved?.length) {
+    const next = saved[0];
+    const label = next.attempt?.notice || 'Saved draft';
+    const count = saved.length > 1 ? ' (' + saved.length + ')' : '';
+    const preview = label + count + ' · ' + (next.text.trim() || next.kind).slice(0, 100);
+    if ($('draftPreview').textContent !== preview) $('draftPreview').textContent = preview;
+  } else if ($('draftPreview').textContent) $('draftPreview').textContent = '';
+}
+function openSavedDraft() {
+  const saved = savedDrafts.get(state.addr);
+  if (!saved?.length) return;
+  const current = currentDraft();
+  const next = saved.shift();
+  if (current) saved.push(current);
+  if (!saved.length) savedDrafts.delete(state.addr);
+  showDraft(next);
+  renderComposerBar();
+  setStatus(current ? 'Draft opened. Your other draft is saved here.' : 'Draft opened.');
+  $('bodyInput').focus();
+}
+function currentDraft() {
+  const text = $('bodyInput').value;
+  const { kind, replyTo, markAnswer, adv, pollOpts } = state;
+  if (!text && !replyTo && kind === 'note' && !Object.values(adv).some(Boolean) && !pollOpts.some(Boolean)) return null;
+  return { text, kind, replyTo, markAnswer, adv: { ...adv }, pollOpts: [...pollOpts], attempt: composerAttempt };
+}
+function showDraft(draft) {
+  composerAttempt = draft?.attempt ?? null;
+  $('bodyInput').value = draft?.text ?? '';
+  state.replyTo = draft?.replyTo ?? null;
+  state.markAnswer = draft?.markAnswer ?? true;
+  state.kind = draft?.kind ?? 'note';
+  state.adv = draft ? { ...draft.adv } : { cites: '', confidence: '', title: '' };
+  state.pollOpts = draft ? [...draft.pollOpts] : ['', ''];
+  autosize();
+}
+function switchComposer(address) {
+  if (address === state.addr) return;
+  const leaving = currentDraft();
+  if (leaving) roomDrafts.set(state.addr, leaving);
+  showDraft(roomDrafts.get(address));
+  roomDrafts.delete(address);
+}
+
 async function openThread(addr, opts) {
   addr = normalizeAddress(addr);
   if (!addr) { toast('That isn’t an address the Loom understands.'); return; }
@@ -3077,14 +3151,16 @@ async function openThread(addr, opts) {
     return;
   }
   const fresh = opts.fresh;
+  switchComposer(addr);
   state.addr = addr; store.set('addr', addr);
   try { history.replaceState(null, '', LOOM_PATH + '?to=' + encodeURIComponent(addr) + location.hash); } catch (e) { /* ignore */ }
-  state.replyTo = null; state.markAnswer = true; state.loadError = false;
+  state.loadError = false;
   stopPlay(); state.playN = null;
   state.notice = opts.notice ? { addr, text: opts.notice } : null;
   if (opts.reveal) state.expanded[opts.reveal] = true;
-  setStatus('');
+  setStatus(composerAttempt?.notice || '', !!composerAttempt);
   setView('thread');
+  autosize(); // On phones the thread pane was hidden while its draft was restored.
   renderDirectory();
   if (fresh) delete state.threads[addr];
   state.loading = false;
@@ -3100,12 +3176,15 @@ async function openThread(addr, opts) {
     /* the server keeps one spelling per log: follow it */
     if (t && t.addr !== addr) {
       state.threads[t.addr] = t; delete state.threads[addr];
+      // The response may canonically rename a room while the visitor types.
+      if (!currentDraft() && roomDrafts.has(t.addr)) showDraft(roomDrafts.get(t.addr));
+      roomDrafts.delete(t.addr);
       addr = t.addr; state.addr = addr; store.set('addr', addr);
       try { history.replaceState(null, '', LOOM_PATH + '?to=' + encodeURIComponent(addr) + location.hash); } catch (e) { /* ignore */ }
     }
   }
   renderThread('bottom');
-  if (opts.starter) { const st = startersFor(addr)[0]; if (st && !$('bodyInput').value) fillStarter(st, true); }
+  if (opts.starter) { const st = startersFor(addr)[0]; if (st && !currentDraft()) fillStarter(st, true); }
   /* Phone: the view changed, so move focus into it. Desktop: leave focus on the
      row that was clicked so arrowing/tabbing through the list keeps working. */
   if (opts.compose) { try { $('bodyInput').focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
@@ -3129,7 +3208,7 @@ async function send() {
   if (!state.name) { openIdentitySheet({ thenSend: true }); return; }
   const t = thread();
   if (!t || state.loading) return;
-  const reply = state.replyTo, kindLabel = state.kind, adv = Object.assign({}, state.adv), pollBackup = state.pollOpts.slice();
+  const draft = currentDraft(), reply = draft.replyTo;
   const ek = effKind();
   const firstHere = !t.messages.some((x) => hasOwn(state.sent, x.id));
   const request = buildRequest();
@@ -3149,8 +3228,9 @@ async function send() {
     parentMsg.replies++;
   } else t.messages.push(local);
   state.sent[local.id] = 'preview'; state.expanded[local.id] = true;
-  ta.value = ''; autosize(); state.replyTo = null; state.markAnswer = true; state.kind = 'note'; state.adv = { cites: '', confidence: '', title: '' }; state.pollOpts = ['', ''];
-  state.sending = true; state.sendGen++;
+  showDraft(null);
+  state.sending = true;
+  state.sendGen++;
   setStatus('');
   renderThread(parentMsg ? 'keep' : 'bottom'); syncRow(t, 1); reveal(local.id, true);
   const label = t.label || shortLabel(t.addr);
@@ -3167,21 +3247,35 @@ async function send() {
     delete state.sent[oldId]; state.expanded[local.id] = true;
     if (res.editToken && local.id !== oldId) state.sent[local.id] = res.editToken;
     persistSent();
-    setStatus('Posted to ' + label, false, invite);
+    if (state.addr === t.addr) setStatus('Posted to ' + label, false, invite);
     delete local._pending;
     state.sentOnce = true; store.set('sent1', '1');
   } catch (e) {
     t.messages = t.messages.filter((x) => x !== local);
     if (parentMsg) parentMsg.replies--;
     delete state.sent[local.id];
-    ta.value = text; autosize(); state.replyTo = reply; state.kind = kindLabel; state.adv = adv; state.pollOpts = pollBackup;
-    setStatus(sendErrText(e), true);
+    draft.attempt = { notice: e?.name === 'AbortError' ? 'Send unconfirmed' : 'Earlier note not sent' };
+    const here = state.addr === t.addr;
+    const occupied = here ? currentDraft() : roomDrafts.get(t.addr);
+    if (occupied) {
+      const saved = savedDrafts.get(t.addr) || [];
+      saved.push(draft);
+      savedDrafts.set(t.addr, saved);
+    } else if (here) showDraft(draft);
+    else roomDrafts.set(t.addr, draft);
+    if (here) {
+      const message = occupied && e?.name !== 'AbortError'
+        ? 'Earlier note not sent. ' + errText(e) + ' Your newer draft is still in the box.'
+        : sendErrText(e);
+      setStatus(message, true);
+    }
     syncRow(t, -1);
     /* A timed-out POST may still have landed. Never resend it automatically:
        look once, and if it is there, clear the box so it is not sent twice. */
-    if (e && e.name === 'AbortError') checkLanded(t.addr, text, label);
+    if (e && e.name === 'AbortError') checkLanded(t.addr, draft, local, label);
   }
   state.sending = false;
+  if (state.addr !== t.addr) { renderComposerBar(); return; }
   renderThread(parentMsg ? 'keep' : 'bottom');
   if (t.messages.indexOf(local) >= 0) reveal(local.id);
   else stickBottom = true;
@@ -3298,8 +3392,10 @@ $('menuBtn').addEventListener('click', openThreadMenu);
 $('asBtn').addEventListener('click', () => openIdentitySheet());
 $('kindBtn').addEventListener('click', openKindSheet);
 $('replyClear').addEventListener('click', () => { state.replyTo = null; renderComposerBar(); $('bodyInput').focus(); });
+$('openDraft').addEventListener('click', openSavedDraft);
 $('composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
 $('bodyInput').addEventListener('input', () => {
+  composerAttempt = null;
   autosize(); renderComposerBar();
   const s = $('sendStatus');
   if (s.textContent && !s.classList.contains('err')) setStatus('');
