@@ -63,10 +63,9 @@ async function refresh() {
     render(card);
     element('status').textContent = '';
   } catch {
-    element('sections').hidden = true;
-    element('board-note').hidden = true;
-    element('history-note').hidden = true;
-    element('status').textContent = 'The task board couldn’t load. Refresh to try again.';
+    element('status').textContent = currentEdition === null
+      ? 'The task board couldn’t load. Refresh to try again.'
+      : 'Couldn’t refresh. Showing the last card loaded. Use Refresh to try again.';
   } finally {
     active = false;
     element('refresh').removeAttribute('aria-disabled');
