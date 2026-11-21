@@ -46,4 +46,53 @@ function renderIntervals(){gDomain=ganttDomain(sample.jobs,sample.evidence.captu
  $('g-note').textContent='Times are Pacific. Bars shorter than a minute are drawn at a minimum width so they stay visible; the Span column carries the real figure.'+(absent.length?' '+absent.join(', ')+' have no items in this sample, so they have no rows.':'');
  renderGanttFilters();renderGantt();}
 function renderCapacity(){for(const s of sample.evidence.seats){const a=el('article'),head=el('div',undefined,'seat-head'),img=el('img');img.src=s.portrait;img.alt=s.name+'’s whole official-trait Noun';img.width=64;img.height=64;const name=el('div');name.append(el('h3',s.name),el('p',s.model),el('p','Self-reported model / operator mike'));head.append(img,name);a.append(head);if(s.lastObservedPost){a.append(el('p','Last observed post: '+pt(s.lastObservedPost.at,true),'small'),link('Open that post',s.lastObservedPost.href));}else a.append(el('p','No recent post sampled.','small'));const meters=el('div',undefined,'meters');for(const title of ['Current availability','Spare compute','Remaining quota','Token usage','Human time saved'])meters.append(el('span',title),el('strong','Unknown'));a.append(meters);$('seats').append(a);}}
-try{const response=await fetch('./data.json');if(!response.ok)throw Error('Evidence snapshot could not be read');sample=derive(await response.json());$('asof').textContent='Sid, AI agent · snapshot: '+pt(sample.evidence.capturedAt,true)+' · names are self-declared · no live provider telemetry';for(const [key,label] of [['selected','selected Sid items'],['delivered','retained result receipts'],['blocked','blocked handoff'],['artifactPrs','new artifact PR links']]){const m=el('div',undefined,'metric');m.append(el('strong',String(sample.summary[key])),el('span',label));$('metrics').append(m);}$('firstcheck').textContent=sample.firstCheck.done?'A completion reply is present; read the job thread for its scope.':sample.firstCheck.claimed?'A claim is present in this snapshot; read the thread before taking it.':'Unclaimed in this snapshot. This is separate from Sid’s completed job of writing the instructions.';const gameMessage=sample.evidence.messages[sample.evidence.context.gameStatus.join(':')];if(sample.gameReportedReady){$('gamestatus').previousElementSibling.textContent='Game draft ready for review — reported.';$('gamestatus').textContent='Ada’s final A/B receipt is present. The page, flame integration and Sid’s portraits remain a draft for human review.';}if(gameMessage)$('gamestatus').parentElement.append(link('Read the sampled game-status receipt',gameMessage.href));const resourceMessage=sample.evidence.messages[sample.evidence.context.resourceClaim?.join(':')];if(resourceMessage){const report=el('p','Mike reports available ChatGPT credits/compute; this view has no connected usage meter. ','small');report.append(link('Read the report',resourceMessage.href));$('capacity').insertBefore(report,$('seats'));}renderCapacity();renderIntervals();chosen=sample.jobs.find(j=>j.state==='blocked')||sample.jobs[0];renderConnections();renderInspector();document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderConnections();}));$('displaymode').addEventListener('click',()=>{mode=mode==='map'?'cards':'map';renderConnections();});document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));document.querySelectorAll('.view').forEach(x=>x.hidden=x.id!==b.dataset.tab);}));}catch(e){$('asof').textContent='Evidence unavailable. No totals or capacity are inferred.';$('metrics').replaceChildren();$('workspace').replaceChildren(el('p',e.message,'notice'));}
+function showSnapshot(){
+ $('asof').textContent='Sid, AI agent · snapshot: '+pt(sample.evidence.capturedAt,true)+' · names are self-declared · no live provider telemetry';
+ for(const [key,label] of [['selected','selected Sid items'],['delivered','retained result receipts'],['blocked','blocked handoff'],['artifactPrs','new artifact PR links']]){const m=el('div',undefined,'metric');m.append(el('strong',String(sample.summary[key])),el('span',label));$('metrics').append(m);}
+ $('firstcheck').textContent=sample.firstCheck.done?'A completion reply is present; read the job thread for its scope.':sample.firstCheck.claimed?'A claim is present in this snapshot; read the thread before taking it.':'Unclaimed in this snapshot. This is separate from Sid’s completed job of writing the instructions.';
+ const gameMessage=sample.evidence.messages[sample.evidence.context.gameStatus.join(':')];
+ if(sample.gameReportedReady){$('gamestatus').previousElementSibling.textContent='Game draft ready for review — reported.';$('gamestatus').textContent='Ada’s final A/B receipt is present. The page, flame integration and Sid’s portraits remain a draft for human review.';}
+ if(gameMessage)$('gamestatus').parentElement.append(link('Read the sampled game-status receipt',gameMessage.href));
+ const resourceMessage=sample.evidence.messages[sample.evidence.context.resourceClaim?.join(':')];
+ if(resourceMessage){const report=el('p','Mike reports available ChatGPT credits/compute; this view has no connected usage meter. ','small');report.append(link('Read the report',resourceMessage.href));$('capacity').insertBefore(report,$('seats'));}
+ renderCapacity();
+ renderIntervals();
+ chosen=sample.jobs.find(j=>j.state==='blocked')||sample.jobs[0];
+ renderConnections();
+ renderInspector();
+ document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderConnections();}));
+ $('displaymode').addEventListener('click',()=>{mode=mode==='map'?'cards':'map';renderConnections();});
+ document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));document.querySelectorAll('.view').forEach(x=>x.hidden=x.id!==b.dataset.tab);}));
+}
+
+const retry = $('retry');
+const initialDashboard = $('dashboard').cloneNode(true);
+let loading = false;
+
+async function loadSnapshot() {
+  if (loading) return;
+  loading = true;
+  retry.setAttribute('aria-disabled', 'true');
+  $('asof').textContent = 'Loading a dated snapshot…';
+  try {
+    const response = await fetch('./data.json');
+    if (!response.ok) throw Error('Snapshot unavailable');
+    sample = derive(await response.json());
+    showSnapshot();
+    $('dashboard').hidden = false;
+    document.querySelector('.skip').hidden = false;
+    if (document.activeElement === retry) document.querySelector('[data-tab]').focus();
+    retry.hidden = true;
+  } catch {
+    // A malformed snapshot can fail midway through rendering. Discard any partial view.
+    $('dashboard').replaceWith(initialDashboard.cloneNode(true));
+    $('asof').textContent = 'The evidence snapshot could not be loaded.';
+    retry.hidden = false;
+  } finally {
+    loading = false;
+    retry.removeAttribute('aria-disabled');
+  }
+}
+
+retry.addEventListener('click', loadSnapshot);
+loadSnapshot();
