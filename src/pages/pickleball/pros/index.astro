@@ -1,0 +1,44 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../../lib/channels';
+import { GEAR_META, KIND_WORDS, PROS, PROS_URL, gearHref, paddleOf, proUrl } from '../../../lib/player-gear';
+import '../../../styles/player-gear.css';
+
+const court = CHANNELS.CRT;
+const title = 'Pro pickleball players: paddles and gear, with sources';
+const description = `${PROS.length} pros and what they play: paddle, shoes and other gear where a brand or a dated article says so, each with its source. Paddles link to their Paddle Register pages. Rankings link out to the official pages.`;
+const jsonLd = {
+  '@context': 'https://schema.org', '@type': 'CollectionPage', '@id': PROS_URL, name: title, description,
+  dateModified: GEAR_META.asOf, license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+};
+const others = (p: (typeof PROS)[number]) => p.gear.filter((g) => g.kind !== 'paddle').map((g) => `${KIND_WORDS[g.kind]}: ${g.brand}${g.model ? ` ${g.model}` : ''}`).join(' · ');
+---
+
+<BlockLayout title={title} description={description} image="/images/og/paddles.png" jsonLd={jsonLd}>
+  <main class="gp" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span>/</span><a href="/pickleball">pickleball</a><span>/</span><span>pros</span></nav>
+    <header class="hero">
+      <p class="kicker">PRO GEAR · {GEAR_META.asOf} · CC0</p>
+      <h1>What the pros play.</h1>
+      <p class="dek">One page per pro: the paddle, and the shoes, ball and other gear where a brand or a dated article says so. Every line has a source. Paddles link to their record in the Paddle Register. Rankings and ratings stay on the official pages, linked from each pro.</p>
+    </header>
+
+    <section class="sec" aria-label="Pros">
+      <div class="rows">
+        {PROS.map((p) => {
+          const pad = paddleOf(p);
+          return (
+            <div class="row">
+              <strong><a href={proUrl(p)}>{p.name}</a></strong>
+              <span>{pad ? (gearHref(pad) ? <a href={gearHref(pad)!}>{pad.brand} {pad.model}</a> : <>{pad.brand} {pad.model}</>) : 'paddle unavailable: no dated source yet'}{pad?.signature ? ' · signature' : ''}{pad?.variant && <small>{pad.variant}</small>}</span>
+              <span class="soft">{others(p) || 'other gear: none on the record'}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+
+    <p class="fine">Built from brand pages, press releases and dated news, never from tour or rating sites. Missing a pro, or something out of date? <a href={`${GEAR_META.suggest}`} rel="noopener">Suggest it</a>. The same data is open: <a href="/pickleball/gear.json">gear.json</a> and <a href="/pickleball/gear.csv">gear.csv</a>.</p>
+    <p class="foot"><a href="/pickleball/gear">everyone's gear</a> · <a href="/paddles">the Paddle Register</a> · <a href="/paddles/pros">who plays what</a> · CC0</p>
+  </main>
+</BlockLayout>

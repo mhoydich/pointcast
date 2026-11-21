@@ -1,0 +1,64 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+import { hostOf } from '../../lib/paddle-calendar';
+import { BASIS_WORDS, GEAR_META, GEAR_URL, KIND_WORDS, PEOPLE, gearHref, personUrl } from '../../lib/player-gear';
+import '../../styles/player-gear.css';
+
+const court = CHANNELS.CRT;
+const players = PEOPLE.filter((p) => p.kind === 'player');
+const pros = PEOPLE.filter((p) => p.kind === 'pro');
+const title = 'Player Gear: an open database of what pickleball players use';
+const description = `Paddles, shoes and other gear for ${pros.length} pros and ${players.length} local player${players.length === 1 ? '' : 's'}, keyed to the Paddle Register. Open (CC0) as JSON and CSV. Pros come from brands and dated articles; everyone else from their own word.`;
+const jsonLd = {
+  '@context': 'https://schema.org', '@type': 'Dataset', '@id': GEAR_URL, name: 'Player Gear', description,
+  url: GEAR_URL, dateModified: GEAR_META.asOf, isAccessibleForFree: true, license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+  distribution: [
+    { '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: `${GEAR_URL}.json` },
+    { '@type': 'DataDownload', encodingFormat: 'text/csv', contentUrl: `${GEAR_URL}.csv` },
+  ],
+  isPartOf: { '@type': 'Dataset', name: 'The Paddle Register', url: 'https://pointcast.xyz/paddles' },
+};
+const groups = [
+  { label: 'LOCAL PLAYERS · THEIR OWN WORD', people: players },
+  { label: 'PROS · BRANDS AND DATED ARTICLES', people: pros },
+];
+---
+
+<BlockLayout title={title} description={description} image="/images/og/paddles.png" jsonLd={jsonLd}>
+  <main class="gp" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span>/</span><a href="/pickleball">pickleball</a><span>/</span><span>gear</span></nav>
+    <header class="hero">
+      <p class="kicker">PLAYER GEAR · {GEAR_META.asOf} · CC0</p>
+      <h1>Who plays what, for everyone.</h1>
+      <p class="dek">An open record of the gear players use, joined to the Paddle Register so every paddle links to its specs, dates and approvals. Pros come from brands and dated articles. A local player's gear goes on file only in their own words, and they can change or remove it any time.</p>
+    </header>
+
+    {groups.filter((g) => g.people.length).map((g) => (
+      <section class="sec" aria-label={g.label}>
+        <p class="kicker">{g.label} · {g.people.length}</p>
+        <div class="rows">
+          {g.people.flatMap((p) => p.gear.map((item, i) => (
+            <div class="row" id={i === 0 ? p.slug : undefined}>
+              <strong>{i === 0 ? <a href={personUrl(p)}>{p.name}</a> : ''}</strong>
+              <span>{KIND_WORDS[item.kind]}: {gearHref(item) ? <a href={gearHref(item)!}>{item.brand} {item.model}</a> : <>{item.brand}{item.model ? ` ${item.model}` : ''}</>}{item.variant && <small>{item.variant}</small>}</span>
+              <span class="soft">{BASIS_WORDS[item.basis]}{item.sourceDate ? ` · ${item.sourceDate}` : ''}{item.source && <> · <a href={item.source} rel="noopener">{hostOf(item.source)} ↗</a></>}</span>
+            </div>
+          )))}
+        </div>
+      </section>
+    ))}
+
+    <section class="sec" aria-label="Use the data">
+      <p class="kicker">OPEN DATA</p>
+      <ul class="links">
+        <li><a href="/pickleball/gear.json">gear.json</a></li>
+        <li><a href="/pickleball/gear.csv">gear.csv</a></li>
+        <li><a href="/paddles.json">paddles.json (the Paddle Register)</a></li>
+        <li><a href={GEAR_META.suggest} rel="noopener">suggest an addition or a fix ↗</a></li>
+      </ul>
+      <p class="fine">Each person's paddle points at a register id (for example <code>franklin-c45</code>) and, where known, the variant, so a bot can read <code>/paddles/&#123;id&#125;.json</code> for the specs. CC0: use it for anything. {GEAR_META.rules.join(' ')}</p>
+    </section>
+    <p class="foot"><a href="/pickleball/pros">pro pages</a> · <a href="/paddles">the Paddle Register</a> · <a href="/paddles/pros">who plays what</a> · CC0</p>
+  </main>
+</BlockLayout>
