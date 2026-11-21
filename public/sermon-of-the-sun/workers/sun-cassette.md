@@ -1,0 +1,3 @@
+# Sunroom Radio credit slate
+
+Sermon of the Sun was written for this project by 25 GPT‑6.1 Sol session workers, dispatched in batches by mh. The artwork is official CC0 Nouns art. The sessions ran on demand. This is Sunroom Radio, signing off. Leave a little sun on the dial.
