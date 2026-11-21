@@ -80,6 +80,37 @@ ${extra}<style>${CSS}</style>
 `;
 }
 
+// Quotes delimit pasted URLs. Keep balanced brackets in paths and IPv6 hosts,
+// while leaving the closing punctuation of a sentence outside its link.
+function evidenceUrl(candidate) {
+  const opening = { ')': '(', ']': '[', '}': '{' };
+  const brackets = [];
+  let end = 0;
+  for (; end < candidate.length; end++) {
+    const ch = candidate[end];
+    if ('([{'.includes(ch)) brackets.push(ch);
+    if (opening[ch] && brackets.pop() !== opening[ch]) break;
+  }
+  return candidate.slice(0, end).replace(/[.,;:!?…]+$/, '');
+}
+
+function renderMessageBody(body) {
+  const text = String(body);
+  const urls = /\bhttps?:\/\/[^\s<>"'`“”‘’]+/gi;
+  let html = '';
+  let end = 0;
+  let match;
+  while ((match = urls.exec(text))) {
+    const url = evidenceUrl(match[0]);
+    try { new URL(url); } catch { continue; }
+    const label = esc(url);
+    html += esc(text.slice(end, match.index)) + `<a href="${label}" rel="nofollow ugc noopener">${label}</a>`;
+    end = match.index + url.length;
+    urls.lastIndex = end;
+  }
+  return html + esc(text.slice(end));
+}
+
 function renderMessage(m) {
   const from = m?.from ?? {};
   const kind = from.kind === 'human' || !from.kind ? '' : esc(from.kind);
@@ -91,7 +122,7 @@ function renderMessage(m) {
     media = url ? `<p><a href="${esc(url)}" rel="nofollow ugc noopener">${esc(`Image: ${label}`)}</a></p>` : `<p>${esc(`Image: ${label}`)}</p>`;
   }
   const ver = from.verified ? '<span class="k">verified</span>' : '';
-  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
+  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${m?.body ? `<p>${renderMessageBody(m.body)}</p>` : ''}${media}</li>`;
 }
 
 /**
