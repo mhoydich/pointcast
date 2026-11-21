@@ -1,0 +1,56 @@
+name: Post to X
+
+# Posts one message to an X account through the official X API, from the
+# cloud. Start it from anywhere with repo access:
+#   gh workflow run x-post.yml -f account=kansasdao -f text="..."
+# Secrets per account: X_<ACCOUNT>_API_KEY, _API_SECRET, _ACCESS_TOKEN,
+# _ACCESS_SECRET (see scripts/x-post.mjs). Without them it is a dry run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      account:
+        description: X handle without @ (kansasdao)
+        required: true
+        default: kansasdao
+      text:
+        description: Post text (280 max, a link counts as 23)
+        required: true
+      reply_to:
+        description: Post ID to reply to (optional, for threads)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x-post-${{ inputs.account }}
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/x-post.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Post
+        env:
+          X_ACCOUNT: ${{ inputs.account }}
+          X_TEXT: ${{ inputs.text }}
+          X_REPLY_TO: ${{ inputs.reply_to }}
+          X_KANSASDAO_API_KEY: ${{ secrets.X_KANSASDAO_API_KEY }}
+          X_KANSASDAO_API_SECRET: ${{ secrets.X_KANSASDAO_API_SECRET }}
+          X_KANSASDAO_ACCESS_TOKEN: ${{ secrets.X_KANSASDAO_ACCESS_TOKEN }}
+          X_KANSASDAO_ACCESS_SECRET: ${{ secrets.X_KANSASDAO_ACCESS_SECRET }}
+          X_UOFELSEGUNDO_API_KEY: ${{ secrets.X_UOFELSEGUNDO_API_KEY }}
+          X_UOFELSEGUNDO_API_SECRET: ${{ secrets.X_UOFELSEGUNDO_API_SECRET }}
+          X_UOFELSEGUNDO_ACCESS_TOKEN: ${{ secrets.X_UOFELSEGUNDO_ACCESS_TOKEN }}
+          X_UOFELSEGUNDO_ACCESS_SECRET: ${{ secrets.X_UOFELSEGUNDO_ACCESS_SECRET }}
+        run: node scripts/x-post.mjs
