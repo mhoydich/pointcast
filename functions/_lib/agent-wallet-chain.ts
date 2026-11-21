@@ -119,7 +119,7 @@ export async function createWalletChain(env: WalletSigningEnv): Promise<WalletCh
     async broadcast({ bytes, hash }) {
       const response = await fetch(`${rpcUrl.replace(/\/$/u, '')}/injection/operation?chain=main`, {
         method: 'POST',
-        redirect: 'error',
+        redirect: 'manual',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(bytes),
         signal: AbortSignal.timeout(15_000),

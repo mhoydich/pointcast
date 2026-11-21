@@ -180,7 +180,7 @@ export async function handleWalletDetail(
 
     const read = async (path: string): Promise<unknown> => {
       const response = await fetchIndex(`${TZKT}/accounts/${wallet.address}/${path}`, {
-        redirect: 'error', signal: AbortSignal.timeout(10_000),
+        redirect: 'manual', signal: AbortSignal.timeout(10_000),
       });
       if (!response.ok) throw new Error('tzkt-unavailable');
       return response.json();
