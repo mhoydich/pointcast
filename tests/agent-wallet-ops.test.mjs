@@ -228,7 +228,8 @@ test('wallet detail uses TzKT, including an empty newly provisioned wallet, and 
   const s = await setup(t, true, false);
   const operationHash = encodeOpHash('ff'.repeat(160));
   const calls = [];
-  const fetchTzkt = async (url) => {
+  const fetchTzkt = async (url, options) => {
+    assert.equal(options.redirect, 'manual');
     calls.push(url);
     if (url.endsWith('/balance')) return Response.json(246);
     return Response.json([
@@ -325,6 +326,7 @@ test('Taquito forges and signs a reveal plus send and encodes a TZIP-21 URI in t
       })) });
     }
     if (pathname === '/injection/operation') {
+      assert.equal(init.redirect, 'manual');
       injected += 1;
       return Response.json(encodeOpHash(JSON.parse(init.body)));
     }
