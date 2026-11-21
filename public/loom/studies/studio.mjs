@@ -9,15 +9,11 @@ const modes = {
   field: ['Field', 'Each cell is a message. Copper loops group authors. Lines connect recorded replies within this view. Drag to orbit.']
 };
 const el = id => document.getElementById(id);
-const query = new URLSearchParams(location.search);
-let mode = Object.hasOwn(modes, query.get('view')) ? query.get('view') : 'field';
-let room = rooms.find(option => option.address === query.get('room'))?.address ?? '#grokbot';
-let selectedId = query.get('record'), model, renderer, loadController, paintToken = 0, playback;
+let mode, room, selectedId, model, renderer, loadController, paintToken = 0, playback;
 const stepButtons = [...document.querySelectorAll('[data-trail-step]')];
 const stepSlugs = handoffSteps.map(step => step.role.toLowerCase());
-let trailIndex = query.get('trail') === 'switchboard' ? Math.max(0, stepSlugs.indexOf(query.get('step'))) : -1;
+let trailIndex = -1;
 let roomModel, trailIds = [];
-if (trailIndex >= 0) mode = 'field';
 const modeButtons = [...document.querySelectorAll('[data-mode]')];
 const description = kind => ({agent:'Self-declared agent',human:'Self-declared human',robot:'House robot',unknown:'Unattributed'}[kind]);
 const authorName = name => name.replace(/\s*\([^()]*\)\s*$/u, '') || name;
@@ -27,11 +23,13 @@ function notice(text) {
   el('stage-message').textContent = text;
   el('stage-message').hidden = !text;
 }
-function saveView() {
+function saveView(push = false, address = room, record = selectedId) {
   const url = new URL(location.href);
-  url.searchParams.set('room',room);
+  // The requested record remains in the URL while its room is loading.
+  if (!roomModel && address === room && !record) record = url.searchParams.get('record');
+  url.searchParams.set('room',address);
   url.searchParams.set('view',mode);
-  if (selectedId) url.searchParams.set('record',selectedId);
+  if (record) url.searchParams.set('record',record);
   else url.searchParams.delete('record');
   if (trailIndex >= 0) {
     url.searchParams.set('trail','switchboard');
@@ -40,7 +38,9 @@ function saveView() {
     url.searchParams.delete('trail');
     url.searchParams.delete('step');
   }
-  history.replaceState(null,'',url);
+  if (url.href === location.href) return;
+  if (push) history.pushState(history.state,'',url);
+  else history.replaceState(history.state,'',url);
 }
 function stop() {
   clearInterval(playback);
@@ -57,11 +57,32 @@ function setProjection() {
     trailIds = projected.ids;
   }
 }
+function restoreView() {
+  const query = new URLSearchParams(location.search);
+  const address = rooms.find(option => option.address === query.get('room'))?.address ?? '#grokbot';
+  const record = query.get('record');
+  trailIndex = query.get('trail') === 'switchboard' ? Math.max(0,stepSlugs.indexOf(query.get('step'))) : -1;
+  mode = trailIndex >= 0 || !Object.hasOwn(modes,query.get('view')) ? 'field' : query.get('view');
+  if (address !== room || !roomModel) {
+    selectedId = record;
+    void read(address,true);
+    return;
+  }
+  stop();
+  setProjection();
+  populate();
+  if (model.shown) {
+    const restored = model.messages.find(message => message.id === record) ?? model.messages[0];
+    select(trailIndex >= 0 ? trailIds[trailIndex] : restored.id);
+  } else emptyRoom();
+  void paint();
+}
 function openTrail(index = 0) {
   if (!roomModel) return;
   stop();
   trailIndex = index;
   mode = 'field';
+  saveView(true);
   setProjection();
   populate();
   select(trailIds[index]);
@@ -72,6 +93,7 @@ function exitTrail() {
   stop();
   const source = handoffSteps[trailIndex]?.message.sourceUrl;
   trailIndex = -1;
+  saveView(true);
   if (!roomModel) { viewChrome(); saveView(); return; }
   setProjection();
   populate();
@@ -287,12 +309,21 @@ el('exit-handoff').onclick = () => {
 stepButtons.forEach((button,index) => { button.onclick = () => pick(trailIds[index]); });
 for (const button of modeButtons) button.onclick = () => {
   stop();
+  if (mode === button.dataset.mode && (trailIndex < 0 || mode === 'field')) return;
   mode = button.dataset.mode;
   if (trailIndex >= 0 && mode !== 'field') exitTrail();
-  else void paint();
+  else { saveView(true); void paint(); }
 };
-el('room').onchange = event => void read(event.target.value);
-el('refresh').onclick = () => void read(room,true);
+el('room').onchange = event => {
+  const address = event.target.value;
+  if (address === room) return;
+  saveView(true,address,null);
+  void read(address);
+};
+el('refresh').onclick = () => {
+  if (roomModel) void read(room,true);
+  else restoreView();
+};
 el('prev').onclick = () => move(-1);
 el('next').onclick = () => move(1);
 el('rotate-left').onclick = () => renderer?.rotate?.(-.32);
@@ -311,4 +342,5 @@ el('play').onclick = () => {
   }, 1800);
 };
 document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
-void read(room,true);
+window.addEventListener('popstate',restoreView);
+restoreView();
