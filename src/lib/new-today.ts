@@ -1,13 +1,13 @@
 /**
- * The "New today" strip under the Shortwave hero: what shipped in the last
- * seven town days, one tap each. src/data/new-today.json is the list; add a
+ * The curated launches shown under the Shortwave hero cover the last
+ * seven town days. src/data/new-today.json is the list; add a
  * line there when something ships. Don't add the same launch to
  * front-door-news.json while it is fresh here: the Morning Edition's town slot
  * (pickTown in functions/_lib/morning.mjs) reads that file and would print it
  * into frozen editions for a week.
  *
  * The build filters the list, and the page checks again on load, so a quiet
- * week ages the strip out without a rebuild. An item's optional `until` retires
+ * week ages the curated list out without a rebuild. An item's optional `until` retires
  * copy that stops being true sooner (a preview that becomes No. 1).
  */
 import { townDate } from './band.ts';
@@ -45,12 +45,6 @@ export function isFresh(item: { date: string; until?: string }, now: Date = new 
   if (!(age >= 0 && age < NEW_TODAY_DAYS)) return false;
   const until = item.until ? Date.parse(item.until) : NaN;
   return !(Number.isFinite(until) && now.getTime() >= until);
-}
-
-/** "New today" when everything showing shipped today, otherwise "New this week". */
-export function stripHeading(dates: string[], now: Date = new Date()): string {
-  const today = townDate(now);
-  return dates.length > 0 && dates.every((date) => date === today) ? 'New today' : 'New this week';
 }
 
 /** "Sep 28" for a YYYY-MM-DD town day. */
