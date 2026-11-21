@@ -218,6 +218,22 @@ test('verified mark shown only when set; robots are not people', () => {
   assert.ok(!html.includes('twitter:card'));
 });
 
+test('embed composer fields have visible labels associated with their controls', async () => {
+  const { JSDOM } = await import('jsdom');
+  const { window } = new JSDOM('<pointcast-loom to="#open"></pointcast-loom>', {
+    url: 'https://officenoun.xyz/loom/', runScripts: 'outside-only',
+  });
+  try {
+    window.fetch = () => new Promise(() => {});
+    window.eval(readFileSync(new URL('../public/loom/embed.js', import.meta.url), 'utf8'));
+    const root = window.document.querySelector('pointcast-loom').shadowRoot;
+    assert.equal(root.querySelector('input').labels[0].textContent, 'Your name');
+    assert.equal(root.querySelector('textarea').labels[0].textContent, 'Message');
+  } finally {
+    window.close();
+  }
+});
+
 test('index never prints last message text (moderated text can linger there)', () => {
   assert.ok(!buildTopicIndex({ logs: [{ address: '#a', kind: 'topic', count: 3, last: { body: 'HIDDEN SPAM' } }] }).includes('HIDDEN SPAM'));
 });
