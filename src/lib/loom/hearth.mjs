@@ -1,28 +1,7 @@
-/**
- * Hearth (Loom v2, cards H-2 to H-4): the Loom read as a fireplace instead of a dashboard.
- *
- * Pure: no I/O, no DOM. The /loom/hearth pages fetch /api/loom and hand the JSON here.
- *
- * Choices, written down:
- * - A room is a fire. Its size comes from how recently it moved (the directory only carries
- *   updatedAt, not a per-day count): under 3 hours 64px, under 12 hours 56, under a day 40,
- *   under 3 days 32. Older than that it is an ember: named in one line, no fire.
- * - Warm when the last speaker was a person, pilot blue when it was a bot. The Collator
- *   (the house robot) never lights a fire on its own: a room whose last line is the
- *   Collator's keeps whatever palette the sender before it earned, which the directory
- *   does not carry, so it shows pilot.
- * - Nothing ever prints a zero. An empty pile is left out, not shown as "0".
- * - The front-page sentence is built from the data, not written by a model, so it can
- *   be wrong only where the data is.
- */
+/** The shared Hearth pixel flame, front-page recap and people-first room view. */
 
 export const FIRE_SIZES = [64, 56, 40, 32];
-const H = 3600000;
-const LIT_STEPS = [[3 * H, 64], [12 * H, 56], [24 * H, 40], [72 * H, 32]];
-export const EMBER_MS = 14 * 24 * H;
 export const MAX_FIRES = 9;
-export const MAX_EMBERS = 4;
-const ROOM_KINDS = new Set(['topic', 'handle']);
 
 export const PALETTES = {
   warm: { outer: 'var(--hearth-ember)', middle: 'var(--hearth-flame)', core: 'var(--hearth-core)' },
@@ -49,16 +28,6 @@ export function flameSvg(size = 40, palette = 'warm', { still = false } = {}) {
     + `<path fill="${p.outer}" d="${PATHS.outer}"/><path fill="${p.middle}" d="${PATHS.middle}"/><path fill="${p.core}" d="${PATHS.core}"/></svg>`;
 }
 
-/** Fire width for a room that last moved at updatedAt, or null when it is only an ember. */
-export function fireSize(updatedAt, now = Date.now()) {
-  const age = now - time(updatedAt);
-  if (age < 0) return FIRE_SIZES[0];
-  for (const [limit, size] of LIT_STEPS) if (age < limit) return size;
-  return null;
-}
-
-export const paletteFor = (last) => (isPerson(last) ? 'warm' : 'pilot');
-
 /** "just now", "12 minutes ago", "3 hours ago", "yesterday", "4 days ago". Never "0 ...". */
 export function ago(at, now = Date.now()) {
   const m = Math.floor((now - time(at)) / 60000);
@@ -70,81 +39,65 @@ export function ago(at, now = Date.now()) {
   return d === 1 ? 'yesterday' : `${d} days ago`;
 }
 
-const roomName = (e) => e.label || e.address;
 export const roomHref = (address) => `/loom/hearth/room?to=${encodeURIComponent(address)}`;
 
-/**
- * The directory (GET /api/loom) as a hearth: lit fires, newest first, and embers.
- * Only rooms (topics and handles) count; page threads and replies stay on the classic Loom.
- */
-export function hearthFromDirectory(logs = [], now = Date.now()) {
-  const rooms = logs.filter((e) => e && ROOM_KINDS.has(e.kind) && e.updatedAt)
-    .sort((a, b) => time(b.updatedAt) - time(a.updatedAt));
-  const fires = [], embers = [];
-  for (const e of rooms) {
-    const size = fireSize(e.updatedAt, now);
-    if (size) {
-      if (fires.length < MAX_FIRES) {
-        fires.push({ address: e.address, name: roomName(e), title: e.title ?? null, size, palette: paletteFor(e.last),
-          lastName: isCollator(e.last) ? null : (e.last?.name ?? null), updatedAt: e.updatedAt, href: roomHref(e.address) });
-      }
-    } else if (now - time(e.updatedAt) < EMBER_MS && embers.length < MAX_EMBERS) {
-      embers.push({ address: e.address, name: roomName(e), href: roomHref(e.address) });
-    }
+/** Rooms are ordered by last-day volume. Use original post times for return visits. */
+export function whileYouWereOut({ active, unavailable, since, asOf }, seenAt = null) {
+  const lastVisit = time(seenAt);
+  const recentVisit = lastVisit >= since && lastVisit <= asOf;
+  const cutoff = recentVisit ? lastVisit : since;
+  const moved = active.filter(room => time(room.lastAt) > cutoff);
+  const person = moved.find(room => room.human && time(room.lastHumanAt) > cutoff);
+  const pilot = moved.find(room => !room.human);
+  if (person) {
+    const name = person.humanName || 'Someone';
+    return pilot ? `${name} posted in ${person.address}, and agents kept ${pilot.address} lit.`
+      : `${name} added a log to ${person.address}.`;
   }
-  return { fires, embers };
+  if (moved.length) {
+    const room = moved[0];
+    return room.lastName ? `${room.lastName} added a log to ${room.address}.`
+      : `The fire in ${room.address} is burning.`;
+  }
+  if (unavailable.length) return 'The Loom could only read part of the board.';
+  return recentVisit ? 'The fires have been quiet since your last visit.' : 'The rooms have been quiet for the past day.';
 }
 
-const listOf = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
-
-/**
- * The "while you were out" sentence. seenAt is when this browser last looked (null on a first look,
- * which reads the last 24 hours). Returns { lead, line } and never mentions a zero.
- */
-export function whileYouWereOut(fires, { seenAt = null, now = Date.now() } = {}) {
-  const since = seenAt ? time(seenAt) : now - 24 * H;
-  const moved = fires.filter((f) => time(f.updatedAt) > since);
-  const lead = seenAt ? 'WHILE YOU WERE OUT' : 'TODAY ON THE LOOM';
-  if (!fires.length) return { lead, line: 'The fires are banked. Add a log to light the first one.' };
-  if (!moved.length) {
-    const f = fires[0];
-    return { lead, line: `Quiet since you last looked. The last fire to move was ${f.name}, ${ago(f.updatedAt, now)}.` };
-  }
-  const people = [...new Set(moved.filter((f) => f.palette === 'warm' && f.lastName).map((f) => f.lastName))].slice(0, 3);
-  const top = moved[0];
-  const count = moved.length === 1 ? 'One fire moved' : `${moved.length} fires moved`;
-  const who = top.lastName ? `, ${top.lastName} spoke last` : '';
-  const peopleLine = people.length ? ` ${listOf(people)} ${people.length === 1 ? 'was' : 'were'} at the fire.` : ' Only bots spoke.';
-  return { lead, line: `${count}. ${top.name} is the brightest${who}.${peopleLine}` };
+/** The newest ROOM NOTE accepted by the classic reader. Trimmed logs have lost their opener. */
+function roomNote(messages, log) {
+  if (log?.kind !== 'topic') return;
+  const roots = messages.filter(m => !m.parent && !(m.depth >= 1) && !m.via);
+  const name = m => String(m?.from?.name || '').trim().replace(/^@+/, '').replace(/\s+/g, ' ').toLowerCase();
+  const opener = !log.trimmedBefore && name(roots.at(-1));
+  return roots.find(m => !m.withdrawn && /^room note(?![a-z])/i.test((m.body || '').trim()) &&
+    (m.from?.verified || name(m) === "loom desk (mike's agent)" || (opener && name(m) === opener)));
 }
 
-/**
- * One room, people first. messages are the folded thread (GET /api/loom?to=...).
- * Returns the three summary lines, the people's posts newest first, and the bots folded.
- */
-export function roomView(messages = [], { title = null, now = Date.now(), cap = 20 } = {}) {
-  // Echoes (copies rippled in from elsewhere, m.via) are the same message as their original: left out.
-  const own = messages.filter((m) => m && !m.hidden && !m.via && !isCollator(m.from));
-  const people = own.filter((m) => isPerson(m.from));
-  const bots = own.filter((m) => !isPerson(m.from));
-  const day = own.filter((m) => now - time(m.at) < 24 * H);
-  const summary = [];
-  if (title) summary.push(oneLine(title, 120));
-  if (day.length) {
-    const dayPeople = day.filter((m) => isPerson(m.from)).length;
-    const voices = new Set(day.map((m) => m.from?.name)).size;
-    summary.push(`${day.length === 1 ? 'One post' : `${day.length} posts`} in the last day from ${voices === 1 ? 'one voice' : `${voices} voices`}${dayPeople ? '' : ', all bots'}.`);
-  } else if (own.length) {
-    summary.push(`Last moved ${ago(own.at(-1).at, now)}.`);
+/** Read direct posts here. The classic room keeps the complete mirrored and system log. */
+export function roomView(messages = [], { log = {} } = {}) {
+  const visible = messages.filter(m => m && !m.hidden && !m.withdrawn)
+    .sort((a, b) => (b.seq || 0) - (a.seq || 0) || time(b.at) - time(a.at));
+  const posts = visible.filter(m => !m.via && !isCollator(m.from));
+  const people = posts.filter(m => isPerson(m.from));
+  const bots = posts.filter(m => !isPerson(m.from));
+  const note = roomNote(visible, log);
+  const summary = note ? note.body.trim().replace(/^room note[\s:.·•\-–—]*/i, '')
+    .split('\n').map(line => line.trim()).filter(Boolean).slice(0, 3).map(line => oneLine(line, 140)) : [];
+  if (summary.length) summary[0] = (note.from.name || 'Room editor') + ' · ' + summary[0];
+
+  const excerpt = m => m.body?.trim() || m.poll?.question || m.media?.alt;
+  const recent = posts.filter(m => m !== note && excerpt(m));
+  const lastPerson = recent.find(m => isPerson(m.from));
+  const lastBot = recent.find(m => !isPerson(m.from));
+  for (const m of new Set([lastPerson, lastBot, ...recent].filter(Boolean))) {
+    if (summary.length === 3) break;
+    summary.push((m.from?.name || 'Someone') + ' wrote “' + oneLine(excerpt(m).split('\n')[0], 110) + '”');
   }
-  const lastPerson = people.at(-1);
-  if (lastPerson) summary.push(`${lastPerson.from.name} said: ${oneLine(lastPerson.body, 110)}`);
-  else if (bots.length) summary.push(`No person has spoken here yet. Latest from ${bots.at(-1).from?.name ?? 'a bot'}: ${oneLine(bots.at(-1).body, 90)}`);
-  const toPost = (m) => ({ id: m.id, name: m.from?.name ?? 'anonymous', person: isPerson(m.from), when: ago(m.at, now), body: String(m.body ?? '') });
-  return {
-    summary: summary.slice(0, 3),
-    people: people.slice(-cap).reverse().map(toPost),
-    bots: bots.slice(-cap).reverse().map(toPost),
-    botCount: bots.length,
-  };
+  if (summary.length < 3) summary.unshift(log.title || 'Around the fire in ' + (log.label || 'this room') + '.');
+  if (summary.length < 3) {
+    const count = posts.length === 1 ? 'One log was posted here.' : posts.length + ' logs were posted here.';
+    summary.push(posts.length ? count : 'No one has posted directly here yet.');
+  }
+  if (summary.length < 3) summary.push(posts.length ? 'Read the logs below.' : 'Add the first log.');
+  return { summary, people, bots, botCount: bots.length };
 }
