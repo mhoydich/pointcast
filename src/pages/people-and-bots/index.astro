@@ -1,0 +1,347 @@
+---
+/**
+ * /people-and-bots/: approved for publication.
+ * No block. No join form.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+import { PEOPLE_AND_BOTS as page } from '../../lib/people-and-bots.mjs';
+import '../../styles/chain.css';
+
+const ch = CHANNELS.FD;
+
+const links = new Map<string, string>();
+const add = (href: string | undefined, label: string) => {
+  if (href) links.set(href, links.get(href) ?? label);
+};
+for (const practice of page.practices) {
+  for (const link of practice.links) add(link.href, link.label);
+}
+for (const resource of page.resources) {
+  add(resource.href, resource.name);
+  if ('productHref' in resource && resource.productHref) add(resource.productHref, `${resource.name} product`);
+  if ('guidelinesHref' in resource && resource.guidelinesHref) add(resource.guidelinesHref, `${resource.name} community guidelines`);
+}
+for (const benefit of page.grokBeyondX.benefits) {
+  add(benefit.href, benefit.hrefLabel);
+  if ('alsoHref' in benefit && benefit.alsoHref) add(benefit.alsoHref, benefit.alsoLabel);
+}
+for (const pricingPage of page.grokBeyondX.pricing.pages) add(pricingPage.href, pricingPage.label);
+add(page.json, 'JSON twin');
+add('/for-agents', 'For agents');
+const sourceLinks = [...links];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': page.canonical,
+  name: page.title,
+  description: page.description,
+  url: page.canonical,
+  creativeWorkStatus: 'Approved for publication',
+  dateCreated: page.credits.drafted.date,
+  inLanguage: 'en',
+  isAccessibleForFree: true,
+  author: {
+    '@type': 'SoftwareApplication',
+    name: page.author.name,
+    alternateName: page.author.also,
+    description: page.author.role,
+  },
+  creditText: page.creditText,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz/' },
+  citation: sourceLinks.map(([href, label]) => ({
+    '@type': 'CreativeWork',
+    name: label,
+    url: href.startsWith('http') ? href : `https://pointcast.xyz${href}`,
+  })),
+};
+---
+
+<BlockLayout
+  title={page.title}
+  documentTitle={page.documentTitle}
+  description={page.description}
+  author="New Bot"
+  creator="New Bot"
+  imageAlt="Page card for People and their bots, approved for publication."
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[{ type: 'application/json', href: page.json, title: 'People and their bots JSON' }]}
+>
+  <article class="chn cs" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span aria-hidden="true">/</span>
+      <span>People and their bots</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">{page.kicker}</p>
+      <h1>{page.title}</h1>
+      <p class="dek">{page.dek}</p>
+      <nav class="jump" aria-label="On this page">
+        <a href="#requests">Requests</a>
+        <a href="#why">Why</a>
+        <a href="#practices">Practices</a>
+        <a href="#resources">Resources</a>
+        <a href="#grok">Grok Bot</a>
+        <a href="#first">First contribution</a>
+        <a href="#provenance">Provenance</a>
+        <a href="#together">Taking part</a>
+        <a href="#sources">Sources</a>
+      </nav>
+    </header>
+
+    <div class="strip">
+      <p>
+        <b>Approved for publication.</b>
+        {page.creditText} No block id.
+      </p>
+    </div>
+    <p class="note">{page.standing}</p>
+
+    <section class="sec" id="requests" aria-labelledby="requests-title">
+      <h2 class="h2" id="requests-title">{page.quotes.heading}</h2>
+      <p class="note">{page.quotes.note}</p>
+      {page.quotes.items.map((quote) => (
+        <blockquote>
+          <p>{quote}</p>
+        </blockquote>
+      ))}
+      <blockquote>
+        <p>{page.quotes.subscription.request}</p>
+      </blockquote>
+      <blockquote>
+        <p>{page.quotes.subscription.clarification}</p>
+      </blockquote>
+      <p class="note">
+        The same day’s clarification of that subscription was “{page.quotes.subscription.means},” plus “{page.quotes.subscription.also}.” No clock time was recorded for these lines. The price check is in <a href="#grok">Grok Bot</a>.
+      </p>
+    </section>
+
+    <section class="sec" id="why" aria-labelledby="why-title">
+      <h2 class="h2" id="why-title">{page.why.heading}</h2>
+      <ul class="cards">
+        {page.why.points.map((point) => (
+          <li class="card">
+            <h3>{point.title}</h3>
+            <p>{point.text}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="sec" id="practices" aria-labelledby="practices-title">
+      <h2 class="h2" id="practices-title">Several ways to contribute</h2>
+      <p class="note">Each person picks the approach that fits the work. The labels below record a check on {page.draftedOn}.</p>
+      <ul class="cards">
+        {page.practices.map((practice) => (
+          <li class="card" id={practice.id}>
+            <p class="card__k"><span class="tag">{practice.status}</span></p>
+            <h3>{practice.title}</h3>
+            <p>{practice.summary}</p>
+            {practice.links.length > 0 && (
+              <div class="card__links">
+                {practice.links.map((link) => (
+                  <a href={link.href}>{link.label}{link.href.startsWith('http') ? ' ↗' : ''}</a>
+                ))}
+              </div>
+            )}
+            {practice.links.map((link) => (
+              <p class="fine">{link.note}</p>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="sec" id="resources" aria-labelledby="resources-title">
+      <h2 class="h2" id="resources-title">A resource shelf</h2>
+      <p class="note">These are tools a person might already like. Each one needs that person’s own account. None of them is included with PointCast, and none of them shares a login.</p>
+      <ul class="cards">
+        {page.resources.map((resource) => (
+          <li class="card" id={resource.id}>
+            <p class="card__k">Checked {resource.checked}</p>
+            <h3>{resource.name}</h3>
+            <p>{resource.use}</p>
+            <p>{resource.check}</p>
+            <p class="card__rule">{resource.boundary}</p>
+            <div class="card__links">
+              <a href={resource.href}>{resource.name} reference ↗</a>
+              {'productHref' in resource && resource.productHref && (
+                <a href={resource.productHref}>Product site ↗</a>
+              )}
+              {'guidelinesHref' in resource && resource.guidelinesHref && (
+                <a href={resource.guidelinesHref}>Community guidelines ↗</a>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="sec" id="grok" aria-labelledby="grok-title">
+      <h2 class="h2" id="grok-title">{page.grokBeyondX.heading}</h2>
+      <p class="note">{page.grokBeyondX.request}</p>
+      <ul class="rows">
+        {page.grokBeyondX.benefits.map((benefit) => (
+          <li>
+            <b>{benefit.title}</b>
+            <div>
+              <span>{benefit.text}</span>
+              {' '}
+              <a href={benefit.href}>{benefit.hrefLabel} ↗</a>
+              {'alsoHref' in benefit && benefit.alsoHref && (
+                <>
+                  {' · '}
+                  <a href={benefit.alsoHref}>{benefit.alsoLabel} ↗</a>
+                </>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div class="card card--tint" id="pricing">
+        <p class="card__k">Price check · {page.grokBeyondX.pricing.checked}</p>
+        <h3>Check the current plan</h3>
+        <p>{page.grokBeyondX.pricing.finding}</p>
+        <p>{page.grokBeyondX.pricing.docs}</p>
+        <p>{page.grokBeyondX.pricing.caveats}</p>
+        <div class="card__links">
+          {page.grokBeyondX.pricing.pages.map((pricingPage) => (
+            <a href={pricingPage.href}>{pricingPage.label} ↗</a>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="first" aria-labelledby="first-title">
+      <h2 class="h2" id="first-title">{page.steps.heading}</h2>
+      <p class="note">{page.steps.intro}</p>
+      <ol class="steps">
+        {page.steps.items.map((item) => (
+          <li>{item}</li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="sec" id="provenance" aria-labelledby="provenance-title">
+      <h2 class="h2" id="provenance-title">{page.provenance.heading}</h2>
+      <p class="note">{page.provenance.intro}</p>
+      <div class="tbl">
+        <table>
+          <caption>What to record before something goes public</caption>
+          <thead>
+            <tr><th scope="col">Field</th><th scope="col">What to write</th></tr>
+          </thead>
+          <tbody>
+            {page.provenance.fields.map(([field, help]) => (
+              <tr>
+                <th scope="row">{field}</th>
+                <td>{help}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="cmd__label" id="template-label">Plain-text template</p>
+      <pre id="provenance-template" aria-labelledby="template-label"><code>{page.provenance.template}</code></pre>
+      <div class="cta">
+        <button type="button" class="btn" data-copy-provenance aria-describedby="copy-provenance-status">Copy the template</button>
+        <span id="copy-provenance-status" role="status"></span>
+      </div>
+    </section>
+
+    <section class="sec" id="together" aria-labelledby="together-title">
+      <h2 class="h2" id="together-title">{page.collaboration.heading}</h2>
+      <ul class="bullets">
+        {page.collaboration.points.map((point) => (
+          <li>{point}</li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="sec" id="sources" aria-labelledby="sources-title">
+      <h2 class="h2" id="sources-title">Sources and backlinks</h2>
+      <p class="note">{page.sourcesNote}</p>
+      <ul class="bullets">
+        {sourceLinks.map(([href, label]) => (
+          <li><a href={href}>{label}</a></li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">Credit</p>
+      <p>{page.creditText}</p>
+      <p>
+        Publication approval, {page.credits.published.date}, {page.credits.published.time}: “{page.credits.published.quote}”
+      </p>
+      <p>
+        Machine twin: <a href={page.json}>{page.json}</a>.
+        Neighbor doors: <a href="/for-agents">/for-agents</a>, <a href="/grok/method/">/grok/method</a>, <a href="/ues/collective-intelligence-studio/">Collective Intelligence Studio</a>.
+      </p>
+    </footer>
+  </article>
+</BlockLayout>
+
+<script>
+  function bindProvenanceCopy() {
+    const button = document.querySelector<HTMLButtonElement>('[data-copy-provenance]');
+    const template = document.getElementById('provenance-template');
+    const status = document.getElementById('copy-provenance-status');
+    if (!button || !template || !status || button.dataset.bound === 'true') return;
+    button.dataset.bound = 'true';
+    button.addEventListener('click', async () => {
+      const text = template.innerText.trim();
+      const copied = 'Copied. Paste it into your own notes. Nothing was submitted.';
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          status.textContent = copied;
+          return;
+        }
+      } catch {
+        // The clipboard can be blocked. The selection below is the fallback.
+      }
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(template);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      let didCopy = false;
+      try {
+        didCopy = document.execCommand('copy');
+      } catch {
+        didCopy = false;
+      }
+      status.textContent = didCopy
+        ? copied
+        : 'The template is selected. Copy it from the selection. Nothing was submitted.';
+    });
+  }
+
+  bindProvenanceCopy();
+  document.addEventListener('astro:page-load', bindProvenanceCopy);
+</script>
+
+<style>
+  .chn.cs blockquote {
+    margin: 0 0 12px;
+    padding: 14px 16px;
+    border-left: 6px solid var(--c600);
+    background: var(--c50);
+  }
+  .chn.cs blockquote p {
+    margin: 0;
+    font: 400 16px/1.55 var(--pc-font-sans);
+  }
+  .chn.cs .note a,
+  .chn.cs .rows a,
+  .chn.cs .bullets a,
+  .chn.cs .fine a,
+  .chn.cs .method a {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+</style>
