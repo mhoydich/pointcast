@@ -170,7 +170,14 @@ function populate() {
     const author = model.authors.find(a => a.key === record.authorKey);
     const item = create('li','');
     const button = create('button',authorName(author.name) + ' · ' + (record.body.slice(0,74) || record.kind));
-    button.value = record.id; button.onclick = () => pick(record.id);
+    button.value = record.id;
+    button.onclick = () => {
+      pick(record.id);
+      if (window.matchMedia('(max-width: 640px)').matches) {
+        el('record-body').focus({preventScroll:true});
+        document.querySelector('.record').scrollIntoView({block:'start'});
+      }
+    };
     item.append(button); list.append(item);
   }
   const agents = roomModel.authors.filter(author => author.kind === 'agent').length;
