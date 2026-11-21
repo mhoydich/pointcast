@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#f6f3e9">
+  <title>Many Worlds Atlas · Nouns Money proofs</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: light; color: #192b2b; background: #f6f3e9; font: 1rem/1.45 system-ui, sans-serif; }
+    body { margin: 0; }
+    main { width: min(90rem, 100%); margin: auto; padding: clamp(1rem, 4vw, 4rem); }
+    h1, h2, p { margin: 0; }
+    .mast, .meta, legend, label[for=edition] { font: 700 .8rem/1.45 ui-monospace, monospace; letter-spacing: .07em; text-transform: uppercase; }
+    .mast { padding-block: .65rem; border-block: 2px solid currentColor; }
+    h1 { margin: 1rem 0 1.6rem; font: 500 clamp(2.6rem, 6vw, 5.2rem)/1 Georgia, serif; letter-spacing: -.055em; }
+    form { display: flex; align-items: flex-end; gap: 1rem 2rem; flex-wrap: wrap; padding-bottom: 1.2rem; border-bottom: 1px solid #aaa99c; }
+    label[for=edition], legend { display: block; margin-bottom: .35rem; }
+    .edition { flex: 1 1 19rem; max-width: 32rem; min-width: 0; }
+    select { font: inherit; background: white; color: inherit; border: 1px solid #73776b; border-radius: 3px; min-height: 2.8rem; width: 100%; padding: .4rem .65rem; }
+    fieldset { border: 0; padding: 0; margin: 0; }
+    legend { padding: 0; }
+    .sides { display: flex; gap: .35rem; }
+    .sides label { display: inline-flex; align-items: center; min-height: 2.8rem; padding: .35rem .7rem; border: 1px solid #73776b; border-radius: 3px; cursor: pointer; background: white; }
+    .sides label:has(:checked) { background: #dde4db; border-color: #263c36; }
+    input { accent-color: #244b42; margin: 0 .45rem 0 0; }
+    :focus-visible, .sides label:has(:focus-visible) { outline: 3px solid #8b391e; outline-offset: 3px; }
+    .intro { margin: 1.5rem 0 1.25rem; }
+    h2 { margin: .15rem 0 .25rem; font: 500 clamp(1.7rem, 4vw, 2.6rem)/1.1 Georgia, serif; }
+    .comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+    figure { min-width: 0; margin: 0; }
+    figcaption { margin: 0 0 .45rem; font-weight: 650; }
+    .art { display: grid; place-items: center; aspect-ratio: 2; border: 1px solid #b6b3a6; background: #e9e6dc; }
+    .art img, .art canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .unavailable { padding: 1rem; }
+    .file { display: inline-block; min-height: 2.75rem; padding: .65rem 0; color: #164e44; text-underline-offset: .2em; }
+    .downloads { display: flex; align-items: baseline; gap: .15rem 1.3rem; flex-wrap: wrap; }
+    button.file { appearance: none; border: 0; background: none; font: inherit; text-decoration: underline; cursor: pointer; }
+    button:disabled { opacity: .65; cursor: wait; }
+    .feedback { font-size: .9rem; }
+    footer { margin-top: 1.4rem; padding-top: .85rem; border-top: 1px solid #aaa99c; }
+    [hidden] { display: none !important; }
+    @media (max-width: 46rem) { .comparison { grid-template-columns: minmax(0, 1fr); } }
+    @media (max-width: 30rem) { form { display: grid; gap: .75rem; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="mast">Nouns Money / X desk proofs</p>
+      <h1>Many Worlds Atlas</h1>
+    </header>
+    <form id="controls" hidden aria-label="Choose a proof">
+      <div class="edition">
+        <label for="edition">Edition</label>
+        <select id="edition" name="edition"></select>
+      </div>
+      <fieldset>
+        <legend>Side</legend>
+        <div class="sides">
+          <label><input type="radio" name="side" value="front" checked>Front</label>
+          <label><input type="radio" name="side" value="back">Back</label>
+        </div>
+      </fieldset>
+    </form>
+    <p id="status" role="status">Loading editions…</p>
+    <noscript>Turn on JavaScript to compare the atlas proofs.</noscript>
+    <section id="review" hidden aria-labelledby="title">
+      <header class="intro">
+        <p id="position" class="meta"></p>
+        <h2 id="title"></h2>
+        <p id="description"></p>
+      </header>
+      <div class="comparison">
+        <figure>
+          <figcaption>As published</figcaption>
+          <div class="art" id="source-art"></div>
+          <a class="file" id="source-pdf">Published print master (PDF)</a>
+        </figure>
+        <figure>
+          <figcaption>Candidate proof</figcaption>
+          <div class="art" id="candidate-art"></div>
+          <div class="downloads">
+            <a class="file" id="candidate-png" hidden>Download this side (PNG)</a>
+            <button type="button" class="file" id="prepare-pdf" hidden>Prepare candidate PDF</button>
+            <a class="file" id="candidate-pdf" hidden>Download verified candidate (PDF)</a>
+          </div>
+          <p class="feedback" id="pdf-status" role="status"></p>
+        </figure>
+      </div>
+    </section>
+    <footer>Collectible art · No cash value</footer>
+  </main>
+  <script>
+    const byId = id => document.getElementById(id);
+    const controls = byId('controls');
+    const select = byId('edition');
+    const status = byId('status');
+    const review = byId('review');
+    const query = new URLSearchParams(location.search);
+    const proofRoot = '/nouns-money/atlas-proof/';
+    let editions = [];
+    let proofs = new Map();
+    let activeView = new AbortController();
+    let activePDF = new AbortController();
+    let selectedEdition = '';
+
+    async function readJSON(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('File unavailable');
+      return response.json();
+    }
+
+    async function checkedFile(url, expectedHash, signal, expectedBytes) {
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error('A proof file could not be loaded.');
+      const bytes = await response.arrayBuffer();
+      if (expectedBytes !== undefined && bytes.byteLength !== expectedBytes) {
+        throw new Error('The file size does not match the proof record.');
+      }
+      await checkHash(bytes, expectedHash);
+      return bytes;
+    }
+
+    async function checkHash(bytes, expected) {
+      if (!globalThis.crypto?.subtle) throw new Error('File verification requires HTTPS or localhost.');
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+      const hex = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+      if (hex !== expected) throw new Error('The file checksum does not match the proof record.');
+    }
+
+    function notice(target, message) {
+      const p = document.createElement('p');
+      p.className = 'unavailable';
+      p.textContent = message;
+      target.replaceChildren(p);
+    }
+
+    function unlink(id) {
+      const a = byId(id);
+      if (a.href.startsWith('blob:')) URL.revokeObjectURL(a.href);
+      a.removeAttribute('href');
+      a.removeAttribute('download');
+      a.hidden = true;
+    }
+
+    function download(id, blob, filename) {
+      const a = byId(id);
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.hidden = false;
+    }
+
+    async function imageFrom(blob) {
+      const url = URL.createObjectURL(blob);
+      try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        return image;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    function showSource(url, label) {
+      const image = new Image();
+      image.alt = 'Published ' + label;
+      image.width = 1200;
+      image.height = 600;
+      image.onerror = () => {
+        if (image.isConnected) notice(byId('source-art'), 'Published image unavailable.');
+      };
+      byId('source-art').replaceChildren(image);
+      image.src = url;
+    }
+
+    async function showCandidate(face, label, filename, signal) {
+      const display = byId('candidate-art');
+      notice(display, 'Preparing proof…');
+      try {
+        const [sourceBytes, patchBytes] = await Promise.all([
+          checkedFile(face.source, face.sourceSha256, signal),
+          checkedFile(proofRoot + face.patch, face.patchSha256, signal)
+        ]);
+        const [source, patch] = await Promise.all([
+          imageFrom(new Blob([sourceBytes], { type: 'image/webp' })),
+          imageFrom(new Blob([patchBytes], { type: 'image/png' }))
+        ]);
+        if (source.naturalWidth !== 1200 || source.naturalHeight !== 600 ||
+            ![face.x, face.y, face.width, face.height].every(Number.isInteger) ||
+            face.x < 0 || face.y < 0 || face.width < 1 || face.height < 1 ||
+            face.x + face.width > source.naturalWidth || face.y + face.height > source.naturalHeight ||
+            patch.naturalWidth !== face.width || patch.naturalHeight !== face.height) {
+          throw new Error('The image patch dimensions do not match the proof record.');
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = source.naturalWidth;
+        canvas.height = source.naturalHeight;
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', 'Candidate ' + label + ', with the whole Noun portrait in the corner.');
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(source, 0, 0);
+        ctx.drawImage(patch, face.x, face.y);
+        if (signal.aborted) return;
+        display.replaceChildren(canvas);
+        const png = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!png) throw new Error('The PNG could not be exported.');
+        if (!signal.aborted) download('candidate-png', png, filename + '.png');
+      } catch (err) {
+        if (!signal.aborted) notice(display, 'Candidate unavailable. ' + err.message);
+      }
+    }
+
+    async function preparePDF() {
+      const proof = proofs.get(selectedEdition);
+      if (!proof?.pdf) return;
+      const signal = activePDF.signal;
+      const button = byId('prepare-pdf');
+      const feedback = byId('pdf-status');
+      button.disabled = true;
+      feedback.textContent = 'Verifying the print master…';
+      try {
+        const pdf = proof.pdf;
+        const [source, patch] = await Promise.all([
+          checkedFile(pdf.source, pdf.sourceSha256, signal, pdf.sourceBytes),
+          checkedFile(proofRoot + pdf.patch, pdf.patchSha256, signal)
+        ]);
+        const combined = new Blob([source, patch], { type: 'application/pdf' });
+        if (combined.size !== pdf.resultBytes) throw new Error('The candidate size does not match the proof record.');
+        await checkHash(await combined.arrayBuffer(), pdf.resultSha256);
+        if (signal.aborted) return;
+        download('candidate-pdf', combined, selectedEdition + '-candidate.pdf');
+        const moveFocus = document.activeElement === button;
+        button.hidden = true;
+        feedback.textContent = 'SHA-256 verified.';
+        if (moveFocus) byId('candidate-pdf').focus();
+      } catch (err) {
+        if (signal.aborted) return;
+        feedback.textContent = 'PDF unavailable. ' + err.message;
+        button.disabled = false;
+      }
+    }
+
+    function updateReview() {
+      const entry = editions[select.selectedIndex];
+      const proof = proofs.get(entry.id);
+      if (entry.id !== selectedEdition) {
+        activePDF.abort();
+        activePDF = new AbortController();
+        selectedEdition = entry.id;
+        unlink('candidate-pdf');
+        byId('prepare-pdf').hidden = !proof?.pdf;
+        byId('prepare-pdf').disabled = false;
+        byId('pdf-status').textContent = '';
+      }
+      activeView.abort();
+      activeView = new AbortController();
+      unlink('candidate-png');
+      const side = controls.elements.side.value;
+      const face = side === 'back' ? entry.back : entry.image;
+      const label = entry.title + ', ' + side;
+
+      byId('position').textContent =
+        'Edition ' + (select.selectedIndex + 1) + ' of ' + editions.length + ' · ' + entry.region;
+      byId('title').textContent = entry.title;
+      byId('description').textContent = entry.description;
+      showSource(face, label);
+      if (proof?.[side]) {
+        showCandidate(proof[side], label, entry.id + '-' + side, activeView.signal);
+      } else {
+        notice(byId('candidate-art'), 'No candidate proof available for this side.');
+      }
+      byId('source-pdf').href = entry.download;
+
+      const url = new URL(location.href);
+      url.searchParams.set('edition', entry.id);
+      url.searchParams.set('side', side);
+      history.replaceState(null, '', url);
+    }
+
+    async function loadEditions() {
+      try {
+        const [manifest, proofList] = await Promise.all([
+          readJSON('/nouns-money/collected/manifest.json'),
+          readJSON(proofRoot + 'proofs.json')
+        ]);
+        editions = manifest.entries.filter(entry => entry.collection === 'many-worlds-atlas');
+        if (!editions.length) throw new Error('Atlas editions missing');
+        proofs = new Map(proofList.editions.map(proof => [proof.id, proof]));
+        for (const entry of editions) {
+          const number = entry.id.split('-')[1];
+          select.add(new Option(number + ' · ' + entry.title, entry.id));
+        }
+        if (editions.some(entry => entry.id === query.get('edition'))) select.value = query.get('edition');
+        if (query.get('side') === 'back') controls.elements.side.value = 'back';
+        updateReview();
+        controls.hidden = false;
+        review.hidden = false;
+        status.hidden = true;
+        controls.addEventListener('change', updateReview);
+        byId('prepare-pdf').addEventListener('click', preparePDF);
+      } catch {
+        status.textContent = 'The atlas proofs could not be loaded. Reload this page to try again.';
+      }
+    }
+
+    controls.addEventListener('submit', event => event.preventDefault());
+    loadEditions();
+  </script>
+</body>
+</html>
