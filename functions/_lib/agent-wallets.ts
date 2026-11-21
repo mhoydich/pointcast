@@ -80,7 +80,11 @@ async function insertWallet(env: AgentWalletEnv, db: D1Database, agentId: string
 }
 
 /** Make sure every roster agent has a wallet, then list the public side of each. */
-export async function ensureAgentWallets(env: AgentWalletEnv): Promise<AgentWallet[]> {
+export async function ensureAgentWallets(
+  env: AgentWalletEnv,
+  rosterOverride?: RosterEntry[],
+): Promise<AgentWallet[]> {
+  const agents = rosterOverride ?? AGENT_ROSTER;
   const db = env.AUTH_DB;
   if (!db) throw new Error('agent-wallet-db-unbound');
   await db.prepare(CREATE_TABLE).run();
@@ -88,17 +92,20 @@ export async function ensureAgentWallets(env: AgentWalletEnv): Promise<AgentWall
     agent_id: string; address: string; created_at: string;
   }>();
   const have = new Map((existing.results ?? []).map((row) => [row.agent_id, row]));
-  const missing = AGENT_ROSTER.filter((agent) => !have.has(agent.id));
-  if (missing.length) {
-    if (have.size + missing.length > MAX_WALLETS) throw new Error('agent-wallet-cap');
-    for (const agent of missing) await insertWallet(env, db, agent.id);
+  const missing = agents.filter((agent) => !have.has(agent.id));
+  // Lifetime cap applies to inserts only: wallets that already exist are always listed,
+  // even when the table is full and a new roster entry cannot be provisioned.
+  const room = Math.max(0, MAX_WALLETS - have.size);
+  const toCreate = missing.slice(0, room);
+  if (toCreate.length) {
+    for (const agent of toCreate) await insertWallet(env, db, agent.id);
     const refreshed = await db.prepare('SELECT agent_id, address, created_at FROM agent_wallets').all<{
       agent_id: string; address: string; created_at: string;
     }>();
     have.clear();
     for (const row of refreshed.results ?? []) have.set(row.agent_id, row);
   }
-  return AGENT_ROSTER.flatMap((agent) => {
+  return agents.flatMap((agent) => {
     const row = have.get(agent.id);
     return row ? [{ id: agent.id, name: agent.name, role: agent.role, address: row.address, createdAt: row.created_at }] : [];
   });

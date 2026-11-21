@@ -5,10 +5,12 @@ import { createServer } from 'vite';
 
 let server;
 let lib;
+let api;
 
 before(async () => {
   server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
   lib = await server.ssrLoadModule('/functions/_lib/agent-wallets.ts');
+  api = await server.ssrLoadModule('/functions/api/agent-wallets.ts');
 });
 after(() => server?.close());
 
@@ -51,4 +53,27 @@ test('ensureAgentWallets creates one wallet per roster agent, is idempotent, nev
 test('ensureAgentWallets refuses to run without a valid encryption key', async () => {
   const env = { AUTH_DB: d1(new DatabaseSync(':memory:')), POINTCAST_INTEGRATION_ENCRYPTION_KEY: 'short' };
   await assert.rejects(() => lib.ensureAgentWallets(env), /encryption-key-invalid/);
+});
+
+test('a full table still lists existing wallets and skips the one it cannot create', async () => {
+  const sqlite = new DatabaseSync(':memory:');
+  const env = { AUTH_DB: d1(sqlite), POINTCAST_INTEGRATION_ENCRYPTION_KEY: KEY };
+  const full = Array.from({ length: 64 }, (_, i) => ({ id: `agent-${i}`, name: `Agent ${i}`, role: 'test' }));
+  assert.equal((await lib.ensureAgentWallets(env, full)).length, 64);
+  const withExtra = [...full.slice(0, 3), { id: 'newcomer', name: 'Newcomer', role: 'test' }];
+  const listed = await lib.ensureAgentWallets(env, withExtra);
+  assert.deepEqual(listed.map((w) => w.id), ['agent-0', 'agent-1', 'agent-2']);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM agent_wallets').get().n, 64);
+});
+
+test('the endpoint returns a fixed error code when a dependency throws', async () => {
+  const env = {
+    AUTH_DB: { prepare() { throw new Error('D1_ERROR: internal detail at shard 7'); } },
+    POINTCAST_INTEGRATION_ENCRYPTION_KEY: KEY,
+  };
+  const response = await api.onRequestGet({ env });
+  assert.equal(response.status, 503);
+  const text = await response.text();
+  assert.deepEqual(JSON.parse(text), { error: 'agent-wallets-unavailable' });
+  assert.ok(!text.includes('shard'));
 });

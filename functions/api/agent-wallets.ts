@@ -22,8 +22,12 @@ export const onRequestGet: PagesFunction<AgentWalletEnv> = async ({ env }) => {
       })),
     }, null, 2), { headers: HEADERS });
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'agent-wallets-failed';
-    return new Response(JSON.stringify({ error: reason }), { status: 503, headers: { ...HEADERS, 'cache-control': 'no-store' } });
+    // Fixed public code: dependency messages (D1, Web Crypto, Taquito) stay in the server log.
+    console.error('agent-wallets-unavailable', error instanceof Error ? error.name : 'unknown');
+    return new Response(JSON.stringify({ error: 'agent-wallets-unavailable' }), {
+      status: 503,
+      headers: { ...HEADERS, 'cache-control': 'no-store' },
+    });
   }
 };
 
