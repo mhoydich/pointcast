@@ -100,7 +100,7 @@ function clearReader() {
   el('record-source').hidden = true;
   el('record-label').textContent = 'Selected message';
   for (const id of ['byline','record-body','provenance','position']) el(id).replaceChildren();
-  for (const id of ['trail-summary','trail-artifact']) el(id).hidden = true;
+  for (const id of ['trail-summary','trail-delivery']) el(id).hidden = true;
   for (const id of ['play','prev','next']) el(id).disabled = true;
 }
 function select(id) {
@@ -123,9 +123,9 @@ function select(id) {
   el('record-body').textContent = record.body || '(No text in this record.)';
   el('record-body').scrollTop = 0;
   el('record-label').textContent = receipt ? 'Handoff · ' + receipt.role : 'Selected message';
-  el('trail-summary').hidden = !receipt;
+  el('trail-summary').hidden = !receipt || Boolean(receipt.artifact);
   el('trail-summary').textContent = receipt?.summary ?? '';
-  el('trail-artifact').hidden = !receipt?.artifact;
+  el('trail-delivery').hidden = !receipt?.artifact;
   if (receipt?.artifact) el('trail-artifact').href = receipt.artifact;
   for (const [i,button] of stepButtons.entries()) {
     if (i === trailIndex) button.setAttribute('aria-current','step');
