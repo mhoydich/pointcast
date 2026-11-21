@@ -234,3 +234,8 @@ test('button.js default address drops query and hash; middleware keeps route noi
   assert.ok(b.includes('link[rel~="canonical"]') && b.includes('u.origin + u.pathname'));
   assert.ok(read('functions/_middleware.ts').includes("if (!routeSetRobots) headers.set('X-Robots-Tag', 'index, follow')"));
 });
+
+test('the host note action has a 44px tap target on phones', () => {
+  const loom = readFileSync(new URL('../src/pages/loom/index.astro', import.meta.url), 'utf8');
+  assert.match(loom, /@media \(max-width: 640px\) \{\s*\.hostline \{[^}]+\}\s*\.hostline button \{ min-height: 44px; \}/);
+});
