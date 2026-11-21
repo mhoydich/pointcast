@@ -125,6 +125,37 @@ test('append, reply as the answer, +1, edit and withdraw reach the server', asyn
   assert.equal(log.messages.some((m) => m.id === mine.id), false, 'withdrawn message is hidden');
 });
 
+test('the reply composer shows the actual parent and public visibility until cleared', async () => {
+  const kv = memoryKv();
+  const room = '#elsegundo';
+  const original = await post(kv, { to: room, from: { name: 'Cam', kind: 'human' }, body: 'The library opens at noon.' });
+  const child = await post(kv, { to: original.address, from: { name: 'Riley', kind: 'human' }, body: 'Thanks for the update.' });
+  const w = await page(kv, { path: '/loom?to=%23elsegundo', name: '', small: true });
+  const byId = (id) => w.document.getElementById(id);
+  const input = byId('bodyInput');
+  const visibility = byId('replyPublic');
+
+  assert.equal(visibility.hidden, true);
+  assert.equal(input.placeholder, 'Write to #elsegundo');
+
+  msgEl(w, child.message.id).querySelector('[data-act="reply"]').click();
+  assert.equal(w.document.activeElement, input);
+  assert.equal(byId('replyLead').textContent, 'Replying to');
+  assert.equal(byId('replyName').textContent, 'Cam');
+  assert.equal(byId('ctxLead').textContent, 'in');
+  assert.equal(input.placeholder, 'Write a reply');
+  assert.equal(visibility.hidden, false);
+  assert.equal(visibility.textContent, 'Anyone can read this reply');
+  assert.equal(input.getAttribute('aria-describedby'), 'replyLead replyName replyPublic');
+
+  byId('replyClear').click();
+  assert.equal(visibility.hidden, true);
+  assert.equal(input.hasAttribute('aria-describedby'), false);
+  assert.equal(input.placeholder, 'Write to #elsegundo');
+  assert.equal(byId('ctxLead').textContent, 'to');
+  assert.equal(w.document.activeElement, input);
+});
+
 test('a vote is recorded once per browser', async () => {
   const kv = memoryKv();
   const p = await post(kv, { to: '#officedesk', from: { name: 'mike', kind: 'human' }, kind: 'poll', body: 'Which first?', poll: { question: 'Which first?', options: ['Mint', 'Ship'] } });
