@@ -196,6 +196,20 @@ test('front-door files are wired', () => {
   assert.ok(button.includes('compose=1#thread'));
 });
 
+test('classic polling retries a failed first read with a full request', async () => {
+  const source = readFileSync(new URL('../src/pages/loom/classic.astro', import.meta.url), 'utf8');
+  const callback = source.match(/window\.setTimeout\((async \(\) => \{[^\n]+\}), 4000\)/)[1];
+  const poll = new Function('document', 'playing', 'meta', 'retryOpen', 'refresh', 'schedule', 'return ' + callback);
+  const document = { visibilityState: 'visible' };
+  const calls = [];
+  const run = (meta, retry) => poll(document, false, meta, retry, (full) => calls.push(full), () => {})();
+  await run(null, false);
+  await run(null, true);
+  await run({}, false);
+  assert.deepEqual(calls, [true, false]);
+  assert.match(source, /catch \{\s+retryOpen = full;\s+\$\('\[data-live\]'\)/);
+});
+
 test('latest twenty go by time posted, so a new reply to an old root is kept', () => {
   // fold() order: root 1, its late reply (seq 31) right after it, then the rest
   const msgs = [msg(1, 'old root'), msg(31, 'LATE REPLY', { parent: 'm_1' }), ...Array.from({ length: 29 }, (_, i) => msg(i + 2, `n${i + 2}`))];
