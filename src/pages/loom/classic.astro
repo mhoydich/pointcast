@@ -79,7 +79,7 @@ const jsonLd = {
         <div class="lm-tab" data-log-tab>Thread</div>
         <header class="lm-head">
           <span class="lm-kicker" data-log-kind>—</span>
-          <h2 class="lm-title" data-log-title>Opening…</h2>
+          <h2 class="lm-title" data-log-title tabindex="-1">Opening…</h2>
           <div class="lm-addr">
             <a data-log-open href="#" target="_blank" rel="noopener" hidden>open page ↗</a>
             <button type="button" data-copy-addr>copy address</button>
@@ -551,9 +551,19 @@ const jsonLd = {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && meta) refresh(); });
 
   syncFields();
-  open(new URLSearchParams(location.search).get('to') || '#loom', { push: false }).then(() => {
-    const focus = location.hash.slice(1);
-    if (focus) document.getElementById(focus)?.scrollIntoView({ block: 'center' });
+  const initialLocation = location.href;
+  const initialThread = new URL(initialLocation).searchParams.get('to');
+  open(initialThread || '#loom', { push: false }).then(() => {
+    if (location.href !== initialLocation) return;
+    const fragment = location.hash.slice(1);
+    if (fragment) {
+      document.getElementById(fragment)?.scrollIntoView({ block: 'center' });
+    } else if (initialThread && meta && matchMedia('(max-width: 760px)').matches &&
+               window.scrollY === 0 && document.activeElement === document.body) {
+      const heading = $('[data-log-title]');
+      heading.focus({ preventScroll: true });
+      heading.scrollIntoView({ block: 'start' });
+    }
   });
   schedule();
 </script>
