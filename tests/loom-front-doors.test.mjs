@@ -228,6 +228,21 @@ test('canonicalTopicName forgives case and #', () => {
   assert.equal(canonicalTopicName('@mike'), null);
 });
 
+test('replay changes its accessible action when playback starts', () => {
+  const source = readFileSync(new URL('../src/pages/loom/index.astro', import.meta.url), 'utf8');
+  const render = source.match(/function renderPlaybar\(\) \{([\s\S]+?)\n\}/)[1];
+  const elements = new Map();
+  const get = (id) => {
+    if (!elements.has(id)) elements.set(id, { setAttribute(name, value) { this[name] = value; } });
+    return elements.get(id);
+  };
+  const run = new Function('thread', 'state', '$', 'playTimer', render);
+  for (const [timer, name] of [[1, 'Stop replay and return to live'], [null, 'Replay this thread from the start']]) {
+    run(() => ({ messages: [{}, {}] }), {}, get, timer);
+    assert.equal(get('playBtn')['aria-label'], name);
+  }
+});
+
 test('button.js default address drops query and hash; middleware keeps route noindex', () => {
   const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
   const b = read('public/loom/button.js');
