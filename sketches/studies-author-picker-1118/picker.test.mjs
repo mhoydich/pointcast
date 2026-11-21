@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { authorOptions } from './picker.mjs';
+const authors=[{key:'a',name:'Ada'},{key:'b',name:'Bob'},{key:'c',name:'No messages'}];
+const messages=[{id:'1',authorKey:'a'},{id:'2',authorKey:'a'},{id:'3',authorKey:'b'}];
+const options=authorOptions(authors,messages);
+assert.equal(options[0].recordId,'1');
+assert.equal(options[0].label,'Ada (2)');
+assert.equal(options[1].recordId,'3');
+assert.equal(options[2].disabled,true);
+assert.equal(authorOptions(authors,messages,['2'])[0].recordId,'2');
+assert.equal(authorOptions(authors,messages,['2'])[1].disabled,true);
+assert.ok(authorOptions(authors,messages,[]).every(x=>x.disabled));
+assert.deepEqual(authorOptions([],[]),[]);
+assert.equal(authors[0].name,'Ada');
+console.log('9 assertions passed: order, counts, empty authors, trail focus and exclusions, no mutation');
