@@ -53,6 +53,19 @@ test('topic page: canonical, links, no robots block when it has messages', () =>
   assert.ok(html.includes('3 messages from 3 participants'));
 });
 
+test('classic stamps expose the absolute time and its displayed time zone', () => {
+  const source = readFileSync(new URL('../src/pages/loom/classic.astro', import.meta.url), 'utf8');
+  const stamp = source.match(/    const postedAt = el\('time'[\s\S]+?(?=    metaRow\.append\(postedAt\))/)[0]
+    .replace(' as HTMLTimeElement', '');
+  const render = new Function('el', 'm', 'when', stamp + 'return postedAt;');
+  const at = '2026-11-17T18:30:00.000Z';
+  const date = render((tag, cls, text) => ({ tag, text }), { at, edits: 1 }, () => 'Nov 17');
+  assert.equal(date.tag, 'time');
+  assert.equal(date.dateTime, at);
+  assert.equal(date.title, new Date(at).toLocaleString(undefined, { timeZoneName: 'short' }));
+  assert.equal(date.text, 'Nov 17 · edited 1×');
+});
+
 test('forum data uses only rendered messages, real dates, safe media and fragment URLs', () => {
   const messages = Array.from({ length: 22 }, (_, i) => msg(i + 1, `post ${i + 1}`));
   messages[21] = msg(22, '</script><script>bad()</script>', {
