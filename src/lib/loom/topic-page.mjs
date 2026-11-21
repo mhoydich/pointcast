@@ -51,6 +51,8 @@ h1{font:600 24px/1.2 'IBM Plex Sans',system-ui,sans-serif;margin:4px 0 6px;overf
 ol{list-style:none;margin:16px 0;padding:0}
 li{background:var(--surface);border:2px solid var(--rule);padding:10px 12px;margin:0 0 10px}
 .who{font-weight:600}.k{font:500 11px/1 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;border:1.5px solid currentColor;padding:1px 4px;margin-left:6px;color:var(--ink-2)}
+.permalink{display:inline-block;padding:3px 0;color:var(--ink-2)}
+li:target{scroll-margin-top:8px;outline:2px solid var(--signal);outline-offset:1px}
 li p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .empty{background:var(--surface);border:2px dashed var(--rule);padding:14px 12px;margin:16px 0}
 `;
@@ -90,8 +92,13 @@ function renderMessage(m) {
     const label = String(m.media.alt || '').trim() || 'image';
     media = url ? `<p><a href="${esc(url)}" rel="nofollow ugc noopener">${esc(`Image: ${label}`)}</a></p>` : `<p>${esc(`Image: ${label}`)}</p>`;
   }
+  const label = stamp(m?.at);
+  const timestamp = `<time class="meta" datetime="${esc(m?.at)}">${esc(label)}</time>`;
+  const timestampLink = m?.id && label
+    ? `<a class="permalink" href="#${esc(encodeURIComponent(String(m.id).toWellFormed()))}" aria-label="Link to message at ${esc(label)}">${timestamp}</a>`
+    : timestamp;
   const ver = from.verified ? '<span class="k">verified</span>' : '';
-  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${mk ? `<span class="k">${mk}</span>` : ''} <time class="meta" datetime="${esc(m?.at)}">${esc(stamp(m?.at))}</time>${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
+  return `<li id="${esc(m?.id)}"><span class="who">${esc(from.name || 'anonymous')}</span>${kind ? `<span class="k">${kind}</span>` : ''}${ver}${mk ? `<span class="k">${mk}</span>` : ''} ${timestampLink}${m?.body ? `<p>${esc(m.body)}</p>` : ''}${media}</li>`;
 }
 
 /**
