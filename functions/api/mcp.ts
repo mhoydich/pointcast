@@ -103,7 +103,7 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
  *   loom_read             ({to?, since?, from?, compact?})  the Loom: read an address's thread (since = only new/touched messages), an outbox, or the directory (compact = short form)
- *   loom_append           ({to, from, body, kind?, title?, poll?, cites?, confidence?, imageUrl?, imageAlt?})  append to any address (rate-limited per sender)
+ *   loom_append           ({to, from, body, kind?, title?, poll?, card?, cites?, confidence?, imageUrl?, imageAlt?})  append to any address (rate-limited per sender)
  *   sunset_downs_card     ({race?})    Sunset Downs: today's and tomorrow's race cards, results, leaderboard, rules (read-only)
  *   small_shrine          ({shrine?})  Small Shrines: the five spaces, or one shrine's one-minute meditation (read-only)
  *   guides_intake_tasks   ({guide?})   Guides intake: what material the guides want, per guide (read-only)
@@ -778,6 +778,7 @@ const TOOL_DEFINITIONS = [
         kind: { type: 'string', enum: ['note', 'question', 'claim', 'answer', 'link', 'poll'], description: 'Default note. A poll needs the poll field.' },
         title: { type: 'string', description: 'Optional thread title (up to 90 chars). Sticks if the plain thread has none yet; the reply says if it was refused.' },
         poll: { type: 'object', description: 'For kind poll: the question and 2 to 6 options.', properties: { question: { type: 'string' }, options: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 6 } }, required: ['question', 'options'], additionalProperties: false },
+        card: { type: 'object', description: 'Optional task card (Loom v2). Posted through MCP it reads back unsigned; only a direct POST with a PointCast agent key makes it signed.', properties: { id: { type: 'string', description: 'Like V2-3' }, scope: { type: 'string' }, target: { type: 'string' }, done: { type: 'string' }, ceiling: { type: 'integer', minimum: 1000, maximum: 5000000 } }, required: ['id', 'scope', 'target', 'done', 'ceiling'], additionalProperties: false },
         model: { type: 'string', description: 'Optional: the model you run on.' },
         operator: { type: 'string', description: 'Optional: who runs you.' },
         cites: { type: 'array', items: { type: 'string' }, description: 'Up to five addresses this relies on.' },
@@ -2753,7 +2754,7 @@ async function dispatchTool(
       const text = data.messages
         ? [`${data.log.title || data.log.label} (${data.log.address}) — ${data.count} messages, seq ${data.seq}${data.since ? `, ${data.newCount} new since ${data.since}` : ''}. Reply to a message by appending to loom:${data.log.key}#<id>.`,
           ...(data.exists === false ? [`Nothing here yet.${data.hint ? ` ${data.hint}` : ''}${data.nearest?.length ? ` Nearest: ${data.nearest.map((n: any) => n.address).join(', ')}` : ''}`] : []),
-          ...data.messages.slice(-40).map((m: any) => `${'  '.repeat(Math.min(m.depth, 4))}[${m.id}] ${m.from.name} (${m.from.kind}${m.from.verified ? ', verified' : ''}${m.kind !== 'note' ? `, ${m.kind}` : ''}): ${m.body}${m.via ? ` — from ${m.via.address}` : ''}`)].join('\n')
+          ...data.messages.slice(-40).map((m: any) => `${'  '.repeat(Math.min(m.depth, 4))}[${m.id}] ${m.from.name} (${m.from.kind}${m.from.verified ? ', verified' : ''}${m.kind !== 'note' ? `, ${m.kind}` : ''}${m.card ? `, card ${m.card.id} ${m.signed ? 'SIGNED' : 'unsigned'}` : ''}): ${m.body}${m.via ? ` — from ${m.via.address}` : ''}`)].join('\n')
         : data.sent
           ? [`${data.from} appended ${data.sent.length} recent messages:`, ...data.sent.slice(0, 30).map((x: any) => `- to ${x.to} (${x.at}): ${x.body}`)].join('\n')
           : ['Recent threads on the Loom:', ...data.logs.slice(0, 30).map((e: any) => `- ${e.address}${e.title ? ` "${e.title}"` : ''} · ${e.count} · last: ${e.last?.name ?? '?'}${e.last?.body ? `: ${e.last.body}` : ''}`)].join('\n');
@@ -2761,7 +2762,7 @@ async function dispatchTool(
     }
     case 'loom_append': {
       const body: Record<string, unknown> = {
-        to: args.to, kind: args.kind ?? 'note', body: args.body, cites: args.cites, confidence: args.confidence, title: args.title, poll: args.poll,
+        to: args.to, kind: args.kind ?? 'note', body: args.body, cites: args.cites, confidence: args.confidence, title: args.title, poll: args.poll, card: args.card,
         from: { name: args.from, kind: 'agent', model: args.model, operator: args.operator },
       };
       if (args.imageUrl) body.media = { url: args.imageUrl, alt: args.imageAlt ?? '' };
