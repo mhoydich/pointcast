@@ -58,3 +58,27 @@ test('Nouns Drum Club campaign is inside the normal native rail count on Nouns a
     'the canonical Drum Club route must not advertise itself',
   );
 });
+
+test('native ad links keep the authored destination and add attribution before its fragment', async () => {
+  const { adDestination, POINTCAST_ADS } = await loadSelector();
+  const counsel = POINTCAST_ADS.find(ad => ad.id === 'PC-DIGITAL-PETS-COUNSEL-002');
+  const tracked = adDestination(counsel, '/drum/');
+  const url = new URL(tracked, 'https://pointcast.xyz');
+  assert.equal(url.pathname, '/digital-pets/counsel');
+  assert.equal(url.hash, '#service-of-process');
+  assert.deepEqual([...url.searchParams], [
+    ['utm_source', 'pointcast'], ['utm_medium', 'open-ad-rail'],
+    ['utm_campaign', 'pc-digital-pets-counsel-2026'], ['utm_content', '/drum/:pc-digital-pets-counsel-002'],
+  ]);
+
+  const params = 'utm_source=pointcast&utm_medium=open-ad-rail&utm_campaign=house&utm_content=%2F%3Ahouse';
+  for (const [href, expected] of [
+    ['../story', `../story?${params}`],
+    ['../story#part?x=1#more', `../story?${params}#part?x=1#more`],
+    ['https://example.com/a%2Fb?x=%2F&x=b+c#p%20q', `https://example.com/a%2Fb?x=%2F&x=b+c&${params}#p%20q`],
+    ['/story?x=1', `/story?x=1&${params}`],
+    ['/story#', `/story?${params}#`],
+  ]) {
+    assert.equal(adDestination({ id: 'HOUSE', href }, ''), expected);
+  }
+});

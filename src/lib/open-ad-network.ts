@@ -1259,8 +1259,10 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
 }
 
 export function adDestination(ad: PointCastAd, pathname: string): string {
-  const joiner = ad.href.includes('?') ? '&' : '?';
+  const [destination] = ad.href.split('#', 1);
+  const fragment = ad.href.slice(destination.length);
+  const joiner = destination.includes('?') ? '&' : '?';
   const campaign = (ad.campaign || ad.id).toLowerCase();
   const content = `${pathname || '/'}:${ad.id.toLowerCase()}`;
-  return `${ad.href}${joiner}utm_source=pointcast&utm_medium=open-ad-rail&utm_campaign=${campaign}&utm_content=${encodeURIComponent(content)}`;
+  return `${destination}${joiner}utm_source=pointcast&utm_medium=open-ad-rail&utm_campaign=${campaign}&utm_content=${encodeURIComponent(content)}${fragment}`;
 }
