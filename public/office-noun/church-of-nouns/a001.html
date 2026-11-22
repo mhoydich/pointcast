@@ -1,0 +1,82 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Same Bell</title>
+<style>
+:root{--stone:#14130f;--ink:#e9e2cf;--brass:#c9a45c;--dim:#8a826d;--halo:rgba(201,164,92,.16);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color-scheme:dark;box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--stone);color:var(--ink);font-family:var(--serif);margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;align-items:center;justify-content:center;overflow:hidden}
+main{display:flex;flex-direction:column;align-items:center;gap:2.2rem;max-width:30rem;width:100%;padding-block:2rem}
+button.bell{all:unset;cursor:pointer;position:relative;width:9rem;height:9rem;display:grid;place-items:center;border-radius:50%}
+button.bell:focus-visible{outline:1px solid var(--brass);outline-offset:6px}
+.halo{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,var(--halo),transparent 70%);opacity:.5;transition:opacity 2.4s}
+.ringing .halo{opacity:1;transition:opacity .15s}
+svg{width:7rem;height:auto;image-rendering:pixelated}
+.head{transform-box:fill-box;transform-origin:50% 0}
+.ringing .head{animation:sway 3.2s ease-out}
+@keyframes sway{0%{transform:rotate(0)}10%{transform:rotate(9deg)}25%{transform:rotate(-6deg)}42%{transform:rotate(3.5deg)}60%{transform:rotate(-1.5deg)}100%{transform:rotate(0)}}
+.verse{display:flex;flex-direction:column;gap:1.4rem;text-align:left;width:100%}
+.verse p{margin:0;font-size:clamp(1.05rem,3.6vw,1.3rem);line-height:1.6;font-style:italic;font-weight:400}
+.verse p.coda{font-style:normal;color:var(--brass)}
+.mark{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);display:flex;gap:1rem;justify-content:space-between;width:100%}
+.hint{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;color:var(--dim);text-transform:lowercase}
+@media (prefers-reduced-motion:reduce){.ringing .head{animation:none}}
+</style></head><body>
+<main>
+  <div class="mark"><span>church of nouns</span><span>sunday · 11.22</span></div>
+  <button class="bell" id="bell" aria-label="ring the bell noun">
+    <span class="halo"></span>
+    <svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+      <rect x="9" y="21" width="14" height="11" fill="#5b6c8f"/>
+      <rect x="11" y="21" width="10" height="1" fill="#6f80a3"/>
+      <rect x="15" y="25" width="2" height="2" fill="#c9a45c"/>
+      <rect x="15" y="27" width="2" height="1" fill="#a8873f"/>
+      <g class="head">
+        <rect x="15" y="3" width="2" height="1" fill="#c9a45c"/>
+        <rect x="14" y="4" width="1" height="2" fill="#c9a45c"/><rect x="17" y="4" width="1" height="2" fill="#c9a45c"/>
+        <rect x="13" y="6" width="6" height="2" fill="#c9a45c"/>
+        <rect x="11" y="8" width="10" height="2" fill="#c9a45c"/>
+        <rect x="9" y="10" width="14" height="8" fill="#c9a45c"/>
+        <rect x="7" y="18" width="18" height="2" fill="#a8873f"/>
+        <rect x="15" y="20" width="2" height="1" fill="#e9e2cf"/>
+        <rect x="6" y="12" width="3" height="1" fill="#d22209"/>
+        <rect x="9" y="11" width="6" height="5" fill="#d22209"/>
+        <rect x="17" y="11" width="6" height="5" fill="#d22209"/>
+        <rect x="15" y="12" width="2" height="1" fill="#d22209"/>
+        <rect x="10" y="12" width="2" height="3" fill="#ffffff"/><rect x="12" y="12" width="2" height="3" fill="#000000"/>
+        <rect x="18" y="12" width="2" height="3" fill="#ffffff"/><rect x="20" y="12" width="2" height="3" fill="#000000"/>
+      </g>
+    </svg>
+  </button>
+  <div class="verse">
+    <p>the same bell<br>for the friend and for the foe.<br>rung in praise, rung in blame —<br>one tone.</p>
+    <p>it does not ask who pulled the rope.<br>it hangs where it is hung<br>and calls that home.</p>
+    <p>ok. yes. ok. yah.<br>sometimes not easy.</p>
+    <p class="coda">whoever stops keeping score<br>is kept.</p>
+  </div>
+  <div class="mark"><span class="hint" id="hint">tap the bell</span><span>mh</span></div>
+</main>
+<script>
+(function(){
+  var ctx=null, btn=document.getElementById('bell'), hint=document.getElementById('hint'), n=0;
+  function ring(){
+    try{
+      ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+      var t=ctx.currentTime, base=196, parts=[[1,.5,7],[2.01,.22,5],[2.76,.16,4],[5.4,.06,2.2],[8.93,.03,1.4]];
+      var out=ctx.createGain(); out.gain.value=.6; out.connect(ctx.destination);
+      parts.forEach(function(p){
+        var o=ctx.createOscillator(), g=ctx.createGain();
+        o.type='sine'; o.frequency.value=base*p[0];
+        g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(p[1],t+.008);
+        g.gain.exponentialRampToValueAtTime(.0001,t+p[2]);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t+p[2]+.1);
+      });
+    }catch(e){}
+    btn.classList.remove('ringing'); void btn.offsetWidth; btn.classList.add('ringing');
+    n++; hint.textContent = n===1 ? 'one tone' : n+' rings, one tone';
+  }
+  btn.addEventListener('click',ring);
+})();
+</script>
+</body></html>
