@@ -126,17 +126,15 @@ export async function getAgentWallet(env: AgentWalletEnv, id: string): Promise<A
   if (!agent) return null;
   const db = env.AUTH_DB;
   if (!db) throw new Error('agent-wallet-db-unbound');
-  await db.prepare(CREATE_TABLE).run();
-  const find = () => db.prepare('SELECT agent_id, address, created_at FROM agent_wallets WHERE agent_id = ?')
-    .bind(id).first<PublicWalletRow>();
-  let row = await find();
-  if (!row) {
-    const count = await db.prepare('SELECT COUNT(*) AS count FROM agent_wallets').first<number>('count');
-    if ((count ?? MAX_WALLETS) >= MAX_WALLETS) return null;
-    await insertWallet(env, db, id);
-    row = await find();
+  try {
+    const row = await db.prepare('SELECT agent_id, address, created_at FROM agent_wallets WHERE agent_id = ?')
+      .bind(id).first<PublicWalletRow>();
+    return row ? publicWallet(agent, row) : null;
+  } catch (error) {
+    // Before either the directory or the migration creates the table, no wallet is provisioned.
+    if (error instanceof Error && /\bno such table: (?:main\.)?agent_wallets\b/u.test(error.message)) return null;
+    throw error;
   }
-  return row ? publicWallet(agent, row) : null;
 }
 
 /** Make sure every roster agent has a wallet, then list the public side of each. */

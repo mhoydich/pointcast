@@ -7,7 +7,7 @@ import {
   type PendingWalletOp, type WalletAction, type WalletChain, type WalletSigningEnv,
 } from './agent-wallet-chain';
 
-const LOCK_TTL_MS = 15 * 60_000;
+const LOCK_TTL_MS = 2 * 60_000;
 const BUDGET_DATE = "strftime('%Y-%m-%dT00:00:00.000Z', 'now')";
 const DAILY_SPEND = `SELECT COALESCE(SUM(max_cost_mutez), 0) AS spent FROM agent_wallet_ops
   WHERE agent_id = ? AND created_at >= ${BUDGET_DATE}`;
@@ -96,7 +96,9 @@ export async function handleWalletOperation(
       FROM agent_wallets WHERE agent_id = ?
     `).bind(id).first<SigningRow>();
     const tokenHash = createHash('sha256').update(token).digest();
-    if (!wallet?.bearer_token_hash || !timingSafeEqual(tokenHash, Buffer.from(wallet.bearer_token_hash, 'hex'))) {
+    const storedHex = wallet?.bearer_token_hash;
+    const storedHash = storedHex?.length === tokenHash.length * 2 ? Buffer.from(storedHex, 'hex') : null;
+    if (!wallet || !storedHash || storedHash.length !== tokenHash.length || !timingSafeEqual(tokenHash, storedHash)) {
       return json({ error: 'wallet-unauthorized' }, 401);
     }
     const action = await parseAction(request, kind);
@@ -106,9 +108,11 @@ export async function handleWalletOperation(
     }
     const idempotencyHash = idempotencyKey === null ? null : createHash('sha256').update(`agent-wallet-idempotency:${idempotencyKey}`).digest('hex');
     const requestHash = createHash('sha256').update(JSON.stringify(action)).digest('hex');
-    const candidate = crypto.randomUUID();
-    if (!await acquireLock(db, id, candidate)) throw new WalletError('wallet-busy', 409);
-    holder = candidate;
+    holder = crypto.randomUUID();
+    if (!await acquireLock(db, id, holder)) {
+      holder = undefined;
+      throw new WalletError('wallet-busy', 409);
+    }
 
     if (idempotencyHash !== null) {
       const recorded = await db.prepare(
@@ -160,23 +164,40 @@ export async function handleWalletOperation(
     if (error instanceof WalletError) {
       return json({ error: error.code, ...(error.operationHash ? { operationHash: error.operationHash } : {}) }, error.status);
     }
-    return json({ error: 'agent-wallet-unavailable' }, 503);
+    const code = 'agent-wallet-unavailable';
+    console.error(code, error instanceof Error ? error.constructor.name : 'unknown');
+    return json({ error: code }, 503);
   } finally {
     if (holder) {
-      await db.prepare('DELETE FROM agent_wallet_signer_locks WHERE agent_id = ? AND holder = ?')
-        .bind(id, holder).run().catch(() => undefined);
+      try {
+        await db.prepare('DELETE FROM agent_wallet_signer_locks WHERE agent_id = ? AND holder = ?')
+          .bind(id, holder).run();
+      } catch {
+        // An unreachable D1 leaves only the short lease, which can expire independently.
+      }
     }
   }
 }
 
 const READ_HEADERS = { 'access-control-allow-origin': '*' };
+const WALLET_DETAIL_CACHE = 'public, max-age=30';
 
 export async function handleWalletDetail(
-  env: AgentWalletEnv, id: string | string[] | undefined, fetchIndex = fetch,
+  request: Request, env: AgentWalletEnv, id: string | string[] | undefined, fetchIndex = fetch,
+  cache: Pick<Cache, 'match' | 'put'> | undefined = typeof caches === 'undefined' ? undefined : caches.default,
 ): Promise<Response> {
   try {
     const wallet = typeof id === 'string' ? await getAgentWallet(env, id) : null;
     if (!wallet) return json({ error: 'wallet-not-found' }, 404, READ_HEADERS);
+
+    const cacheKey = new Request(new URL(`/__cache/agent-wallet-tzkt/v1/${encodeURIComponent(wallet.address)}`, request.url));
+    const cached = await cache?.match(cacheKey)
+      .then((response) => response?.json<{ balanceMutez: number; recentOps: unknown[] }>())
+      .catch(() => undefined);
+    if (cached && integer(cached.balanceMutez, 0) && Array.isArray(cached.recentOps)) {
+      return json({ ...wallet, network: 'mainnet', balanceMutez: cached.balanceMutez, recentOps: cached.recentOps },
+        200, READ_HEADERS, WALLET_DETAIL_CACHE);
+    }
 
     const read = async (path: string): Promise<unknown> => {
       const response = await fetchIndex(`${TZKT}/accounts/${wallet.address}/${path}`, {
@@ -194,7 +215,10 @@ export async function handleWalletDetail(
         level: op.level, ...(integer(op.amount, 0) ? { amountMutez: op.amount } : {}),
       }];
     });
-    return json({ ...wallet, network: 'mainnet', balanceMutez: balance, recentOps }, 200, READ_HEADERS, 'public, max-age=30');
+    const snapshot = { balanceMutez: balance, recentOps };
+    await cache?.put(cacheKey, Response.json(snapshot, { headers: { 'cache-control': WALLET_DETAIL_CACHE } }))
+      .catch(() => undefined);
+    return json({ ...wallet, network: 'mainnet', ...snapshot }, 200, READ_HEADERS, WALLET_DETAIL_CACHE);
   } catch {
     return json({ error: 'wallet-detail-unavailable' }, 503, READ_HEADERS);
   }

@@ -1,8 +1,9 @@
 # Agent wallet signing
 
-The public directory is `GET /api/agent-wallets`. `GET /api/agent-wallets/{id}`
-returns that wallet's balance in mutez and up to 10 recent operations indexed
-by TzKT. TzKT can lag a new submission.
+`GET /api/agent-wallets` provisions wallets and lists the public directory.
+`GET /api/agent-wallets/{id}` reads an existing wallet and returns its balance
+in mutez and up to 10 recent operations indexed by TzKT. The TzKT snapshot is
+cached for about 30 seconds per address.
 
 ## Configure a wallet
 
@@ -17,8 +18,10 @@ by TzKT. TzKT can lag a new submission.
    signing. Replace the digest to rotate the token.
 3. Keep the existing `POINTCAST_INTEGRATION_ENCRYPTION_KEY` that encrypted the
    v1 wallets. Rotating it requires re-encrypting those rows with their original
-   agent-bound AAD. The default cap is 5,000,000 mutez per UTC day. Override
-   `daily_cap_mutez` in that wallet row. Zero disables new submissions.
+   agent-bound AAD. The daily cap is the maximum tez loss per agent through
+   these routes for operations submitted in a UTC day, including fees and
+   storage burns. The default is 5,000,000 mutez. Override `daily_cap_mutez`
+   in that wallet row. Zero disables new submissions.
 4. Optionally set `AGENT_WALLETS_RPC_URL` to a trusted Tezos mainnet RPC. The
    default is `https://mainnet.smartpy.io`. Set `AGENT_WALLETS_MINT_CONTRACT` to
    the approved FA2 contract address to enable minting. The contract must grant
@@ -27,7 +30,8 @@ by TzKT. TzKT can lag a new submission.
 ## Submit an operation
 
 Send JSON with `Authorization: Bearer <token>` on both POST routes. Use an
-`Idempotency-Key` for each intent and reuse it with the same body on retries.
+`Idempotency-Key` for each submission. Reuse the same key and body to recover
+the recorded operation hash after a lost response.
 
 | Route | JSON fields |
 | --- | --- |
@@ -41,8 +45,12 @@ sets the empty `token_info` key to the UTF-8 bytes of an `ipfs://` or
 contract.
 
 A `202` carries `operationHash` and one of `submitted`, `submission-unknown`,
-or `recorded` (an idempotent retry). Check TzKT for chain status. The D1
-audit row is written before injection and reserves the maximum transfer,
+or `recorded` (an idempotent retry). After `submission-unknown`, look up that
+hash on TzKT. If the transaction applied, the submission is complete. If it
+definitively failed or its branch expired without inclusion, retry with a new
+`Idempotency-Key`. Allow for TzKT indexing delay when checking inclusion.
+
+The D1 audit row is written before injection and reserves the maximum transfer,
 fees, and storage burn against the submission day's cap, including ambiguous
 submissions. A new operation can proceed after the previous counter appears
 at `head~2` or the previous branch's inclusion window expires.
