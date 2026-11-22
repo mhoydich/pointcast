@@ -20,7 +20,13 @@ D1 is authoritative for the API, bot, For You, topic, sitemap, and share-card re
 4. Apply the reviewed 0037 migration to AUTH_DB before deploying the code. Keep writes paused during the cutover. Check all readers, including cached pages after expiry, and complete the authorized smoke check before resuming writes.
 5. If rollback is needed after D1 accepts a write, stop writes first. Keep D1 authoritative until a reviewed reconciliation or export preserves its committed entries. Reverting directly to KV-only readers would hide those posts.
 
-The existing rolling operation, directory, and outbox caps still apply. The repair cannot reconstruct posts already lost. The revision is global, and serialized logs still have D1 row-size limits.
+### Room size and retained history
+
+D1 room logs have a `MAX_LOG_BYTES` ceiling of 1,500,000 UTF-8 bytes of serialized JSON, leaving headroom below D1's [2,000,000-byte string and row limit](https://developers.cloudflare.com/d1/platform/limits/). The existing 600-operation cap still applies. When either cap is reached, the oldest operations move into bounded `loom:archive:<room-key>:<first-seq>-<last-seq>` records in `loom_atomic_values`. Each record holds `{ v, key, address, ops }`, preserving the original operations, IDs, and sequence numbers. These records and the retained room commit in the same revision-checked batch; failed writes or revision conflicts cannot archive only half of a change.
+
+The retained room keeps its latest sequence number and sets `trimmedBefore` to the first retained operation's sequence. Existing room reads show that recent window. Archive records preserve older history for storage inspection/export; this change does not add a public archive browser or make archived messages editable. Legacy KV remains read-only. History already discarded by the old operation-count trim cannot be recovered.
+
+If room metadata or an individual operation cannot fit even after trimming, the request returns HTTP 413 with `loom_log_too_large` and `maxLogBytes`; none of its room, archive, echo, or outbox changes commit. All buffered values are also checked before submitting the D1 batch. Small rooms are unchanged. Directory and outbox caps still apply, and the revision remains global.
 
 ## Local verification
 

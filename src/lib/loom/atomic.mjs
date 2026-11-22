@@ -3,7 +3,19 @@
  * changed while the handler ran. No process-local lock or KV retry can do this.
  * Legacy KV is a read-only archive after cutover; see docs/setup/loom-atomic.md.
  */
-import { handleLoom, SPEC } from './service.mjs';
+import { handleLoom, MAX_OPS, SPEC } from './service.mjs';
+import { boundedLogWrites, LoomLogSizeError, MAX_LOG_BYTES, utf8Bytes } from './log-size.mjs';
+export { MAX_LOG_BYTES } from './log-size.mjs';
+
+function tooLarge() {
+  return new Response(JSON.stringify({ ok: false, spec: SPEC, error: 'loom_log_too_large',
+    maxLogBytes: MAX_LOG_BYTES,
+    hint: 'This room or its history cannot fit safely in storage. No changes were saved.' }), {
+    status: 413,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' },
+  });
+}
 
 function unavailable(error = 'loom_storage_unavailable', retryAfterSec) {
   const headers = {
@@ -60,6 +72,7 @@ export async function handleAtomicLoom(request, { db, kv: archive, attempts = 8,
       const writes = new Map();
       const reads = new Map();
       let readFailed = false;
+      let sizeFailed = false;
       const kv = {
         async get(key) {
           if (writes.has(key)) return writes.get(key);
@@ -76,12 +89,25 @@ export async function handleAtomicLoom(request, { db, kv: archive, attempts = 8,
           return reads.get(key);
         },
         async put(key, value) { writes.set(key, value); },
+        async saveLog(log) {
+          try {
+            for (const [key, value] of boundedLogWrites(log, MAX_OPS)) writes.set(key, value);
+          } catch (error) {
+            if (error instanceof LoomLogSizeError) sizeFailed = true;
+            throw error;
+          }
+        },
       };
       const response = await handleLoom(request.clone(), { ...stable, kv });
       if (readFailed) return unavailable();
+      // The legacy service catches storage exceptions. Preserve a size refusal
+      // as a clear 4xx, and discard every buffered destination on this request.
+      if (sizeFailed) return tooLarge();
       // Never commit a partially executed failed request. A GET may attempt
       // a legacy room-list backfill; it is intentionally not persisted.
       if (!response.ok || request.method !== 'POST' || !writes.size) return response;
+      // Cover derived lists and any future write path too, before binding SQL.
+      if ([...writes.values()].some(value => utf8Bytes(value) > MAX_LOG_BYTES)) return tooLarge();
       const statements = [session.prepare(`UPDATE loom_atomic_state SET revision = CASE WHEN revision = ? THEN revision + 1 ELSE -1 END WHERE singleton = 1`).bind(state.revision)];
       for (const [key, value] of writes) statements.push(session.prepare('INSERT INTO loom_atomic_values(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(key, value));
       try { await session.batch(statements); }
