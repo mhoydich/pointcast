@@ -1,4 +1,5 @@
 import { REAL_ESTATE_TOOLS, runRealEstateTool } from '../../src/lib/real-estate-agent.mjs';
+import { MINT_KIT_TOOLS, MINT_KIT_TOOL_NAMES, runMintKitTool } from '../../src/lib/mint-kit.mjs';
 import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-inbox.mjs';
 import { anyMemberReady, canRead, memberForToken, parseAfter, parsePost, postToRoom, readRoom } from '../_lib/family-room.mjs';
 import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
@@ -1634,6 +1635,7 @@ const TOOLS = [
   ...ATLAS_TOOL_DEFINITIONS,
   ...COMMUNICATOR_TOOL_DEFINITIONS,
   ...APP_VIEW_TOOL_DEFINITIONS,
+  ...MINT_KIT_TOOLS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -2148,6 +2150,14 @@ async function dispatchTool(
   base: string,
   sessionId: string,
 ): Promise<{ content: Array<{ type: string; text?: string }>; isError?: boolean }> {
+  if (MINT_KIT_TOOL_NAMES.includes(name)) {
+    try {
+      const data = await runMintKitTool(name, args);
+      return textContent(JSON.stringify(data, null, 2));
+    } catch (error) {
+      return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : 'Invalid mint kit request.' }] };
+    }
+  }
   switch (name) {
     case 'real_estate_study':
     case 'real_estate_scenario':
