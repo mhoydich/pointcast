@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { setImmediate } from 'node:timers/promises';
+import { JSDOM } from 'jsdom';
 import { BOARD, blockedPulls, endpoints, inbox, postReply, threadUrl } from '../public/loom/phone/phone.mjs';
 
 const spec = 'pointcast.loom/v1';
@@ -10,6 +13,46 @@ const item = (id) => ({ id, link: target(id), label: '#work', snippet: 'A public
 const forMike = (needsYes, replies) => ({ ok: true, spec, owner: '@mike', piles: { needsYes }, activity: { replies } });
 const board = (messages) => ({ ok: true, spec, kvBound: true, log: { address: BOARD, key }, messages });
 const message = (id, body, seq = 1, extra = {}) => ({ id, body, at: '2026-11-17T10:00:00Z', seq, from: { name: 'Tess', kind: 'agent' }, ...extra });
+
+test('Refresh distinguishes an unavailable inbox from partial and complete counts', async (t) => {
+  const html = await readFile(new URL('../public/loom/phone/index.html', import.meta.url), 'utf8');
+  const { window } = new JSDOM(html, { url: 'https://pointcast.xyz/loom/phone/' });
+  globalThis.document = window.document;
+  globalThis.location = window.location;
+  t.after(() => {
+    delete globalThis.document;
+    delete globalThis.location;
+    window.close();
+  });
+  let inboxRead = null;
+  let boardRead = null;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const data = new URL(url, location).searchParams.has('for') ? inboxRead : boardRead;
+    return data === null ? new Response(null, { status: 503 }) : Response.json(data);
+  });
+
+  const overview = document.getElementById('overview');
+  const refresh = document.getElementById('refresh');
+  await import('../public/loom/phone/screen.mjs');
+  await setImmediate();
+  assert.equal(overview.textContent, 'Couldn’t load the inbox. Tap Refresh to retry.');
+  assert.equal(refresh.disabled, false);
+
+  async function retry(feed, reports) {
+    inboxRead = feed;
+    boardRead = reports;
+    refresh.click();
+    await setImmediate();
+    return overview.textContent;
+  }
+  assert.equal(await retry(null, board([])), '0 items to review in the sections that loaded.');
+  const gate = item('m_gate001');
+  assert.equal(await retry(forMike([gate], []), null), '1 item to review in the sections that loaded.');
+  assert.equal(document.querySelectorAll('#queue article').length, 1);
+  assert.equal(await retry(forMike([], []), board([])), '0 items to review.');
+  assert.equal(await retry(forMike([gate], [item('m_reply01')]), board([])), '2 items to review.');
+  assert.equal(document.querySelectorAll('#queue article').length, 2);
+});
 
 test('the public inbox follows canonical original targets with independent section availability', () => {
   const gate = item('m_gate001');
