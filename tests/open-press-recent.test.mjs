@@ -32,7 +32,7 @@ test('configured feed reads the newest mint transfers and reports upstream failu
   const saved = registry.openPress.mainnet;
   t.after(() => { registry.openPress.mainnet = saved; });
   registry.openPress.mainnet = address;
-  const rows = [{ tokenId: '3', creator: 'tz1-reader', editions: '10000', timestamp: '2026-11-21T00:00:00Z' }];
+  const rows = [{ tokenId: '3', mintedBy: 'tz1-reader', editions: '10000', timestamp: '2026-11-21T00:00:00Z' }];
   const fetch = t.mock.method(globalThis, 'fetch', () => Response.json(rows));
 
   const response = await recent();
@@ -42,6 +42,7 @@ test('configured feed reads the newest mint transfers and reports upstream failu
   assert.equal(url.origin + url.pathname, 'https://api.tzkt.io/v1/tokens/transfers');
   assert.equal(url.searchParams.get('token.contract'), address);
   assert.equal(url.searchParams.get('from.null'), 'true');
+  assert.ok(url.searchParams.get('select').split(',').includes('to.address as mintedBy'));
   assert.equal(url.searchParams.get('sort.desc'), 'id');
   assert.equal(url.searchParams.get('limit'), '20');
   fetch.mock.mockImplementation(() => new Response(null, { status: 429 }));

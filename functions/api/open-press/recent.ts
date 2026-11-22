@@ -17,7 +17,7 @@ export const onRequest: PagesFunction = async ({ request }) => {
     'from.null': 'true',
     'sort.desc': 'id',
     limit: '20',
-    select: 'token.tokenId as tokenId,to.address as creator,amount as editions,timestamp',
+    select: 'token.tokenId as tokenId,to.address as mintedBy,amount as editions,timestamp',
   }).toString();
 
   try {

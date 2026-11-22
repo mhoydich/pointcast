@@ -97,6 +97,16 @@ const description =
       <p class="minted__loading mono">LOADING HOLDINGS…</p>
     </section>
 
+    <section class="minted__pending" aria-labelledby="open-press-heading">
+      <h2 id="open-press-heading" class="minted__sub-kicker mono">Open Press · latest mints across all wallets</h2>
+      {contracts.openPress.mainnet ? (
+        <div id="open-press-recent" aria-live="polite">
+          <p>Loading mints…</p>
+          <ul class="minted__pending-list"></ul>
+        </div>
+      ) : <p>Awaiting contract origination.</p>}
+    </section>
+
     {PENDING_LANES.length > 0 && (
       <section class="minted__pending">
         <p class="minted__sub-kicker mono">ORIGINATING SOON · {PENDING_LANES.length} collection{PENDING_LANES.length === 1 ? '' : 's'}</p>
@@ -253,6 +263,28 @@ const description =
     else loadHoldings(MIKE_FALLBACK, false);
   }
 
+  async function loadOpenPress() {
+    const feed = document.getElementById('open-press-recent');
+    if (!feed) return;
+    const status = feed.querySelector('p');
+    const list = feed.querySelector('ul');
+    try {
+      const response = await fetch('/api/open-press/recent');
+      if (!response.ok) throw new Error();
+      const mints = await response.json();
+      for (const mint of mints) {
+        const row = document.createElement('li');
+        row.textContent = 'Token #' + mint.tokenId + ' · Minted by ' + mint.mintedBy;
+        list.append(row);
+      }
+      if (mints.length) status.remove();
+      else status.textContent = 'No mints indexed yet.';
+    } catch {
+      status.textContent = 'Recent mints are unavailable.';
+    }
+  }
+
+  loadOpenPress();
   repaint();
   tick();
   setInterval(tick, 60 * 1000);
