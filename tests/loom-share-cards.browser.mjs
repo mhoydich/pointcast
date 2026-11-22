@@ -10,10 +10,19 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PAT
 try {
   const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
   const page = await browser.newPage({ ...phone, reducedMotion: 'reduce' });
+  const printedSource = 'pointcast.xyz/sketches/38/#day';
+  await page.addInitScript(source => {
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (value, ...args) {
+      if (this.canvas.id === 'art' && value === source) this.canvas.dataset.printedSource = source;
+      return fillText.call(this, value, ...args);
+    };
+  }, printedSource);
   await page.goto(url);
   const hashes = new Set();
   for (const kind of ['message', 'day']) {
     await page.locator('[data-kind="' + kind + '"]').tap();
+    if (kind === 'day') assert.equal(await page.locator('#art').getAttribute('data-printed-source'), printedSource);
     for (const layout of ['dispatch', 'signal', 'ledger']) {
       await page.locator('[data-layout="' + layout + '"]').tap();
       for (const format of ['landscape', 'portrait']) {
