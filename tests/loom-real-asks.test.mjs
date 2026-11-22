@@ -62,8 +62,9 @@ test('polls addressed to Mike or his inbox are asks; another owner’s poll is n
   const poll = (question) => message(question, { kind: 'poll', poll: { question, options: ['Blue', 'Orange'] } });
   const mike = poll('@mike, which poster should we publish?');
   const alex = poll('@alex, which poster should we publish?');
+  const otherHandle = poll('@mike.team, which poster should we publish?');
   const inbox = poll('Which poster should we publish?');
-  assert.deepEqual(asks([mike, alex]), [mike.id]);
+  assert.deepEqual(asks([mike, alex, otherHandle]), [mike.id]);
   assert.deepEqual(asks([inbox], '@mike'), [inbox.id]);
   assert.deepEqual(asks([mike], '#work', 'alex'), []);
 });

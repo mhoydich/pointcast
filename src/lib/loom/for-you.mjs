@@ -95,7 +95,7 @@ function asksForGoAhead(message, phrases, owner, inbox) {
     }
   }
   const question = requestProse(message.poll?.question ?? '', owner).trim();
-  const toOwner = addressed.test(question) || mentionsOwner(question, owner) ||
+  const toOwner = addressed.test(question) || new RegExp(`(^|[^A-Za-z0-9_])@${name}`, 'i').test(question) ||
     (inbox && !/@[A-Za-z0-9_.-]+/.test(question));
   return message.kind === 'poll' && !!message.poll?.question && toOwner && /[A-Za-z0-9]/.test(question);
 }
