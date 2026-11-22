@@ -1,11 +1,11 @@
 import { hearthActivity, HEARTH_BATCH } from './hearth-day.mjs';
-import { addressKey, parseAddress } from './address.mjs';
-import { fold } from './fold.mjs';
+import { parseAddress } from './address.mjs';
+import { handleLoom } from './service.mjs';
 
-export async function serveHearthActivity(request, kv, now = Date.now()) {
+export async function serveHearthActivity(request, source, now = Date.now()) {
   const params = new URL(request.url).searchParams.getAll('room');
   if (!params.length || params.length > HEARTH_BATCH) return Response.json({ ok: false }, { status: 400 });
-  if (!kv) return Response.json({ ok: false }, { status: 503 });
+  if (!source) return Response.json({ ok: false }, { status: 503 });
   let addresses;
   try {
     addresses = [...new Set(params.map(value => {
@@ -16,12 +16,21 @@ export async function serveHearthActivity(request, kv, now = Date.now()) {
   } catch {
     return Response.json({ ok: false }, { status: 400 });
   }
+  // Use Loom's own GET and folded view, like the other server readers. The
+  // Pages wrapper injects the authoritative atomic reader when D1 is bound.
+  const read = typeof source === 'function' ? source : request => handleLoom(request, { kv: source });
   const rooms = await Promise.all(addresses.map(async address => {
     try {
-      const log = await kv.get('loom:log:' + await addressKey(address), 'json');
-      if (!Array.isArray(log?.ops)) return { address, state: 'unavailable' };
-      const messages = fold(log.ops).messages;
-      const trimmedSince = log.trimmedBefore ? log.ops[0]?.at || 'unknown' : null;
+      const url = new URL('/api/loom', request.url);
+      url.searchParams.set('to', address);
+      const response = await read(new Request(url));
+      if (!response.ok) return { address, state: 'unavailable' };
+      const data = await response.json();
+      if (!data.ok || !data.kvBound || !data.exists || !Array.isArray(data.messages) || !Array.isArray(data.ops)) {
+        return { address, state: 'unavailable' };
+      }
+      const { log, messages, ops } = data;
+      const trimmedSince = log.trimmedBefore ? ops[0]?.at || 'unknown' : null;
       return { address, ...hearthActivity(messages, { now, trimmedSince }) };
     } catch {
       return { address, state: 'unavailable' };

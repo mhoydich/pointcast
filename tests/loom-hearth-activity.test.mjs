@@ -23,8 +23,13 @@ test('a room fire counts only visible original posts in the trailing day', async
   for (const [address, value] of Object.entries({
     '#warm': log, '@pilot': { ops: [post(1, 'agent')] },
     '#embers': { ops: [post(1, 'human', now - HEARTH_DAY)] }, '#trimmed': { ...log, ops: log.ops.slice(1), trimmedBefore: 2 },
-  })) records.set('loom:log:' + await addressKey(address), value);
-  const kv = { get: async key => records.get(key) };
+  })) {
+    const key = await addressKey(address);
+    records.set('loom:log:' + key, JSON.stringify({
+      address, key, createdAt: iso(now - HEARTH_DAY), seq: value.ops.at(-1).seq, ...value,
+    }));
+  }
+  const kv = { get: async key => records.get(key) ?? null };
   const result = await serveHearthActivity(requestFor(['#warm', '@pilot', '#embers', '#trimmed', '#missing']), kv, now);
   const { rooms } = await result.json();
   assert.deepEqual(rooms, [
