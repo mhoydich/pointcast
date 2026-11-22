@@ -10,7 +10,7 @@ const sample = {
 const day = {
   kind: 'day', room: '#loom-ux', date: 'Nov 18, 2026 · 7 pm ET', title: 'A day on the Loom',
   metrics: [{value:'11', label:'desks claiming work'}, {value:'73', label:'new drafts linked'}, {value:'13', label:'PRs deployed'}],
-  linkLabel: 'github.com/mhoydich/pointcast/pull/1895', source: '../38/index.html#day',
+  linkLabel: 'pointcast.xyz/sketches/38/#day', source: '../38/index.html#day',
 };
 const state = { kind: 'message', layout: 'dispatch', format: 'landscape' };
 let message = sample;
