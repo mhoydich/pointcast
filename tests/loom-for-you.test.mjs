@@ -275,6 +275,13 @@ async function page(kv, { name = 'tester', sent = null, path = '/loom' } = {}) {
 }
 const settle = async (w, ms = 60) => { for (let i = 0; i < 6; i += 1) await new Promise((r) => w.setTimeout(r, ms / 6)); };
 const fy = (w) => w.document.getElementById('fyDyn');
+const assertRecap = (w) => {
+  const recap = fy(w).querySelector('.dashhead loom-recap');
+  assert.ok(recap, 'For You mounts the shared Hearth recap');
+  assert.equal(recap.querySelector('.eyebrow').textContent, 'While you were out');
+  assert.equal(recap.querySelector('h2').getAttribute('aria-live'), 'polite');
+  assert.equal(fy(w).querySelectorAll('.tiles, .tile').length, 0, 'number tiles are absent, including zero tiles');
+};
 
 test('page: three piles in order, a human post under People, Collator hidden from Replies to you, one seen POST', async () => {
   const kv = memoryKv();
@@ -284,9 +291,8 @@ test('page: three piles in order, a human post under People, Collator hidden fro
   await post(kv, { to: '#court', from: human('Sam'), body: 'court is open' });
   const w = await page(kv, { sent: { [mine.message.id]: mine.editToken } });
   await settle(w, 900);
-  // the dashboard: one tile per pile, most urgent first, then panels; the old lists sit in the fold
-  const tiles = [...fy(w).querySelectorAll('.tiles [data-fyact^="tile-"]')].map((x) => x.dataset.fyact);
-  assert.deepEqual(tiles.filter((k) => k !== 'tile-waiting'), ['tile-yes', 'tile-replies', 'tile-people', 'tile-done', 'tile-unanswered', 'tile-new']);
+  // The recap leads; full queues remain available below and old lists sit in the fold.
+  assertRecap(w);
   const heads = [...fy(w).querySelectorAll('h2.sect')].map((x) => x.textContent);
   assert.ok(heads.indexOf('Waiting on you') > heads.indexOf('Start something'), 'the old lists are inside the fold');
   const more = fy(w).querySelector('details#fyMore');
@@ -299,7 +305,7 @@ test('page: three piles in order, a human post under People, Collator hidden fro
   // the browser's own lists: the Collator reply to tester's post is counted, not listed
   assert.ok(!more.textContent.includes('Also threaded elsewhere'));
   assert.equal(w.document.getElementById('fyRobots').textContent, '1 house robot line hidden');
-  assert.match(w.document.getElementById('fyNew').textContent, /^(?:\d+ new things?\.|All caught up\.)Last looked never\.$/);
+  assert.equal(w.document.getElementById('fyNew').closest('loom-recap'), fy(w).querySelector('loom-recap'));
   assert.equal(fy(w).querySelector('[data-fyact="feed"]').getAttribute('href'), '/loom/for/tester?format=rss');
   const seen = () => w.posts.filter((p) => p.action === 'seen');
   assert.equal(seen().length, 1);
@@ -325,6 +331,34 @@ test('page: a NEEDS line shows under Needs your yes; untrusted text stays text',
   assert.match(yes[0].textContent, /NEEDS TESTER · <img/);
   assert.equal(fy(w).querySelectorAll('img[src="x"], [onerror]').length, 0);
   assert.ok([...fy(w).querySelectorAll('img')].every((i) => i.closest('.hearth')), 'the only picture is the hearth');
+});
+
+test('page: only the newest ask leads; remaining asks start folded and stay accessible', async () => {
+  const kv = memoryKv();
+  for (const [index, body] of ['review the first draft', 'choose the second cover', 'approve the newest copy'].entries()) {
+    await post(kv, { to: '#desk', from: agent('Build desk'), body: 'NEEDS TESTER · ' + body },
+      { clock: () => new Date(Date.now() - (3 - index) * 60000) });
+  }
+  const w = await page(kv);
+  await settle(w, 300);
+  assertRecap(w);
+  const leading = fy(w).querySelectorAll('.upnext .gate');
+  assert.equal(leading.length, 1);
+  assert.match(leading[0].textContent, /approve the newest copy/);
+  const panel = fy(w).querySelector('#fyp-yes');
+  assert.ok(panel);
+  assert.equal(panel.open, false, 'other asks are initially folded');
+  const remaining = [...panel.querySelectorAll('.gate .gask')].map((ask) => ask.textContent);
+  assert.equal(remaining.length, 2);
+  assert.ok(remaining.some((text) => text.includes('review the first draft')));
+  assert.ok(remaining.some((text) => text.includes('choose the second cover')));
+  assert.ok(remaining.every((text) => !text.includes('approve the newest copy')), 'the leading ask is not repeated');
+  const exposed = [...fy(w).querySelectorAll('.gate')].filter((gate) => !gate.closest('details:not([open])'));
+  assert.equal(exposed.length, 1, 'the initial page exposes only one ask');
+  panel.open = true;
+  panel.dispatchEvent(new w.Event('toggle'));
+  w.loomTest.renderForYou();
+  assert.equal(fy(w).querySelector('#fyp-yes').open, true, 'opening the remaining asks survives a redraw');
 });
 
 test('page: if the for= read fails, today\'s lists show unfolded with no error noise', async () => {
@@ -389,7 +423,7 @@ test('page: New tags stay for the page view after its own seen mark and a refres
   w.ticks.filter((t) => t.ms === 60000).forEach((t) => t.fn());
   await settle(w, 300);
   assert.equal(news(), 1, 'still New after the refresh');
-  assert.match(w.document.getElementById('fyNew').textContent, /^1 new thing\.Last looked never\.$/);
+  assertRecap(w);
   assert.equal(w.posts.filter((p) => p.action === 'seen').length, 1);
 });
 
@@ -492,12 +526,12 @@ test('S3 public view preserves stored writer and dashboard, never marks the view
   const w = await page(kv,{name:'tester',path:'/loom?for=MiKe#for-you'});
   await settle(w,900);
   assert.match(fy(w).querySelector('#fyPublicView').textContent,/Public For you for @mike/);
-  assert.match(fy(w).querySelector('.eyebrow').textContent,/for you · mike/);
+  assert.match(fy(w).querySelector('.dashfine').textContent,/for you · mike/);
   assert.equal(w.localStorage.getItem('loom.name'),'tester');
   assert.equal(w.loomTest.postingName(),'tester');
   assert.equal(w.posts.length,0);
   assert.equal(fy(w).querySelector('[data-fyact="share"]').getAttribute('href'),'/loom/for/mike');
-  assert.equal(fy(w).querySelectorAll('.tiles [data-fyact^="tile-"]').length,6);
+  assertRecap(w);
   w.loomTest.setView('directory'); w.loomTest.setView('for-you');
   assert.equal(w.location.search,'?for=mike');
 });
@@ -515,7 +549,8 @@ test('S3 older-only dashboard: folded, counted, keyboard-native and expandable w
   const fold=fy(w).querySelector('#fyOlder');
   assert.ok(fold); assert.equal(fold.open,false);
   assert.match(fold.querySelector('summary').textContent,/Older unanswered posts.*1/);
-  assert.equal(fy(w).querySelector('[data-fyact="tile-unanswered"] .tn').textContent,'0');
+  assertRecap(w);
+  assert.equal(fy(w).querySelector('#fyp-unanswered'), null, 'empty recent activity has no numbered panel');
   fold.open=true; fold.dispatchEvent(new w.Event('toggle'));
   assert.match(fold.textContent,/older-only question/);
   w.loomTest.renderForYou();
@@ -527,7 +562,7 @@ test('S3 public view also works without a saved identity or a seen POST', async 
   const w = await page(memoryKv(), {name:'',path:'/loom?for=sid#for-you'});
   await settle(w,750);
   assert.match(fy(w).querySelector('#fyPublicView').textContent, /@sid/);
-  assert.equal(fy(w).querySelectorAll('.tiles .tile').length,6);
+  assertRecap(w);
   assert.equal(w.loomTest.postingName(),'');
   assert.equal(w.localStorage.getItem('loom.name'),null);
   assert.equal(w.posts.length,0);

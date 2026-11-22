@@ -70,13 +70,17 @@ test('ago reads like a person and esc neutralises markup', () => {
   assert.equal(esc('<b a="1">&\'</b>'), '&lt;b a=&quot;1&quot;&gt;&amp;&#39;&lt;/b&gt;');
 });
 
-test('the hearth pages sit beside /loom and the classic page is untouched', () => {
+test('the Hearth pages share their shell while For You reuses only the recap logic', () => {
   for (const p of ['index', 'room', 'flame', 'lend']) {
     const src = readFileSync(new URL(`../src/pages/loom/hearth/${p}.astro`, import.meta.url), 'utf8');
     assert.match(src, /HearthLayout/);
   }
-  const classic = readFileSync(new URL('../src/pages/loom/index.astro', import.meta.url), 'utf8');
-  assert.doesNotMatch(classic, /hearth\.css|HearthLayout|lib\/loom\/hearth/, 'the classic page does not load Hearth');
+  const interactive = readFileSync(new URL('../src/pages/loom/index.astro', import.meta.url), 'utf8');
+  assert.doesNotMatch(interactive, /hearth\.css|HearthLayout/, 'the interactive page keeps its own styles');
+  assert.match(interactive, /<LoomRecap\s*\/>/);
+  const recap = readFileSync(new URL('../src/components/LoomRecap.astro', import.meta.url), 'utf8');
+  assert.match(recap, /import \{ whileYouWereOut \} from/);
+  assert.match(recap, /import \{ readHearth \} from/);
   const css = readFileSync(new URL('../src/styles/hearth.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /^\.hearth[ ,{:]/m, 'no bare .hearth selector, which the classic page already uses');
 });
