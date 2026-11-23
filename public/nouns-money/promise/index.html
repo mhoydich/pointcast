@@ -59,6 +59,8 @@
   @media (max-width:900px){.maker-grid{grid-template-columns:1fr}}
   form.controls{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
   .field{margin-bottom:18px}
+  .field .share-option{display:flex;align-items:center;gap:8px;min-height:44px;margin:0;font:14px/1.35 var(--sans);letter-spacing:normal;text-transform:none}
+  .share-option input{width:20px;height:20px;margin:0;flex:0 0 auto;accent-color:var(--ink)}
   .field label,fieldset legend{display:block;font:600 12px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
   fieldset{border:0;padding:0;margin:0 0 18px}
   input[type=text],select{width:100%;font:16px/1.3 var(--sans);color:var(--ink);background:var(--paper);border:1px solid #1c1a1640;border-radius:8px;padding:10px 12px}
@@ -176,8 +178,13 @@
             <button type="button" class="btn" id="download">Download note (SVG)</button>
             <button type="button" class="btn ghost" id="reissue">New serial</button>
           </div>
-          <div class="field" style="margin-top:18px"><label for="share">Share line</label><input type="text" id="share" readonly><button type="button" class="btn ghost" id="copy" style="margin-top:8px">Copy share line</button></div>
-          <p class="fine">Nothing you type leaves this page. No account, no wallet, no server.</p>
+          <div class="field" style="margin-top:18px">
+            <label for="share">Share line</label>
+            <input type="text" id="share" readonly>
+            <label class="share-option"><input type="checkbox" id="share-recipient" autocomplete="off" disabled> Include the recipient’s name in the share line</label>
+            <button type="button" class="btn ghost" id="copy">Copy share line</button>
+          </div>
+          <p class="fine">The download includes what you write on the note. The share line leaves out the promise and sender. This page uploads nothing. No account or wallet needed.</p>
         </form>
 
         <div class="note-stage">
@@ -254,6 +261,9 @@
     aurora:{name:'AURORA POST',bg:'#F5E8F0',ink:'#4E1F3F',accent:'#B04A8E',sun:'#5CC5C0'}
   };
   var state={promise:'one hour of help',custom:'',to:'',from:'',color:'pacific',serial:mkSerial()};
+  var shareRecipient=document.getElementById('share-recipient');
+  var share=document.getElementById('share');
+  shareRecipient.checked=false;
 
   function mkSerial(){
     var L='ABCDEFGHJKLMNPRSTUVWXYZ', s='';
@@ -304,17 +314,29 @@
     svg.appendChild(el('text',{x:585,y:228,'text-anchor':'middle','font-family':serif,'font-size':11,'font-style':'italic',fill:c.ink},'not legal tender. just tender.'));
     svg.appendChild(el('text',{x:W-40,y:252,'text-anchor':'end','font-family':mono,'font-size':10,'letter-spacing':'2',fill:c.ink},'ART, NO CASH VALUE'));
     svg.appendChild(el('text',{x:40,y:252,'font-family':mono,'font-size':9,'letter-spacing':'1.5',fill:c.ink,'fill-opacity':'.75'},'ISSUED '+today()+' · NOUNSMONEY.XYZ'));
-    document.getElementById('share').value='I made a promise note for '+(to||'______')+'. Not legal tender, just tender. Art, no cash value. Make one for someone at pointcast.xyz/nouns-money/promise/ @nounsmoneyxyz';
+    renderShare();
     var frame=document.getElementById('frame');
     frame.replaceChildren(svg);
     svg.classList.add('flip'); requestAnimationFrame(function(){requestAnimationFrame(function(){svg.classList.remove('flip')})});
   }
+  function renderShare(){
+    var to=state.to.trim();
+    shareRecipient.disabled=!to;
+    var recipient=to&&shareRecipient.checked?' for '+to:'';
+    share.value='I made a promise note'+recipient+'. Not legal tender, just tender. Art, no cash value. Make one for someone at pointcast.xyz/nouns-money/promise/ @nounsmoneyxyz';
+  }
+  shareRecipient.addEventListener('change',renderShare);
   function press(group,btn){group.querySelectorAll('button').forEach(function(b){b.setAttribute('aria-pressed',b===btn?'true':'false')})}
   var promises=document.getElementById('promises');
   promises.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;press(promises,b);state.promise=b.dataset.v;state.custom='';document.getElementById('custom').value='';render()});
   var sw=document.getElementById('swatches');
   sw.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;press(sw,b);state.color=b.dataset.c;render()});
-  ['custom','to','from'].forEach(function(id){document.getElementById(id).addEventListener('input',function(e){state[id]=e.target.value;render()})});
+  ['custom','to','from'].forEach(function(id){document.getElementById(id).addEventListener('input',function(e){
+    var value=e.target.value;
+    if(id==='to'&&value!==state.to) shareRecipient.checked=false;
+    state[id]=value;
+    render();
+  })});
   document.getElementById('reissue').addEventListener('click',function(){state.serial=mkSerial();render()});
   document.getElementById('download').addEventListener('click',function(){
     var svg=document.querySelector('#frame svg');
