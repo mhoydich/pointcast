@@ -1,10 +1,16 @@
 import { hearthActivity, HEARTH_BATCH } from './hearth-day.mjs';
 import { addressKey, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
+import { personThread } from './hearth-person.mjs';
 
 export async function serveHearthActivity(request, kv, now = Date.now()) {
-  const params = new URL(request.url).searchParams.getAll('room');
+  const query = new URL(request.url).searchParams;
+  const params = query.getAll('room');
+  const person = query.get('person');
   if (!params.length || params.length > HEARTH_BATCH) return Response.json({ ok: false }, { status: 400 });
+  if (person !== null && (!person.trim().replace(/^@+/, '').trim() || person.length > 120)) {
+    return Response.json({ ok: false }, { status: 400 });
+  }
   if (!kv) return Response.json({ ok: false }, { status: 503 });
   let addresses;
   try {
@@ -18,9 +24,12 @@ export async function serveHearthActivity(request, kv, now = Date.now()) {
   }
   const rooms = await Promise.all(addresses.map(async address => {
     try {
-      const log = await kv.get('loom:log:' + await addressKey(address), 'json');
+      const key = await addressKey(address);
+      const log = await kv.get('loom:log:' + key, 'json');
       if (!Array.isArray(log?.ops)) return { address, state: 'unavailable' };
       const messages = fold(log.ops).messages;
+      // A compact public read of the same folded log; never return raw ops.
+      if (person !== null) return personThread(messages, { name: person, room: address, key, trimmed: !!log.trimmedBefore, now });
       const trimmedSince = log.trimmedBefore ? log.ops[0]?.at || 'unknown' : null;
       return { address, ...hearthActivity(messages, { now, trimmedSince }) };
     } catch {
