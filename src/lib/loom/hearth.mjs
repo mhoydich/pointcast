@@ -1,4 +1,5 @@
 /** The shared Hearth pixel flame, front-page recap and people-first room view. */
+import { roomSummary } from './hearth-summary.mjs';
 
 export const FIRE_SIZES = [64, 56, 40, 32];
 export const MAX_FIRES = 9;
@@ -15,7 +16,6 @@ const PATHS = {
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const time = (t) => { const n = Date.parse(t); return Number.isFinite(n) ? n : 0; };
-const oneLine = (s, n = 140) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 export const isCollator = (from) => !!from && (from.kind === 'robot' || String(from.name ?? '').toLowerCase() === 'collator' || from.address === '@collator');
 export const isPerson = (from) => !!from && from.kind === 'human';
 
@@ -63,41 +63,13 @@ export function whileYouWereOut({ active, unavailable, since, asOf }, seenAt = n
   return recentVisit ? 'The fires have been quiet since your last visit.' : 'The rooms have been quiet for the past day.';
 }
 
-/** The newest ROOM NOTE accepted by the classic reader. Trimmed logs have lost their opener. */
-function roomNote(messages, log) {
-  if (log?.kind !== 'topic') return;
-  const roots = messages.filter(m => !m.parent && !(m.depth >= 1) && !m.via);
-  const name = m => String(m?.from?.name || '').trim().replace(/^@+/, '').replace(/\s+/g, ' ').toLowerCase();
-  const opener = !log.trimmedBefore && name(roots.at(-1));
-  return roots.find(m => !m.withdrawn && /^room note(?![a-z])/i.test((m.body || '').trim()) &&
-    (m.from?.verified || name(m) === "loom desk (mike's agent)" || (opener && name(m) === opener)));
-}
-
 /** Read direct posts here. The classic room keeps the complete mirrored and system log. */
-export function roomView(messages = [], { log = {} } = {}) {
+export function roomView(messages = [], { log = {}, now = Date.now() } = {}) {
   const visible = messages.filter(m => m && !m.hidden && !m.withdrawn)
     .sort((a, b) => (b.seq || 0) - (a.seq || 0) || time(b.at) - time(a.at));
   const posts = visible.filter(m => !m.via && !isCollator(m.from));
   const people = posts.filter(m => isPerson(m.from));
   const bots = posts.filter(m => !isPerson(m.from));
-  const note = roomNote(visible, log);
-  const summary = note ? note.body.trim().replace(/^room note[\s:.·•\-–—]*/i, '')
-    .split('\n').map(line => line.trim()).filter(Boolean).slice(0, 3).map(line => oneLine(line, 140)) : [];
-  if (summary.length) summary[0] = (note.from.name || 'Room editor') + ' · ' + summary[0];
-
-  const excerpt = m => m.body?.trim() || m.poll?.question || m.media?.alt;
-  const recent = posts.filter(m => m !== note && excerpt(m));
-  const lastPerson = recent.find(m => isPerson(m.from));
-  const lastBot = recent.find(m => !isPerson(m.from));
-  for (const m of new Set([lastPerson, lastBot, ...recent].filter(Boolean))) {
-    if (summary.length === 3) break;
-    summary.push((m.from?.name || 'Someone') + ' wrote “' + oneLine(excerpt(m).split('\n')[0], 110) + '”');
-  }
-  if (summary.length < 3) summary.unshift(log.title || 'Around the fire in ' + (log.label || 'this room') + '.');
-  if (summary.length < 3) {
-    const count = posts.length === 1 ? 'One log was posted here.' : posts.length + ' logs were posted here.';
-    summary.push(posts.length ? count : 'No one has posted directly here yet.');
-  }
-  if (summary.length < 3) summary.push(posts.length ? 'Read the logs below.' : 'Add the first log.');
+  const summary = roomSummary(posts, { log, now });
   return { summary, people, bots, botCount: bots.length };
 }
