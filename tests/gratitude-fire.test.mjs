@@ -59,6 +59,14 @@ test('without JavaScript the actual page shows one canonical Hearth flame and it
   dom.window.close();
 });
 
+test('the page loads IBM Plex Sans and uses it for the picture preview', () => {
+  const dom = fixture(base, false);
+  const font = dom.window.document.querySelector('link[rel="stylesheet"]');
+  assert.equal(new URL(font.href).searchParams.get('family'), 'IBM Plex Sans:wght@400');
+  assert.match(source, /figcaption\s*\{[^}]*font:[^;]*"IBM Plex Sans", system-ui, sans-serif/);
+  dom.window.close();
+});
+
 test('shared markup is rendered as literal text, never executable elements', () => {
   const text = 'thankful for <img src=x onerror="alert(1)"> & <script>alert(2)</script> 🦃';
   const dom = fixture(shareUrl(base, text));
@@ -160,6 +168,7 @@ test('picture drawing uses exact Hearth paths, 1200x630 pixels, and safely fits 
   for (const [, color, font, words, x, y] of written) {
     context.font = font;
     assert.equal(color, '#F4EDE4');
+    assert.match(font, /^\d+px "IBM Plex Sans", system-ui, sans-serif$/);
     assert.ok(context.measureText(words).width <= 1008);
     assert.equal(x, 600);
     assert.ok(y > 300 && y < 550);
@@ -171,24 +180,106 @@ test('picture drawing uses exact Hearth paths, 1200x630 pixels, and safely fits 
   dom.window.close();
 });
 
-test('Save picture requests a PNG download and releases the temporary object URL', async () => {
+function downloadFixture(dom) {
+  const receipt = {};
+  dom.window.HTMLCanvasElement.prototype.toBlob = (callback, type) => { receipt.format = type; callback(new dom.window.Blob(['png'], { type })); };
+  dom.window.URL.createObjectURL = blob => { assert.equal(blob.type, 'image/png'); return 'blob:gratitude'; };
+  dom.window.URL.revokeObjectURL = url => { receipt.revoked = url; };
+  dom.window.HTMLAnchorElement.prototype.click = function () { receipt.downloaded = [this.href, this.download]; };
+  return receipt;
+}
+
+test('Save picture requests a PNG download and releases the temporary object URL without FontFaceSet support', async () => {
   const dom = fixture();
   canvasFixture(dom);
-  let format, downloaded, revoked;
-  dom.window.HTMLCanvasElement.prototype.toBlob = (callback, type) => { format = type; callback(new dom.window.Blob(['png'], { type })); };
-  dom.window.URL.createObjectURL = blob => { assert.equal(blob.type, 'image/png'); return 'blob:gratitude'; };
-  dom.window.URL.revokeObjectURL = url => { revoked = url; };
+  const receipt = downloadFixture(dom);
   dom.window.setTimeout = callback => callback();
-  dom.window.HTMLAnchorElement.prototype.click = function () { downloaded = [this.href, this.download]; };
   dom.window.document.querySelector('#save').click();
   await tick();
-  assert.equal(format, 'image/png');
-  assert.deepEqual(downloaded, ['blob:gratitude', 'gratitude-fire.png']);
-  assert.equal(revoked, 'blob:gratitude');
+  assert.equal(receipt.format, 'image/png');
+  assert.deepEqual(receipt.downloaded, ['blob:gratitude', 'gratitude-fire.png']);
+  assert.equal(receipt.revoked, 'blob:gratitude');
   assert.equal(dom.window.document.querySelector('#save').disabled, false);
   assert.equal(dom.window.document.querySelector('a[download]'), null);
   dom.window.close();
 });
+
+test('Save picture waits for IBM Plex Sans before any canvas drawing or PNG export', async () => {
+  const dom = fixture();
+  const { document } = dom.window;
+  const { calls } = canvasFixture(dom);
+  const receipt = downloadFixture(dom);
+  const timers = [], cleared = [];
+  dom.window.setTimeout = (callback, delay) => { timers.push({ callback, delay }); return timers.length; };
+  dom.window.clearTimeout = id => cleared.push(id);
+  let loaded, request;
+  Object.defineProperty(document, 'fonts', { value: {
+    load(font, text) {
+      request = { font, text };
+      return new Promise(resolve => { loaded = resolve; });
+    },
+  } });
+  const text = 'thankful for café and friends.';
+  document.querySelector('#words').value = text;
+  document.querySelector('#save').click();
+  await tick();
+  assert.deepEqual(request, { font: '48px "IBM Plex Sans"', text });
+  assert.equal(document.querySelector('#save').disabled, true);
+  assert.deepEqual(calls, []);
+  assert.equal(receipt.format, undefined);
+
+  loaded([]);
+  await tick();
+  assert.equal(calls[0][0], 'background');
+  assert.equal(calls.filter(call => call[0] === 'text').map(call => call[3]).join(' '), text);
+  assert.deepEqual(receipt.downloaded, ['blob:gratitude', 'gratitude-fire.png']);
+  assert.deepEqual(cleared, [1]);
+  assert.equal(document.querySelector('#save').disabled, false);
+  dom.window.close();
+});
+
+test('a font load that never settles still saves after a short timeout', async () => {
+  const dom = fixture();
+  const { document } = dom.window;
+  const { calls } = canvasFixture(dom);
+  const receipt = downloadFixture(dom);
+  const timers = [];
+  dom.window.setTimeout = (callback, delay) => { timers.push({ callback, delay }); return timers.length; };
+  dom.window.clearTimeout = () => {};
+  Object.defineProperty(document, 'fonts', { value: { load: () => new Promise(() => {}) } });
+  document.querySelector('#save').click();
+  await tick();
+  assert.deepEqual(calls, []);
+  assert.equal(timers.length, 1);
+  assert.ok(timers[0].delay > 0 && timers[0].delay <= 1500);
+  timers[0].callback();
+  await tick();
+  assert.deepEqual(receipt.downloaded, ['blob:gratitude', 'gratitude-fire.png']);
+  assert.match(document.querySelector('#status').textContent, /picture is ready/);
+  assert.equal(document.querySelector('#save').disabled, false);
+  dom.window.close();
+});
+
+for (const failure of ['rejects', 'throws']) {
+  test(`a font load that ${failure} still saves the PNG`, async () => {
+    const dom = fixture();
+    const { document } = dom.window;
+    canvasFixture(dom);
+    const receipt = downloadFixture(dom);
+    Object.defineProperty(document, 'fonts', { value: {
+      load() {
+        if (failure === 'throws') throw new Error('Font unavailable');
+        return Promise.reject(new Error('Font unavailable'));
+      },
+    } });
+    document.querySelector('#save').click();
+    await tick();
+    assert.deepEqual(receipt.downloaded, ['blob:gratitude', 'gratitude-fire.png']);
+    assert.match(document.querySelector('#status').textContent, /picture is ready/);
+    assert.equal(document.querySelector('#save').disabled, false);
+    dom.window.close();
+  });
+}
 
 test('picture failures leave Copy link available and permit another save attempt', async () => {
   const dom = fixture();

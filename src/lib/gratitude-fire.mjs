@@ -5,6 +5,8 @@ export const MAX_LINE_LENGTH = 140;
 export const MAX_HASH_LENGTH = 2400;
 export const PICTURE_WIDTH = 1200;
 export const PICTURE_HEIGHT = 630;
+const PICTURE_FONT_FAMILY = '"IBM Plex Sans", system-ui, sans-serif';
+const FONT_WAIT_MS = 1000;
 
 export function normalizeLine(value) {
   const text = String(value ?? '').replace(/[\u0000-\u001f\u007f]/gu, ' ').replace(/\s+/gu, ' ').trim();
@@ -50,7 +52,23 @@ export function layoutLines(context, text, maxWidth) {
   return lines;
 }
 
-/** Native canvas only: exact Hearth paths, local fonts, no remote images. */
+/** Let the page font settle before measuring or painting; saving still works offline. */
+async function waitForPictureFont(document, window, text) {
+  if (!document.fonts?.load) return;
+  let timeout;
+  try {
+    await Promise.race([
+      document.fonts.load('48px "IBM Plex Sans"', text),
+      new Promise(resolve => { timeout = window.setTimeout(resolve, FONT_WAIT_MS); }),
+    ]);
+  } catch {
+    // A failed font request uses the same sans-serif fallback as the page.
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+/** Native canvas only: exact Hearth paths, the page font, no remote images. */
 export function drawPicture(canvas, svg, line) {
   canvas.width = PICTURE_WIDTH;
   canvas.height = PICTURE_HEIGHT;
@@ -72,7 +90,7 @@ export function drawPicture(canvas, svg, line) {
   const text = normalizeLine(line) || DEFAULT_LINE;
   let lines, size = 48;
   do {
-    context.font = `${size}px Georgia, serif`;
+    context.font = `${size}px ${PICTURE_FONT_FAMILY}`;
     lines = layoutLines(context, text, 1008);
     if (lines.length <= 3 || size <= 24) break;
     size -= 2;
@@ -132,8 +150,10 @@ export function mountGratitudeFire(document, window) {
     save.disabled = true;
     status.textContent = '';
     try {
+      const text = currentLine();
+      await waitForPictureFont(document, window, text);
       const canvas = document.createElement('canvas');
-      drawPicture(canvas, document.querySelector('.hearth-flame'), currentLine());
+      drawPicture(canvas, document.querySelector('.hearth-flame'), text);
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error('Picture drawing is unavailable.');
       const url = window.URL.createObjectURL(blob);
