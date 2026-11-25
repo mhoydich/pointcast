@@ -1,3 +1,4 @@
+import { readBoundedJson } from './read-bounded-json';
 import {
   base64ToBytes,
   canonicalJson,
@@ -59,25 +60,8 @@ export function agentIdentityJson(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), { status, headers: HEADERS });
 }
 
-export async function readAgentIdentityJson(request: Request): Promise<unknown> {
-  const declared = Number(request.headers.get('content-length') || 0);
-  if (declared > MAX_BODY_BYTES) throw new Error('request body is too large');
-  if (!request.body) throw new Error('request body is required');
-  const reader = request.body.getReader();
-  const decoder = new TextDecoder();
-  let total = 0;
-  let text = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_BODY_BYTES) {
-      await reader.cancel();
-      throw new Error('request body is too large');
-    }
-    text += decoder.decode(value, { stream: true });
-  }
-  return JSON.parse(text + decoder.decode()) as unknown;
+export function readAgentIdentityJson(request: Request): Promise<unknown> {
+  return readBoundedJson(request, MAX_BODY_BYTES);
 }
 
 function record(value: unknown): Record<string, unknown> {

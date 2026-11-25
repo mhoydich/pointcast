@@ -361,6 +361,27 @@ test('page: only the newest ask leads; remaining asks start folded and stay acce
   assert.equal(fy(w).querySelector('#fyp-yes').open, true, 'opening the remaining asks survives a redraw');
 });
 
+test('page and public digest show an approval control only for the real request', async () => {
+  const kv = memoryKv();
+  const receipts = [
+    "FIXED (seq 224), 6pm check. The Money Office plates now render. Burning them needs Mike's yes; until then they sit in the office wallet.",
+    'MINTED: the collection is recorded. The next release needs your yes.',
+    'REVIEW: the Needs your yes card passed its checks.',
+    'The “needs your yes” card has a larger button.',
+  ];
+  for (const body of receipts) await post(kv, { to: '#mint-queue', from: agent('Signing desk'), body });
+  const ask = await post(kv, { to: '#mint-queue', from: agent('Design desk'), body: 'Mike, please approve the poster.' });
+  const result = await (await getFor(kv, 'mike')).json();
+  assert.deepEqual(result.piles.needsYes.map((item) => item.id), [ask.message.id]);
+  const digest = await serveFor(new Request('https://pointcast.xyz/loom/for/mike'), kv, 'mike');
+  assert.match(await digest.text(), /NEEDS YOUR YES \(1\)/);
+  const w = await page(kv, { name: 'mike' });
+  await settle(w, 300);
+  assert.deepEqual([...fy(w).querySelectorAll('.gate .gask .snip')].map((el) => el.textContent), ['Mike, please approve the poster.']);
+  assert.equal([...fy(w).querySelectorAll('.gate button')].filter((el) => el.textContent === 'Yes, go ahead').length, 1);
+  assert.equal(w.posts.filter((p) => p.kind === 'answer').length, 0);
+});
+
 test('page: if the for= read fails, today\'s lists show unfolded with no error noise', async () => {
   const kv = memoryKv();
   const dom = new JSDOM(`<!doctype html><html><body>${BODY}</body></html>`, { url: `${ORIGIN}/loom`, runScripts: 'outside-only', pretendToBeVisual: true });
@@ -455,6 +476,60 @@ test('a status receipt that names the Needs your yes pile is not an ask', () => 
   const explicit = msg(agent('Desk'), 'NEEDS MIKE · DONE review · #work', 2);
   const r = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#work', 'k', [working, done, ask, explicit])] });
   assert.deepEqual(new Set(r.piles.needsYes.map((x) => x.id)), new Set([ask.id, explicit.id]));
+});
+
+test('quoting or naming the confirm card does not turn a note into a decision', () => {
+  const desk = agent('X desk');
+  // Item 5 of the live queue note shown as a confirm card in the #1821 phone capture.
+  const designExample = '5. The "needs your yes" confirm card is the bar: picture, sound, one clear action.';
+  const notes = [
+    designExample,
+    'Item 10 · The live “needs your yes” card after scrolling.',
+    'The label is ‘needs your yes’.',
+    "Read the 'needs your yes' section.",
+    'Look under Needs your yes.',
+    'Nothing needs your yes.',
+    'The **Needs your yes** card now has a larger button.',
+    'See the _Needs your yes_ decision cards.',
+    'There are no items in Needs your yes.',
+    'Two entries in **Needs your yes** are still visible.',
+    'The needs your yes pile now has two entries.',
+    'The screenshot shows the `needs your yes` text.',
+    'Copy example:\n> Needs your yes before release',
+  ].map((body) => msg(desk, body, 2));
+  const requests = [
+    'The “night edition” needs your yes before release.',
+    designExample + '\nThe poster itself still needs your yes.',
+    'NEEDS MIKE · Review the “needs your yes” card · reply here',
+    'The release needs your yes\nCard: see the preview.',
+    'The release needs your yes\r\nDecision card: see the preview.',
+    'Signing in needs your yes before we can publish.',
+    'There are no items in Needs your yes. The reprint still needs your yes.',
+    'The release **needs your yes** before noon.',
+  ].map((body) => msg(desk, body, 2));
+  const result = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#loom-ux', 'k', [...notes, ...requests])] });
+  assert.deepEqual(new Set(result.piles.needsYes.map((it) => it.id)), new Set(requests.map((it) => it.id)));
+  assert.equal(result.rest.count, notes.length);
+});
+
+test('feed titles stay ordinary notes, while requests about a feed still need a decision', () => {
+  const source = 'The For You alerts note and the current People/Needs your yes RSS are useful sources.';
+  const examples = [
+    [source, false],
+    ['Read from **Needs your yes** RSS for this report.', false],
+    ['Subscribe to Needs your yes feeds through RSS.', false],
+    ['Background source: People / Needs your yes.', false],
+    ['Read Needs your yes / New arrivals for context.', false],
+    ['The rollout still needs your yes. ' + source, true],
+    [source + '\nThe RSS feed itself needs your yes to launch.', true],
+    ['The change needs your yes\nRSS feed: see the preview.', true],
+    ['NEEDS MIKE · May we include the People/Needs your yes RSS?', true],
+  ];
+  for (const [body, expected] of examples) {
+    const relay = msg(agent('Launch'), body, 2);
+    const result = buildPiles({ owner: 'mike', now: NOW, threads: [thread('#loom-ux', 'k', [relay])] });
+    assert.deepEqual(result.piles.needsYes.map((item) => item.id), expected ? [relay.id] : [], body);
+  }
 });
 
 test('new count includes unanswered inbox notes and deduplicates items also in a pile', () => {
