@@ -166,7 +166,12 @@ export async function readHearthPerson(name, { request = fetch, now } = {}) {
   const asOf = now ?? (Number.isFinite(serverTime) ? serverTime : Date.now());
   const directory = [...new Map(data.logs.filter(log => ['topic', 'handle'].includes(log.kind) && log.address)
     .map(log => [log.address, log])).values()];
-  const rooms = directory.slice(0, 400), threads = [], unavailable = [], trimmed = [];
+  // updatedAt is already in the compact directory. Keep unknown dates rather
+  // than silently dropping a room whose activity cannot be established.
+  const recent = directory.filter(room => !(Date.parse(room.updatedAt) < asOf - 7 * HEARTH_DAY));
+  // Stable batches keep cache keys useful when directory activity order changes.
+  const rooms = recent.slice(0, 400).sort((a, b) => a.address.localeCompare(b.address));
+  const threads = [], unavailable = [], trimmed = [];
   let next = 0;
   async function readRooms() {
     while (next < rooms.length) {
@@ -190,6 +195,6 @@ export async function readHearthPerson(name, { request = fetch, now } = {}) {
   await Promise.all([readRooms(), readRooms()]);
   if (rooms.length && !threads.length) throw new Error('The Loom could not read this card.');
   return { ...personCard(threads, { name, now: asOf }), asOf, readRooms: threads.length,
-    incomplete: directory.length >= 400 || unavailable.length > 0 || trimmed.length > 0,
+    incomplete: directory.length >= 400 || recent.length < directory.length || unavailable.length > 0 || trimmed.length > 0,
     unavailable: unavailable.sort(), trimmed: trimmed.sort() };
 }
