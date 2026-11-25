@@ -7,7 +7,7 @@ import { transform } from '@astrojs/compiler';
 import { experimental_AstroContainer } from 'astro/container';
 import ts from 'typescript';
 import { JSDOM } from 'jsdom';
-import { esc, ago, roomHref } from '../src/lib/loom/hearth.mjs';
+import { esc, ago, roomHref, historyWarning } from '../src/lib/loom/hearth.mjs';
 
 const require = createRequire(import.meta.url);
 const runtime = pathToFileURL(require.resolve('astro/runtime/server/index.js')).href;
@@ -61,7 +61,7 @@ const fixture = () => ({
   ],
   lent: { tokens: 125000, approximate: true, tokenSource: { room: '#efficiency', key: 'efficiency-key', id: 'receipt', at: at(4) },
     closedCards: 2, cardSources: [] },
-  unavailable: [], incomplete: false,
+  unavailable: [], trimmed: [], incomplete: false,
 });
 
 async function page(t, { card = fixture(), query = '?name=%40MIKE', savedName, reader } = {}) {
@@ -70,7 +70,7 @@ async function page(t, { card = fixture(), query = '?name=%40MIKE', savedName, r
   if (savedName) dom.window.localStorage.setItem('loom.name', savedName);
   const calls = [];
   Object.assign(dom.window, {
-    esc, ago, roomHref,
+    esc, ago, roomHref, historyWarning,
     readHearthPerson: async name => { calls.push(name); return reader ? reader(name) : card; },
   });
   dom.window.eval(script);
@@ -141,7 +141,8 @@ test('missing names do not request a card; a saved name can open one', async t =
 
 test('unavailable history is visible and a failed read can retry', async t => {
   const partial = await page(t, { card: { ...fixture(), incomplete: true, unavailable: ['#missing'] } });
-  assert.match(partial.document.querySelector('#read-status').textContent, /history could not be read/);
+  assert.equal(partial.document.querySelector('#read-status').textContent,
+    '1 room could not be read. This card may be missing logs or bots.');
   assert.equal(partial.document.querySelector('#retry').hidden, false);
   let fail = true;
   const failed = await page(t, { reader: () => { if (fail) throw new Error('offline'); return fixture(); } });
@@ -153,6 +154,19 @@ test('unavailable history is visible and a failed read can retry', async t => {
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(failed.document.querySelector('#read-status').textContent, '');
   assert.equal(failed.document.querySelectorAll('#posts article').length, 3);
+});
+
+test('person warnings count failed and trimmed rooms separately and keep readable posts', async t => {
+  const trimmed = await page(t, { card: { ...fixture(), incomplete: true, trimmed: ['#trimmed'] } });
+  assert.equal(trimmed.document.querySelector('#read-status').textContent,
+    '1 room had trimmed history. This card may be missing logs or bots.');
+  assert.equal(trimmed.document.querySelector('#retry').hidden, true);
+  assert.equal(trimmed.document.querySelectorAll('#posts article').length, 3);
+  const mixed = await page(t, { card: { ...fixture(), incomplete: true,
+    unavailable: ['#missing-1', '#missing-2'], trimmed: ['#trimmed-1', '#trimmed-2'] } });
+  assert.equal(mixed.document.querySelector('#read-status').textContent,
+    '2 rooms could not be read. 2 rooms had trimmed history. This card may be missing logs or bots.');
+  assert.equal(mixed.document.querySelector('#retry').hidden, false);
 });
 
 test('names, rooms and post contents render as text and unsafe media stays unlinked', async t => {

@@ -140,6 +140,6 @@ export async function readHearthLedger({ request = fetch, now } = {}) {
     if (!threads.length) throw new Error('The Loom could not read this ledger.');
   }
   return { rows: ledgerRows(threads, { now: asOf }), asOf, readRooms: threads.length,
-    incomplete: data.logs.length >= 400 || unavailable.length > 0 || trimmed.length > 0,
+    incomplete: unavailable.length > 0 || trimmed.length > 0,
     unavailable: unavailable.sort(), trimmed: trimmed.sort() };
 }
