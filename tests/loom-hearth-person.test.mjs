@@ -117,8 +117,8 @@ test('compact room reads preserve full human posts and only the bot metadata the
   assert.deepEqual(compactCard, fullCard);
 });
 
-test('person reader uses bounded Hearth batches, includes old rooms, and discloses failed or trimmed reads', async () => {
-  const logs = Array.from({ length: 19 }, (_, i) => ({ kind: 'topic', address: '#room' + i, updatedAt: '2020-01-01T00:00:00Z' }));
+test('person reader uses bounded Hearth batches and discloses failed or trimmed reads', async () => {
+  const logs = Array.from({ length: 19 }, (_, i) => ({ kind: 'topic', address: '#room' + String(i).padStart(2, '0'), updatedAt: new Date(NOW).toISOString() }));
   const batches = [];
   let pending = 0, peak = 0;
   async function request(path) {
@@ -130,7 +130,7 @@ test('person reader uses bounded Hearth batches, includes old rooms, and disclos
     peak = Math.max(peak, ++pending);
     await new Promise(resolve => setTimeout(resolve, 1));
     pending--;
-    if (rooms.includes('#room8')) return new Response(null, { status: 503 });
+    if (rooms.includes('#room08')) return new Response(null, { status: 503 });
     return Response.json({ ok: true, rooms: rooms.map(address => ({ address, key: address.slice(1), state: 'read',
       trimmed: address === '#room18', messages: address === '#room18' ? [post('latest-person', human)] : [] })) });
   }
@@ -142,6 +142,72 @@ test('person reader uses bounded Hearth batches, includes old rooms, and disclos
   assert.deepEqual(card.trimmed, ['#room18']);
   assert.equal(card.incomplete, true);
   assert.equal(card.posts[0].id, 'latest-person');
+});
+
+test('person reads include the seven-day boundary and unknown dates, and disclose skipped old rooms', async () => {
+  const since = NOW - 7 * HEARTH_DAY;
+  const logs = [
+    { kind: 'topic', address: '#old', updatedAt: new Date(since - 1).toISOString() },
+    { kind: 'topic', address: '#boundary', updatedAt: new Date(since).toISOString() },
+    { kind: 'handle', address: '@recent', updatedAt: new Date(NOW).toISOString() },
+    { kind: 'topic', address: '#missing-date' },
+    { kind: 'topic', address: '#invalid-date', updatedAt: 'unknown' },
+  ];
+  const reads = [];
+  const request = async path => {
+    if (path.includes('compact')) return Response.json({ ok: true, kvBound: true, logs });
+    const rooms = new URL(path, 'https://pointcast.xyz').searchParams.getAll('room');
+    reads.push(...rooms);
+    return Response.json({ ok: true, rooms: rooms.map(address => ({ address, state: 'read', messages: [], trimmed: false })) });
+  };
+  const result = await readHearthPerson('mike', { request, now: NOW });
+  assert.deepEqual([...reads].sort(), ['#boundary', '#invalid-date', '#missing-date', '@recent'].sort());
+  assert.equal(result.readRooms, 4);
+  assert.equal(result.incomplete, true);
+  assert.deepEqual(result.unavailable, []);
+  assert.deepEqual(result.trimmed, []);
+});
+
+test('an old-only directory performs no room reads and keeps partial-history disclosure', async () => {
+  let requests = 0;
+  const request = async path => {
+    requests++;
+    assert.equal(path, '/api/loom?compact=1');
+    return Response.json({ ok: true, kvBound: true, logs: [
+      { kind: 'topic', address: '#old', updatedAt: new Date(NOW - 8 * HEARTH_DAY).toISOString() },
+    ] });
+  };
+  const result = await readHearthPerson('mike', { request, now: NOW });
+  assert.equal(requests, 1);
+  assert.equal(result.readRooms, 0);
+  assert.equal(result.incomplete, true);
+  assert.deepEqual(result.posts, []);
+  assert.deepEqual(result.bots, []);
+  assert.deepEqual(result.unavailable, []);
+  assert.deepEqual(result.trimmed, []);
+});
+
+test('room activity reordering preserves person batch membership and order', async () => {
+  const logs = Array.from({ length: 19 }, (_, i) => ({
+    kind: 'topic', address: '#room' + i, updatedAt: new Date(NOW - i * 1000).toISOString(),
+  }));
+  const batchesFor = async directory => {
+    const batches = [];
+    const request = async path => {
+      if (path.includes('compact')) return Response.json({ ok: true, kvBound: true, logs: directory });
+      const rooms = new URL(path, 'https://pointcast.xyz').searchParams.getAll('room');
+      batches.push(rooms);
+      return Response.json({ ok: true, rooms: rooms.map(address => ({ address, state: 'read', messages: [], trimmed: false })) });
+    };
+    const result = await readHearthPerson('mike', { request, now: NOW });
+    assert.equal(result.incomplete, false);
+    assert.equal(result.readRooms, logs.length);
+    return batches;
+  };
+  const first = await batchesFor(logs);
+  const reordered = await batchesFor([...logs].reverse().map(room => ({ ...room, updatedAt: new Date(NOW).toISOString() })));
+  assert.deepEqual(first.map(batch => batch.length), [8, 8, 3]);
+  assert.deepEqual(reordered, first);
 });
 
 test('an unbound directory or an absent name cannot become an empty person card', async () => {

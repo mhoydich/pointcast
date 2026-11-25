@@ -1,9 +1,9 @@
 import { hearthActivity, HEARTH_BATCH } from './hearth-day.mjs';
 import { addressKey, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
-import { personThread } from './hearth-person.mjs';
+import { personName, personThread } from './hearth-person.mjs';
 
-export async function serveHearthActivity(request, kv, now = Date.now()) {
+export async function serveHearthActivity(request, kv, now = Date.now(), { cache, waitUntil } = {}) {
   const query = new URL(request.url).searchParams;
   const params = query.getAll('room');
   const person = query.get('person');
@@ -22,6 +22,19 @@ export async function serveHearthActivity(request, kv, now = Date.now()) {
   } catch {
     return Response.json({ ok: false }, { status: 400 });
   }
+  let cacheKey;
+  if (person !== null && cache) {
+    const url = new URL('/api/loom-hearth', request.url);
+    url.searchParams.set('person', personName(person));
+    // A person has several batches. Preserve room order, but discard unrelated
+    // query parameters and request headers so they cannot fragment the cache.
+    for (const address of addresses) url.searchParams.append('room', address);
+    cacheKey = new Request(url);
+    try {
+      const cached = await cache.match(cacheKey);
+      if (cached) return cached;
+    } catch { /* A cache outage must not prevent a public room read. */ }
+  }
   const rooms = await Promise.all(addresses.map(async address => {
     try {
       const key = await addressKey(address);
@@ -37,7 +50,14 @@ export async function serveHearthActivity(request, kv, now = Date.now()) {
     }
   }));
   const partial = rooms.some(room => room.state === 'unavailable');
-  return Response.json({ ok: true, rooms }, {
-    headers: { 'Cache-Control': partial ? 'no-store' : 'public, max-age=30' },
+  const response = Response.json({ ok: true, rooms }, {
+    headers: { 'Cache-Control': partial ? 'no-store'
+      : person !== null ? 'public, max-age=0, s-maxage=60' : 'public, max-age=30' },
   });
+  if (cacheKey && !partial) {
+    const store = cache.put(cacheKey, response.clone()).catch(() => {});
+    if (waitUntil) waitUntil(store);
+    else await store;
+  }
+  return response;
 }
