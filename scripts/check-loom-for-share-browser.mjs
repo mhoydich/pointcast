@@ -43,9 +43,11 @@ try{
   assert.match(page.url(),/\/loom\?for=mike#for-you$/);
   assert.match(await page.locator('#fyPublicView').textContent(),/Public For you for @mike/);
   assert.equal(await page.evaluate(()=>localStorage.getItem('loom.name')),'tester');
-  assert.equal(await page.locator('.tiles [data-fyact^="tile-"]').count(),6);
-  assert.equal(await page.locator('[data-fyact="tile-unanswered"] .tn').textContent(),'0');
-  assert.ok(await page.locator('.gate').count()>0,'existing approval gate remains');
+  assert.equal(await page.locator('.tiles, .tile').count(),0);
+  assert.equal(await page.locator('loom-recap .eyebrow').textContent(),'While you were out');
+  assert.equal(await page.locator('.upnext .gate').count(),1,'one approval ask leads');
+  assert.equal(await page.locator('#fyp-yes').evaluate(e=>e.open),false,'remaining asks start folded');
+  assert.equal(await page.locator('#fyp-unanswered').count(),0,'empty recent activity has no numbered panel');
   assert.equal(await page.locator('#fyOlder').evaluate(e=>e.open),false);
   await page.locator('#fyOlder summary').focus(); await page.keyboard.press('Enter');
   assert.equal(await page.locator('#fyOlder').evaluate(e=>e.open),true);
@@ -58,5 +60,5 @@ try{
   assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);
   await page.close();
  }
- console.log('PASS: 390/1440px browser share redirect, preserved writer/dashboard/gate, older-only fold, keyboard expansion/show all, no overflow/errors/writes.');
+ console.log('PASS: 390/1440px browser share redirect, preserved writer, Hearth recap header, no number tiles, one leading ask, older-only fold, keyboard expansion/show all, no overflow/errors/writes.');
 }finally{if(browser)await browser.close();await new Promise(r=>server.close(r));}
