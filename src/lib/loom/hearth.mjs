@@ -40,6 +40,7 @@ export function ago(at, now = Date.now()) {
 }
 
 export const roomHref = (address) => `/loom/hearth/room?to=${encodeURIComponent(address)}`;
+export const personHref = (name) => `/loom/hearth/person?name=${encodeURIComponent(name)}`;
 
 /** Rooms are ordered by last-day volume. Use original post times for return visits. */
 export function whileYouWereOut({ active, unavailable, since, asOf }, seenAt = null) {
