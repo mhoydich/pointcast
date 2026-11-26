@@ -81,7 +81,11 @@ export function loomBrief(active = [], { done: doneLimit = 5, open: openLimit = 
       });
   };
   const done = gather('done'), open = gather('open');
-  return { done: done.slice(0, doneLimit), open: open.slice(0, openLimit), doneCount: done.length, openCount: open.length };
+  // Rooms report how many items they left out; those make the counts lower bounds.
+  const more = key => active.reduce((sum, room) => sum + (Number.isInteger(room.brief?.[key]) && room.brief[key] > 0 ? room.brief[key] : 0), 0);
+  const doneMore = more('doneMore'), openMore = more('openMore');
+  return { done: done.slice(0, doneLimit), open: open.slice(0, openLimit),
+    doneCount: done.length + doneMore, openCount: open.length + openMore, atLeast: doneMore + openMore > 0 };
 }
 
 /** The headline counts work, not posts. Falls back to the recap when no room reported any. */
@@ -91,8 +95,9 @@ export function briefHeadline(brief, snapshot, seenAt = null) {
   const things = n => `${n} ${n === 1 ? 'thing' : 'things'}`;
   const person = snapshot.active.find(room => room.human);
   const lead = person ? `${person.humanName || 'Someone'} spoke in ${person.address}. ` : '';
-  if (done && open) return `${lead}${things(done)} done, ${open} still open.`;
-  return done ? `${lead}${things(done)} done in the last day.` : `${lead}${things(open)} still open.`;
+  const least = brief.atLeast ? (lead ? 'at least ' : 'At least ') : '';
+  if (done && open) return `${lead}${least}${things(done)} done, ${open} still open.`;
+  return done ? `${lead}${least}${things(done)} done in the last day.` : `${lead}${least}${things(open)} still open.`;
 }
 
 /** Read direct posts here. The classic room keeps the complete mirrored and system log. */

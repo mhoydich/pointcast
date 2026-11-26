@@ -37,8 +37,10 @@ test('a room brief ignores hidden, withdrawn, mirrored and collator posts and ca
     { ...post('collator', 'DONE robot roll-up', 1), from: { name: 'collator', kind: 'robot' } },
     ...[1, 2, 3, 4, 5].map(n => post('A', `DONE real job ${n}`, n)),
   ];
-  const brief = roomBrief(messages, { log, now: NOW });
+  const brief = roomBrief(messages, { log, now: NOW, limit: 3 });
   assert.deepEqual(brief.done.map(i => i.text), ['real job 1', 'real job 2', 'real job 3']);
+  assert.equal(brief.doneMore, 2, 'what the cap left out is counted');
+  assert.equal(roomBrief(messages, { log, now: NOW }).doneMore, undefined);
 });
 
 test('front-page lines keep the sentence after a card or PR id, full names, and skip room-wide questions', () => {
@@ -84,4 +86,55 @@ test('the headline counts work and names a person; with no reported work it is t
   assert.equal(briefHeadline({ doneCount: 1, openCount: 0 }, snapshot), 'Mike spoke in #officenoun. 1 thing done in the last day.');
   assert.equal(briefHeadline({ doneCount: 0, openCount: 1 }, bots), '1 thing still open.');
   assert.equal(briefHeadline({ doneCount: 0, openCount: 0 }, bots), 'Astra added a log to #loom-v2.');
+});
+
+test('quoted or fenced merge examples are not reports of finished work', () => {
+  const quoted = [post('A', '> PR #42 was merged: https://github.com/mhoydich/pointcast/pull/42', 1)];
+  const fenced = [post('A', 'Example\n```\nPR #42 was merged: https://github.com/mhoydich/pointcast/pull/42\n```', 1)];
+  const inline = [post('A', 'Write `DONE V2-3` when you finish.', 1)];
+  for (const messages of [quoted, fenced, inline]) assert.deepEqual(roomBrief(messages, { log, now: NOW }), { done: [], open: [] });
+  const real = [post('A', '> an earlier note\nPR #42 was merged: https://github.com/mhoydich/pointcast/pull/42', 1)];
+  assert.equal(roomBrief(real, { log, now: NOW }).done.length, 1);
+});
+
+test('a claim closes on its own completion, whatever the marker, and never on an unrelated one', () => {
+  const claim = post('Sol', 'MINE #42 · Fix navigation', 3);
+  const shipped = post('Sol', 'SHIPPED #42 · Fix navigation', 2, { parent: claim.id });
+  let brief = roomBrief([claim, shipped], { log, now: NOW });
+  assert.deepEqual([brief.done.length, brief.open.length], [1, 0], 'the same task is not both done and open');
+  const a = post('Sol', 'MINE A', 5), b = post('Sol', 'MINE B', 4), doneB = post('Sol', 'DONE B', 3);
+  brief = roomBrief([a, b, doneB], { log, now: NOW });
+  assert.deepEqual(brief.open.map(i => i.text), ['A']);
+  const v23 = post('Sol', 'MINE V2-3 · Building the runner', 5), v24 = post('Sol', 'DONE V2-4 · Ledger', 4);
+  assert.equal(roomBrief([v23, v24], { log, now: NOW }).open.length, 1, 'another card id closes nothing');
+  assert.equal(roomBrief([v23, post('Sol', 'MERGED V2-3 · runner', 1)], { log, now: NOW }).open.length, 0);
+  assert.equal(roomBrief([v23, post('Astra', 'DONE V2-3 · runner', 1)], { log, now: NOW }).open.length, 1, 'someone else cannot close it');
+  assert.equal(roomBrief([post('Sol', 'DONE V2-3', 6), v23], { log, now: NOW }).open.length, 1, 'an earlier completion closes nothing');
+});
+
+test('stamped or bolded NEEDS asks still reach the front page', () => {
+  for (const body of ['NEEDS MIKE · Choose a room', 'Nov 25 · Sol, AI agent · NEEDS MIKE · Choose a room', '**NEEDS MIKE** · Choose a room']) {
+    assert.deepEqual(roomBrief([post('Sol', body, 1)], { log, now: NOW }).open.map(i => i.text), ['Choose a room'], body);
+  }
+  assert.deepEqual(roomBrief([post('Sol', '> NEEDS MIKE · an example', 1)], { log, now: NOW }).open, []);
+});
+
+test('room to headline: more work than the cap is counted, and said to be a floor when cut', () => {
+  const six = [1, 2, 3, 4, 5, 6].map(n => post('A', `DONE job ${n}`, n));
+  const full = loomBrief([{ address: '#work', brief: roomBrief(six, { log, now: NOW }) }]);
+  assert.equal(full.doneCount, 6);
+  assert.equal(full.done.length, 5);
+  const bots = { active: [{ address: '#work', human: false, lastName: 'A', lastAt: hAgo(1) }], unavailable: [], since: NOW - 86400000, asOf: NOW };
+  assert.equal(briefHeadline(full, bots), '6 things done in the last day.');
+  const cut = loomBrief([{ address: '#work', brief: roomBrief(six, { log, now: NOW, limit: 4 }) }]);
+  assert.equal(cut.doneCount, 6);
+  assert.equal(briefHeadline(cut, bots), 'At least 6 things done in the last day.');
+});
+
+test('six hundred unresolved claims stay cheap to classify', () => {
+  const claims = Array.from({ length: 600 }, (_, i) => post('Bot ' + (i % 7), `MINE job ${i}`, 1 + i / 100));
+  const started = performance.now();
+  const brief = roomBrief(claims, { log, now: NOW });
+  assert.equal(brief.open.length + brief.openMore, 600);
+  assert.ok(performance.now() - started < 250, 'one pass, not one scan per claim');
 });

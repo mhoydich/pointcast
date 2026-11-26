@@ -5,14 +5,21 @@ import { splitStamp } from './stamp.mjs';
 const DAY = 86400000;
 const SHIPPED = /^(?:DONE|SHIPPED|MERGED|RELEASE\s+RECEIPT)\b/i;
 const MINE = /^MINE\b/i;
-const DONE = /^DONE\b/i;
-const time = m => Date.parse(m.at) || 0;
+const QUOTE_OR_CODE = /```[\s\S]*?(?:```|(?![\s\S]))|~~~[\s\S]*?(?:~~~|(?![\s\S]))|^[ \t]*>[^\n]*|`[^`\n]*`/gm;
+const TASK_ID = /^(#?[A-Za-z]{0,8}-?\d[\w-]{0,8})(?=$|[\s·:,.])/;
+const times = new WeakMap();
+const time = m => {
+  if (!times.has(m)) times.set(m, Date.parse(m.at) || 0);
+  return times.get(m);
+};
 const newest = (a, b) => time(b) - time(a) || (b.seq || 0) - (a.seq || 0);
 const identity = value => String(value || 'anonymous').trim().toLowerCase().replace(/\s+/g, ' ');
 const sameSender = (a, b) => (a.from?.kind || 'agent') === (b.from?.kind || 'agent') &&
   (a.from?.address && b.from?.address ? identity(a.from.address) === identity(b.from.address)
     : identity(a.from?.name) === identity(b.from?.name));
-const content = m => splitStamp(String(m.body || m.poll?.question || '').trim()).text
+// The author's own words: quoted passages and code are examples, not reports.
+const own = m => String(m.body || m.poll?.question || '').replace(QUOTE_OR_CODE, '').trim();
+const content = m => splitStamp(own(m)).text
   .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+)/, '').replace(/[*_]/g, '').trim();
 const webUrl = value => {
   try {
@@ -21,7 +28,7 @@ const webUrl = value => {
   } catch { return null; }
 };
 const urls = m => [...new Set([
-  ...(String(m.body || '').match(/https?:\/\/[^\s<>"']+/gi) || []),
+  ...(own(m).match(/https?:\/\/[^\s<>"']+/gi) || []),
   ...(m.links || []), ...(m.cites || []),
 ].map(webUrl).filter(Boolean))];
 const postHref = (m, log) => '/loom?to=' + encodeURIComponent(log.address || (log.key ? `loom:${log.key}` : '#loom'))
@@ -50,8 +57,10 @@ function receipt(m) {
 
 function askOwners(m) {
   const body = String(m.body || m.poll?.question || '');
-  const explicit = body.trim().match(/^NEEDS\s+@?([A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*)\b/i);
-  if (explicit && normHandle(explicit[1]) !== 'your' && !/^NEEDS\s+@?[\w.-]+['’]s\s+yes\b/i.test(body.trim())) return [normHandle(explicit[1])];
+  // Stamps and emphasis are display syntax; "NEEDS MIKE" reads the same with or without them.
+  const plain = content(m);
+  const explicit = plain.match(/^NEEDS\s+@?([A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*)\b/i);
+  if (explicit && normHandle(explicit[1]) !== 'your' && !/^NEEDS\s+@?[\w.-]+['’]s\s+yes\b/i.test(plain)) return [normHandle(explicit[1])];
   // The shared classifier still decides whether these candidates are actual
   // requests. Quoted examples, UI labels and status receipts stay excluded.
   const candidates = new Set([
@@ -66,12 +75,16 @@ function askOwners(m) {
   return asksForGoAhead(m, GO_AHEAD_PHRASES.map(make => make('__room__')), '__room__', true) ? [''] : [];
 }
 
-function askClosed(m, owners, posts) {
+function childIndex(posts) {
   const children = new Map();
   for (const p of posts) if (p.parent) {
     if (!children.has(p.parent)) children.set(p.parent, []);
     children.get(p.parent).push(p);
   }
+  return children;
+}
+
+function askClosed(m, owners, children) {
   const seen = new Set([m.id]), stack = [...(children.get(m.id) || [])];
   while (stack.length) {
     const reply = stack.pop();
@@ -82,6 +95,42 @@ function askClosed(m, owners, posts) {
     stack.push(...(children.get(reply.id) || []));
   }
   return false;
+}
+
+const task = text => {
+  const rest = text.replace(MINE, '').replace(SHIPPED, '').replace(/^\s*[·:—–-]+\s*/, '').trim();
+  const id = rest.match(TASK_ID)?.[1];
+  return { id: id ? id.replace(/^#/, '').toLowerCase() : '',
+    words: rest.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean).slice(0, 4).join(' ') };
+};
+
+/** Which MINE claims their own sender later reported finished. One pass, oldest
+ * first. A completion closes the claim it replies under, else the claim with
+ * the same card or PR id, else the claim with the same opening words, so
+ * "DONE B" never clears an unrelated "MINE A".
+ */
+function closedClaims(posts) {
+  const closed = new Set(), claims = [], byId = new Map(posts.map(p => [p.id, p]));
+  for (let i = posts.length - 1; i >= 0; i--) {
+    const m = posts[i], text = content(m);
+    if (MINE.test(text)) { claims.push({ post: m, ...task(text) }); continue; }
+    if (!claims.length || !SHIPPED.test(text)) continue;
+    const done = task(text);
+    const mine = claim => sameSender(claim.post, m) && newest(m, claim.post) < 0;
+    let at = -1;
+    for (let parent = byId.get(m.parent), hops = 0; parent && at < 0 && hops < 50; parent = byId.get(parent.parent), hops++) {
+      at = claims.findIndex(claim => claim.post.id === parent.id && mine(claim));
+    }
+    if (at < 0 && done.id) at = claims.findIndex(claim => claim.id === done.id && mine(claim));
+    if (at < 0 && done.words) {
+      at = claims.findIndex(claim => mine(claim) && claim.words && !(done.id && claim.id && done.id !== claim.id)
+        && (claim.words.startsWith(done.words) || done.words.startsWith(claim.words)));
+    }
+    // A bare "DONE" with nothing after it can only mean the sender's one open claim.
+    if (at < 0 && !done.id && !done.words && claims.filter(mine).length === 1) at = claims.findIndex(mine);
+    if (at >= 0) closed.add(claims.splice(at, 1)[0].post.id);
+  }
+  return closed;
 }
 
 /** A fuller line for the front page: a leading card or PR id keeps the sentence after it. */
@@ -102,10 +151,11 @@ function work(recent, posts, log, { say = phrase, roomWide = true } = {}) {
   const item = (m, text, href) => ({ text, href, at: m.at, by: who(m) });
   const shipped = recent.filter(receipt).map(m => item(m,
     say(content(m).replace(SHIPPED, ''), 'Work completed'), urls(m)[0] || postHref(m, log)));
+  const closed = closedClaims(posts), children = childIndex(posts);
   const open = recent.filter(m => {
-    if (MINE.test(content(m))) return !posts.some(p => newest(p, m) < 0 && sameSender(p, m) && DONE.test(content(p)));
+    if (MINE.test(content(m))) return !closed.has(m.id);
     const owners = askOwners(m).filter(owner => roomWide || owner);
-    return owners.length && !askClosed(m, owners, posts);
+    return owners.length && !askClosed(m, owners, children);
   }).map(m => item(m,
     say(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting'), postHref(m, log)));
   return { shipped, open };
@@ -116,11 +166,14 @@ function work(recent, posts, log, { say = phrase, roomWide = true } = {}) {
  * to nobody in particular stays in its room; the front page lists claims and
  * asks that name someone.
  */
-export function roomBrief(messages = [], { log = {}, now = Date.now(), limit = 3 } = {}) {
+export function roomBrief(messages = [], { log = {}, now = Date.now(), limit = 12 } = {}) {
   const posts = messages.filter(m => m && !m.hidden && !m.withdrawn && !m.via && !isCollator(m.from) && time(m) <= now)
     .sort(newest);
   const { shipped, open } = work(posts.filter(m => time(m) >= now - DAY), posts, log, { say: tell, roomWide: false });
-  return { done: shipped.slice(0, limit), open: open.slice(0, limit) };
+  // Anything past the limit is counted, so a headline never passes a sample off as a total.
+  return { done: shipped.slice(0, limit), open: open.slice(0, limit),
+    ...(shipped.length > limit ? { doneMore: shipped.length - limit } : {}),
+    ...(open.length > limit ? { openMore: open.length - limit } : {}) };
 }
 
 /** Last day of direct posts, or the newest twenty when that window is empty.
