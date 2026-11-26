@@ -200,33 +200,45 @@ test('a quick answer from For you takes a second tap', async () => {
 // ---- OFF-34: the top of the page on a phone ----
 const fy = (w) => w.document.getElementById('fyDyn');
 
-test('no name, plain visit: compact welcome card markup, one-line "Waiting on you" link', async () => {
+test('no name, desktop visit: welcome and For you name link remain available', async () => {
   const w = await page(memoryKv(), { name: '' });
   const card = fy(w).querySelector('.card.wel');
   assert.ok(card, 'card shows for a new visitor');
-  const tog = card.querySelector('#welToggle');
-  assert.equal(tog.tagName, 'SPAN', 'inert plain heading text above 640px');
-  assert.equal(tog.hasAttribute('aria-expanded'), false);
-  const ws = await page(memoryKv(), { name: '', small: true });
-  const t2 = fy(ws).querySelector('#welToggle');
-  assert.equal(t2.tagName, 'BUTTON');
-  assert.equal(t2.getAttribute('aria-expanded'), 'false');
-  assert.equal(t2.getAttribute('aria-controls'), 'welBody');
-  t2.click();
-  assert.equal(fy(ws).querySelector('#welToggle').getAttribute('aria-expanded'), 'true');
-  assert.ok(fy(ws).querySelector('.card.wel').hasAttribute('data-open'));
+  assert.equal(card.querySelector('#welH').textContent, 'What this is');
   assert.ok(card.querySelector('#welStart') && card.querySelector('#welBots'));
-  assert.equal(fy(w).querySelector('h2.sect'), null, 'no heading + sentence + big button');
   const link = fy(w).querySelector('#fyName');
   assert.equal(link.className, 'linkbtn');
   assert.match(link.textContent, /Add your name to see what is waiting on you/);
-  assert.match(CSS, /@media \(max-width: 640px\)[\s\S]*\.card\.wel:not\(\[data-open\]\) \.welbody/);
+});
+
+test('first phone visit explains the Loom once and browses without setting a name or posting', async () => {
+  const kv = memoryKv();
+  const w = await page(kv, { name: '', small: true });
+  const app = w.document.getElementById('app');
+  const card = fy(w).querySelector('.wel-mobile');
+  assert.ok(card);
+  assert.equal(card.querySelectorAll('p').length, 1);
+  assert.match(card.querySelector('p').textContent, /public message board where people and AI agents talk/);
+  assert.deepEqual(texts(w, '#fyDyn button, #fyDyn a'), ['Browse threads']);
+  const browse = card.querySelector('button');
+  browse.focus();
+  browse.click();
+  assert.equal(app.dataset.view, 'directory');
+  assert.equal(app.hasAttribute('data-welcome'), false);
+  assert.equal(w.document.activeElement, w.document.querySelector('#tabs [data-tab="directory"]'));
+  assert.ok(texts(w, '#dirList .row .label').includes('#loom'));
+  assert.equal(w.localStorage.getItem('loom.name'), null);
+  assert.equal(w.localStorage.getItem('loom.welcome'), null);
+  assert.equal(kv.map.size, 0);
+  w.document.querySelector('#tabs [data-tab="for-you"]').click();
+  assert.equal(fy(w).querySelector('.wel-mobile'), null);
+  assert.ok(fy(w).querySelector('#fyName'));
 });
 
 test('the welcome card never shows on a ?to= link or once there is a name', async () => {
-  const onLink = await page(memoryKv(), { path: '/loom?to=%23court', name: '' });
+  const onLink = await page(memoryKv(), { path: '/loom?to=%23court', name: '', small: true });
   assert.equal(fy(onLink).querySelector('.card.wel'), null);
-  const named = await page(memoryKv(), { name: 'sam' });
+  const named = await page(memoryKv(), { name: 'sam', small: true });
   assert.equal(fy(named).querySelector('.card.wel'), null);
 });
 
