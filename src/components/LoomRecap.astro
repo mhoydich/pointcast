@@ -1,0 +1,40 @@
+<!-- The interactive reader mounts this element as its For You queues refresh. -->
+<script>
+  import { readHearth } from '../lib/loom/hearth-read.mjs';
+  import { whileYouWereOut } from '../lib/loom/hearth.mjs';
+
+  // One snapshot per page visit, shared across dashboard redraws. Reading a
+  // public For You page never changes the visitor's Hearth seen mark.
+  let recap: Promise<string> | undefined;
+  function readRecap() {
+    if (!recap) {
+      let seenAt = null;
+      try { seenAt = localStorage.getItem('hearth.seenAt'); } catch { /* private mode */ }
+      recap = readHearth().then(snapshot => whileYouWereOut(snapshot, seenAt));
+    }
+    return recap;
+  }
+
+  class LoomRecap extends HTMLElement {
+    connectedCallback() {
+      const retry = this.querySelector<HTMLButtonElement>('[data-recap-retry]');
+      if (retry) retry.onclick = () => { recap = undefined; this.load(); };
+      this.load();
+    }
+
+    async load() {
+      const line = this.querySelector('h2');
+      const retry = this.querySelector<HTMLButtonElement>('[data-recap-retry]');
+      if (!line || !retry) return;
+      line.textContent = 'Lighting the fires…';
+      retry.hidden = true;
+      try {
+        line.textContent = await readRecap();
+      } catch {
+        line.textContent = 'The Loom couldn’t read the room fires.';
+        retry.hidden = false;
+      }
+    }
+  }
+  customElements.define('loom-recap', LoomRecap);
+</script>
