@@ -370,6 +370,26 @@ function validateFrom(raw, verifiedAgent) {
   return out;
 }
 
+// Signed task cards (Loom v2, V2-1). A card is the fixed shape a runner may pick up and work on.
+// The card itself is plain data any sender can post; it only counts as SIGNED when the server saw a
+// verified PointCast agent key on the append (from.verified). That flag is computed on read in fold.mjs,
+// never accepted from a client. Runners take signed cards and ignore everything else on the board.
+export const CARD_ID = /^[A-Z][A-Z0-9]{0,7}-[0-9]{1,4}[a-z]?$/;
+export const CARD_CEILING_MIN = 1000;
+export const CARD_CEILING_MAX = 5000000;
+function validateCard(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AddressError('card_invalid');
+  const id = clean(raw.id, 16);
+  if (!CARD_ID.test(id)) throw new AddressError('card_id_invalid');
+  const scope = clean(raw.scope, 280), target = clean(raw.target, 200), done = clean(raw.done, 280);
+  if (!scope) throw new AddressError('card_scope_required');
+  if (!target) throw new AddressError('card_target_required');
+  if (!done) throw new AddressError('card_done_required');
+  const ceiling = raw.ceiling;
+  if (typeof ceiling !== 'number' || !Number.isInteger(ceiling) || ceiling < CARD_CEILING_MIN || ceiling > CARD_CEILING_MAX) throw new AddressError('card_ceiling_range');
+  return { id, scope, target, done, ceiling };
+}
+
 function validateMessage(body, text) {
   const kind = KINDS.has(body.kind) ? body.kind : 'note';
   const out = { kind, body: text };
@@ -391,6 +411,7 @@ function validateMessage(body, text) {
     out.kind = 'poll';
     out.body ||= question;
   }
+  if (body.card !== undefined && body.card !== null) out.card = validateCard(body.card);
   if (!out.body && !out.media) throw new AddressError('body_required');
   if (body.confidence !== undefined && body.confidence !== null) {
     const c = Number(body.confidence);
