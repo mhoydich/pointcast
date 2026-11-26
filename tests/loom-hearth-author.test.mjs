@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { esc, flameSvg, roomView, personHref, isPerson, ago } from '../src/lib/loom/hearth.mjs';
+import { esc, flameSvg, roomView, personHref, isPerson, ago, cardChipHtml } from '../src/lib/loom/hearth.mjs';
 import { hearthActivity } from '../src/lib/loom/hearth-day.mjs';
 
 const source = readFileSync(new URL('../src/pages/loom/hearth/room.astro', import.meta.url), 'utf8');
@@ -44,7 +44,7 @@ function room(initial = {}, postOK = true) {
     localStorage: { getItem: key => profile.get(key) ?? null, setItem: (key, value) => profile.set(key, value) },
     Date: class extends Date { static now() { return NOW; } },
     crypto: { randomUUID: () => 'offline-fixture' }, URLSearchParams, URL, AbortSignal,
-    fetch, esc, flameSvg, roomView, personHref, isPerson, ago, hearthActivity,
+    fetch, esc, flameSvg, roomView, personHref, isPerson, ago, cardChipHtml, hearthActivity,
   });
   return { node, profile, requests, get focused() { return focused; },
     async submit() { await node('log-form').events.submit({ preventDefault() {} }); },

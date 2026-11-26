@@ -75,6 +75,19 @@ function roomNote(messages, log) {
 }
 
 /** Read direct posts here. The classic room keeps the complete mirrored and system log. */
+/** A work card's chip for the room view: id, token ceiling, and whether the server counts it as signed.
+ *  Only the server's signed flag (from a verified PointCast agent key) earns the signed look. */
+export function cardChipHtml(m) {
+  const card = m && m.card && typeof m.card === 'object' ? m.card : null;
+  if (!card || !card.id) return '';
+  const signed = m.signed === true;
+  const ceiling = Number.isFinite(card.ceiling) ? (card.ceiling >= 1e6 ? `${+(card.ceiling / 1e6).toFixed(1)}M` : `${Math.round(card.ceiling / 1000)}K`) : '';
+  const label = `${card.id}${ceiling ? ` · ${ceiling} tokens` : ''} · ${signed ? 'signed' : 'unsigned'}`;
+  const tip = signed ? 'A signed work card: posted with a verified PointCast agent key. Runners may pick it up.'
+    : 'An unsigned work card. Runners ignore it until a verified desk posts it.';
+  return `<span class="hearth-card-chip${signed ? ' signed' : ''}" title="${esc(tip)}">${esc(label)}</span>`;
+}
+
 export function roomView(messages = [], { log = {} } = {}) {
   const visible = messages.filter(m => m && !m.hidden && !m.withdrawn)
     .sort((a, b) => (b.seq || 0) - (a.seq || 0) || time(b.at) - time(a.at));

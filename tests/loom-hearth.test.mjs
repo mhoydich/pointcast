@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { flameSvg, ago, roomHref, personHref, whileYouWereOut, roomView, esc, MAX_FIRES } from '../src/lib/loom/hearth.mjs';
+import { flameSvg, ago, roomHref, personHref, whileYouWereOut, roomView, esc, MAX_FIRES, cardChipHtml } from '../src/lib/loom/hearth.mjs';
 
 const NOW = Date.parse('2026-11-21T19:00:00.000Z');
 const hAgo = (h) => new Date(NOW - h * 3600000).toISOString();
@@ -105,4 +105,16 @@ test('the Hearth pages share their shell while For You reuses only the recap log
   assert.match(recap, /import \{ readHearth \} from/);
   const css = readFileSync(new URL('../src/styles/hearth.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /^\.hearth[ ,{:]/m, 'no bare .hearth selector, which the classic page already uses');
+});
+
+test('room view card chip: only the server signed flag earns the signed look', () => {
+  const card = { id: 'V2-3', scope: 's', target: 't', done: 'd', ceiling: 400000 };
+  assert.equal(cardChipHtml({ body: 'plain' }), '');
+  const signed = cardChipHtml({ card, signed: true });
+  assert.match(signed, /class="hearth-card-chip signed"/);
+  assert.match(signed, /V2-3 · 400K tokens · signed/);
+  const unsigned = cardChipHtml({ card: { ...card, ceiling: 2500000 }, signed: 'true' });
+  assert.doesNotMatch(unsigned, /chip signed/);
+  assert.match(unsigned, /2\.5M tokens · unsigned/);
+  assert.doesNotMatch(cardChipHtml({ card: { ...card, id: '<b>x</b>' }, signed: true }), /<b>/);
 });
