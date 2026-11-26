@@ -84,6 +84,45 @@ function askClosed(m, owners, posts) {
   return false;
 }
 
+/** A fuller line for the front page: a leading card or PR id keeps the sentence after it. */
+function tell(value, fallback) {
+  const parts = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
+    .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*_`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
+    .split(/\n|\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
+    .filter(part => /[\p{L}\p{N}]/u.test(part));
+  if (!parts.length) return fallback;
+  const id = /^#?[A-Za-z]{0,8}-?\d[\w-]{0,8}$/.test(parts[0]) && parts[1] ? parts.shift() : '';
+  const text = (id ? id + ' · ' : '') + parts[0];
+  return text.length <= 120 ? text : text.slice(0, 117).replace(/\s+\S*$/, '') + '…';
+}
+const who = m => String(m.from?.name || 'Someone').replace(/\s+/g, ' ').trim().slice(0, 48) || 'Someone';
+
+/** Receipts and still-open claims or asks among `recent`, newest first. */
+function work(recent, posts, log, { say = phrase, roomWide = true } = {}) {
+  const item = (m, text, href) => ({ text, href, at: m.at, by: who(m) });
+  const shipped = recent.filter(receipt).map(m => item(m,
+    say(content(m).replace(SHIPPED, ''), 'Work completed'), urls(m)[0] || postHref(m, log)));
+  const open = recent.filter(m => {
+    if (MINE.test(content(m))) return !posts.some(p => newest(p, m) < 0 && sameSender(p, m) && DONE.test(content(p)));
+    const owners = askOwners(m).filter(owner => roomWide || owner);
+    return owners.length && !askClosed(m, owners, posts);
+  }).map(m => item(m,
+    say(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting'), postHref(m, log)));
+  return { shipped, open };
+}
+
+/** The front page's share of one room: what was reported done and what is
+ * still open in the last day only. Never falls back to older posts. A question
+ * to nobody in particular stays in its room; the front page lists claims and
+ * asks that name someone.
+ */
+export function roomBrief(messages = [], { log = {}, now = Date.now(), limit = 3 } = {}) {
+  const posts = messages.filter(m => m && !m.hidden && !m.withdrawn && !m.via && !isCollator(m.from) && time(m) <= now)
+    .sort(newest);
+  const { shipped, open } = work(posts.filter(m => time(m) >= now - DAY), posts, log, { say: tell, roomWide: false });
+  return { done: shipped.slice(0, limit), open: open.slice(0, limit) };
+}
+
 /** Last day of direct posts, or the newest twenty when that window is empty.
  * Lines have plain text for non-HTML readers and separately escaped link items.
  * Claims close on a later DONE by the same sender, regardless of thread nesting.
@@ -102,18 +141,9 @@ export function roomSummary(messages = [], { log = {}, now = Date.now() } = {}) 
   const names = [...humans, ...(bots ? [`${bots} ${bots === 1 ? 'bot' : 'bots'}`] : [])];
   const who = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names.at(-1) : names[0];
   const lines = who ? [{ kind: 'who', text: `${who} spoke.` }] : [];
-  const shipped = recent.filter(receipt).slice(0, 2).map(m => ({
-    text: phrase(content(m).replace(SHIPPED, ''), 'Work completed'),
-    href: urls(m)[0] || postHref(m, log),
-  }));
-  const open = recent.filter(m => {
-    if (MINE.test(content(m))) return !posts.some(p => newest(p, m) < 0 && sameSender(p, m) && DONE.test(content(p)));
-    const owners = askOwners(m);
-    return owners.length && !askClosed(m, owners, posts);
-  }).slice(0, 2).map(m => ({
-    text: phrase(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting'),
-    href: postHref(m, log),
-  }));
+  const found = work(recent, posts, log);
+  const shipped = found.shipped.slice(0, 2).map(({ text, href }) => ({ text, href }));
+  const open = found.open.slice(0, 2).map(({ text, href }) => ({ text, href }));
   for (const [kind, label, items] of [['shipped', 'Shipped', shipped], ['open', 'Open', open]]) {
     if (items.length) lines.push({ kind, label, items, text: `${label}: ${items.map(item => item.text).join('; ')}` });
   }

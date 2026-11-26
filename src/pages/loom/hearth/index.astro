@@ -15,6 +15,16 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
     <span class="hearth-meta" id="clock"></span>
   </section>
 
+  <section class="hearth-section" aria-labelledby="done-label" id="brief-done" hidden>
+    <h2 class="hearth-label" id="done-label">Done in the last day</h2>
+    <ul class="hearth-brief" id="done-list"></ul>
+  </section>
+
+  <section class="hearth-section" aria-labelledby="open-label" id="brief-open" hidden>
+    <h2 class="hearth-label" id="open-label">Still open</h2>
+    <ul class="hearth-brief" id="open-list"></ul>
+  </section>
+
   <section class="hearth-section" aria-labelledby="lit-label" id="lit" hidden>
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
       <h2 class="hearth-label" id="lit-label">Lit in the last day</h2>
@@ -53,11 +63,12 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
 <style>
   #out-line, #ask, #chips, #fires, #more-list, #other-rooms { overflow-wrap: anywhere; }
   #more-list { padding: 12px; }
+  #done-list, #open-list { overflow-wrap: anywhere; }
   .full-loom { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; text-underline-offset: 4px; }
 </style>
 
 <script>
-  import { esc, flameSvg, roomHref, personHref, whileYouWereOut, ago, MAX_FIRES } from '../../../lib/loom/hearth.mjs';
+  import { esc, flameSvg, roomHref, personHref, loomBrief, briefHeadline, ago, MAX_FIRES } from '../../../lib/loom/hearth.mjs';
   import { readHearth } from '../../../lib/loom/hearth-read.mjs';
 
   const store = {
@@ -77,6 +88,13 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
     </a>`;
   }
 
+  // Work links go to the reported result or the post; only web and same-site links are followed.
+  function briefItem(item, now) {
+    const href = /^(https?:\/\/|\/(?!\/))/i.test(item.href) ? item.href : roomHref(item.room);
+    return `<li><a class="hearth-brief-text" href="${esc(href)}">${esc(item.text)}</a>
+      <span class="hearth-meta"><a href="${esc(roomHref(item.room))}">${esc(item.room)}</a> · ${esc(item.by || 'Someone')} · ${esc(ago(item.at, now))}</span></li>`;
+  }
+
   function roomLinks(id, rooms) {
     $(id).innerHTML = rooms.map(room => `<a href="${esc(roomHref(room.address))}">${esc(room.address)}</a>`).join('');
   }
@@ -89,7 +107,12 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
       const { active, embers, unavailable } = snapshot;
       const now = snapshot.asOf ?? Date.now();
       $('clock').textContent = new Date(now).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
-      $('out-line').textContent = whileYouWereOut(snapshot, store.get('hearth.seenAt'));
+      const brief = loomBrief(active);
+      $('out-line').textContent = briefHeadline(brief, snapshot, store.get('hearth.seenAt'));
+      for (const [kind, items] of [['done', brief.done], ['open', brief.open]]) {
+        $('brief-' + kind).hidden = !items.length;
+        $(kind + '-list').innerHTML = items.map(item => briefItem(item, now)).join('');
+      }
       if (!unavailable.length) store.set('hearth.seenAt', new Date(now).toISOString());
 
       $('lit').hidden = !active.length;

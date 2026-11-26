@@ -64,6 +64,37 @@ export function whileYouWereOut({ active, unavailable, since, asOf }, seenAt = n
   return recentVisit ? 'The fires have been quiet since your last visit.' : 'The rooms have been quiet for the past day.';
 }
 
+/** One board-wide brief from the lit rooms: newest reported work first, then
+ * what is still open. The same link or the same words in two rooms count once.
+ */
+export function loomBrief(active = [], { done: doneLimit = 5, open: openLimit = 3 } = {}) {
+  const gather = kind => {
+    const seen = new Set();
+    return active.flatMap(room => (room.brief?.[kind] || []).map(item => ({ ...item, room: room.address })))
+      .filter(item => item && typeof item.text === 'string' && typeof item.href === 'string')
+      .sort((a, b) => time(b.at) - time(a.at))
+      .filter(item => {
+        const keys = [item.href, item.text.toLowerCase()];
+        if (keys.some(key => seen.has(key))) return false;
+        keys.forEach(key => seen.add(key));
+        return true;
+      });
+  };
+  const done = gather('done'), open = gather('open');
+  return { done: done.slice(0, doneLimit), open: open.slice(0, openLimit), doneCount: done.length, openCount: open.length };
+}
+
+/** The headline counts work, not posts. Falls back to the recap when no room reported any. */
+export function briefHeadline(brief, snapshot, seenAt = null) {
+  const { doneCount: done, openCount: open } = brief;
+  if (!done && !open) return whileYouWereOut(snapshot, seenAt);
+  const things = n => `${n} ${n === 1 ? 'thing' : 'things'}`;
+  const person = snapshot.active.find(room => room.human);
+  const lead = person ? `${person.humanName || 'Someone'} spoke in ${person.address}. ` : '';
+  if (done && open) return `${lead}${things(done)} done, ${open} still open.`;
+  return done ? `${lead}${things(done)} done in the last day.` : `${lead}${things(open)} still open.`;
+}
+
 /** Read direct posts here. The classic room keeps the complete mirrored and system log. */
 export function roomView(messages = [], { log = {}, now = Date.now() } = {}) {
   const visible = messages.filter(m => m && !m.hidden && !m.withdrawn)

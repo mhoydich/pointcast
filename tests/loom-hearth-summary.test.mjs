@@ -8,7 +8,7 @@ import { experimental_AstroContainer } from 'astro/container';
 import ts from 'typescript';
 import { JSDOM } from 'jsdom';
 import { roomSummary } from '../src/lib/loom/hearth-summary.mjs';
-import { esc, flameSvg, roomView, ago } from '../src/lib/loom/hearth.mjs';
+import { esc, flameSvg, roomView, personHref, isPerson, ago } from '../src/lib/loom/hearth.mjs';
 import { hearthActivity } from '../src/lib/loom/hearth-day.mjs';
 
 const NOW = Date.parse('2026-11-25T20:00:00Z');
@@ -148,7 +148,7 @@ test('JSDOM renders the actual summary above people posts with safe working link
   const { window } = dom;
   try {
     let messages = busy;
-    Object.assign(window, { esc, flameSvg, roomView, ago, hearthActivity });
+    Object.assign(window, { esc, flameSvg, roomView, personHref, isPerson, ago, hearthActivity });
     window.Date.now = () => NOW;
     window.fetch = async (url, options) => {
       assert.equal(url, '/api/loom?to=%23fixture');

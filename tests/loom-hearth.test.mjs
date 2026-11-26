@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { flameSvg, ago, roomHref, personHref, whileYouWereOut, roomView, esc, MAX_FIRES } from '../src/lib/loom/hearth.mjs';
+import { flameSvg, ago, roomHref, personHref, whileYouWereOut, roomView, esc, MAX_FIRES, loomBrief, briefHeadline } from '../src/lib/loom/hearth.mjs';
 
 const NOW = Date.parse('2026-11-21T19:00:00.000Z');
 const hAgo = (h) => new Date(NOW - h * 3600000).toISOString();
@@ -82,7 +82,7 @@ test('the front page links human chips to person cards and leaves bot chips and 
   runInNewContext(script, {
     document: { getElementById: id => nodes.get(id) }, location: { search: '' },
     localStorage: { getItem: () => null, setItem() {} }, URLSearchParams, Date,
-    readHearth: async () => snapshot, esc, flameSvg, roomHref, personHref, whileYouWereOut, ago, MAX_FIRES,
+    readHearth: async () => snapshot, esc, flameSvg, roomHref, personHref, loomBrief, briefHeadline, ago, MAX_FIRES,
   });
   await new Promise(resolve => setImmediate(resolve));
   assert.match(nodes.get('chips').innerHTML, /<a class="hearth-chip" href="\/loom\/hearth\/person\?name=Grace%20%26%20%3Cfriends%3E">Grace &amp; &lt;friends&gt;<\/a>/);
