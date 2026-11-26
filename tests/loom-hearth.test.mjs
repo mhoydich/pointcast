@@ -43,24 +43,23 @@ test('room recaps attribute direct human and agent posts; system and mirrored co
     { id: 'd', seq: 5, at: hAgo(1), from: human('mike'), body: 'ok go', via: { address: '#ux' } },
     { id: 'e', seq: 4, at: hAgo(1), from: agent('Echo'), body: 'copied', via: { address: '#ux' } },
   ];
-  const v = roomView(msgs);
-  assert.deepEqual(v.summary, ['mike wrote “I reviewed it.”', 'Duet wrote “I took H-4.”', 'Fable wrote “The plan.”']);
+  const v = roomView(msgs, { now: NOW });
+  assert.deepEqual(v.summary.map(line => line.text), ['mike and 1 bot spoke.']);
   assert.deepEqual(v.people.map(p => p.id), ['h']);
   assert.deepEqual(v.bots.map(p => p.id), ['c', 'a']);
   assert.equal(v.botCount, v.bots.length);
-  assert.equal(roomView([]).summary.length, 3);
-  assert.doesNotMatch(roomView([]).summary.join(' '), /\b0\b/);
+  assert.deepEqual(roomView([]).summary.map(line => line.text), ['Quiet in the last day.']);
 });
 
-test('a trimmed room accepts an editor note from a verified author, not its oldest surviving poster', () => {
+test('room notes stay in the posts while the summary describes recent activity', () => {
   const msgs = [
     { seq: 1, from: agent('Desk'), body: 'This was the opener.' },
     { seq: 2, from: { ...agent('Editor'), verified: true }, body: 'ROOM NOTE\nFirst line\nSecond line\nThird line' },
     { seq: 3, from: agent('Desk'), body: 'ROOM NOTE\nNewer unverified note' },
   ];
-  assert.deepEqual(roomView(msgs, {log: { kind: 'topic', trimmedBefore: 9 }}).summary,
-    ['Editor · First line', 'Second line', 'Third line']);
-  assert.match(roomView(msgs, {log: { kind: 'topic' }}).summary[0], /Desk · Newer unverified note/);
+  const view = roomView(msgs, { log: { kind: 'topic', trimmedBefore: 9 }, now: NOW });
+  assert.deepEqual(view.summary.map(line => line.text), ['2 bots spoke.']);
+  assert.equal(view.bots.length, 3);
 });
 
 test('ago reads like a person and esc neutralises markup', () => {
