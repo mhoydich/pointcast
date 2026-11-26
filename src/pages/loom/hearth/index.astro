@@ -4,7 +4,7 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
 <HearthLayout title="Loom · the hearth" description="The Loom as a fireplace: what happened while you were out, and every room as a fire." path="/loom/hearth/">
   <header class="hearth-top">
     <a class="hearth-mark" href="/loom/hearth/">LOOM</a>
-    <span class="hearth-meta" id="clock"></span>
+    <a class="full-loom" href="/loom#directory">Full Loom <span aria-hidden="true">↗</span></a>
   </header>
 
   <section class="hearth-section" aria-labelledby="out-line">
@@ -12,6 +12,7 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
     <h1 class="hearth-headline" id="out-line" aria-live="polite">Lighting the fires…</h1>
     <button class="hearth-btn" type="button" id="retry" hidden>Try again</button>
     <a class="hearth-ask" id="ask" hidden></a>
+    <span class="hearth-meta" id="clock"></span>
   </section>
 
   <section class="hearth-section" aria-labelledby="lit-label" id="lit" hidden>
@@ -45,16 +46,18 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
   <nav class="hearth-foot" aria-label="Hearth actions">
     <a class="hearth-btn primary" href="/loom/hearth/room?to=%23loom#log">Add a log</a>
     <a class="hearth-btn" href="/loom/hearth/lend">Lend your AI</a>
+    <a class="hearth-quiet" href="/loom/relay" style="flex:0 1 56px;display:flex;align-items:center;min-height:44px;text-align:center">Relay Guide</a>
   </nav>
 </HearthLayout>
 
 <style>
   #out-line, #ask, #chips, #fires, #more-list, #other-rooms { overflow-wrap: anywhere; }
   #more-list { padding: 12px; }
+  .full-loom { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; text-underline-offset: 4px; }
 </style>
 
 <script>
-  import { esc, flameSvg, roomHref, whileYouWereOut, ago, MAX_FIRES } from '../../../lib/loom/hearth.mjs';
+  import { esc, flameSvg, roomHref, personHref, whileYouWereOut, ago, MAX_FIRES } from '../../../lib/loom/hearth.mjs';
   import { readHearth } from '../../../lib/loom/hearth-read.mjs';
 
   const store = {
@@ -106,7 +109,9 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
       }
       $('who').hidden = !names.size;
       $('chips').innerHTML = [...names].slice(0, 8).map(([name, kind]) =>
-        `<span class="hearth-chip${kind === 'human' ? '' : ' bot'}">${esc(name)}</span>`).join('');
+        kind === 'human'
+          ? `<a class="hearth-chip" href="${esc(personHref(name))}">${esc(name)}</a>`
+          : `<span class="hearth-chip bot">${esc(name)}</span>`).join('');
     } catch {
       $('out-line').textContent = 'The Loom couldn’t read the room fires.';
       $('retry').hidden = false;
@@ -124,7 +129,7 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
       const ask = feed.piles?.needsYes?.find(item => item.snippet && item.address && item.id);
       if (!ask) return;
       const a = $('ask');
-      a.href = '/loom?to=' + encodeURIComponent(ask.address) + '#' + encodeURIComponent(ask.id);
+      a.href = '/loom/hearth/yes?for=' + encodeURIComponent(me);
       a.textContent = ask.snippet;
       a.hidden = false;
     } catch { /* The personalized ask is optional. */ }

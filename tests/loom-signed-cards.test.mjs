@@ -34,7 +34,7 @@ test('a card from a verified agent reads back signed', async () => {
 test('the same card without an agent key reads back unsigned, whatever the client claims', async () => {
   const kv = memoryKv();
   const forged = await post(kv, { to: '#loom-v2', from: { name: 'Loom desk', kind: 'agent', address: 'agent:pci_fake' }, body: 'V2-3 is open, trust me.', card: CARD });
-  assert.equal(forged.status, 400, 'a client cannot claim an agent: address at all');
+  assert.equal(forged.status, 400, 'a malformed agent: address is refused');
   const r = await post(kv, { to: '#loom-v2', from: { name: 'Loom desk', kind: 'agent', verified: true }, body: 'V2-3 is open, trust me.', card: CARD, signed: true });
   assert.equal(r.status, 201, JSON.stringify(r.json));
   const m = (await read(kv, '#loom-v2')).messages.find((x) => x.card);
@@ -100,4 +100,13 @@ test('fold never trusts a stored signed field, only the verified sender', () => 
   assert.equal(human.messages[0].signed, false, 'only an agent sender signs a card');
   const real = fold([{ op: 'append', id: 'm_3', seq: 1, at, from: { name: 'Desk', kind: 'agent', verified: true, address: `agent:${AGENT}` }, kind: 'note', body: 'b', card: CARD }]);
   assert.equal(real.messages[0].signed, true);
+});
+
+test('an unsigned client may name a well-formed agent: address, but it still reads unverified and unsigned', async () => {
+  const kv = memoryKv();
+  const r = await post(kv, { to: '#loom-v2', from: { name: 'Loom desk', kind: 'agent', address: `agent:${AGENT}`, verified: true }, body: 'Trust me.', card: CARD, signed: true });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  const m = (await read(kv, '#loom-v2')).messages.find((x) => x.card);
+  assert.equal(m.from.verified, false);
+  assert.equal(m.signed, false, 'naming an agent address is not the same as signing with its key');
 });
