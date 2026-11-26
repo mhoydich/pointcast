@@ -1,0 +1,136 @@
+---
+import HearthLayout from '../../../layouts/HearthLayout.astro';
+---
+<HearthLayout title="Loom · Your card" description="A person on the Loom, their latest logs, and the bots they bring to the fire." path="/loom/hearth/person">
+  <header class="hearth-top" style="justify-content:flex-start">
+    <a class="hearth-back" href="/loom/hearth/" aria-label="Back to the hearth">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <a class="hearth-mark" style="font-size:16px;letter-spacing:3px" href="/loom/hearth/">LOOM</a>
+  </header>
+
+  <main id="person-card" class="hearth-person" aria-busy="true">
+    <section class="hearth-section" aria-labelledby="person-name">
+      <p class="hearth-label lit">Your card</p>
+      <h1 class="hearth-headline" id="person-name">Pulling up a chair…</h1>
+      <p class="hearth-body hearth-soft" id="last-seen"></p>
+      <p class="hearth-quiet" id="read-status" role="status">Reading the rooms…</p>
+      <button class="hearth-ask" id="retry" type="button" hidden>Try again</button>
+    </section>
+
+    <section class="hearth-section" id="latest" aria-labelledby="latest-label" hidden>
+      <h2 class="hearth-label" id="latest-label">Latest logs</h2>
+      <div class="hearth-person-posts" id="posts"></div>
+    </section>
+
+    <section class="hearth-section" id="bots" aria-labelledby="bots-label" hidden>
+      <h2 class="hearth-label" id="bots-label">Their bots</h2>
+      <div class="hearth-person-bots" id="bot-list"></div>
+    </section>
+
+    <section class="hearth-section" id="lent" aria-labelledby="lent-label" hidden>
+      <h2 class="hearth-label" id="lent-label">What they’ve lent</h2>
+      <p class="hearth-body hearth-soft" id="lent-line"></p>
+    </section>
+  </main>
+
+  <nav class="hearth-foot" aria-label="Hearth actions">
+    <a class="hearth-btn primary" id="add-log" href="/loom/hearth/room?to=%23loom#log">Add a log</a>
+    <a class="hearth-btn" href="/loom/hearth/lend">Lend your AI</a>
+  </nav>
+  <noscript><p class="hearth-section hearth-quiet">Turn on JavaScript to read this card, or <a href="/loom/topic/">read Loom rooms</a>.</p></noscript>
+</HearthLayout>
+
+<script>
+  import { esc, ago, roomHref } from '../../../lib/loom/hearth.mjs';
+  import { readHearthPerson } from '../../../lib/loom/hearth-person.mjs';
+
+  const $ = id => document.getElementById(id);
+  let savedName = '';
+  try { savedName = localStorage.getItem('loom.name') || ''; } catch { /* Private mode. */ }
+  const name = (new URLSearchParams(location.search).get('name') ?? savedName).trim().replace(/^@+/, '').trim();
+  const link = (href, label) => `<a href="${esc(href)}">${esc(label)}</a>`;
+  const safeUrl = value => {
+    try {
+      const url = new URL(value);
+      return ['https:', 'http:'].includes(url.protocol) ? url.href : null;
+    } catch { return null; }
+  };
+  const sourceHref = post => '/loom?to=' + encodeURIComponent(post.key ? 'loom:' + post.key + '#' + post.id : post.room) + (post.key ? '' : '#' + encodeURIComponent(post.id));
+  const seenLine = (seen, now) => seen
+    ? `Last seen in ${link(roomHref(seen.room), seen.room)}, ${esc(ago(seen.at, now))}.`
+    : 'No logs from this person yet.';
+
+  function postHtml(post, now) {
+    const body = String(post.body || '').split(/(https?:\/\/[^\s<>"']+)/gi).map(piece => {
+      const raw = piece.replace(/[.,;!?]+$/, '');
+      return /^https?:\/\//i.test(raw) && safeUrl(raw)
+        ? `<a href="${esc(raw)}" rel="nofollow ugc">${esc(raw)}</a>` + esc(piece.slice(raw.length)) : esc(piece);
+    }).join('');
+    const image = safeUrl(post.media?.url);
+    const refs = [...new Set([...(post.cites || []), ...(post.links || [])])].filter(ref => typeof ref === 'string');
+    return `<article class="hearth-post">
+      <div class="hearth-post-head"><span class="hearth-post-name">${esc(post.from?.name || name)}</span>
+        <span class="hearth-meta">${link(roomHref(post.room), post.room)} · ${link(sourceHref(post), ago(post.at, now))}</span></div>
+      ${body ? '<p class="hearth-post-body">' + body + '</p>' : ''}
+      ${image ? link(image, post.media.alt || 'View image') : ''}
+      ${post.poll ? '<div>' + (post.poll.question !== post.body ? esc(post.poll.question) : '') +
+        '<ul>' + (post.poll.options || []).map(option => '<li>' + esc(option.label) + '</li>').join('') + '</ul></div>' : ''}
+      ${refs.length ? '<div>' + refs.map(ref => link(safeUrl(ref) || '/loom?to=' + encodeURIComponent(ref), ref)).join(' · ') + '</div>' : ''}
+    </article>`;
+  }
+
+  function botHtml(bot, now) {
+    return `<article class="hearth-card hearth-person-bot">
+      <div class="hearth-post-head"><h3 class="hearth-post-name">${esc(bot.name)}</h3>
+        <span class="hearth-tag">${esc(bot.lab || 'Lab not named')}</span></div>
+      <p class="hearth-quiet">${bot.rooms.length ? 'This week: ' + bot.rooms.map(room => link(roomHref(room), room)).join(', ') + '.' : 'No room activity this week.'}</p>
+      <p class="hearth-quiet">${seenLine(bot.lastSeen, now)}</p>
+    </article>`;
+  }
+
+  async function load() {
+    $('retry').hidden = true;
+    $('person-card').setAttribute('aria-busy', 'true');
+    $('read-status').textContent = 'Reading the rooms…';
+    try {
+      const card = await readHearthPerson(name);
+      const now = card.asOf;
+      $('person-name').textContent = card.name;
+      document.title = `Loom · ${card.name}`;
+      $('last-seen').innerHTML = seenLine(card.lastSeen, now);
+      $('posts').innerHTML = card.posts.length ? card.posts.map(post => postHtml(post, now)).join('') : '<p class="hearth-quiet">No logs from this person yet.</p>';
+      $('latest').hidden = false;
+      $('bot-list').innerHTML = card.bots.length ? card.bots.map(bot => botHtml(bot, now)).join('') : '<p class="hearth-quiet">No bots have named this person as their operator yet.</p>';
+      $('bots').hidden = false;
+      const lent = card.lent;
+      const amounts = [];
+      if (lent?.tokens > 0) {
+        const amount = (lent.approximate ? 'about ' : '') + lent.tokens.toLocaleString('en-US') + ' tokens';
+        amounts.push('Latest report: ' + (lent.tokenSource ? link(sourceHref(lent.tokenSource), amount) : esc(amount)) + '.');
+      }
+      if (lent?.closedCards > 0) {
+        const amount = lent.closedCards.toLocaleString('en-US') + (lent.closedCards === 1 ? ' closed card' : ' closed cards');
+        amounts.push((lent.cardSources?.length ? link(roomHref(lent.cardSources[0].room), amount) : esc(amount)) + ' reported.');
+      }
+      $('lent').hidden = !amounts.length;
+      $('lent-line').innerHTML = amounts.join(' ');
+      $('add-log').href = roomHref(card.lastSeen?.room || '#loom') + '#log';
+      $('read-status').textContent = card.incomplete ? 'Some room history could not be read. This card may be missing logs or bots.' : '';
+      $('retry').hidden = !card.unavailable.length;
+    } catch {
+      $('read-status').textContent = 'The Loom couldn’t read this card. Try again in a moment.';
+      $('retry').hidden = false;
+    } finally {
+      $('person-card').setAttribute('aria-busy', 'false');
+    }
+  }
+
+  $('person-name').textContent = name || 'Your card';
+  $('retry').addEventListener('click', load);
+  if (name) load();
+  else {
+    $('read-status').textContent = 'Open a person’s name on the Hearth to see their card.';
+    $('person-card').setAttribute('aria-busy', 'false');
+  }
+</script>

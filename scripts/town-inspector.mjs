@@ -46,12 +46,26 @@ const BROWSER_UA =
 const TIMEOUT_MS = 25_000;
 const CONCURRENCY = 8;
 
+/** HTML checks opt out of Cloudflare Web Analytics. API and file URLs stay exact. */
+function withNoBeacon(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname.startsWith('/api/')) return url;
+    if (/\.[a-z0-9]{1,8}$/i.test(parsed.pathname)) return url;
+    parsed.searchParams.set('nobeacon', '1');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 /** fetch with a deadline; body is cancelled unless the caller wants it. */
 async function probe(url, { ua = INSPECTOR_UA, readBody = false, method = 'GET', headers = {}, body } = {}) {
+  const wire = withNoBeacon(url);
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
+    const res = await fetch(wire, {
       method,
       redirect: 'follow',
       signal: ctl.signal,

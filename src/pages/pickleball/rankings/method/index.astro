@@ -1,0 +1,64 @@
+---
+import RankShell from '../../../../components/pickleball-rankings/RankShell.astro';
+import { PLACE_ADJ, SMALL_DRAW_TEAMS, SMALL_DRAW_WEIGHT, DECLARED_WEIGHT, BAND_AT_ZERO, GAP_FLAG, MIN, MAX, LEVELS } from '../../../../lib/pickleball-rankings/rating.js';
+import { LEVEL_FOR_OPEN_OR_PRO, LEVEL_WHEN_UNKNOWN, HALF_LIFE_DAYS, MAX_AGE_DAYS } from '../../../../lib/pickleball-rankings/tiers.mjs';
+import { SOURCES, LINK_ONLY_HOSTS, BASE, FEEDS, mailto, fmtDate } from '../../../../lib/pickleball-rankings/data.mjs';
+import doNotList from '../../../../data/pickleball-rankings/do-not-list.json';
+
+const REPO = 'https://github.com/mhoydich/pointcast/blob/main/';
+const sign = (n: number) => (n > 0 ? `+${n.toFixed(2)}` : n === 0 ? '0' : n.toFixed(2));
+---
+<RankShell title="How PointCast pickleball rankings work" description="The open Court Rating recipe behind PointCast pickleball rankings: place, level, draw size and recency, with sources, tiers, JSON, CSV and removal rules." active="method" eyebrow="PICKLEBALL · RANKINGS · METHOD">
+  <h1>Method</h1>
+  <p class="pr-dek">The same open recipe as the <a href="https://elsegundo.xyz/pickleball/players/method/">El Segundo ladder</a>, run over every tier. The code is <a href={`${REPO}src/lib/pickleball-rankings/rating.js`}>rating.js</a>, copied verbatim from elsegundo.xyz.</p>
+
+  <h2 id="recipe">Court Rating</h2>
+  <ol class="pr-list">
+    <li>Each podium finish reads as its division's level plus a place adjustment: 1st {sign(PLACE_ADJ[1])}, 2nd {sign(PLACE_ADJ[2])}, 3rd {sign(PLACE_ADJ[3])}, 4th {sign(PLACE_ADJ[4])}. Open, pro and elite divisions read as {LEVEL_FOR_OPEN_OR_PRO.toFixed(1)}; a division with no level as {LEVEL_WHEN_UNKNOWN.toFixed(1)}.</li>
+    <li>Court Rating is the recency-weighted mean of those numbers. Recency halves every {HALF_LIFE_DAYS} days from the event's last day; finishes over {MAX_AGE_DAYS} days old count zero.</li>
+    <li>A draw of {SMALL_DRAW_TEAMS} teams or fewer counts {SMALL_DRAW_WEIGHT === 0.5 ? 'half' : SMALL_DRAW_WEIGHT}.</li>
+    <li>A self-declared level, from a verified claim, counts as weight {DECLARED_WEIGHT}. A gap of {GAP_FLAG} or more between what a player says and what results show is shown, not hidden.</li>
+    <li>Band = ±{BAND_AT_ZERO} / √(1 + results weight). It narrows as results add up.</li>
+    <li>Level = the nearest half step on the {MIN.toFixed(1)} to {MAX.toFixed(1)} scale.</li>
+    <li>Tags: <strong>Self-declared</strong> (only the player's word), <strong>Provisional</strong> (1 or 2 counted results), <strong>Settled</strong> (3 or more).</li>
+    <li>Order: Court Rating, then the narrower band, then name. Equal rating and band share a rank.</li>
+  </ol>
+  <p>Court Score, the El Segundo points ladder, is a different number and is not used here.</p>
+
+  <h2 id="levels">Levels</h2>
+  <ul class="pr-list">{LEVELS.map(([v, d]: any) => <li><strong>{v.toFixed(1)}</strong>: {d}</li>)}</ul>
+
+  <h2 id="tiers">Four scales, one pool of results</h2>
+  <ul class="pr-list">
+    <li><strong>Regional:</strong> a named center and radius. A player is on it because they finished at an event whose venue is inside the event radius. Nobody's home is recorded or guessed.</li>
+    <li><strong>National:</strong> every finish at a venue in that country, from every feed, deduped by event, division, place and team.</li>
+    <li><strong>Global:</strong> every national ladder together.</li>
+    <li><strong>By level:</strong> a filter over any tier by Level.</li>
+    <li>Two ladders' entries are one person only with an explicit merge or a verified claim, never by name similarity.</li>
+  </ul>
+  <p>Plan in full: <a href={`${REPO}docs/pickleball-rankings/TIER-PLAN.md`}>TIER-PLAN.md</a>.</p>
+
+  <h2 id="sources">Sources</h2>
+  <p><strong>{SOURCES.verdict}</strong> Survey checked {fmtDate(SOURCES.checked)}: <a href={`${REPO}docs/pickleball-rankings/SOURCE-SURVEY.md`}>SOURCE-SURVEY.md</a>.</p>
+  <p>Feeds in use: {FEEDS.map((f: any) => <><a href={f.upstream.feed}>{f.name}</a> (as of {fmtDate(f.as_of)}) </>)}</p>
+  <p>Only results the organizer or venue publishes itself on a public page, whose terms don't bar reuse. No sign-ins, no app-only data, no working around bot checks or rate limits. Adults' divisions only.</p>
+  <p>Link out only, never copied: {LINK_ONLY_HOSTS.join(', ')}. The build refuses any row whose source is on one of these hosts.</p>
+  <h3>Link-only</h3>
+  <ul class="pr-list">{SOURCES.link_only.map((s: any) => <li><a href={s.link} rel="noopener nofollow">{s.name}</a>: {s.why}</li>)}</ul>
+  <h3>Unclear, to ask the organizer</h3>
+  <ul class="pr-list">{SOURCES.unclear.map((s: any) => <li><a href={s.link} rel="noopener nofollow">{s.name}</a>: {s.why}</li>)}</ul>
+
+  <h2 id="data">Open data</h2>
+  <ul class="pr-list">
+    <li><a href={`${BASE}rankings.json`}>rankings.json</a>: every tier, every player, with rating, band, level and tag.</li>
+    <li><a href={`${BASE}rankings.csv`}>rankings.csv</a>: one row per player per tier.</li>
+    <li><a href={`${BASE}results.csv`}>results.csv</a>: every team finish, with its source, so you can rerun the recipe.</li>
+    <li>Missing values say <code>unavailable</code> (CSV) or <code>null</code> (JSON). Never zero.</li>
+  </ul>
+
+  <h2 id="do-not-list">Claim, correct, remove, and the do-not-list</h2>
+  <p>Every player page has claim, correct and remove links. Removal needs no proof and happens the same day, on every tier. We store removals as a SHA-256 of the normalized name, so the public list names no one: <a href={`${REPO}src/data/pickleball-rankings/do-not-list.json`}>do-not-list.json</a> ({doNotList.entries.length} entries). The same hash works on elsegundo.xyz, and we pass removals on. <a href={mailto('remove', '')}>Ask to be removed</a>.</p>
+
+  <h2 id="ai">Who made this</h2>
+  <p>Drafted by Claude (Opus 5.5) with Claude Fable 5.1 on the source survey and tier plan. Recipe by the El Segundo ladder. Checked by tests in the repo. Not affiliated with USA Pickleball, DUPR, the PPA Tour or any tour.</p>
+</RankShell>

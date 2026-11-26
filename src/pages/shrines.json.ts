@@ -17,7 +17,7 @@ export const GET: APIRoute = async () => {
         title: 'Small Shrines',
         url: absoluteUrl('/small-shrines/'),
         json: absoluteUrl('/small-shrines.json'),
-        description: 'Four secular art-led pauses with original short meditations and optional browser-synthesized sound.',
+        description: 'Five secular art-led pauses with original short meditations and optional browser-synthesized sound.',
         image: absoluteImage('/images/small-shrines/ocean.webp'),
       },
       { title: 'Elemental Shrine', url: absoluteUrl('/elemental-shrine') },

@@ -204,6 +204,7 @@ button.link { background: none; border: 0; padding: 0; text-decoration: underlin
 .sec { font: bold 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--pc-dim); padding: 8px 12px 4px; border-top: 1px solid var(--pc-rule); }
 .txc { padding: 8px 12px; border-top: 1px solid var(--pc-rule); display: grid; gap: 3px; font: 12px var(--mono); }
 .txc:first-of-type { border-top: 0; }
+.txc.tx-target { outline: 2px solid var(--pc-ink); outline-offset: -2px; }
 .txk { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .txk b { font: bold 13px var(--sans); }
 .txk .kicon { width: 24px; height: 24px; }
@@ -1306,6 +1307,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   let devnetSeen = false;
   const devnet = () => devnetSeen || !!(status && status.network === "devnet");
   let selected = 0, hovered = 0, panelH = 0;
+  let linkedTx = null;             // { hash, height, index } resolved from ?tx= on this node
   let spot = null;                 // { type: "kind", ix } | { type: "addr", addr }
   // The Mints lens (?lens=mints): every *_mint cube lit, a ring on each
   // collection's first mint, the counter strip. ?town= links collections to
@@ -1457,12 +1459,38 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const from = Math.max(1, tip - MAX_LOAD + 1);
     if (from > 1) show("v-src", `Showing the latest ${fmt(MAX_LOAD)} blocks (№${fmt(from)}–№${fmt(tip)}); the timeline covers what is loaded.`);
     if (tip > 0) await loadRange(from, tip, true);
+    linkedTx = await loadLinkedTx();
     initialDone = true;
     afterLoad();
+    if (linkedTx) {
+      setFollow(false);
+      select(linkedTx.height, { open: true, center: true });
+      $("linked-tx").scrollIntoView({ block: "nearest" });
+    }
     setTimeout(poll, POLL_MS);
     setInterval(() => { loadAnchorsLive().then(() => { updateStats(); kick(); }).catch(() => {}); }, 15000);
     refreshNet();
     setInterval(refreshNet, 60000);
+  }
+
+  async function loadLinkedTx() {
+    const requested = qs.get("tx");
+    if (!requested) return null;
+    const hash = hex64(requested.trim().toLowerCase());
+    try {
+      if (!hash) throw new Error("invalid transaction hash");
+      const tx = await getJSON(`/tx/${hash}`);
+      if (!tx || tx.status !== "included" || !isInt(tx.height) || tx.height < 1 || tx.height > status.height || !isInt(tx.index) || tx.index < 0) throw new Error("transaction not included");
+      // A link can name a block older than the latest MAX_LOAD stacks.
+      if (!blocks.has(tx.height)) await loadRange(tx.height, tx.height, false);
+      const B = blocks.get(tx.height);
+      if (!B || tx.index >= B.ntx) throw new Error("transaction block unavailable");
+      if (tx.height < status.height - MAX_LOAD + 1) show("v-src", `Showing the latest ${fmt(MAX_LOAD)} blocks and linked block №${fmt(tx.height)}; the timeline covers what is loaded.`);
+      return { hash, height: tx.height, index: tx.index };
+    } catch {
+      show("v-src", "Transaction wasn't found on this node. Showing the tip.");
+      return null;
+    }
   }
 
   // Post bodies are off-chain. A devnet recording carries them in `bodies`, or
@@ -2622,7 +2650,14 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
         const { card, mod } = panelCard(useReplay ? rep.txs[i] : null, servedTxs ? servedTxs[i] : null, !!useReplay, devnet());
         const bh = t && t.tx && typeof t.tx.body_hash === "string" ? t.tx.body_hash : "";
         if (snapMode) { mod.withhold = false; if (bh && SNAP_HIDDEN.has(bh)) mod.hidden = true; }
-        list.append(txCard(t, card, i, src, !!useReplay, ctx, mod));
+        const article = txCard(t, card, i, src, !!useReplay, ctx, mod);
+        if (linkedTx && linkedTx.height === hh && linkedTx.index === i) {
+          article.id = "linked-tx";
+          article.classList.add("tx-target");
+          article.setAttribute("aria-current", "true");
+          article.prepend(h("span", { class: "badge rep" }, "Linked transaction"));
+        }
+        list.append(article);
       });
       body.append(list);
     } else {

@@ -1,151 +1,141 @@
 ---
-/** /takeoff-organ — Door 1 of the Ten Doors (2026-11-02). Planes off the LAX north runway hold organ notes. */
+/** Takeoff Organ v2 — eight notes, tiny departures, optional sky chords. */
 import TenDoorsFrame from '../components/TenDoorsFrame.astro';
+import { NOTES, PLANS } from '../lib/ten-doors/takeoff.mjs';
+import { PAD_COLORS } from '../lib/ten-doors/takeoff-render.mjs';
+const first = PLANS[0];
 ---
 
-<TenDoorsFrame slug="takeoff-organ">
-  <canvas class="td-canvas" id="to-sky" width="720" height="440" aria-label="Night sky over El Segundo. Tap the runway lanes at the bottom to launch planes that each hold a note."></canvas>
-  <div class="td-row" role="group" aria-label="Launch a departure">
-    <button class="td-btn" data-lane="0">Lane 1</button><button class="td-btn" data-lane="1">Lane 2</button>
-    <button class="td-btn" data-lane="2">Lane 3</button><button class="td-btn" data-lane="3">Lane 4</button>
-    <button class="td-btn" data-lane="4">Lane 5</button><button class="td-btn" data-lane="5">Lane 6</button>
-    <button class="td-btn" data-lane="6">Lane 7</button><button class="td-btn" data-lane="7">Lane 8</button>
+<TenDoorsFrame slug="takeoff-organ" quiet isolated>
+  <div id="to-app" class="to-app" data-takeoff-v2 tabindex="0" role="group" aria-label="Takeoff Organ instrument" aria-describedby="to-help">
+    <div class="to-toolbar">
+      <span class="to-airport"><span aria-hidden="true">↗</span> YOUR LITTLE AIRPORT</span>
+      <div class="to-tools">
+        <button id="to-sound" type="button" aria-pressed="false" disabled><span aria-hidden="true">♪</span> <span data-sound-label>Sound off</span></button>
+        <button id="to-pause" type="button" disabled>Pause</button>
+      </div>
+    </div>
+    <div class="to-scene">
+      <canvas id="to-sky" width="900" height="400" aria-hidden="true"></canvas>
+      <p class="to-scene-fallback" hidden>The illustration is unavailable here. The note pads and chord guide still work.</p>
+      <div class="to-scene-label" aria-hidden="true"><span>EL SEGUNDO · PACIFIC SKY</span><span id="to-aircount">Ready for takeoff</span></div>
+    </div>
+
+    <section class="to-guide" aria-labelledby="to-title">
+      <div class="to-guide-top">
+        <div><p class="to-eyebrow" id="to-eyebrow">A little sky chord</p><h2 id="to-title">{first.title}</h2></div>
+        <button id="to-next" class="to-next" type="button" disabled>Next chord <span aria-hidden="true">→</span></button>
+      </div>
+      <p class="to-hint" id="to-hint">Tap the three marked notes. Let them overlap.</p>
+      <div id="to-goals" class="to-goals" role="list" aria-label="Chord departures">
+        {first.lanes.map((lane) => <div class="to-goal" role="listitem" data-goal-slot><span class="to-goal-note">{lane + 1} · {NOTES[lane]}</span><span class="to-goal-state">Ready</span></div>)}
+      </div>
+      <div class="to-stamps" id="to-stamps" role="group" aria-label="Your explored sky chords">
+        {PLANS.map((plan) => <span data-stamp={plan.id} role="img" title={plan.title} aria-label={`${plan.title}, unexplored`}><span aria-hidden="true">✦</span></span>)}
+        <span id="to-stamp-label">Five little skies to explore</span>
+      </div>
+    </section>
+
+    <div class="to-pads" role="group" aria-label="Eight musical departure lanes">
+      {NOTES.map((note, lane) => (
+        <button class="to-pad" type="button" data-to-lane={lane} style={`--pad:${PAD_COLORS[lane]}`} aria-label={`Launch lane ${lane + 1}, ${note}`} disabled>
+          <span class="to-pad-top"><span>{lane + 1}</span><svg viewBox="0 0 32 24" width="25" height="19" aria-hidden="true"><path d="M2 12 13 8 11 2 15 2 21 8 29 10Q33 12 29 14L21 16 15 22 11 22 13 16Z" fill="currentColor" /></svg></span>
+          <strong>{note.slice(0, -1)}<sub>{note.slice(-1)}</sub></strong>
+          <span class="to-pad-hint">Play a note</span>
+        </button>
+      ))}
+    </div>
+
+    <div class="to-bottom">
+      <div class="to-mode" role="group" aria-label="Choose how to play">
+        <button id="to-guide-mode" type="button" aria-pressed="true" disabled>Sky chords</button>
+        <button id="to-free-mode" type="button" aria-pressed="false" disabled>Free play</button>
+      </div>
+      <div class="to-extra">
+        <button id="to-auto" type="button" aria-pressed="false" hidden disabled>Auto fly</button>
+        <button id="to-clear" type="button" disabled>Clear sky</button>
+      </div>
+    </div>
+    <p id="to-status" class="to-status" role="status" aria-atomic="true">Tap a note. Watch it take off.</p>
+    <p id="to-help" class="to-help">Every note is welcome. Keys 1–8 play while the instrument is focused. Space pauses outside buttons. Sound is optional.</p>
+    <noscript><p class="to-help">This instrument needs JavaScript to launch its planes. The instructions below remain available.</p></noscript>
   </div>
-  <div class="td-row">
-    <button class="td-btn" id="to-auto" aria-pressed="false">Auto schedule</button>
-    <button class="td-btn" id="to-mute" aria-pressed="false">Sound on</button>
-  </div>
-  <p class="td-readout" id="to-read" aria-live="polite">Tap a runway lane to launch the first departure.</p>
 </TenDoorsFrame>
 
+<style is:global>
+  .td[data-door='takeoff-organ'] .td-stage { padding: 0; color: #24314c; background: #fbfaf6; border-radius: 30px; box-shadow: 0 20px 60px #2235521a, 0 2px 5px #22355212; overflow: hidden; }
+  .td[data-door='takeoff-organ'] .td-pitch { max-width: 44rem; }
+</style>
 <style>
-  #to-sky { touch-action: pan-y; }
+  .to-app { outline: none; }
+  .to-app [hidden] { display: none !important; }
+  .to-app:focus-visible { outline: 3px solid #345fbd; outline-offset: -4px; border-radius: 30px; }
+  .to-app button { font: inherit; font-size: .78rem; font-weight: 600; line-height: 1.2; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .to-app button:focus-visible { outline: 3px solid #244c9a; outline-offset: 3px; }
+  .to-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; }
+  .to-airport { display: flex; align-items: center; gap: 6px; font: 700 0.57rem/1.3 ui-monospace, monospace; letter-spacing: 0.07em; color: #596376; }
+  .to-airport > span { display: grid; place-items: center; background: #e8edf5; width: 24px; height: 24px; border-radius: 50%; font-size: 1rem; color: #36528a; }
+  .to-tools, .to-extra { display: flex; gap: 6px; }
+  .to-tools button, .to-extra button { min-height: 44px; padding: 8px 11px; border: 1px solid #d9dfe7; background: #fff; color: #34415a; border-radius: 14px; }
+  .to-tools button[aria-pressed='true'], .to-extra button[aria-pressed='true'] { background: #273d69; border-color: #273d69; color: white; }
+  .to-scene { position: relative; overflow: hidden; background: linear-gradient(#f6c5b1, #b5bede 65%, #467298); }
+  #to-sky { width: 100%; height: clamp(195px, 31vw, 340px); display: block; touch-action: pan-y; }
+  .to-scene-label { position: absolute; inset: auto 14px 11px; display: flex; justify-content: space-between; gap: 10px; color: #f9f5ee; font: 600 0.55rem/1.3 ui-monospace, monospace; letter-spacing: 0.06em; pointer-events: none; text-shadow: 0 1px 4px #172c4e; }
+  .to-scene-fallback { min-height: 170px; padding: 24px; box-sizing: border-box; line-height: 1.5; }
+  .to-guide { padding: 14px 20px 10px; background: linear-gradient(135deg,#fffdf8,#f3f5f8); border-bottom: 1px solid #e7e7e2; }
+  .to-guide.is-complete { background: linear-gradient(120deg,#e7f7ec,#f6faf0); }
+  .to-guide-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .to-eyebrow { margin: 0 0 3px; font: 700 0.56rem ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.1em; color: #6c7484; }
+  h2 { margin: 0; font-size: clamp(1.2rem, 4vw, 1.6rem); line-height: 1.1; letter-spacing: -0.035em; font-weight: 750; }
+  .to-next { min-height: 44px; padding: 10px 13px; background: #293f6c; color: #fff; border: 0; border-radius: 14px; box-shadow: 0 3px 0 #15294e; white-space: nowrap; }
+  .to-next:disabled { background: #e4e7ec; color: #758094; box-shadow: none; cursor: default; }
+  .to-hint { margin: 7px 0 10px; font-size: 0.78rem; line-height: 1.4; color: #566176; }
+  .to-goals { display: flex; gap: 6px; }
+  .to-goal { flex: 1; min-width: 0; display: flex; justify-content: space-between; align-items: center; gap: 5px; padding: 8px 9px; background: #e9edf2; border: 1px solid #dce2e9; border-radius: 11px; font-size: 0.67rem; line-height: 1.3; }
+  .to-goal-note { font-weight: 750; color: #334363; }
+  .to-goal-state { font-size: 0.625rem; color: #626e83; }
+  .to-goal.is-airborne { background: #e2edf9; border-color: #b7d1f0; }
+  .to-goal.is-clear { background: #d9efdf; border-color: #aacdb3; }
+  .to-goal.is-clear .to-goal-state { color: #286044; font-weight: 750; }
+  .to-stamps { display: flex; align-items: center; gap: 4px; margin-top: 9px; }
+  .to-stamps > span[data-stamp] { display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; background: #e8e9e8; color: #a0a6ab; font-size: 0.65rem; }
+  .to-stamps > span.is-earned { color: #77521a; background: #f6d782; }
+  #to-stamp-label { font-size: 0.61rem; margin-left: 4px; color: #70798a; }
+  .to-pads { display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); gap: 9px; padding: 17px 18px 13px; }
+  .to-pad { position: relative; min-width: 0; min-height: 105px; display: flex; flex-direction: column; text-align: left; justify-content: space-between; padding: 9px 10px; border: 1px solid #ffffffbb; border-bottom: 4px solid #26334d20; border-radius: 18px; background: linear-gradient(155deg,#ffffff70,transparent 65%),var(--pad); color: #26334d; box-shadow: inset 0 1px 0 #ffffffc9, 0 5px 0 #26334d14, 0 7px 12px #26334d0c; transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
+  .to-pad::after { content: ''; position: absolute; inset: 3px 5px auto; height: 28%; border-radius: 14px 14px 55% 55%; background: #ffffff21; pointer-events: none; }
+  .to-pad:active, .to-pad.is-lit { transform: translateY(3px); filter: brightness(1.06); box-shadow: inset 0 2px 5px #26334d15, 0 2px 0 #26334d14, 0 0 0 3px #ffffff; }
+  .to-pad.is-goal { outline: 2px solid #596d8d; outline-offset: 2px; }
+  .to-pad:focus-visible { outline: 3px solid #234c9a; outline-offset: 4px; }
+  .to-pad-top { display: flex; justify-content: space-between; align-items: center; width: 100%; font: 750 0.63rem ui-monospace, monospace; opacity: .8; }
+  .to-pad strong { font-size: 1.7rem; line-height: 1; letter-spacing: -.07em; font-weight: 800; }
+  .to-pad sub { font-size: .55em; vertical-align: baseline; margin-left: 2px; }
+  .to-pad-hint { font-size: .625rem; line-height: 1.2; font-weight: 650; }
+  .to-pad:disabled { cursor: default; filter: saturate(.5); opacity: .65; }
+  .to-bottom { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 18px 0; flex-wrap: wrap; }
+  .to-mode { display: inline-flex; background: #e9ecf0; border: 1px solid #e0e4ea; padding: 3px; border-radius: 14px; }
+  .to-mode button { min-height: 44px; padding: 7px 11px; border: 0; border-radius: 10px; color: #596479; background: transparent; }
+  .to-mode button[aria-pressed='true'] { background: white; color: #263b64; box-shadow: 0 2px 5px #22355212; }
+  .to-status { margin: 12px 18px 5px; font-size: .8rem; line-height: 1.45; color: #344562; min-height: 1.45em; font-weight: 650; }
+  .to-help { margin: 0 18px; padding-bottom: 16px; font-size: .75rem; line-height: 1.5; color: #667185; }
+  @media(max-width:680px) { .to-pads { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; padding: 14px; } .to-pad { min-height: 88px; border-radius: 16px; padding: 8px 9px; } .to-pad strong { font-size: 1.5rem; } .to-guide { padding: 12px 14px 9px; } .to-goal { flex-direction: column; gap: 1px; padding: 6px; } .to-bottom { padding-inline: 14px; } }
+  @media(max-width:370px) { .to-airport { max-width: 77px; font-size: .5rem; } .to-toolbar { padding-inline: 11px; } .to-tools button { padding-inline: 9px; font-size: .69rem; } .to-next { padding-inline: 10px; font-size: .69rem; } .to-mode button { padding-inline: 9px; } .to-extra button { padding-inline: 9px; } }
+  @media(prefers-reduced-motion:reduce) { .to-pad { transition: none; } .to-pad:active,.to-pad.is-lit { transform: none; } }
 </style>
 
 <script>
-  import { tone, hz, setMuted, isMuted, fitCanvas, pointerXY, reducedMotion, audio, out, typing } from '../lib/ten-doors/audio.mjs';
-
-  const W = 720, H = 440, LANES = 8;
-  const SCALE = [50, 53, 55, 57, 60, 62, 65, 67]; // D minor-ish organ ladder, MIDI
-  const canvas = document.getElementById('to-sky');
-  const g = fitCanvas(canvas, W, H);
-  const read = document.getElementById('to-read');
-  const planes = [];
-  const activeOscillators = new Set();
-  const stars = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: Math.random() * H * 0.7, s: Math.random() * 1.6 + 0.3 }));
-  let auto = false, nextAuto = 0, launched = 0;
-
-  function organ(midi) {
-    const c = audio();
-    if (!c) return null;
-    const t = c.currentTime;
-    const gain = c.createGain();
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(0.09, t + 1.2);
-    const oscs = [1, 2, 3].map((m, i) => {
-      const o = c.createOscillator();
-      o.type = i === 0 ? 'sine' : 'triangle';
-      o.frequency.value = hz(midi) * m;
-      const og = c.createGain();
-      og.gain.value = [1, 0.35, 0.15][i];
-      o.connect(og); og.connect(gain); o.start(t);
-      activeOscillators.add(o); o.addEventListener('ended', () => activeOscillators.delete(o), { once: true });
-      return o;
-    });
-    gain.connect(out());
-    return { gain, oscs, context: c };
+  import { mountTakeoff } from '../lib/ten-doors/takeoff-client.mjs';
+  let cleanup, mounted;
+  function mount() {
+    const root = document.querySelector('[data-takeoff-v2]');
+    if (root === mounted && cleanup) return;
+    cleanup?.(); mounted = root;
+    cleanup = root ? mountTakeoff(root) : undefined;
   }
-
-  function launch(lane) {
-    const holding = planes.filter((p) => p.voice);
-    if (holding.length >= 10) release(holding[0]);
-    const voice = organ(SCALE[lane]);
-    planes.push({ lane, x: W - 40 - lane * 6, y: H - 46, vx: -(1.6 + Math.random() * 0.6), vy: -(0.55 + lane * 0.05), t: 0, voice });
-    launched += 1;
-    read.textContent = `Departure ${launched} off lane ${lane + 1}. ${planes.length} in the air.`;
-  }
-
-  function release(p) {
-    if (!p.voice) return;
-    const c = p.voice.context;
-    const t = c.currentTime;
-    p.voice.gain.gain.cancelScheduledValues(t);
-    p.voice.gain.gain.setValueAtTime(p.voice.gain.gain.value, t);
-    p.voice.gain.gain.exponentialRampToValueAtTime(0.0001, t + 2.5);
-    p.voice.oscs.forEach((o) => o.stop(t + 2.6));
-    p.voice = null;
-  }
-
-  canvas.addEventListener('click', (e) => {
-    const { x, y } = pointerXY(canvas, e, W, H);
-    if (y < H - 90) { launch(Math.floor(Math.random() * LANES)); return; }
-    launch(Math.min(LANES - 1, Math.floor((x / W) * LANES)));
-  });
-  window.addEventListener('keydown', (e) => {
-    if (typing(e) || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-    const n = Number(e.key);
-    if (n >= 1 && n <= 8) launch(n - 1);
-  });
-  document.querySelectorAll('[data-lane]').forEach((button) => button.addEventListener('click', () => launch(Number(button.dataset.lane))));
-  function toggleAuto() {
-    auto = !auto;
-    document.getElementById('to-auto').setAttribute('aria-pressed', String(auto));
-    read.textContent = auto ? 'The airport is running its own schedule.' : 'Back to you on the tower.';
-  }
-  document.getElementById('to-auto').addEventListener('click', () => { audio(); toggleAuto(); });
-  document.getElementById('to-mute').addEventListener('click', (e) => {
-    setMuted(!isMuted());
-    e.currentTarget.textContent = isMuted() ? 'Sound off' : 'Sound on';
-    e.currentTarget.setAttribute('aria-pressed', String(isMuted()));
-  });
-
-  let animationFrame = 0, lastDraw = performance.now();
-  function draw(ts) {
-    const delta = Math.min(3, Math.max(0, (ts - lastDraw) / (1000 / 60)));
-    lastDraw = ts;
-    const still = reducedMotion();
-    const sky = g.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#081028'); sky.addColorStop(0.7, '#1b2a55'); sky.addColorStop(1, '#3a2b4a');
-    g.fillStyle = sky; g.fillRect(0, 0, W, H);
-    for (const s of stars) { g.fillStyle = `rgba(255,255,240,${still ? 0.6 : 0.4 + 0.3 * Math.sin(ts / 900 + s.x)})`; g.fillRect(s.x, s.y, s.s, s.s); }
-    // the sea at left, dunes, town lights
-    g.fillStyle = '#0b1733'; g.fillRect(0, H - 120, 150, 120);
-    g.fillStyle = '#2a2236';
-    g.beginPath(); g.moveTo(150, H - 70); for (let x = 150; x <= W; x += 20) g.lineTo(x, H - 78 - 10 * Math.sin(x / 50)); g.lineTo(W, H); g.lineTo(150, H); g.fill();
-    for (let i = 0; i < 40; i += 1) { g.fillStyle = i % 3 ? '#ffd27a' : '#ff9d6b'; g.fillRect(170 + ((i * 37) % (W - 180)), H - 70 + ((i * 13) % 14), 2, 2); }
-    // runway lanes
-    for (let l = 0; l < LANES; l += 1) {
-      const x0 = (l / LANES) * W;
-      g.fillStyle = l % 2 ? 'rgba(255,210,122,0.08)' : 'rgba(255,210,122,0.14)';
-      g.fillRect(x0, H - 40, W / LANES, 40);
-      g.fillStyle = '#ffd27a';
-      g.font = '600 12px ui-monospace, monospace'; g.textAlign = 'center';
-      g.fillText(String(l + 1), x0 + W / LANES / 2, H - 16);
-      if (!still && Math.floor(ts / 400) % LANES === l) { g.fillStyle = '#ffffff'; g.fillRect(x0 + 6, H - 40, W / LANES - 12, 2); }
-    }
-    // planes
-    for (const p of planes) {
-      p.t += delta;
-      if (!still) { p.x += p.vx * delta; p.y += p.vy * delta; p.vy *= 0.997 ** delta; }
-      if (p.voice && (p.x < 150 || (still && p.t > 220))) release(p);
-      g.save(); g.translate(p.x, p.y); g.rotate(Math.atan2(p.vy, p.vx) + Math.PI);
-      g.fillStyle = '#e8ecf5'; g.fillRect(-10, -2, 20, 4); g.fillRect(-3, -9, 5, 18); g.fillRect(7, -5, 3, 10);
-      g.restore();
-      const blink = still ? 0 : Math.floor(p.t / 20) % 2;
-      g.fillStyle = blink ? '#ff4d4d' : '#7dff9a'; g.fillRect(p.x - 1, p.y - 1, 3, 3);
-      if (!reducedMotion()) { g.strokeStyle = 'rgba(255,210,122,0.18)'; g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x - p.vx * 30, p.y - p.vy * 30); g.stroke(); }
-    }
-    for (let i = planes.length - 1; i >= 0; i -= 1) if (planes[i].x < -30 || planes[i].y < -30 || (still && planes[i].t > 380)) { release(planes[i]); planes.splice(i, 1); }
-    if (auto && ts > nextAuto) { launch(Math.floor(Math.random() * LANES)); nextAuto = ts + 1800 + Math.random() * 2600; }
-    animationFrame = requestAnimationFrame(draw);
-  }
-  animationFrame = requestAnimationFrame(draw);
-  window.addEventListener('pagehide', () => {
-    cancelAnimationFrame(animationFrame); auto = false;
-    document.getElementById('to-auto').setAttribute('aria-pressed', 'false');
-    for (const oscillator of activeOscillators) { try { oscillator.stop(); } catch { /* Already stopped. */ } }
-    activeOscillators.clear();
-    planes.length = 0;
-  });
-  window.addEventListener('pageshow', (event) => { if (event.persisted) { lastDraw = performance.now(); animationFrame = requestAnimationFrame(draw); } });
+  function unmount() { cleanup?.(); cleanup = undefined; mounted = undefined; }
+  mount();
+  document.addEventListener('astro:page-load', mount);
+  document.addEventListener('astro:before-swap', unmount);
+  window.addEventListener('pagehide', unmount);
+  window.addEventListener('pageshow', (event) => { if (event.persisted) mount(); });
 </script>

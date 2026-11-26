@@ -13,6 +13,7 @@
  * Storage (KV, prefix `loom:`):
  *   loom:log:<key>   { address, kind, label, title, seq, ops[] }   capped at MAX_OPS
  *   loom:index       recent logs, newest first                      capped at MAX_INDEX
+ *   loom:rooms       topic/inbox/agent/wallet/geo logs only          capped at MAX_ROOMS
  *   loom:out:<key>   what one sender appended, newest first         capped at MAX_OUTBOX
  * KV is read-modify-write; two writes to one log inside the same second can
  * race and the later one wins. Fine for a v1 commons; a Durable Object per log
@@ -20,13 +21,21 @@
  */
 import { AddressError, SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
 import { fold } from './fold.mjs';
+import { ARRIVAL_MS, NEEDS_WINDOW_MS, buildPiles, forYouText, isCollator, normHandle } from './for-you.mjs';
+import { makeMagic } from './magic.mjs';
+import { TASK_TOPIC, WELCOME_BUCKET, isDesk, normalName, pickOpenTask, skipsWelcome, welcomeMarkerKey, welcomeText } from './welcome.mjs';
 
 export const SPEC = 'pointcast.loom/v1';
 export const MAX_OPS = 600;
 export const MAX_INDEX = 300;
+export const MAX_ROOMS = 400;
+export const MAX_WINDOW = 120; // recent non-room threads the default directory shows
+export const MAX_LINKS = 300;  // link threads the links view returns
+const ROOM_KINDS = new Set(['topic', 'handle', 'agent', 'wallet', 'geo']);
 export const MAX_OUTBOX = 200;
 export const BODY_MAX = 2000;
 const KINDS = new Set(['note', 'question', 'claim', 'answer', 'image', 'poll', 'link']);
+const KEEP_WITH_MEDIA = new Set(['question', 'claim', 'answer', 'link', 'poll']);
 const SENDER_KINDS = new Set(['human', 'agent']);
 const RIPPLE_MAX = 4;
 const READ_CACHE = 'public, max-age=10';
@@ -114,29 +123,78 @@ function pushOp(log, op, now) {
 }
 const excerpt = (s, n = 140) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
+// Rooms (topics, inboxes, ...) live in their own list so link threads, which
+// every URL in a post opens, can't push them out of the 300-entry recent index.
+// Backfill: the first time loom:rooms reads empty it is seeded from the current
+// loom:index (bounded by MAX_INDEX). Rooms that were already dropped from the
+// index before this list existed can't be recovered; they reappear on their next post.
+const roomsOf = (index) => index.filter((e) => ROOM_KINDS.has(e.kind)).slice(0, MAX_ROOMS);
+async function loadRooms(kv, index) {
+  const stored = await readJson(kv, 'loom:rooms', null);
+  if (Array.isArray(stored)) return stored;
+  const seeded = roomsOf(index);
+  if (kv && seeded.length) { try { await writeJson(kv, 'loom:rooms', seeded); } catch { /* best effort */ } }
+  return seeded;
+}
+
 async function touchIndex(kv, log, op) {
   const index = await readJson(kv, 'loom:index', []);
   const folded = fold(log.ops);
   const entry = { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, updatedAt: log.updatedAt, count: folded.count,
-    last: { name: op.from?.name, kind: op.from?.kind, body: excerpt(op.body, 120) } };
+    last: { name: op.from?.name, kind: op.from?.kind, verified: !!op.from?.verified, body: excerpt(op.body, 120) } };
   const next = [entry, ...index.filter((e) => e.key !== log.key)].slice(0, MAX_INDEX);
+  // Link threads (most appends) skip the room list: one read-modify-write, as before.
+  if (ROOM_KINDS.has(log.kind)) {
+    // One read, one write. Rooms still in the recent index are folded back in (newest copy wins),
+    // so an entry lost to a concurrent write of this list heals on the next room post.
+    const stored = await readJson(kv, 'loom:rooms', null);
+    const byKey = new Map();
+    for (const e of [...(Array.isArray(stored) ? stored : []), ...roomsOf(next)]) {
+      const had = byKey.get(e.key);
+      if (!had || String(e.updatedAt ?? '') >= String(had.updatedAt ?? '')) byKey.set(e.key, e);
+    }
+    // Over the cap, topics are kept first and inboxes, agents, wallets and places fill what is left,
+    // so a burst of new @handles can never push a topic out of the directory.
+    const newest = (a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? ''));
+    const all = [...byKey.values()].sort(newest);
+    const topics = all.filter((e) => e.kind === 'topic').slice(0, MAX_ROOMS);
+    const rooms = [...topics, ...all.filter((e) => e.kind !== 'topic').slice(0, MAX_ROOMS - topics.length)].sort(newest);
+    await writeJson(kv, 'loom:rooms', rooms);
+  }
   await writeJson(kv, 'loom:index', next);
 }
 
+// After an edit, withdraw or moderation hide: the directory excerpt and count must not keep
+// showing the old text. Updates the log's entry in place (no reordering) in both lists.
+async function retouchIndex(kv, log) {
+  const folded = fold(log.ops);
+  const latest = [...folded.messages].sort((a, b) => a.seq - b.seq).at(-1);
+  const last = latest ? { name: latest.from?.name, kind: latest.from?.kind, verified: !!latest.from?.verified, body: excerpt(latest.body, 120) } : null;
+  for (const name of ['loom:index', 'loom:rooms']) {
+    const list = await readJson(kv, name, null);
+    if (!Array.isArray(list) || !list.some((e) => e.key === log.key)) continue;
+    await writeJson(kv, name, list.map((e) => (e.key === log.key ? { ...e, count: folded.count, last } : e)));
+  }
+}
+
+const outboxAddress = (from) => from.address || `@${from.name.toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'anon'}`;
 async function touchOutbox(kv, from, record) {
-  const sender = from.address || `@${from.name.toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'anon'}`;
-  const key = await addressKey(sender);
+  const key = await addressKey(outboxAddress(from));
   const out = await readJson(kv, `loom:out:${key}`, []);
   await writeJson(kv, `loom:out:${key}`, [record, ...out].slice(0, MAX_OUTBOX));
 }
 
-function publicView(log, { since = 0 } = {}) {
+function publicView(log, { since = 0, onlyNew = false } = {}) {
   const folded = fold(log.ops);
   const ops = log.ops.filter((op) => op.seq > since).map(({ tokenHash, ...op }) => op);
+  // "New" = appended after since, or touched by any later op (edit, +1, vote, hide), so only=new misses nothing.
+  const touched = new Set(log.ops.filter((op) => op.seq > since).map((op) => op.id));
+  const newer = folded.messages.filter((m) => m.seq > since || touched.has(m.id));
   return {
     log: { address: log.address, key: log.key, kind: log.kind, label: log.label, title: log.title, createdAt: log.createdAt, updatedAt: log.updatedAt,
       reply: `loom:${log.key}#<message id>`, url: `${SITE}/loom?to=${encodeURIComponent(log.address)}`, trimmedBefore: log.trimmedBefore ?? null, seed: !!log.seed },
-    seq: log.seq, ops, messages: folded.messages, count: folded.count, participants: folded.participants,
+    seq: log.seq, ops, messages: onlyNew ? newer : folded.messages, count: folded.count, participants: folded.participants,
+    ...(since ? { since, newCount: newer.length } : {}),
   };
 }
 
@@ -181,6 +239,114 @@ ${items}
 `;
 }
 
+/*
+ * For you (OFF-45): GET /api/loom?for=NAME[&format=json|text|rss] answers "what needs NAME" in one request.
+ * Reads are bounded: the board index, up to FOR_LOGS recent logs plus FOR_LOGS of the owner’s posting locations, (the
+ * Needs your yes window is 14 days; People and the rest keep their own 7 days; the owner's own inbox is included), at most FOR_OUTBOXES sender outboxes to find first posts, and one seen mark.
+ * Nothing is written on GET.
+ *
+ * Alerts that leave the page (the "D" of OFF-45): email needs a mail service and key, web push needs VAPID
+ * keys stored as a secret plus a subscription store, a ping service needs an account. None of those exist
+ * yet, so the RSS format below is the first version: any feed reader that notifies on new items (many
+ * phone readers do) turns People + Needs your yes into an alert, with no keys, signups or spend.
+ * Next step for true push: docs/loom-for-you-alerts.md.
+ */
+const FOR_LOGS = 40;
+const FOR_OUTBOXES = 30;
+const FOR_CACHE = 'public, max-age=30';
+const FOR_HANDLE = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
+const seenKey = async (handle) => `loom:seen:${(await sha(handle)).slice(0, 32)}`;
+
+// Bound outstanding KV reads without changing scan limits or output order.
+const FOR_READ_CONCURRENCY = 6;
+async function readInOrder(items, read) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(FOR_READ_CONCURRENCY, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await read(items[index]);
+    }
+  }));
+  return results;
+}
+
+async function forYou(kv, owner, now) {
+  const nowMs = now.getTime();
+  const index = await readJson(kv, 'loom:index', []);
+  const inboxAddress = `@${owner}`;
+  const inboxKey = await addressKey(inboxAddress);
+  const recent = index.filter((e) => e && e.key && e.key !== inboxKey && Date.parse(e.updatedAt) >= nowMs - NEEDS_WINDOW_MS);
+  const inbox = await readJson(kv, `loom:log:${inboxKey}`, null);
+  const picked = recent.slice(0, inbox ? FOR_LOGS - 1 : FOR_LOGS);
+  // Also inspect the reader's own recent posting locations, even if other rooms
+  // have pushed them out of the latest-activity slice.
+  const ownOut = await readJson(kv, `loom:out:${await addressKey(inboxAddress)}`, []);
+  const chosen = new Set([inboxKey, ...picked.map((e) => e.key)]);
+  for (const record of (Array.isArray(ownOut) ? ownOut : [])) {
+    if (picked.length >= FOR_LOGS * 2 - (inbox ? 1 : 0) || !record?.key || chosen.has(record.key)) continue;
+    picked.push({ key: record.key }); chosen.add(record.key);
+  }
+  const logs = [];
+  if (inbox) logs.push(inbox);
+  const readLogs = await readInOrder(picked, (e) => readJson(kv, `loom:log:${e.key}`, null));
+  for (const log of readLogs) if (log) logs.push(log);
+  const threads = logs.map((log) => ({ address: log.address, key: log.key, label: log.label || log.address, title: log.title ?? null, messages: fold(log.ops).messages }));
+
+  // First posts: for each sender seen in the last 48h, their outbox's oldest record, if the outbox is not full.
+  const firstPosts = new Map();
+  const asked = new Set();
+  const senders = [];
+  for (const t of threads) {
+    for (const m of t.messages) {
+      if (asked.size >= FOR_OUTBOXES) break;
+      if (m.via || !m.from?.name || isCollator(m.from) || Date.parse(m.at) < nowMs - ARRIVAL_MS) continue;
+      const box = outboxAddress(m.from);
+      if (asked.has(box)) continue;
+      asked.add(box);
+      senders.push({ box, from: m.from });
+    }
+  }
+  const outboxes = await readInOrder(senders, async ({ box }) =>
+    readJson(kv, `loom:out:${await addressKey(box)}`, []));
+  // Apply results in the original encounter order, not completion order.
+  for (let i = 0; i < senders.length; i += 1) {
+    const { box, from } = senders[i], out = outboxes[i];
+    if (!Array.isArray(out) || !out.length || out.length >= MAX_OUTBOX) continue;
+    const first = out[out.length - 1];
+    if (!first?.id || Date.parse(first.at) < nowMs - ARRIVAL_MS) continue;
+    const where = threads.find((x) => x.key === first.key);
+    firstPosts.set(normHandle(from.name) || box, { name: from.name, kind: from.kind, verified: !!from.verified, fromAddress: from.address ?? null,
+      address: first.to, key: first.key, id: first.id, at: first.at, body: first.body, label: where?.label ?? describe(first.to).label });
+  }
+  const mark = kv ? await kv.get(await seenKey(owner)) : null;
+  const seenAt = mark && Number.isFinite(Date.parse(mark)) ? mark : null;
+  return { ...buildPiles({ owner, threads, seenAt, now, firstPosts }), scanned: { logs: threads.length, window: '14d' } };
+}
+
+function forYouRss(result) {
+  const name = result.owner.replace(/^@/, '');
+  const items = [...result.piles.needsYes.map((it) => ({ it, yes: true })), ...result.piles.people.map((it) => ({ it, yes: false }))]
+    .sort((a, b) => Date.parse(b.it.at) - Date.parse(a.it.at))
+    .map(({ it, yes }) => `    <item>
+      <title>${xml(`${yes ? 'Needs your yes · ' : ''}${it.from.name}${it.from.kind === 'human' ? '' : ` (${it.from.kind})`} in ${it.label}: ${excerpt(it.snippet, 80)}`)}</title>
+      <link>${xml(`${SITE}/loom?to=${encodeURIComponent(it.address)}#${it.id}`)}</link>
+      <guid isPermaLink="false">${xml(it.link)}</guid>
+      <pubDate>${new Date(it.at).toUTCString()}</pubDate>
+      <description>${xml(it.snippet)}</description>
+    </item>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${xml(`What needs ${result.owner} · the Loom`)}</title>
+    <link>${xml(`${SITE}/loom/for/${name}`)}</link>
+    <description>${xml(`Posts from people and open NEEDS ${name.toUpperCase()} lines for ${result.owner} on the PointCast Loom. Names are self-declared.`)}</description>
+${items}
+  </channel>
+</rss>
+`;
+}
+
 function validateFrom(raw, verifiedAgent) {
   const from = raw && typeof raw === 'object' ? raw : {};
   const name = clean(from.name, 40);
@@ -204,9 +370,28 @@ function validateFrom(raw, verifiedAgent) {
   return out;
 }
 
-function validateMessage(body) {
+// Signed task cards (Loom v2, V2-1). A card is the fixed shape a runner may pick up and work on.
+// The card itself is plain data any sender can post; it only counts as SIGNED when the server saw a
+// verified PointCast agent key on the append (from.verified). That flag is computed on read in fold.mjs,
+// never accepted from a client. Runners take signed cards and ignore everything else on the board.
+export const CARD_ID = /^[A-Z][A-Z0-9]{0,7}-[0-9]{1,4}[a-z]?$/;
+export const CARD_CEILING_MIN = 1000;
+export const CARD_CEILING_MAX = 5000000;
+function validateCard(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AddressError('card_invalid');
+  const id = clean(raw.id, 16);
+  if (!CARD_ID.test(id)) throw new AddressError('card_id_invalid');
+  const scope = clean(raw.scope, 280), target = clean(raw.target, 200), done = clean(raw.done, 280);
+  if (!scope) throw new AddressError('card_scope_required');
+  if (!target) throw new AddressError('card_target_required');
+  if (!done) throw new AddressError('card_done_required');
+  const ceiling = raw.ceiling;
+  if (typeof ceiling !== 'number' || !Number.isInteger(ceiling) || ceiling < CARD_CEILING_MIN || ceiling > CARD_CEILING_MAX) throw new AddressError('card_ceiling_range');
+  return { id, scope, target, done, ceiling };
+}
+
+function validateMessage(body, text) {
   const kind = KINDS.has(body.kind) ? body.kind : 'note';
-  const text = clean(body.body, BODY_MAX);
   const out = { kind, body: text };
   if (body.media) {
     const url = String(body.media.url ?? '');
@@ -215,7 +400,8 @@ function validateMessage(body) {
     if (u.protocol !== 'https:' || url.length > 600) throw new AddressError('media_url_invalid');
     out.media = { url: u.toString(), alt: clean(body.media.alt, 200) };
     if (!text && !out.media.alt) throw new AddressError('media_alt_required');
-    out.kind = body.kind === 'poll' ? 'poll' : 'image';
+    // A question/claim/answer/link with a picture is still that kind; the picture is its attachment.
+    out.kind = KEEP_WITH_MEDIA.has(kind) ? kind : 'image';
   }
   if (body.poll || kind === 'poll') {
     const question = clean(body.poll?.question ?? text, 140);
@@ -225,6 +411,7 @@ function validateMessage(body) {
     out.kind = 'poll';
     out.body ||= question;
   }
+  if (body.card !== undefined && body.card !== null) out.card = validateCard(body.card);
   if (!out.body && !out.media) throw new AddressError('body_required');
   if (body.confidence !== undefined && body.confidence !== null) {
     const c = Number(body.confidence);
@@ -240,6 +427,49 @@ function validateMessage(body) {
 async function clientTag(request, body) {
   const seed = clean(body.clientId, 64) || request.headers.get('CF-Connecting-IP') || 'anon';
   return `c_${(await sha(`loom:${seed}`)).slice(0, 12)}`;
+}
+
+/** `limit` may answer a boolean (old contract) or { allowed, retryAfter }. */
+async function gate(limit, bucket, clientId) {
+  const r = await limit(bucket, clientId);
+  if (r && typeof r === 'object') return { allowed: !!r.allowed, retryAfter: Math.max(1, Math.ceil(Number(r.retryAfter) || 60)) };
+  return { allowed: !!r, retryAfter: 60 };
+}
+const limited = (retryAfter) => json({ ok: false, spec: SPEC, error: 'rate_limited', retryAfterSec: retryAfter }, 429, { 'Retry-After': String(retryAfter) });
+
+/** Edit distance on at most 64 chars, one reused row; cheap enough to run on every miss. */
+function distance(a, b) {
+  a = a.slice(0, 64); b = b.slice(0, 64);
+  const row = Array.from({ length: b.length + 1 }, (_, k) => k);
+  for (let i = 1; i <= a.length; i += 1) {
+    let diag = row[0];
+    row[0] = i;
+    for (let k = 1; k <= b.length; k += 1) {
+      const up = row[k];
+      row[k] = Math.min(up + 1, row[k - 1] + 1, diag + (a[i - 1] === b[k - 1] ? 0 : 1));
+      diag = up;
+    }
+  }
+  return row[b.length];
+}
+/** Real addresses closest to one that has never been written. Handles only match handles. */
+function nearestTo(target, index) {
+  const strip = (x) => x.replace(/^https?:\/\//, '').slice(0, 64);
+  const want = strip(target.address);
+  const out = [];
+  for (const e of index) {
+    if (!(e.count > 0) || e.address === target.address || (target.kind === 'handle') !== (e.kind === 'handle')) continue;
+    const other = strip(e.address);
+    const longest = Math.max(want.length, other.length, 1);
+    // distance >= length gap, so a big gap makes sim >= 0.3 impossible: skip the O(n*m) work
+    if (1 - Math.abs(want.length - other.length) / longest < 0.3) continue;
+    const sim = 1 - distance(want, other) / longest;
+    if (sim >= 0.3) out.push({ e, sim });
+  }
+  return out
+    .sort((a, b) => (Number(b.e.kind === target.kind) - Number(a.e.kind === target.kind)) || b.sim - a.sim)
+    .slice(0, 5)
+    .map(({ e }) => ({ address: e.address, kind: e.kind, title: e.title, count: e.count }));
 }
 
 async function resolveTarget(kv, to) {
@@ -284,13 +514,69 @@ async function ripple(kv, source, op, now) {
   return reached;
 }
 
-export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '' } = {}) {
+/**
+ * First hello (OFF-36). Runs inside the newcomer's own POST, before their outbox is touched.
+ * Returns the welcome op (already pushed onto `log`) or null. Never throws.
+ * Cap policy: if the board-wide welcome budget is spent we skip silently and do not write the marker, but the
+ * newcomer's own post still lands in their outbox, so on their next post they count as known and are never
+ * welcomed later. A capped name simply goes without a welcome (a desk may still follow up by hand).
+ */
+async function firstHello(kv, { log, op, from, now, limit }) {
+  try {
+    if (log.kind !== 'topic' || skipsWelcome(from.name)) return null;
+    const hash = (await sha(normalName(from.name))).slice(0, 32);
+    if (await kv.get(welcomeMarkerKey(hash))) return null;
+    // Regulars from before this deploy: anything already in their outbox (by address or by name) means known.
+    const mine = await readJson(kv, `loom:out:${await addressKey(outboxAddress(from))}`, []);
+    const byName = await readJson(kv, `loom:out:${await addressKey(outboxAddress({ name: from.name }))}`, []);
+    if (mine.length || byName.length) { await kv.put(welcomeMarkerKey(hash), now); return null; }
+    const cap = await gate(limit, WELCOME_BUCKET, 'board');
+    if (!cap.allowed) return null;
+    // Most recent desk (agent) post: this log first, then the board index.
+    const name = normalName(from.name);
+    let deskAt = null, deskWhere = 'here';
+    for (let i = log.ops.length - 1; i >= 0 && !deskAt; i -= 1) {
+      const o = log.ops[i];
+      if (o.op === 'append' && isDesk(o.from) && normalName(o.from.name) !== name && o.id !== op.id) deskAt = o.at;
+    }
+    if (!deskAt) {
+      deskWhere = 'on the board';
+      const index = await readJson(kv, 'loom:index', []);
+      deskAt = index.filter((e) => isDesk(e.last) && normalName(e.last?.name) !== name && e.updatedAt).map((e) => e.updatedAt).sort().pop() ?? null;
+    }
+    const bot = from.kind === 'agent';
+    let task = null;
+    if (bot) task = pickOpenTask((await loadLog(kv, TASK_TOPIC)).ops);
+    const body = welcomeText({ bot, deskAt, deskWhere, task, now });
+    await kv.put(welcomeMarkerKey(hash), now);
+    // Deliberately not passed through ripple(): fixed text, no echoes.
+    return pushOp(log, { op: 'append', id: `m_${randomId(5)}`, kind: 'note', from: COLLATOR, parent: op.id, body, cites: [], tags: [], mentions: [], auto: 'first-hello' }, now);
+  } catch { return null; }
+}
+
+/**
+ * Options: `drumCount` is an optional async () => number|null, read only when a message's first
+ * line is the magic word "drum" (OFF-49); functions/api/loom.ts wires it to the drum counter.
+ */
+export async function handleLoom(request, { kv = null, clock = () => new Date(), limit = async () => true, verifiedAgent = null, adminKey = '', firstHelloEnabled = true, drumCount = null } = {}) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   const url = new URL(request.url);
   try {
     if (request.method === 'GET' || request.method === 'HEAD') {
       const to = url.searchParams.get('to');
       const from = url.searchParams.get('from');
+      if (url.searchParams.has('for')) {
+        const raw = String(url.searchParams.get('for') ?? '');
+        const owner = normHandle(raw);
+        if (!owner) return fail('for_name_required');
+        if (!FOR_HANDLE.test(owner)) return fail('for_name_invalid');
+        const now = clock();
+        const result = { ok: true, spec: SPEC, ...(await forYou(kv, owner, now)), generatedAt: now.toISOString() };
+        const format = url.searchParams.get('format');
+        if (format === 'rss') return new Response(forYouRss(result), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': FOR_CACHE } });
+        if (format === 'text') return new Response(forYouText(result, { generatedAt: result.generatedAt }), { headers: { ...HEADERS, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': FOR_CACHE } });
+        return json(result, 200, { 'Cache-Control': FOR_CACHE });
+      }
       if (to) {
         const target = parseAddress(to);
         const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
@@ -299,15 +585,31 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         if (format === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8', 'Cache-Control': READ_CACHE });
         if (format === 'rss') return new Response(asRss(log), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
         const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
-        // Live polls (since=) stay uncached; whole-thread reads can ride a short edge cache.
-        return json({ ok: true, spec: SPEC, kvBound: !!kv, ...publicView(log, { since }) }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
+        // since= alone keeps the whole folded thread in `messages` (the /loom page patches from it);
+        // only=new (what the MCP tool sends) trims `messages` to seq > since.
+        const onlyNew = since > 0 && url.searchParams.get('only') === 'new';
+        const view = publicView(log, { since, onlyNew });
+        // A never-written address still opens (people post first), but says so and offers real neighbours.
+        const exists = !!log.createdAt;
+        let miss = {};
+        if (!exists && target.kind !== 'reply') {
+          const nearest = nearestTo(target, await readJson(kv, 'loom:index', []));
+          miss = { nearest, ...(nearest.length ? { hint: `Nothing has been appended to ${target.address} yet. Did you mean one of these? Post to it to start the thread.` } : {}) };
+        }
+        // Live polls (since=) stay uncached; whole-thread reads and misses can ride a short edge cache.
+        return json({ ok: true, spec: SPEC, kvBound: !!kv, exists, ...miss, ...view }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
       }
       if (from) {
         const sender = parseAddress(from);
         const out = await readJson(kv, `loom:out:${await addressKey(sender.address)}`, []);
         return json({ ok: true, spec: SPEC, kvBound: !!kv, from: sender.address, sent: out });
       }
-      const stored = await readJson(kv, 'loom:index', []);
+      const recent = await readJson(kv, 'loom:index', []);
+      const rooms = await loadRooms(kv, recent);
+      // Union of the recent window and the room list, one entry per key, newest first.
+      const seen = new Set();
+      const stored = [...recent, ...rooms].filter((e) => !seen.has(e.key) && seen.add(e.key))
+        .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
       const seeds = [];
       for (const address of Object.keys(SEEDS)) {
         const key = await addressKey(address);
@@ -315,12 +617,31 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       }
       const q = clean(url.searchParams.get('q'), 60).toLowerCase();
       const kind = url.searchParams.get('kind');
-      let logs = [...stored, ...seeds];
-      if (kind) logs = logs.filter((e) => e.kind === kind);
+      const wantLinks = kind === 'url' || url.searchParams.get('view') === 'links';
+      let logs = [...stored, ...seeds].sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+      const linkAll = stored.filter((e) => e.kind === 'url');
+      const linksHidden = linkAll.filter((e) => (e.count ?? 0) < 2).length;
+      if (wantLinks) logs = logs.filter((e) => e.kind === 'url');
+      else if (kind) logs = logs.filter((e) => e.kind === kind);
+      else {
+        // Default: every room, plus the recent window of other threads; one-message link threads stay out.
+        let others = 0;
+        logs = logs.filter((e) => {
+          if (ROOM_KINDS.has(e.kind)) return true;
+          if (q) return true; // a search looks through everything, one-message links included
+          if (e.kind === 'url' && (e.count ?? 0) < 2) return false;
+          return (others += 1) <= MAX_WINDOW;
+        });
+      }
       if (q) logs = logs.filter((e) => `${e.address} ${e.title ?? ''} ${e.last?.body ?? ''}`.toLowerCase().includes(q));
       const kinds = {};
       for (const e of stored) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
-      return json({ ok: true, spec: SPEC, kvBound: !!kv, logs: logs.slice(0, 120), network: { logs: stored.length, kinds, hosts: [...new Set(stored.filter((e) => e.kind === 'url').map((e) => new URL(e.address).hostname))].slice(0, 40) } });
+      // compact=1 (alias short=1): no last.body, no network.hosts, for callers that only need the list.
+      const compact = ['compact', 'short'].some((k) => ['1', 'true'].includes(url.searchParams.get(k)));
+      const roomCount = stored.filter((e) => ROOM_KINDS.has(e.kind)).length + seeds.length;
+      const shown = logs.slice(0, wantLinks ? MAX_LINKS : MAX_ROOMS + MAX_WINDOW).map((e) => (compact ? { ...e, last: e.last ? { name: e.last.name, kind: e.last.kind } : e.last } : e));
+      const hosts = compact ? undefined : [...new Set(stored.filter((e) => e.kind === 'url').map((e) => new URL(e.address).hostname))].slice(0, 40);
+      return json({ ok: true, spec: SPEC, kvBound: !!kv, logs: shown, views: { rooms: roomCount, links: linkAll.length, linksHidden }, network: { logs: stored.length, kinds, ...(hosts ? { hosts } : {}) } });
     }
 
     if (request.method !== 'POST') return fail('method_not_allowed', 405, {});
@@ -334,22 +655,71 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     const now = clock().toISOString();
 
     if (action === 'append') {
-      if (!await limit(verifiedAgent ? 'loom:append:verified' : 'loom:append')) return fail('rate_limited', 429);
       const from = validateFrom(body.from, verifiedAgent);
-      const message = validateMessage(body);
+      // Budget per sender, not per caller IP: MCP callers all arrive from one server IP. Verified agents
+      // are keyed on their agent id; unsigned senders on a hash of name+operator, plus a looser per-IP
+      // ceiling so rotating names cannot flood.
+      // The IP is part of the unsigned key so nobody elsewhere can burn "Mike"'s budget by posting as Mike.
+      const ip = request.headers.get('CF-Connecting-IP') || (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'anon';
+      const senderKey = verifiedAgent ? verifiedAgent : `sender:${(await sha(`${ip}|${from.name.toLowerCase()}|${(from.operator ?? '').toLowerCase()}`)).slice(0, 16)}`;
+      const own = await gate(limit, verifiedAgent ? 'loom:append:verified' : 'loom:append', senderKey);
+      if (!own.allowed) return limited(own.retryAfter);
+      if (!verifiedAgent) {
+        const ceiling = await gate(limit, 'loom:append:ip');
+        if (!ceiling.allowed) return limited(ceiling.retryAfter);
+      }
+      const text = clean(body.body, Infinity);
+      if (text.length > BODY_MAX) return fail('body_too_long', 400, { bodyMax: BODY_MAX, bodyLength: text.length });
+      const message = validateMessage(body, text);
       const { log, parent } = await resolveTarget(kv, body.to);
-      if (body.title && !log.title && log.seq === 0) log.title = clean(body.title, 90) || null;
+      // A title sticks on a new log, or late on an untitled #topic; otherwise say why not.
+      let title;
+      const wanted = clean(body.title, 90);
+      if (wanted) {
+        if (parent) title = { applied: false, reason: 'title_on_reply' };
+        else if (log.title) title = log.title === wanted ? { applied: true, value: wanted } : { applied: false, reason: 'title_already_set' };
+        // Late titles only on topics (channels): renaming an inbox, URL or place thread after the fact is a hijack.
+        else if (log.seq === 0 || log.kind === 'topic') { log.title = wanted; title = { applied: true, value: wanted }; }
+        else title = { applied: false, reason: 'title_after_first_post' };
+      }
       const { mentions, topics } = extractAddresses(message.body);
       const token = randomId(12);
+      // Magic words (OFF-49): filled in here, by the server, so a client can never supply or fake one.
+      // validateMessage never copies a client `magic`; this is the only place the field is set.
+      const magic = await makeMagic(message.body, { from, now, drumCount });
       const op = pushOp(log, { op: 'append', id: `m_${randomId(5)}`, from, parent: parent ?? (typeof body.parent === 'string' ? body.parent : null), ...message,
-        tags: topics.slice(0, 8), mentions: mentions.slice(0, 8), tokenHash: await sha(token) }, now);
+        ...(magic ? { magic } : {}), tags: topics.slice(0, 8), mentions: mentions.slice(0, 8), tokenHash: await sha(token) }, now);
       if (op.parent && !log.ops.some((o) => o.op === 'append' && o.id === op.parent)) op.parent = null;
       const reached = await ripple(kv, log, op, now);
+      const hello = firstHelloEnabled ? await firstHello(kv, { log, op, from, now, limit }) : null;
       await saveLog(kv, log);
       await touchIndex(kv, log, op);
       await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
       const { tokenHash, ...publicOp } = op;
-      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached }, 201);
+      return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached, ...(hello ? { welcome: { id: hello.id } } : {}), ...(title ? { title } : {}) }, 201);
+    }
+
+    if (action === 'seen') {
+      // "New since you last looked", kept on the server by name (a phone's in-app browser forgets localStorage).
+      // Names are unsigned on this board, so anyone can move anyone's mark forward. That is low-stakes: a mark
+      // only makes items look "not new"; it never hides an item from a pile. The mark only moves forward, and
+      // a future time is clamped to now.
+      const g = await gate(limit, 'loom:seen');
+      if (!g.allowed) return limited(g.retryAfter);
+      const owner = typeof body.name === 'string' ? normHandle(body.name.slice(0, 64)) : '';
+      if (!owner) return fail('seen_name_required');
+      if (!FOR_HANDLE.test(owner)) return fail('seen_name_invalid');
+      let at = now;
+      if (body.at !== undefined && body.at !== null && body.at !== '') {
+        const t = Date.parse(String(body.at));
+        if (!Number.isFinite(t)) return fail('seen_at_invalid');
+        at = new Date(Math.min(t, Date.parse(now))).toISOString();
+      }
+      const key = await seenKey(owner);
+      const prior = await kv.get(key);
+      const moved = !(Date.parse(prior) >= Date.parse(at));
+      if (moved) await kv.put(key, at);
+      return json({ ok: true, spec: SPEC, owner: `@${owner}`, seenAt: moved ? at : prior, moved });
     }
 
     const target = parseAddress(body.to);
@@ -361,15 +731,18 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     if (action === 'edit' || action === 'withdraw') {
       if (!original.tokenHash || !safeEqual(await sha(String(body.token ?? '')), original.tokenHash)) return fail('edit_token_invalid', 403);
       if (action === 'edit') {
+        if (clean(body.body, Infinity).length > BODY_MAX) return fail('body_too_long', 400, { bodyMax: BODY_MAX });
         const text = clean(body.body, BODY_MAX);
         if (!text) return fail('body_required');
         pushOp(log, { op: 'edit', id, body: text }, now);
       } else pushOp(log, { op: 'hide', id, reason: 'withdrawn' }, now);
     } else if (action === 'plus') {
-      if (!await limit('loom:plus')) return fail('rate_limited', 429);
+      const g = await gate(limit, 'loom:plus');
+      if (!g.allowed) return limited(g.retryAfter);
       pushOp(log, { op: 'plus', id, by: await clientTag(request, body) }, now);
     } else if (action === 'vote') {
-      if (!await limit('loom:plus')) return fail('rate_limited', 429);
+      const g = await gate(limit, 'loom:plus');
+      if (!g.allowed) return limited(g.retryAfter);
       const choice = Number(body.choice);
       if (!original.poll || !Number.isInteger(choice) || !original.poll.options[choice]) return fail('vote_invalid');
       pushOp(log, { op: 'vote', id, choice, by: await clientTag(request, body) }, now);
@@ -378,6 +751,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       pushOp(log, { op: 'hide', id, reason: clean(body.reason, 80) || 'moderated' }, now);
     } else return fail('action_unknown');
     await saveLog(kv, log);
+    if (action !== 'plus' && action !== 'vote') { try { await retouchIndex(kv, log); } catch { /* the log is saved; the excerpt refreshes on the next post */ } }
     const view = publicView(log);
     return json({ ok: true, spec: SPEC, seq: log.seq, message: view.messages.find((m) => m.id === id) ?? null });
   } catch (error) {

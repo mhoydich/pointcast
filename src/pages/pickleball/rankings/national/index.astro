@@ -1,0 +1,44 @@
+---
+import RankShell from '../../../../components/pickleball-rankings/RankShell.astro';
+import RankTable from '../../../../components/pickleball-rankings/RankTable.astro';
+import { TIERS, SOURCES, BASE, LEVEL_BANDS, byLevel, tierStatus, fmtDate } from '../../../../lib/pickleball-rankings/data.mjs';
+
+const t = TIERS.national;
+const st = tierStatus('national');
+const national = (SOURCES.link_only || []).filter((s: any) => s.scale === 'national' || s.scale === 'pro');
+const usable = (SOURCES.usable || []).filter((s: any) => s.scale === 'national' || s.scale === 'pro');
+---
+<RankShell title={st.available ? 'National pickleball rankings (US)' : 'US pickleball rankings: not available yet'} description={st.available ? "PointCast's national pickleball rankings: the open Court Rating recipe over public, organizer-published results, rolled up from regional ladders." : "PointCast has no US pickleball ranking yet. This page shows the Southern California rollup so far and links to the national and pro tours' own rankings."} active="national" json={`${BASE}rankings.json`} csv={`${BASE}rankings.csv`}>
+  <h1>{st.available ? 'National rankings · United States' : 'National rankings · not available yet'}</h1>
+  <p class="pr-dek">{st.available
+    ? 'Every counted adult finish at a US venue, rated with the same open recipe as the El Segundo ladder. Same results, same numbers on every tier; only the rank changes.'
+    : 'PointCast does not rank US or pro players yet. The national tours and rating services publish their own order; follow the links below for who leads there. The table on this page is our Southern California rollup, not a US ranking.'}</p>
+
+  <div class={`pr-status${st.available ? ' ok' : ''}`}>
+    <strong>{st.available ? 'Available' : 'Unavailable as a national ranking'}</strong>
+    {st.available ? `Built from ${st.coverage.feeds} feeds.` : st.reason}
+  </div>
+
+  <div class="pr-cards">
+    <div class="pr-card"><h3>Feeds rolled up</h3><span class="n">{st.coverage.feeds}</span><p>{t.feeds.map((f: any) => f.name).join(', ')}</p></div>
+    <div class="pr-card"><h3>Events</h3><span class="n">{st.coverage.events}</span><p>{st.coverage.cities.join(', ')}</p></div>
+    <div class="pr-card"><h3>Players</h3><span class="n">{st.coverage.players}</span><p>From published podium finishes only.</p></div>
+    <div class="pr-card"><h3>National and pro sources usable</h3><span class="n">{usable.length || 'none'}</span><p><a href={`${BASE}method/#sources`}>Source survey</a>, checked {fmtDate(SOURCES.checked)}.</p></div>
+  </div>
+
+  <h2>By level</h2>
+  <nav class="pr-chips" aria-label="Level">
+    {LEVEL_BANDS.map((b) => { const n = byLevel(t.players, b).length; return n ? <a href={`${BASE}level/${b}/`}>{b} · {n}</a> : <span title="unavailable">{b}</span>; })}
+  </nav>
+
+  <h2>{st.available ? 'Rolled up so far' : 'Southern California rollup (not a US ranking)'}</h2>
+  <RankTable players={t.players} caption={st.available ? `US rollup. Ordered by Court Rating, then narrower band, then name. As of ${fmtDate(t.as_of)}.` : `Southern California only. A rank here is a rank among these local finishes, not a US rank. Ordered by Court Rating, then narrower band, then name. As of ${fmtDate(t.as_of)}.`} />
+
+  <h2>National and pro results: link out only</h2>
+  <p>These hold the national championships, pro tours and national ratings. Their terms, a sign-in or app-only access keep us from reusing their results, so PointCast copies nothing from them. Follow the links to see their own rankings.</p>
+  {national.length ? (
+    <ul class="pr-list">{national.map((s: any) => <li><a href={s.link} rel="noopener nofollow">{s.name}</a> · {s.why}</li>)}</ul>
+  ) : (
+    <ul class="pr-list"><li>See the <a href={`${BASE}method/#sources`}>source survey</a>.</li></ul>
+  )}
+</RankShell>

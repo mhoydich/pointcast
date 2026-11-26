@@ -114,11 +114,9 @@ run('git', ['push', 'origin', `HEAD:${defaultBranch}`]);
 const shortSha = output('git', ['rev-parse', '--short', 'HEAD']);
 console.log(`\nPushed ${shortSha} to origin/${defaultBranch}.`);
 
-// Pages has no Git hookup (the webhook died in 2026-04), so a push alone
-// never reaches pointcast.xyz. scripts/deploy.sh builds origin/main in the
-// shared ~/pc-deploy worktree, queued behind any other agent's deploy.
-if (rawArgs.includes('--no-deploy')) {
-  console.log('Skipping deploy (--no-deploy). Run scripts/deploy.sh to go live.');
-} else {
-  run('bash', [join(root, 'scripts/deploy.sh')]);
-}
+// The push to main starts the GitHub workflow "Deploy PointCast to Cloudflare
+// Pages", which builds, gates, uploads and smoke-tests it. This script no
+// longer deploys; --no-deploy is still accepted and changes nothing.
+console.log('GitHub deploys this push. It is live when that run is green:');
+console.log(`  gh run list --workflow cloudflare-pages.yml --branch ${defaultBranch} --limit 3`);
+console.log('If that run fails, see docs/OPERATIONS.md, section 3.');

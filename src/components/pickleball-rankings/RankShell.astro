@@ -1,0 +1,86 @@
+---
+/**
+ * Frame for every /pickleball/rankings/ page: preview banner, tier nav, footer with the
+ * data rules. Always noindex while this is a preview (src/lib/seo-rules.mjs also keeps
+ * the whole prefix out of the sitemap).
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { BASE, TIERS, fmtDate, mailto } from '../../lib/pickleball-rankings/data.mjs';
+
+interface Props { title: string; description: string; active?: string; eyebrow?: string; json?: string; csv?: string }
+const { title, description, active = '', eyebrow = 'PICKLEBALL · RANKINGS', json, csv } = Astro.props;
+const nav = [
+  ['national', 'National', `${BASE}national/`],
+  ['global', 'Global', `${BASE}global/`],
+  ['regional', 'Regional', `${BASE}regional/`],
+  ['level', 'By level', `${BASE}level/`],
+  ['method', 'Method', `${BASE}method/`],
+];
+const alternates = [
+  json ? { type: 'application/json', href: json, title: `${title} (JSON)` } : null,
+  csv ? { type: 'text/csv', href: csv, title: `${title} (CSV)` } : null,
+].filter(Boolean) as { type: string; href: string; title?: string }[];
+---
+<BlockLayout title={`${title} · PointCast`} description={description} noindex hideAds showNetworkStrip={false} jsonLd={null} alternates={alternates}>
+  <div class="pr">
+    <p class="pr-preview" role="note"><strong>Preview.</strong> Not live and not indexed. Nothing here goes public until Mike says so, naming the item.</p>
+    <p class="pr-eyebrow"><a href="/pickleball">PointCast pickleball</a> · {eyebrow}</p>
+    <nav class="pr-nav" aria-label="Rankings">
+      <a href={BASE} aria-current={active === 'home' ? 'page' : undefined}>Overview</a>
+      {nav.map(([k, label, href]) => <a href={href} aria-current={active === k ? 'page' : undefined}>{label}</a>)}
+    </nav>
+    <slot />
+    <footer class="pr-foot">
+      <p>Public results only: name as the organizer listed it, division and level, events, finishes, partners, dates and source. No addresses, contacts, photos, socials, ages beyond the published bracket, or guesses about anyone. Adults' divisions only.</p>
+      <p>Data as of {fmtDate(TIERS.as_of)} (America/Los_Angeles). Open data: <a href={`${BASE}rankings.json`}>rankings.json</a> · <a href={`${BASE}rankings.csv`}>rankings.csv</a> · <a href={`${BASE}results.csv`}>results.csv</a> · <a href={`${BASE}method/`}>method</a>.</p>
+      <p>Want off every tier? <a href={mailto('remove', '')}>Email us</a> with the name as listed. No proof needed, same day. We keep a <a href={`${BASE}method/#do-not-list`}>do-not-list</a> so it stays that way.</p>
+      <p class="pr-small">Built by Claude (Opus 5.5, with Fable 5.1 on the source survey and tier plan) from the El Segundo ladder's open recipe on elsegundo.xyz. Not affiliated with USA Pickleball, DUPR, PPA, or any tour.</p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  .pr { max-width: 980px; margin: 0 auto; padding: 16px; font: 16px/1.5 Inter, system-ui, sans-serif; color: #17211a; }
+  .pr a { color: #2f5d0f; }
+  .pr h1 { font-size: clamp(1.7rem, 4vw, 2.5rem); line-height: 1.1; margin: .3em 0 .2em; letter-spacing: -.01em; }
+  .pr h2 { font-size: 1.25rem; margin: 1.6em 0 .4em; }
+  .pr-preview { background: #fff4c2; border: 1px solid #e0c35a; padding: 8px 12px; border-radius: 8px; font-size: .92rem; }
+  .pr-eyebrow { font: 600 .75rem/1.2 'JetBrains Mono', ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; color: #5a6b5e; margin: 14px 0 6px; }
+  .pr-eyebrow a { color: inherit; }
+  .pr-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; }
+  .pr-nav a { padding: 5px 11px; border: 1px solid #c9d6c3; border-radius: 999px; text-decoration: none; font-size: .9rem; color: #17211a; }
+  .pr-nav a[aria-current='page'] { background: #3b6d11; border-color: #3b6d11; color: #fff; }
+  .pr-dek { font-size: 1.05rem; color: #3c4a40; max-width: 70ch; }
+  .pr-status { border-left: 4px solid #b3541e; background: #fbefe8; padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+  .pr-status.ok { border-color: #3b6d11; background: #eef5e8; }
+  .pr-status strong { display: block; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+  .pr-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin: 12px 0; }
+  .pr-card { border: 1px solid #d7e1d2; border-radius: 10px; padding: 12px 14px; background: #fbfdf9; }
+  .pr-card h3 { margin: 0 0 4px; font-size: 1.02rem; }
+  .pr-card p { margin: 0; font-size: .9rem; color: #3c4a40; }
+  .pr-card .n { font: 700 1.5rem/1.1 'JetBrains Mono', ui-monospace, monospace; display: block; margin: 4px 0; }
+  .pr-tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #d7e1d2; border-radius: 10px; }
+  .pr-table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+  .pr-table th, .pr-table td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #e6ece3; white-space: nowrap; }
+  .pr-table th { font: 600 .72rem/1.2 'JetBrains Mono', ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; color: #5a6b5e; background: #f3f7f0; position: sticky; top: 0; }
+  .pr-table td.num { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .pr-table td.name { white-space: normal; min-width: 150px; }
+  .pr-tag { display: inline-block; font: 600 .7rem/1 'JetBrains Mono', ui-monospace, monospace; padding: 3px 6px; border-radius: 4px; background: #e9efe5; color: #3c4a40; }
+  .pr-tag.settled { background: #3b6d11; color: #fff; }
+  .pr-tag.self-declared { background: #fff4c2; }
+  .pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .pr-chips a, .pr-chips span { font: 600 .85rem/1 'JetBrains Mono', ui-monospace, monospace; padding: 7px 10px; border-radius: 6px; border: 1px solid #c9d6c3; text-decoration: none; color: #17211a; }
+  .pr-chips a[aria-current='page'] { background: #17211a; color: #fff; }
+  .pr-chips span { color: #8a978d; border-style: dashed; }
+  .pr-more { margin: 10px 0; font-size: .92rem; }
+  .pr-claim { border: 1px solid #d7e1d2; border-radius: 10px; padding: 12px 16px; margin: 18px 0; background: #fbfdf9; }
+  .pr-claim h2 { margin-top: .2em; }
+  .pr-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 10px 0; }
+  .pr-facts div { border: 1px solid #e0e8dc; border-radius: 8px; padding: 8px 10px; }
+  .pr-facts dt { font: 600 .7rem/1.2 'JetBrains Mono', ui-monospace, monospace; text-transform: uppercase; letter-spacing: .06em; color: #5a6b5e; }
+  .pr-facts dd { margin: 3px 0 0; font: 700 1.1rem/1.2 'JetBrains Mono', ui-monospace, monospace; }
+  .pr-foot { margin-top: 32px; border-top: 1px solid #d7e1d2; padding-top: 12px; font-size: .88rem; color: #3c4a40; }
+  .pr-small { font-size: .8rem; color: #6b786e; }
+  .pr ul.pr-list li { margin: 4px 0; }
+  .pr code { font-size: .88em; background: #f1f4ee; padding: 1px 4px; border-radius: 4px; }
+</style>

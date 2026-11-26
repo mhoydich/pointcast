@@ -415,7 +415,7 @@ export function mountFooterBar(root, scope) {
         if (fresh.length) swFlashFeed();
       }).catch(function () {});
     }
-    setTimeout(function () { swPoll(true); }, 2500);
+    setTimeout(function () { swPoll(); }, 2500);
     setInterval(swPoll, 60000);
 
     if ($airHere) on($airHere, 'click', airHere);
@@ -1302,6 +1302,7 @@ export function mountFooterBar(root, scope) {
     }
 
     async function updatePresence() {
+      if (document.visibilityState === 'hidden') return;
       try {
         var r = await fetch('/api/presence/snapshot', { cache: 'no-store' });
         if (!r.ok) return;
@@ -1325,6 +1326,7 @@ export function mountFooterBar(root, scope) {
     }
     updatePresence();
     setInterval(updatePresence, 45 * 1000);
+    on(document, 'visibilitychange', function () { if (document.visibilityState === 'visible') updatePresence(); });
 
     setTimeout(function () {
       try { reconcileEchoes(); } catch (e) {}
@@ -1539,6 +1541,7 @@ export function mountFooterBar(root, scope) {
     // BROADCAST tray polling — use the editorial now-playing record and
     // reuse the presence snapshot for audience count.
     async function refreshBroadcast() {
+      if (document.visibilityState === 'hidden') return;
       var $now      = root.querySelector('[data-pc-ref="fb-bcast-now"]');
       var $nowId    = root.querySelector('[data-pc-ref="fb-bcast-now-id"]');
       var $nowTitle = root.querySelector('[data-pc-ref="fb-bcast-now-title"]');
@@ -2002,6 +2005,7 @@ export function mountFooterBar(root, scope) {
     // tray opens for the first time.
     setTimeout(refreshBroadcast, 1800);
     setInterval(refreshBroadcast, 90 * 1000);
+    on(document, 'visibilitychange', function () { if (document.visibilityState === 'visible') refreshBroadcast(); });
 
     (function scheduleNounRefresh() {
       var now = new Date();

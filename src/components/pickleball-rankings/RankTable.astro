@@ -1,0 +1,34 @@
+---
+import { BASE, fix2 } from '../../lib/pickleball-rankings/data.mjs';
+
+interface Props { players: any[]; limit?: number; moreHref?: string; caption: string }
+const { players, limit, moreHref, caption } = Astro.props;
+const shown = limit ? players.slice(0, limit) : players;
+const tagClass = (t: string) => (t || '').toLowerCase().replace(/\s+/g, '-');
+---
+{players.length === 0 ? (
+  <p class="pr-status"><strong>Unavailable</strong>No player has a counted result in this view yet.</p>
+) : (
+  <>
+    <div class="pr-tablewrap">
+      <table class="pr-table">
+        <caption class="pr-small" style="text-align:left;padding:8px 10px">{caption}</caption>
+        <thead><tr><th scope="col">Rank</th><th scope="col">Player (as listed)</th><th scope="col">Court Rating</th><th scope="col">Band</th><th scope="col">Level</th><th scope="col">Tag</th><th scope="col">Results</th></tr></thead>
+        <tbody>
+          {shown.map((p) => (
+            <tr>
+              <td class="num">{p.rank}</td>
+              <td class="name"><a href={`${BASE}player/${p.slug}/`}>{p.name}</a></td>
+              <td class="num">{fix2(p.court_rating)}</td>
+              <td class="num">±{fix2(p.band)}</td>
+              <td class="num">{p.level}</td>
+              <td><span class={`pr-tag ${tagClass(p.tag)}`}>{p.tag}</span></td>
+              <td class="num">{p.results.filter((r: any) => r.recency > 0).length}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    {limit && players.length > limit && moreHref ? <p class="pr-more">Showing {limit} of {players.length}. <a href={moreHref}>See all {players.length}</a>, or get the <a href={`${BASE}rankings.csv`}>CSV</a>.</p> : null}
+  </>
+)}

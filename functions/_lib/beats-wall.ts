@@ -257,7 +257,7 @@ export async function floorStats(request: Request, env: BeatsEnv): Promise<Respo
 // Hands out the next serial for a Moment type so "#12" means the 12th of its kind anywhere.
 // Moments are earned on the phone (the server can't see a room peak or a Daily), so this only numbers
 // them; best effort, because KV has no atomic increment (see the header).
-export const MOMENT_TYPES = ['peak-groove', 'perfect-daily', 'first-beat', 'tenth-beat', 'hundredth-beat', 'ten-nods', 'floor-hopper'];
+export const MOMENT_TYPES = ['peak-groove', 'perfect-daily', 'first-beat', 'tenth-beat', 'hundredth-beat', 'ten-nods', 'floor-hopper', 'battle-won', 'battle-played']; /* v3:battle */
 export async function claimMoment(request: Request, env: BeatsEnv): Promise<Response> {
   if (!env.VISITS) return json({ error: 'storage not bound' }, 503);
   let b: any;

@@ -47,6 +47,7 @@ import { CABINET_COLLECT_PROTOCOL } from '../data/agent-cabinet';
 // The MCP catalogue comes from the server file itself, so the manifest
 // advertises exactly what tools/list and resources/list serve.
 import { MCP_RESOURCE_URIS, MCP_SERVER_INFO, MCP_TOOL_NAMES } from '../../functions/api/mcp';
+import { toolEffect } from '../../functions/api/mcp';
 
 function contractKey(key: string) {
   return key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
@@ -970,6 +971,7 @@ export const GET: APIRoute = async () => {
         // tools/list and resources/list serve. Never hand-type these.
         toolCount: MCP_TOOL_NAMES.length,
         tools: MCP_TOOL_NAMES,
+        toolEffects: Object.fromEntries(MCP_TOOL_NAMES.map((n) => [n, toolEffect(n)])),
         resourceCount: MCP_RESOURCE_URIS.length,
         resources: MCP_RESOURCE_URIS,
         note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler wiki briefs, agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
@@ -1245,6 +1247,19 @@ export const GET: APIRoute = async () => {
       description: t.description,
       footerHint: t.footerHint,
     })),
+
+    atlas: {
+      spec: 'https://pointcast.xyz/cartography/atlas',
+      schema: 'https://pointcast.xyz/atlas/schema.json',
+      atlas: 'https://pointcast.xyz/atlas.json',
+      index: 'https://pointcast.xyz/atlas/index.json',
+      map: 'https://pointcast.xyz/cartography/map',
+      crossSite: 'https://pointcast.xyz/cartography/map?site=all',
+      mcpTools: ['atlas_search', 'atlas_get', 'atlas_near', 'atlas_links'],
+      license: 'CC0-1.0',
+      writes: 'none; suggestions by pull request',
+      sisterAtlases: ['https://elsegundo.xyz/atlas.json'],
+    },
 
     contracts: {
       ...contractSources,

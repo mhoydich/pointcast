@@ -10,11 +10,19 @@
  *   plus    +1 from someone
  *   vote    a choice on a poll gadget
  *   hide    moderation; the message stays in the log but is folded away
+ *
+ * `magic` (OFF-49) is set once by the server on the append and never recomputed. An edit keeps it,
+ * but it only shows while the edited body's first line still says the word; edit the word back and
+ * the original fact returns (an edit can never re-roll the dice).
  */
+import { taskSummaries } from '../../../public/loom-task-status.mjs';
+import { magicStillSays } from './magic.mjs';
+
 export function fold(ops, { until = Infinity } = {}) {
   const byId = new Map();
   const order = [];
   const participants = new Map();
+  const firstMagic = new Map();
   for (const op of ops ?? []) {
     if (!op || op.seq > until) continue;
     if (op.op === 'append') {
@@ -24,7 +32,11 @@ export function fold(ops, { until = Infinity } = {}) {
         media: op.media ?? null, cites: op.cites ?? [], parent: op.parent ?? null,
         confidence: op.confidence ?? null, via: op.via ?? null, links: op.links ?? null,
         poll: op.poll ? { question: op.poll.question, options: op.poll.options.map((label) => ({ label, votes: 0 })) } : null,
-        tags: op.tags ?? [], mentions: op.mentions ?? [],
+        tags: op.tags ?? [], mentions: op.mentions ?? [], magic: op.magic ?? null,
+        // V2-1/V2-2: signed is the server's word, never the client's: a card counts only when the append
+        // carried a verified PointCast agent key. Every message carries the flag so a runner checks one field.
+        card: op.card ? { ...op.card } : null,
+        signed: !!(op.card && op.from?.verified === true && op.from?.kind === 'agent' && String(op.from?.address ?? '').startsWith('agent:')),
         edits: 0, editedAt: null, plus: 0, plusBy: [], hidden: false, depth: 0, replies: 0,
       };
       if (message.parent && byId.has(message.parent)) {
@@ -35,6 +47,7 @@ export function fold(ops, { until = Infinity } = {}) {
         message.parent = null;
       }
       byId.set(op.id, message);
+      if (op.magic) firstMagic.set(op.id, op.magic);
       order.push(message);
       const who = op.from?.address || op.from?.name;
       if (who) {
@@ -45,7 +58,11 @@ export function fold(ops, { until = Infinity } = {}) {
     }
     const message = byId.get(op.id);
     if (!message) continue;
-    if (op.op === 'edit') { message.body = op.body; message.edits += 1; message.editedAt = op.at; }
+    if (op.op === 'edit') {
+      message.body = op.body; message.edits += 1; message.editedAt = op.at;
+      const magic = firstMagic.get(op.id);
+      if (magic) message.magic = magicStillSays(magic, op.body) ? magic : null;
+    }
     else if (op.op === 'plus') { if (!message.plusBy.includes(op.by)) { message.plusBy.push(op.by); message.plus += 1; } }
     else if (op.op === 'vote' && message.poll) {
       message.poll.voters ??= {};
@@ -66,5 +83,7 @@ export function fold(ops, { until = Infinity } = {}) {
   walk('');
   for (const m of threaded) if (m.poll) delete m.poll.voters;
   const visible = threaded.filter((m) => !m.hidden);
+  const statuses = taskSummaries(visible);
+  for (const m of visible) if (statuses.has(m.id)) m.taskStatus = statuses.get(m.id);
   return { messages: visible, count: visible.length, participants: [...participants.values()].sort((a, b) => b.count - a.count) };
 }

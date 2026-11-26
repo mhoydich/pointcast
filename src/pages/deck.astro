@@ -1,0 +1,109 @@
+---
+/**
+ * /deck — what to try on PointCast, as cards you swipe sideways on a phone.
+ *
+ * Mike asked in chat on 2026-11-10 for "an area of ... pointcast that is this
+ * mobile card swipe". Drafted by Claude Code (author cc per VOICE.md); none of
+ * the copy is in Mike's voice.
+ *
+ * Cards are kept by hand in src/data/deck.json. tests/deck-links.test.mjs
+ * fails if any card links to a route that does not exist in this repo.
+ * The cards scroll and snap with CSS alone; /js/deck.js only adds Back/Next,
+ * dots and arrow keys.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import data from '../data/deck.json';
+
+const title = 'The deck';
+const description = 'What to try on PointCast, as cards you swipe through on a phone: start here, what was added, play, listen, say something, and the door for AI agents.';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const [y, m, d] = data.updated.split('-').map(Number);
+const updated = `${MONTHS[m - 1]} ${d}, ${y}`;
+const cards = data.cards;
+const n = cards.length;
+---
+
+<BlockLayout title={title} description={description} author="PointCast · Claude Code" hideAds showNetworkStrip={false}>
+  <div class="deck-page">
+    <nav class="deck-crumb" aria-label="Breadcrumb"><a href="/">← Home</a><span aria-hidden="true">·</span><a href="/links">All links</a></nav>
+    <p class="deck-kicker">THE DECK · {n} CARDS · UPDATED {updated.toUpperCase()}</p>
+    <h1 class="deck-title">What to try on PointCast</h1>
+    <p class="deck-lead">Swipe sideways, or use Back and Next. Every line opens the page it names.</p>
+
+    <ul class="deck" id="deck" tabindex="0" aria-label="Cards. Swipe, or use the arrow keys.">
+      {cards.map((c, i) => (
+        <li class="deck-card" id={`card-${c.id}`} aria-label={`Card ${i + 1} of ${n}: ${c.title}`}>
+          <p class="deck-tag">{c.tag}</p>
+          <h2>{c.title}</h2>
+          <p class="deck-blurb">{c.blurb}</p>
+          <ul class="deck-items">
+            {c.items.map((it) => (
+              <li><a href={it.href}><span>{it.text}</span><span aria-hidden="true">→</span></a></li>
+            ))}
+          </ul>
+          <p class="deck-count" aria-hidden="true">{i + 1} / {n}</p>
+        </li>
+      ))}
+    </ul>
+
+    <div class="deck-nav">
+      <button type="button" id="deck-prev" class="deck-btn" hidden>← Back</button>
+      <p id="deck-dots" class="deck-dots" aria-hidden="true"></p>
+      <button type="button" id="deck-next" class="deck-btn" hidden>Next →</button>
+    </div>
+
+    <p class="deck-foot">Kept by hand and updated when something ships. Drafted by Claude Code for PointCast. See <a href="/links">all links</a> for the full list of surfaces.</p>
+  </div>
+  <script is:inline src="/js/deck.js" defer></script>
+</BlockLayout>
+
+<style>
+  .deck-page { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  .deck-crumb { display: flex; gap: 8px; font-family: var(--pc-font-mono); font-size: 12px; }
+  .deck-crumb a { display: inline-flex; align-items: center; min-height: 44px; }
+  .deck-kicker { margin: 8px 0 0; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.12em; color: var(--pc-ink-muted); }
+  .deck-title { margin: 6px 0 8px; font-size: clamp(28px, 7vw, 40px); font-weight: 500; line-height: 1.1; letter-spacing: -0.01em; }
+  .deck-lead { margin: 0 0 20px; color: var(--pc-ink-soft); }
+
+  .deck {
+    list-style: none; margin: 0 -16px; padding: 4px 16px 12px;
+    display: grid; grid-auto-flow: column; grid-auto-columns: min(86%, 520px); gap: 12px;
+    overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory; scroll-padding-inline: 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .deck:focus-visible { outline: 2px solid var(--pc-accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) { .deck { scroll-behavior: smooth; } }
+
+  .deck-card {
+    scroll-snap-align: start; scroll-snap-stop: always;
+    display: flex; flex-direction: column;
+    min-height: 420px; padding: 20px 18px 14px;
+    background: var(--pc-bg); border: 1px solid var(--pc-rule); border-radius: 4px;
+  }
+  .deck-tag { margin: 0; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pc-accent); }
+  .deck-card h2 { margin: 8px 0 6px; font-size: 24px; font-weight: 500; line-height: 1.2; }
+  .deck-blurb { margin: 0 0 14px; color: var(--pc-ink-soft); font-size: 15px; line-height: 1.5; }
+  .deck-items { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--pc-rule-soft); }
+  .deck-items li { border-bottom: 1px solid var(--pc-rule-soft); }
+  .deck-items a {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    min-height: 48px; padding: 10px 2px; color: var(--pc-ink); font-size: 16px; line-height: 1.35;
+  }
+  .deck-items a:hover span:first-child { text-decoration: underline; }
+  .deck-items a:focus-visible { outline: 2px solid var(--pc-accent); outline-offset: 2px; }
+  .deck-items a span:last-child { color: var(--pc-accent); flex: none; }
+  .deck-count { margin: auto 0 0; padding-top: 12px; font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-ink-muted); text-align: right; }
+
+  .deck-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+  .deck-btn {
+    min-width: 96px; min-height: 44px; padding: 0 14px;
+    font-family: var(--pc-font-mono); font-size: 13px; letter-spacing: 0.04em;
+    color: var(--pc-ink); background: var(--pc-bg); border: 1px solid var(--pc-ink); border-radius: 4px; cursor: pointer;
+  }
+  .deck-btn:disabled { color: var(--pc-ink-muted); border-color: var(--pc-rule); cursor: default; }
+  .deck-btn:focus-visible { outline: 2px solid var(--pc-accent); outline-offset: 2px; }
+  .deck-dots { margin: 0; display: flex; gap: 6px; font-size: 10px; color: var(--pc-rule); }
+  .deck-dots :global(b) { color: var(--pc-ink); font-weight: 400; }
+  .deck-foot { margin-top: 28px; font-size: 13px; color: var(--pc-ink-muted); }
+</style>

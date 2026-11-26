@@ -164,4 +164,40 @@ export const SHRINES: SmallShrine[] = [
       },
     ],
   },
+  {
+    id: 'tide',
+    title: 'Tide',
+    number: '05',
+    kicker: 'The water comes back',
+    invitation: 'The sea keeps its own time, twice a day.',
+    focus: 'The lace of foam where the wave stops.',
+    image: '/images/small-shrines/tide.webp',
+    alt: 'A pale beach at dawn, with a soft line of foam at the water and one smooth grey stone resting on the wet sand.',
+    color: '#4f6e73',
+    audioMode: 'tide',
+    credit: 'Original artwork · drawn in code by Claude',
+    sourceUrl: '/images/small-shrines/provenance.json',
+    phases: [
+      {
+        at: 0,
+        label: 'Arrive',
+        text: 'Find the line where the foam stops on the sand. It is a little higher or lower than it was an hour ago, whether anyone watched or not.',
+      },
+      {
+        at: 15,
+        label: 'Notice',
+        text: 'Follow that line from left to right, slowly. Breathe as you already are. The sea is doing its work without any help.',
+      },
+      {
+        at: 30,
+        label: 'Stay',
+        text: 'Something you are waiting on is also moving at its own pace. Let it go out a little, the way water does.',
+      },
+      {
+        at: 45,
+        label: 'Return',
+        text: 'The tide turns again in about six hours. Bring your eyes back to the room, and to one thing near your hand.',
+      },
+    ],
+  },
 ];

@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAddress, extractAddresses, addressKey } from '../src/lib/loom/address.mjs';
 import { fold } from '../src/lib/loom/fold.mjs';
-import { handleLoom } from '../src/lib/loom/service.mjs';
+import { handleLoom, MAX_ROOMS } from '../src/lib/loom/service.mjs';
 
 function memoryKv() {
   const map = new Map();
   return { map, get: async (k) => map.get(k) ?? null, put: async (k, v) => { map.set(k, v); } };
 }
 const base = 'https://pointcast.xyz/api/loom';
-const post = (kv, body, opts = {}) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), { kv, ...opts });
+const post = (kv, body, opts = {}) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), { kv, firstHelloEnabled: false, ...opts }); // first-hello is covered in loom-welcome.test.mjs
 const get = async (kv, query) => (await handleLoom(new Request(`${base}${query}`), { kv })).json();
 
 test('addresses canonicalise so spellings of one thing share a log', () => {
@@ -164,4 +164,253 @@ test('whole-thread reads may be cached briefly; live polls never are', async () 
   const poll = await handleLoom(new Request(`${base}?to=%23t&since=1`), { kv });
   assert.equal(full.headers.get('cache-control'), 'public, max-age=10');
   assert.equal(poll.headers.get('cache-control'), 'no-store');
+});
+
+const alice = { name: 'Ana', kind: 'human' };
+// A counting limiter shaped like functions/api/loom.ts: per (bucket, clientId) fixed budget.
+const countingLimit = (max, ipMax = 1000) => { const seen = new Map(); return async (bucket, clientId = 'ip') => {
+  const k = `${bucket}:${clientId}`; const n = (seen.get(k) ?? 0) + 1; seen.set(k, n);
+  return { allowed: n <= (bucket === 'loom:append:ip' ? ipMax : max), retryAfter: 42 };
+}; };
+
+test('A: a refused append says when to retry, in the body and in Retry-After', async () => {
+  const kv = memoryKv();
+  const res = await post(kv, { to: '#t', from: alice, body: 'x' }, { limit: async () => ({ allowed: false, retryAfter: 37 }) });
+  assert.equal(res.status, 429);
+  assert.equal(res.headers.get('retry-after'), '37');
+  assert.equal((await res.json()).retryAfterSec, 37);
+  const legacy = await post(kv, { to: '#t', from: alice, body: 'x' }, { limit: async () => false });
+  assert.equal((await legacy.json()).retryAfterSec, 60);
+});
+
+test('B: budgets are per sender; one sender hits its own limit, another is untouched', async () => {
+  const kv = memoryKv();
+  const limit = countingLimit(2);
+  const as = (name, operator) => post(kv, { to: '#t', from: { name, kind: 'agent', operator }, body: 'hi' }, { limit });
+  assert.equal((await as('Bot A', 'op')).status, 201);
+  assert.equal((await as('bot a', 'OP')).status, 201); // same sender, case-insensitive
+  assert.equal((await as('Bot A', 'op')).status, 429);
+  assert.equal((await as('Bot B', 'op')).status, 201);
+  // rotating names still hits the per-IP ceiling
+  const flood = countingLimit(99, 2);
+  const names = [];
+  for (const n of ['x1', 'x2', 'x3']) names.push((await post(kv, { to: '#t', from: { name: n, kind: 'human' }, body: 'hi' }, { limit: flood })).status);
+  assert.deepEqual(names, [201, 201, 429]);
+  // verified agents are keyed on their id
+  const seen = [];
+  await post(kv, { to: '#t', from: alice, body: 'v' }, { verifiedAgent: 'pci_x', limit: async (b, c) => { seen.push([b, c]); return true; } });
+  assert.deepEqual(seen, [['loom:append:verified', 'pci_x']]);
+});
+
+test('C: a late title sticks on an untitled log; otherwise it is refused with a reason', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#late', from: alice, body: 'first' });
+  const late = await (await post(kv, { to: '#late', from: alice, body: 'second', title: 'Named late' })).json();
+  assert.deepEqual(late.title, { applied: true, value: 'Named late' });
+  assert.equal((await get(kv, '?to=%23late')).log.title, 'Named late');
+  const again = await (await post(kv, { to: '#late', from: alice, body: 'third', title: 'Other' })).json();
+  assert.deepEqual(again.title, { applied: false, reason: 'title_already_set' });
+  const reply = await (await post(kv, { to: late.address, from: alice, body: 'r', title: 'On reply' })).json();
+  assert.deepEqual(reply.title, { applied: false, reason: 'title_on_reply' });
+  const seed = await (await post(kv, { to: '#loom', from: alice, body: 's', title: 'Mine' })).json();
+  assert.equal(seed.title.applied, false);
+  assert.equal((await get(kv, '?to=%23loom')).log.title, 'The Loom — start here');
+  assert.equal((await (await post(kv, { to: '#none', from: alice, body: 'n' })).json()).title, undefined);
+});
+
+test('D: a question with an image stays a question and keeps the image', async () => {
+  const kv = memoryKv();
+  const media = { url: 'https://pointcast.xyz/a.png', alt: 'a court' };
+  const q = await (await post(kv, { to: '#t', from: alice, kind: 'question', body: 'Is this court open?', media })).json();
+  assert.equal(q.message.kind, 'question');
+  assert.equal(q.message.media.url, media.url);
+  assert.equal((await (await post(kv, { to: '#t', from: alice, kind: 'note', body: 'look', media })).json()).message.kind, 'image');
+  assert.equal((await (await post(kv, { to: '#t', from: alice, body: 'look', media })).json()).message.kind, 'image');
+});
+
+test('E: reading a never-written address says so and offers nearest real names', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: 'https://pointcast.xyz/court', from: alice, body: 'dry' });
+  await post(kv, { to: '@court', from: alice, body: 'inbox' });
+  await post(kv, { to: '#courts', from: alice, body: 'topic' });
+  const miss = await get(kv, `?to=${encodeURIComponent('https://pointcast.xyz/courts')}`);
+  assert.equal(miss.exists, false);
+  assert.equal(miss.count, 0);
+  assert.equal(miss.nearest[0].address, 'https://pointcast.xyz/court');
+  assert.ok(miss.nearest.every((n) => n.kind !== 'handle'));
+  assert.ok(miss.hint);
+  const handle = await get(kv, '?to=%40courts');
+  assert.deepEqual(handle.nearest.map((n) => n.address), ['@court']);
+  const hit = await get(kv, `?to=${encodeURIComponent('https://pointcast.xyz/court')}`);
+  assert.equal(hit.exists, true);
+  assert.equal(hit.nearest, undefined);
+  assert.equal((await get(kv, '?to=%23loom')).exists, true);
+});
+
+test('G: only=new returns just newer messages; plain since keeps the whole thread; compact directory', async () => {
+  const kv = memoryKv();
+  for (const b of ['one', 'two', 'three']) await post(kv, { to: 'https://example.com/p', from: alice, body: `${b} http://example.org/x` });
+  const q = `?to=${encodeURIComponent('https://example.com/p')}`;
+  const full = await get(kv, `${q}&since=1`);
+  assert.equal(full.messages.length, 3); // page contract: whole folded thread
+  assert.equal(full.since, 1);
+  const only = await get(kv, `${q}&since=1&only=new`);
+  assert.deepEqual(only.messages.map((m) => m.body.split(' ')[0]), ['two', 'three']);
+  assert.equal(only.count, 3);
+  assert.equal(only.newCount, 2);
+  const dir = await get(kv, '?compact=1');
+  assert.ok(dir.logs.length > 0 && dir.logs.every((e) => !e.last || e.last.body === undefined));
+  assert.equal(dir.network.hosts, undefined);
+  const short = await get(kv, '?short=1');
+  assert.equal(short.network.hosts, undefined);
+  const normal = await get(kv, '');
+  assert.ok(normal.network.hosts.length > 0);
+  assert.ok(normal.logs.some((e) => e.last?.body));
+});
+
+test('review 1: unsigned budget is per IP+name, so another IP cannot lock a name out', async () => {
+  const kv = memoryKv();
+  const limit = countingLimit(1);
+  const as = (ip) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip }, body: JSON.stringify({ to: '#t', from: alice, body: 'x' }) }), { kv, limit });
+  assert.equal((await as('1.1.1.1')).status, 201);
+  assert.equal((await as('1.1.1.1')).status, 429);
+  assert.equal((await as('2.2.2.2')).status, 201);
+});
+
+test('review 2: late titles only stick on topics', async () => {
+  const kv = memoryKv();
+  for (const to of ['https://example.com/p', '@someone']) {
+    await post(kv, { to, from: alice, body: 'first' });
+    const r = await (await post(kv, { to, from: alice, body: 'second', title: 'Hijack' })).json();
+    assert.deepEqual(r.title, { applied: false, reason: 'title_after_first_post' });
+  }
+  assert.equal((await (await post(kv, { to: 'https://example.com/new', from: alice, body: 'a', title: 'First time' })).json()).title.applied, true);
+});
+
+test('review 4: misses get the short read cache and skip hopeless candidates', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#a', from: alice, body: 'x' });
+  await post(kv, { to: 'https://pointcast.xyz/court', from: alice, body: 'x' });
+  const res = await handleLoom(new Request(`${base}?to=${encodeURIComponent('https://pointcast.xyz/courts')}`), { kv });
+  assert.equal(res.headers.get('cache-control'), 'public, max-age=10');
+  assert.deepEqual((await res.json()).nearest.map((n) => n.address), ['https://pointcast.xyz/court']);
+});
+
+test('review 5: only=new includes older messages touched by edits and plus', async () => {
+  const kv = memoryKv();
+  const a = await (await post(kv, { to: '#t', from: alice, body: 'old' })).json();
+  await post(kv, { to: '#t', from: alice, body: 'mid' });
+  await post(kv, { action: 'plus', to: a.address, clientId: 'c' });
+  await post(kv, { action: 'edit', to: a.address, token: a.editToken, body: 'old, edited' });
+  const r = await get(kv, '?to=%23t&since=2&only=new');
+  assert.deepEqual(r.messages.map((m) => m.body), ['old, edited']);
+  assert.equal(r.messages[0].plus, 1);
+  assert.equal((await get(kv, '?to=%23t&since=2')).messages.length, 2);
+});
+
+test('over-long appends are refused without writing; a body at the limit still posts', async () => {
+  const kv = memoryKv();
+  const body = 'y'.repeat(2000);
+  const rejected = await post(kv, { to: '#t', from: alice, body: '  ' + body + 'z  ' });
+  assert.equal(rejected.status, 400);
+  const error = await rejected.json();
+  assert.equal(error.error, 'body_too_long');
+  assert.equal(error.bodyMax, 2000);
+  assert.equal(error.bodyLength, 2001);
+  assert.equal(kv.map.size, 0);
+
+  const accepted = await post(kv, { to: '#t', from: alice, body: '  ' + body + '  ' });
+  assert.equal(accepted.status, 201);
+  const made = await accepted.json();
+  assert.equal(made.message.body, body);
+  const edit = await post(kv, { action: 'edit', to: made.address, token: made.editToken, body: body + 'z' });
+  assert.equal(edit.status, 400);
+  assert.equal((await edit.json()).error, 'body_too_long');
+  assert.equal((await get(kv, '?to=%23t')).messages[0].body, body);
+});
+
+test('C8: link threads cannot push topics and inboxes out of the directory', async () => {
+  const kv = memoryKv();
+  const clock = (() => { let t = Date.parse('2026-11-01T00:00:00Z'); return () => new Date((t += 1000)); })();
+  const p = (to, body) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, from: { name: `bot${to.length}`, kind: 'agent' }, body, clientId: 'c8' }) }), { kv, clock, firstHelloEnabled: false, limit: async () => true });
+  for (let i = 0; i < 10; i += 1) assert.equal((await p(`#room-${i}`, `hello ${i}`)).status, 201);
+  for (let i = 0; i < 5; i += 1) assert.equal((await p(`@inbox${i}`, `hi ${i}`)).status, 201);
+  for (let i = 0; i < 130; i += 1) assert.equal((await p(`https://example.com/p${i}`, `note ${i}`)).status, 201);
+  assert.equal((await p('https://example.com/p7', 'second')).status, 201);
+  const d = await get(kv, '');
+  const addrs = d.logs.map((e) => e.address);
+  for (let i = 0; i < 10; i += 1) assert.ok(addrs.includes(`#room-${i}`), `#room-${i}`);
+  for (let i = 0; i < 5; i += 1) assert.ok(addrs.includes(`@inbox${i}`), `@inbox${i}`);
+  assert.ok(addrs.includes('https://example.com/p7'));
+  assert.ok(!addrs.includes('https://example.com/p8'));
+  assert.equal(d.logs.filter((e) => e.kind === 'url').length, 1);
+  assert.equal(d.views.links, 130);
+  assert.ok(d.views.linksHidden >= 100);
+  const links = await get(kv, '?kind=url');
+  assert.ok(links.logs.some((e) => e.address === 'https://example.com/p8' && e.count === 1));
+  assert.equal(links.logs[0].address, 'https://example.com/p7');
+  const links2 = await get(kv, '?view=links');
+  assert.ok(links2.logs.length >= 100 && links2.logs.every((e) => e.kind === 'url'));
+  const topics = await get(kv, '?kind=topic');
+  for (let i = 0; i < 10; i += 1) assert.ok(topics.logs.some((e) => e.address === `#room-${i}`));
+  assert.ok(topics.logs.every((e) => e.kind === 'topic'));
+});
+
+test('C8: loom:rooms backfills once from the recent index', async () => {
+  const kv = memoryKv();
+  const entry = (address, kind) => ({ address, key: `k${address}`, kind, label: address, updatedAt: '2026-11-01T00:00:00Z', count: 1 });
+  kv.map.set('loom:index', JSON.stringify([entry('#old', 'topic'), entry('https://a.example/x', 'url')]));
+  const d = await get(kv, '');
+  assert.ok(d.logs.some((e) => e.address === '#old'));
+  assert.ok(JSON.parse(kv.map.get('loom:rooms')).some((e) => e.address === '#old'));
+});
+
+test('C8 review: a room survives more link threads than the recent index holds; search still finds one-message links', async () => {
+  const kv = memoryKv();
+  const clock = (() => { let t = Date.parse('2026-11-01T00:00:00Z'); return () => new Date((t += 1000)); })();
+  const p = (to, body) => handleLoom(new Request(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, from: { name: 'bot', kind: 'agent' }, body, clientId: 'c8r' }) }), { kv, clock, firstHelloEnabled: false, limit: async () => true });
+  await p('#keeper', 'first');
+  await p('@keeper', 'hi');
+  for (let i = 0; i < 310; i += 1) assert.equal((await p(`https://example.com/q${i}`, `note ${i}`)).status, 201);
+  assert.ok(!JSON.parse(kv.map.get('loom:index')).some((e) => e.address === '#keeper'), 'the recent index really dropped the room');
+  const d = await get(kv, '');
+  assert.ok(d.logs.some((e) => e.address === '#keeper'));
+  assert.ok(d.logs.some((e) => e.address === '@keeper'));
+  assert.ok((await get(kv, '?kind=topic')).logs.some((e) => e.address === '#keeper'));
+  const found = await get(kv, '?q=q309');
+  assert.ok(found.logs.some((e) => e.address === 'https://example.com/q309'));
+  // A room entry lost from loom:rooms (concurrent write) heals from the recent index on the next room post.
+  await p('#second', 'x');
+  kv.map.set('loom:rooms', JSON.stringify(JSON.parse(kv.map.get('loom:rooms')).filter((e) => e.address !== '#second')));
+  await p('#third', 'y');
+  const rooms = JSON.parse(kv.map.get('loom:rooms')).map((e) => e.address);
+  assert.deepEqual(rooms.slice(0, 2), ['#third', '#second']);
+  assert.ok(rooms.includes('#keeper'));
+});
+
+test('C8 review: a withdrawn message leaves the directory excerpt in both lists', async () => {
+  const kv = memoryKv();
+  const alice = { name: 'alice', kind: 'human' };
+  await post(kv, { to: '#quiet', from: alice, body: 'kept line' });
+  const made = await (await post(kv, { to: '#quiet', from: alice, body: 'secret oops' })).json();
+  assert.match(JSON.stringify((await get(kv, '')).logs), /secret oops/);
+  const res = await post(kv, { action: 'withdraw', to: '#quiet', id: made.message.id, token: made.editToken });
+  assert.equal(res.status, 200);
+  assert.doesNotMatch(kv.map.get('loom:index'), /secret oops/);
+  assert.doesNotMatch(kv.map.get('loom:rooms'), /secret oops/);
+  const row = (await get(kv, '')).logs.find((e) => e.address === '#quiet');
+  assert.equal(row.count, 1);
+  assert.equal(row.last.body, 'kept line');
+});
+
+test('C8: over the room cap, a flood of new inboxes never pushes a topic out', async () => {
+  const kv = memoryKv();
+  const entry = (address, kind, at) => ({ address, key: `k${address}`, kind, label: address, updatedAt: at, count: 2 });
+  const handles = Array.from({ length: MAX_ROOMS }, (_, i) => entry(`@h${i}`, 'handle', `2026-11-13T10:${String(i % 60).padStart(2, '0')}:00Z`));
+  kv.map.set('loom:rooms', JSON.stringify([entry('#quiet', 'topic', '2026-11-01T00:00:00Z'), ...handles.slice(0, MAX_ROOMS - 1)]));
+  await post(kv, { to: '@newcomer', from: { name: 'someone', kind: 'human' }, body: 'hi' });
+  const rooms = JSON.parse(kv.map.get('loom:rooms'));
+  assert.equal(rooms.length, MAX_ROOMS);
+  assert.ok(rooms.some((e) => e.address === '#quiet'));
+  assert.ok(rooms.some((e) => e.address === '@newcomer'));
 });

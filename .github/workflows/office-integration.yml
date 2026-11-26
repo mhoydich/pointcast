@@ -1,0 +1,39 @@
+name: Office integration draft
+on:
+  pull_request:
+    paths:
+      - 'src/pages/office.astro'
+      - 'src/lib/office-page.mjs'
+      - 'src/data/office-seat-records.json'
+      - 'functions/api/office.ts'
+      - 'public/office/app.*'
+      - 'public/office/room-controls.mjs'
+      - 'public/office/freshness.mjs'
+      - 'public/office/view-state.mjs'
+      - 'tests/office-integration/**'
+      - 'scripts/prepare-office-composite.py'
+      - 'scripts/check-office-freshness-browser.mjs'
+      - 'docs/office/integration*'
+      - '.github/workflows/office-integration.yml'
+concurrency:
+  group: office-integration-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  composite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: python scripts/prepare-office-composite.py
+      - run: node --test tests/office-integration/*.test.mjs
+      - run: npm ci
+      - run: npm run audit:agents
+      - run: node_modules/.bin/esbuild functions/api/office.ts --bundle --platform=browser --format=esm --outfile=/tmp/office-api.mjs
+      - run: npm run build:bare
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144

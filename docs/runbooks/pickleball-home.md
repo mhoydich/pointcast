@@ -34,7 +34,7 @@ purchase, reservation, or wallet transaction was added by this page.
 
 All existing paddle IDs, Court Blocks, games, RALLY crew tools, and board routes
 remain. Two retired instruction URLs redirect to the new hub's learning/gear
-sections. Standard deployment remains `scripts/deploy.sh` after reviewed PR merge;
+sections. Standard deployment is the GitHub deploy run after reviewed PR merge;
 coordinate the single publisher with the active release lane.
 
 ## PointCast Practice Desk 02

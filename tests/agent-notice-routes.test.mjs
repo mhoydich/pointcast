@@ -69,8 +69,8 @@ test('resident slash routes and similarly named routes retain current visit and 
   const {result}=await request('https://pointcast.xyz'+path);assert.equal(result.status,200);assert.equal(state.next,1);assert.equal(state.records,1);assert.equal(state.wait,1);assert.ok(state.transforms>0);assert.ok(state.classify>0);
  }
 });
-test('unrelated resident bare routes retain the existing generic directory fetch',async()=>{
- const {result}=await request('https://pointcast.xyz/agents/mike');assert.equal(result.status,200);assert.equal(state.fetch,1);assert.equal(state.next,0);assert.ok(state.classify>0);
+test('unrelated resident bare routes read the slash asset without a second worker hop',async()=>{
+ const {result}=await request('https://pointcast.xyz/agents/mike');assert.equal(result.status,200);assert.equal(state.assets,1);assert.equal(state.fetch,0);assert.equal(state.next,0);assert.ok(state.classify>0);
 });
 test('quiet route source guard stays exact and follows existing canonical routing',()=>{
  const position=middlewareSource.indexOf("if (['/agents/', '/agents/spec/'].includes(url.pathname)) return next();");assert.ok(position>middlewareSource.indexOf("url.hostname === 'catan.pointcast.xyz'"));assert.ok(position<middlewareSource.indexOf('const looksLikeDirectoryPath'));assert.ok(!middlewareSource.includes("url.pathname.startsWith('/agents')"));

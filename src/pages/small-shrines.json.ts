@@ -8,7 +8,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   title: 'Small Shrines',
   version: 1,
   url: absolute('/small-shrines/'),
-  description: 'Four secular places to pause with artwork, original one-minute meditations, and optional procedural sound.',
+  description: 'Five secular places to pause with artwork, original one-minute meditations, and optional procedural sound. Tide also shows NOAA predicted tides for Santa Monica.',
   durationSeconds: SHRINE_DURATION,
   access: { accountRequired: false, free: true },
   practice: {
@@ -20,6 +20,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     meditations: 'Original text written by Codex for Small Shrines at Michael Hoydich’s request.',
     spaceNames: 'Editorial names for these meditation spaces, not asserted original artwork titles.',
     generatedArt: 'Ocean and Night: original artwork generated with OpenAI image_gen.',
+    codeArt: 'Tide: original artwork drawn in code (scripts/small-shrines/tide-art.py) by Claude.',
     existingArt: 'Garden and Memory: Michael Hoydich’s existing Midjourney works; source links are recorded with each space.',
     profile: 'https://www.midjourney.com/@mhoydich',
     provenance: absolute('/images/small-shrines/provenance.json'),
@@ -49,6 +50,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     home: absolute('/'),
     shrineIndex: absolute('/shrines'),
     elementalShrine: absolute('/elemental-shrine'),
+    tide: absolute('/api/tide?station=9410840'),
+    saltWaterCommons: 'https://elsegundo.xyz/salt-water-commons/',
     openRoad: absolute('/open-road'),
   },
 }, null, 2), {
