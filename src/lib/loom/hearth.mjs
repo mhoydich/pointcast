@@ -81,11 +81,10 @@ export function loomBrief(active = [], { done: doneLimit = 5, open: openLimit = 
       });
   };
   const done = gather('done'), open = gather('open');
-  // Rooms report how many items they left out; those make the counts lower bounds.
-  const more = key => active.reduce((sum, room) => sum + (Number.isInteger(room.brief?.[key]) && room.brief[key] > 0 ? room.brief[key] : 0), 0);
-  const doneMore = more('doneMore'), openMore = more('openMore');
+  // A room that left posts out makes the counts a floor: the omitted posts may repeat known work.
+  const cut = active.some(room => room.brief?.doneMore > 0 || room.brief?.openMore > 0);
   return { done: done.slice(0, doneLimit), open: open.slice(0, openLimit),
-    doneCount: done.length + doneMore, openCount: open.length + openMore, atLeast: doneMore + openMore > 0 };
+    doneCount: done.length, openCount: open.length, atLeast: cut };
 }
 
 /** The headline counts work, not posts. Falls back to the recap when no room reported any. */

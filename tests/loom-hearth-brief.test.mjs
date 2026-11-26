@@ -127,8 +127,11 @@ test('room to headline: more work than the cap is counted, and said to be a floo
   const bots = { active: [{ address: '#work', human: false, lastName: 'A', lastAt: hAgo(1) }], unavailable: [], since: NOW - 86400000, asOf: NOW };
   assert.equal(briefHeadline(full, bots), '6 things done in the last day.');
   const cut = loomBrief([{ address: '#work', brief: roomBrief(six, { log, now: NOW, limit: 4 }) }]);
-  assert.equal(cut.doneCount, 6);
-  assert.equal(briefHeadline(cut, bots), 'At least 6 things done in the last day.');
+  assert.equal(cut.doneCount, 4, 'only distinct known work is counted');
+  assert.equal(briefHeadline(cut, bots), 'At least 4 things done in the last day.');
+  const same = Array.from({ length: 13 }, (_, i) => post('A', 'DONE navigation https://example.com/navigation', 1 + i / 10));
+  const repeated = loomBrief([{ address: '#work', brief: roomBrief(same, { log, now: NOW }) }]);
+  assert.equal(briefHeadline(repeated, bots), 'At least 1 thing done in the last day.', 'thirteen copies are one thing');
 });
 
 test('six hundred unresolved claims stay cheap to classify', () => {
@@ -137,4 +140,33 @@ test('six hundred unresolved claims stay cheap to classify', () => {
   const brief = roomBrief(claims, { log, now: NOW });
   assert.equal(brief.open.length + brief.openMore, 600);
   assert.ok(performance.now() - started < 250, 'one pass, not one scan per claim');
+});
+
+test('re-review: prose quotes, exact claim matches, handle underscores and inline-code subjects', () => {
+  for (const body of ['The example says "PR #42 was merged: https://github.com/mhoydich/pointcast/pull/42".',
+    'The example says “PR #42 was merged: https://github.com/mhoydich/pointcast/pull/42”.']) {
+    assert.deepEqual(roomBrief([post('A', body, 1)], { log, now: NOW }).done, [], body);
+  }
+  const first = post('Sol', 'MINE Room summary', 5), second = post('Sol', 'MINE Room summary styling', 4);
+  let brief = roomBrief([first, second, post('Sol', 'DONE Room summary styling', 3)], { log, now: NOW });
+  assert.deepEqual(brief.open.map(i => i.text), ['Room summary'], 'the exact task closes, not its prefix');
+  brief = roomBrief([post('Sol', 'MINE Rooms', 5), post('Sol', 'DONE Room', 3)], { log, now: NOW });
+  assert.equal(brief.open.length, 1, 'Room is not Rooms');
+  brief = roomBrief([post('Sol', 'MINE Room summary', 5), post('Sol', 'MINE Room summary styling', 4), post('Sol', 'DONE Room', 3)], { log, now: NOW });
+  assert.equal(brief.open.length, 2, 'an ambiguous short wording closes nothing');
+  brief = roomBrief([post('Sol', 'MINE Room summary for Hearth', 5), post('Sol', 'DONE Room summary', 3)], { log, now: NOW });
+  assert.equal(brief.open.length, 0, 'one clear shorter wording still closes');
+
+  const ask = post('Sol', 'NEEDS @review_desk · Choose a room', 3);
+  const answer = { ...post('Alex', 'The blue one.', 2, { parent: ask.id }), from: { name: 'Alex', kind: 'human', address: '@review_desk' } };
+  assert.equal(roomBrief([ask], { log, now: NOW }).open.length, 1);
+  assert.equal(roomBrief([ask, answer], { log, now: NOW }).open.length, 0, 'the named owner answered');
+  assert.deepEqual(roomBrief([post('Sol', '_NEEDS MIKE_ · Choose a room', 1)], { log, now: NOW }).open.map(i => i.text), ['Choose a room']);
+
+  const files = [post('A', 'DONE · `src/a.mjs`', 1), post('A', 'DONE · `src/b.mjs`', 2), post('A', 'MINE `hearth_brief.mjs` tests', 3)];
+  brief = roomBrief(files, { log, now: NOW });
+  assert.deepEqual(brief.done.map(i => i.text), ['src/a.mjs', 'src/b.mjs']);
+  assert.deepEqual(brief.open.map(i => i.text), ['hearth_brief.mjs tests']);
+  assert.equal(loomBrief([{ address: '#work', brief }]).doneCount, 2);
+  assert.deepEqual(roomBrief([post('A', '`DONE` is the word to start a receipt with.', 1)], { log, now: NOW }).done, []);
 });

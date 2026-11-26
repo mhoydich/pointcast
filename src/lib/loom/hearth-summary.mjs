@@ -5,7 +5,9 @@ import { splitStamp } from './stamp.mjs';
 const DAY = 86400000;
 const SHIPPED = /^(?:DONE|SHIPPED|MERGED|RELEASE\s+RECEIPT)\b/i;
 const MINE = /^MINE\b/i;
-const QUOTE_OR_CODE = /```[\s\S]*?(?:```|(?![\s\S]))|~~~[\s\S]*?(?:~~~|(?![\s\S]))|^[ \t]*>[^\n]*|`[^`\n]*`/gm;
+const QUOTE_OR_FENCE = /```[\s\S]*?(?:```|(?![\s\S]))|~~~[\s\S]*?(?:~~~|(?![\s\S]))|^[ \t]*>[^\n]*/gm;
+const INLINE_CODE = /`([^`\n]*)`/g;
+const QUOTED_TEXT = /“[^”]*”|"[^"\n]*"|‘[^’\n]*’|(?<!\w)'[^'\n]+'(?!\w)/g;
 const TASK_ID = /^(#?[A-Za-z]{0,8}-?\d[\w-]{0,8})(?=$|[\s·:,.])/;
 const times = new WeakMap();
 const time = m => {
@@ -17,10 +19,15 @@ const identity = value => String(value || 'anonymous').trim().toLowerCase().repl
 const sameSender = (a, b) => (a.from?.kind || 'agent') === (b.from?.kind || 'agent') &&
   (a.from?.address && b.from?.address ? identity(a.from.address) === identity(b.from.address)
     : identity(a.from?.name) === identity(b.from?.name));
-// The author's own words: quoted passages and code are examples, not reports.
-const own = m => String(m.body || m.poll?.question || '').replace(QUOTE_OR_CODE, '').trim();
-const content = m => splitStamp(own(m)).text
-  .replace(/^\s*(?:#{1,6}\s+|[-*+]\s+)/, '').replace(/[*_]/g, '').trim();
+// The author's own words: block quotes and fenced code are examples, not reports.
+const own = m => String(m.body || m.poll?.question || '').replace(QUOTE_OR_FENCE, '').trim();
+// Emphasis marks go; an underscore inside a handle or a file name stays.
+const tidy = text => splitStamp(text.trim()).text.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+)/, '').replace(/\*+/g, '')
+  .replace(/(^|[^\p{L}\p{N}])_+(?=\S)|(?<=\S)_+(?=$|[^\p{L}\p{N}])/gu, '$1').trim();
+// What a post says, with inline code kept as words: `src/a.mjs` is the subject of a real status line.
+const content = m => tidy(own(m).replace(INLINE_CODE, '$1'));
+// What kind of post it is: inline code never supplies the keyword, the owner or the merge report.
+const status = m => tidy(own(m).replace(INLINE_CODE, ''));
 const webUrl = value => {
   try {
     const u = new URL(String(value).replace(/[.,;!?)\]]+$/, ''));
@@ -28,7 +35,7 @@ const webUrl = value => {
   } catch { return null; }
 };
 const urls = m => [...new Set([
-  ...(own(m).match(/https?:\/\/[^\s<>"']+/gi) || []),
+  ...(own(m).replace(INLINE_CODE, '').match(/https?:\/\/[^\s<>"']+/gi) || []),
   ...(m.links || []), ...(m.cites || []),
 ].map(webUrl).filter(Boolean))];
 const postHref = (m, log) => '/loom?to=' + encodeURIComponent(log.address || (log.key ? `loom:${log.key}` : '#loom'))
@@ -38,18 +45,19 @@ const postHref = (m, log) => '/loom?to=' + encodeURIComponent(log.address || (lo
 function phrase(value, fallback) {
   const text = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
     .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/\b[\da-f]{7,64}\b/gi, '')
-    .replace(/[#@*_`]/g, '').replace(/^\s*[·:—–-]+\s*/, '').trim()
+    .replace(/[#@*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '').trim()
     .split(/\n|\s+[·|]\s+|(?<=[.!?])\s+/).find(part => /[\p{L}\p{N}]/u.test(part)) || fallback;
   const short = text.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim();
   return short.length <= 88 ? short : short.slice(0, 85).replace(/\s+\S*$/, '') + '…';
 }
 
 function receipt(m) {
-  const body = content(m);
+  const body = status(m);
   if (SHIPPED.test(body)) return true;
   // A bare PR URL cannot tell us its GitHub state. Require a reported merge,
   // in the same sentence as the link, and exclude planned or negated merges.
-  return body.split(/\n|(?<=[.!?])\s+/).some(sentence =>
+  // Words inside quotation marks are someone else's report or an example.
+  return body.replace(QUOTED_TEXT, '').split(/\n|(?<=[.!?])\s+/).some(sentence =>
     /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+\b/i.test(sentence)
     && /\b(?:was|is|has been|just) merged\b|\bPR\s*#?\d+\s+merged\b/i.test(sentence)
     && !/\b(?:not|never|isn't|wasn't|hasn't|when|once|if|until|after|will|should)\b/i.test(sentence));
@@ -58,7 +66,7 @@ function receipt(m) {
 function askOwners(m) {
   const body = String(m.body || m.poll?.question || '');
   // Stamps and emphasis are display syntax; "NEEDS MIKE" reads the same with or without them.
-  const plain = content(m);
+  const plain = status(m);
   const explicit = plain.match(/^NEEDS\s+@?([A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*)\b/i);
   if (explicit && normHandle(explicit[1]) !== 'your' && !/^NEEDS\s+@?[\w.-]+['’]s\s+yes\b/i.test(plain)) return [normHandle(explicit[1])];
   // The shared classifier still decides whether these candidates are actual
@@ -91,7 +99,7 @@ function askClosed(m, owners, children) {
     if (seen.has(reply.id)) continue;
     seen.add(reply.id);
     const ownerReply = owners.some(owner => owner && [reply.from?.name, reply.from?.address].some(name => normHandle(name) === owner));
-    if (newest(reply, m) < 0 && (ownerReply || (sameSender(reply, m) && /^(?:CLEARED|DONE)\b/i.test(content(reply))))) return true;
+    if (newest(reply, m) < 0 && (ownerReply || (sameSender(reply, m) && /^(?:CLEARED|DONE)\b/i.test(status(reply))))) return true;
     stack.push(...(children.get(reply.id) || []));
   }
   return false;
@@ -101,7 +109,7 @@ const task = text => {
   const rest = text.replace(MINE, '').replace(SHIPPED, '').replace(/^\s*[·:—–-]+\s*/, '').trim();
   const id = rest.match(TASK_ID)?.[1];
   return { id: id ? id.replace(/^#/, '').toLowerCase() : '',
-    words: rest.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean).slice(0, 4).join(' ') };
+    words: rest.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean).slice(0, 12).join(' ') };
 };
 
 /** Which MINE claims their own sender later reported finished. One pass, oldest
@@ -112,19 +120,23 @@ const task = text => {
 function closedClaims(posts) {
   const closed = new Set(), claims = [], byId = new Map(posts.map(p => [p.id, p]));
   for (let i = posts.length - 1; i >= 0; i--) {
-    const m = posts[i], text = content(m);
-    if (MINE.test(text)) { claims.push({ post: m, ...task(text) }); continue; }
-    if (!claims.length || !SHIPPED.test(text)) continue;
-    const done = task(text);
+    const m = posts[i], kind = status(m);
+    if (MINE.test(kind)) { claims.push({ post: m, ...task(content(m)) }); continue; }
+    if (!claims.length || !SHIPPED.test(kind)) continue;
+    const done = task(content(m));
     const mine = claim => sameSender(claim.post, m) && newest(m, claim.post) < 0;
+    const sameCard = claim => !(done.id && claim.id && done.id !== claim.id);
     let at = -1;
     for (let parent = byId.get(m.parent), hops = 0; parent && at < 0 && hops < 50; parent = byId.get(parent.parent), hops++) {
       at = claims.findIndex(claim => claim.post.id === parent.id && mine(claim));
     }
     if (at < 0 && done.id) at = claims.findIndex(claim => claim.id === done.id && mine(claim));
+    if (at < 0 && done.words) at = claims.findIndex(claim => mine(claim) && sameCard(claim) && claim.words === done.words);
     if (at < 0 && done.words) {
-      at = claims.findIndex(claim => mine(claim) && claim.words && !(done.id && claim.id && done.id !== claim.id)
-        && (claim.words.startsWith(done.words) || done.words.startsWith(claim.words)));
+      // A shorter wording of the same task counts only on whole words and only when one claim fits.
+      const near = claims.filter(claim => mine(claim) && sameCard(claim) && claim.words
+        && (claim.words.startsWith(done.words + ' ') || done.words.startsWith(claim.words + ' ')));
+      if (near.length === 1) at = claims.indexOf(near[0]);
     }
     // A bare "DONE" with nothing after it can only mean the sender's one open claim.
     if (at < 0 && !done.id && !done.words && claims.filter(mine).length === 1) at = claims.findIndex(mine);
@@ -136,7 +148,7 @@ function closedClaims(posts) {
 /** A fuller line for the front page: a leading card or PR id keeps the sentence after it. */
 function tell(value, fallback) {
   const parts = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
-    .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*_`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
+    .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
     .split(/\n|\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
     .filter(part => /[\p{L}\p{N}]/u.test(part));
   if (!parts.length) return fallback;
@@ -153,7 +165,7 @@ function work(recent, posts, log, { say = phrase, roomWide = true } = {}) {
     say(content(m).replace(SHIPPED, ''), 'Work completed'), urls(m)[0] || postHref(m, log)));
   const closed = closedClaims(posts), children = childIndex(posts);
   const open = recent.filter(m => {
-    if (MINE.test(content(m))) return !closed.has(m.id);
+    if (MINE.test(status(m))) return !closed.has(m.id);
     const owners = askOwners(m).filter(owner => roomWide || owner);
     return owners.length && !askClosed(m, owners, children);
   }).map(m => item(m,
@@ -170,7 +182,8 @@ export function roomBrief(messages = [], { log = {}, now = Date.now(), limit = 1
   const posts = messages.filter(m => m && !m.hidden && !m.withdrawn && !m.via && !isCollator(m.from) && time(m) <= now)
     .sort(newest);
   const { shipped, open } = work(posts.filter(m => time(m) >= now - DAY), posts, log, { say: tell, roomWide: false });
-  // Anything past the limit is counted, so a headline never passes a sample off as a total.
+  // Say how many posts the cap left out. They may repeat known work, so readers treat
+  // the listed items as a floor rather than adding these in.
   return { done: shipped.slice(0, limit), open: open.slice(0, limit),
     ...(shipped.length > limit ? { doneMore: shipped.length - limit } : {}),
     ...(open.length > limit ? { openMore: open.length - limit } : {}) };
