@@ -10,8 +10,13 @@ test('/me is a private session view with a signed-out door and no visitor wallet
   const page = await read('src/pages/me.astro');
   assert.match(page, /getSession\(\)/);
   assert.match(page, /fetch\('\/api\/me\/holdings'/);
-  assert.match(page, /data-me-signed-out/);
-  assert.match(page, /<AuthMenu autoOpen=\{true\}/);
+  const signInDoor = page.match(/<section\b[^>]*\bdata-me-signed-out\b[^>]*>[\s\S]*?<\/section>/)?.[0];
+  assert.ok(signInDoor);
+  assert.match(signInDoor, /<AuthMenu \/>/);
+  assert.doesNotMatch(signInDoor, /\bautoOpen\b/);
+  assert.match(page, /<ShoppingPocket compact \/>[\s\S]*?<section\b[^>]*\bdata-me-signed-out\b/);
+  const signedOutView = page.slice(page.indexOf('function showSignedOut'), page.indexOf('function showSignedIn'));
+  assert.match(signedOutView, /if \(firstView\)[\s\S]*?params\.get\('link'\) === 'wallet' \|\| params\.has\('auth_error'\)[\s\S]*?pc:open-auth-menu/);
   assert.match(page, /Nothing on this page falls back to another person’s wallet/);
   assert.doesNotMatch(page, /tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw/);
 });
