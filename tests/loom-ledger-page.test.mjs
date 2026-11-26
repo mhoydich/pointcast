@@ -116,10 +116,52 @@ test('ledger rows keep their contribution order, link people and display positiv
   assert.doesNotMatch(rows[2].textContent, /about|closed cards/);
 });
 
+test('an outsider with only a signed-card close appears with a link to their DONE post', async t => {
+  const ledger = fixture();
+  ledger.rows = [{ handle: 'outsider', name: 'Outside contributor', kind: 'human', lent: {
+    signedClosedCards: 1,
+    signedCardSources: [{ room: '#loom-v2', id: 'outsider-done', task: 'LV2-1' }],
+  } }];
+  const { document } = await page(t, { ledger });
+  const rows = [...document.querySelectorAll('#ledger-rows > li')];
+  assert.equal(rows.length, 1);
+  assert.equal(document.querySelector('#empty').hidden, true);
+  assert.equal(rows[0].querySelector('h3').textContent, '@outsider');
+  assert.equal(rows[0].querySelector('h3 a').getAttribute('href'), '/loom/hearth/person?name=outsider');
+  assert.equal(rows[0].querySelector('.hearth-body').textContent.trim(), '1 signed card closed');
+  assert.equal(rows[0].querySelector('.hearth-body a').getAttribute('href'), '/loom?to=%23loom-v2#outsider-done');
+});
+
+test('signed-card closes keep their own plural count and DONE link alongside legacy cards and tokens', async t => {
+  const ledger = fixture();
+  const key = 'room"><svg onload=alert(1)>';
+  const id = 'done&"';
+  ledger.rows = [{ ...ledger.rows[0], lent: { ...ledger.rows[0].lent,
+    signedClosedCards: 2,
+    signedCardSources: [
+      { room: '#loom-v2', key, id, task: 'LV2-1' },
+      { room: '#loom-v2', key: 'loom-v2-key', id: 'other-done', task: 'LV2-2' },
+    ],
+  } }];
+  const { document } = await page(t, { ledger });
+  const body = document.querySelector('#ledger-rows .hearth-body');
+  const links = [...body.querySelectorAll('a')];
+  assert.equal(links.length, 3);
+  const signed = links.find(link => link.textContent === '2 signed cards closed');
+  assert.ok(signed);
+  assert.equal(signed.getAttribute('href'), '/loom?to=' + encodeURIComponent('loom:' + key + '#' + id));
+  assert.equal(links.find(link => link.textContent === '2 closed cards').getAttribute('href'),
+    '/loom?to=loom%3Aledger-key%23closed-card');
+  assert.equal(links.find(link => link.textContent === 'about 125,000 tokens').getAttribute('href'),
+    '/loom?to=loom%3Aefficiency-key%23token-report');
+  assert.match(body.textContent, /Latest report: about 125,000 tokens/);
+  assert.equal(body.querySelectorAll('svg, [onload]').length, 0);
+});
+
 test('rows without positive figures are absent and no zero counters are rendered', async t => {
   const ledger = fixture();
   ledger.rows.push(
-    { handle: 'zero', name: 'No reported contributions', kind: 'human', lent: { tokens: 0, closedCards: 0 } },
+    { handle: 'zero', name: 'No reported contributions', kind: 'human', lent: { tokens: 0, closedCards: 0, signedClosedCards: 0 } },
     { handle: 'missing', name: 'No evidence', kind: 'agent', lent: null },
   );
   const { document } = await page(t, { ledger });

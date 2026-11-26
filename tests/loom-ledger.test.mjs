@@ -16,6 +16,18 @@ const post = (id, from, minutes = 0, extra = {}) => ({ id, at: at(minutes), from
 const thread = (address, messages, extra = {}) => ({ address, key: address.slice(1), messages, ...extra });
 const task = (id, from, minutes, state = 'done', extra = {}) => ({ task: id, status: state, reported: true,
   claimedBy: who(from), by: who(desk), source: { id: 'receipt-' + id, at: at(minutes), by: who(desk) }, ...extra });
+const outsider = { name: 'MB-bot', kind: 'agent', operator: 'purplematter' };
+const signedCard = { id: 'V2-3', scope: 'Close a signed card', target: '/loom/ledger',
+  done: 'The closer appears on the ledger', ceiling: 400000 };
+
+function signedFixture(from = outsider) {
+  return thread('#loom-v2', [
+    post('signed-card', { ...desk, operator: 'mike' }, 30, { seq: 1, card: signedCard, signed: true }),
+    post('runner-claim', from, 20, { seq: 2, parent: 'signed-card', body: 'MINE V2-3' }),
+    // The DONE body and parent are the runner format from PR #1942.
+    post('runner-done', from, 10, { seq: 3, parent: 'signed-card', body: 'DONE V2-3 · Actual 123 tokens.' }),
+  ]);
+}
 
 function fixtures() {
   return [
@@ -160,6 +172,162 @@ test('compact efficiency and ledger threads preserve grouped totals, sources and
     threads[0].messages.find(message => message.id === 'latest-valid').body);
 });
 
+test('a signed card closed by the runner credits the outsider operator and links the DONE post', () => {
+  const rows = ledgerRows([signedFixture()], { now: NOW });
+  assert.deepEqual(rows.map(row => [row.handle, row.kind, row.lent.signedClosedCards]), [['purplematter', 'human', 1]]);
+  assert.deepEqual(rows[0].lent.signedCardSources, [{
+    at: at(10), room: '#loom-v2', key: 'loom-v2', id: 'runner-done', task: 'V2-3',
+  }]);
+  assert.equal(rows[0].lent.closedCards, undefined, 'signed closes have their own count beside existing task receipts');
+  assert.equal(rows[0].lent.tokens, undefined, 'the runner receipt is not an efficiency-room token report');
+});
+
+test('unsigned, missing and malformed card fields cannot produce a signed close', () => {
+  for (const fields of [
+    { signed: false }, { signed: undefined }, { signed: 'true' }, { signed: 1 },
+    { card: null }, { card: undefined }, { card: 'V2-3' }, { card: {} },
+  ]) {
+    const value = signedFixture();
+    Object.assign(value.messages[0], fields);
+    assert.deepEqual(ledgerRows([value], { now: NOW }), [], JSON.stringify(fields));
+  }
+});
+
+test('a DONE from another sender cannot close a claimed signed card, including a sibling bot', () => {
+  for (const from of [jane, { name: 'Other bot', kind: 'agent', operator: outsider.operator }]) {
+    const value = signedFixture();
+    value.messages[2].from = from;
+    assert.deepEqual(ledgerRows([value], { now: NOW }), []);
+  }
+});
+
+test('the latest MINE controls the closer, independent of folded message order', () => {
+  const value = signedFixture();
+  const replacement = { name: 'New worker', kind: 'agent', operator: 'other-operator' };
+  const newerClaim = post('newer-claim', replacement, 15, { seq: 3, parent: 'signed-card', body: 'MINE V2-3' });
+  value.messages[2].seq = 4;
+  value.messages.splice(1, 0, newerClaim);
+  assert.deepEqual(ledgerRows([value], { now: NOW }), [], 'the earlier claimer cannot close after another sender claims');
+  value.messages.find(message => message.id === 'runner-done').from = replacement;
+  const expected = [['other-operator', 1]];
+  assert.deepEqual(ledgerRows([value], { now: NOW }).map(row => [row.handle, row.lent.signedClosedCards]), expected);
+  assert.deepEqual(ledgerRows([{ ...value, messages: [...value.messages].reverse() }], { now: NOW })
+    .map(row => [row.handle, row.lent.signedClosedCards]), expected);
+});
+
+test('same-time claims use their append sequence when selecting the latest claimer', () => {
+  const value = signedFixture();
+  const newerClaim = post('a-latest-claim', jane, 20, { seq: 3, parent: 'signed-card', body: 'MINE V2-3' });
+  value.messages[1].id = 'z-earlier-claim';
+  value.messages[2].seq = 4;
+  value.messages.splice(1, 0, newerClaim);
+  assert.deepEqual(ledgerRows([value], { now: NOW }), []);
+  value.messages.find(message => message.id === 'runner-done').from = jane;
+  const rows = ledgerRows([value], { now: NOW });
+  assert.deepEqual(rows.map(row => [row.handle, row.lent.signedClosedCards]), [['jane', 1]]);
+  const compact = ledgerThread(value.messages, { room: value.address, key: value.key, now: NOW });
+  assert.deepEqual(ledgerRows([compact], { now: NOW }), rows);
+});
+
+test('a signed close requires a preceding MINE for the same card id', () => {
+  const unclaimed = signedFixture();
+  unclaimed.messages.splice(1, 1);
+  assert.deepEqual(ledgerRows([unclaimed], { now: NOW }), []);
+  const wrongCard = signedFixture();
+  wrongCard.messages[1].body = 'MINE V2-30';
+  assert.deepEqual(ledgerRows([wrongCard], { now: NOW }), []);
+  const lateClaim = signedFixture();
+  lateClaim.messages[1].at = at(5);
+  lateClaim.messages[1].seq = 4;
+  assert.deepEqual(ledgerRows([lateClaim], { now: NOW }), []);
+});
+
+test('claims and DONE replies to a different card do not close the signed original', () => {
+  for (const index of [1, 2]) {
+    const value = signedFixture();
+    value.messages[index].parent = 'unrelated-card';
+    assert.deepEqual(ledgerRows([value], { now: NOW }), []);
+  }
+});
+
+test('hidden or echoed signed cards, claims and completions cannot supply close evidence', () => {
+  for (const index of [0, 1, 2]) {
+    for (const fields of [{ hidden: true }, { withdrawn: true }, { via: { id: 'original' } }]) {
+      const value = signedFixture();
+      Object.assign(value.messages[index], fields);
+      assert.deepEqual(ledgerRows([value], { now: NOW }), []);
+    }
+  }
+});
+
+test('duplicate DONE posts count once per signed card id', () => {
+  const value = signedFixture();
+  value.messages.push({ ...value.messages[2], id: 'duplicate-done', at: at(5), seq: 4 });
+  const rows = ledgerRows([value], { now: NOW });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].lent.signedClosedCards, 1);
+  assert.equal(rows[0].lent.signedCardSources.length, 1);
+  assert.equal(rows[0].lent.signedCardSources[0].task, 'V2-3');
+  assert.ok(['runner-done', 'duplicate-done'].includes(rows[0].lent.signedCardSources[0].id));
+});
+
+test('a closer without an operator receives a row under their own name', () => {
+  const rows = ledgerRows([signedFixture({ name: 'Outside worker', kind: 'agent' })], { now: NOW });
+  assert.deepEqual(rows.map(row => [row.handle, row.name, row.kind, row.lent.signedClosedCards]),
+    [['outside worker', 'Outside worker', 'agent', 1]]);
+});
+
+test('a close without an operator retains its own row despite historical operator metadata', () => {
+  const worker = { name: 'Outside worker', kind: 'agent' };
+  const rows = ledgerRows([signedFixture(worker), thread('#efficiency', [
+    post('unoperated-report', worker, 50, { body: 'Actual 200k tokens.' }),
+    post('historical-operator', { ...worker, operator: 'mike' }, 40, { body: 'Actual 100k tokens.' }),
+  ])], { now: NOW });
+  assert.deepEqual(rows.map(row => [row.handle, row.lent.signedClosedCards, row.lent.tokens]),
+    [['outside worker', 1, undefined], ['mike', undefined, 100000]]);
+});
+
+test('messages from main without card fields leave all existing ledger counts unchanged', () => {
+  const legacy = signedFixture();
+  delete legacy.messages[0].card;
+  delete legacy.messages[0].signed;
+  const original = ledgerRows(fixtures(), { now: NOW });
+  assert.deepEqual(ledgerRows([...fixtures(), legacy], { now: NOW }), original);
+  assert.ok(original.every(row => row.lent.signedClosedCards === undefined && row.lent.signedCardSources === undefined));
+});
+
+test('unsigned loom-v2 identities cannot backfill or reassign existing ledger credit', () => {
+  const legacy = [...fixtures(), thread('#ledger', [
+    post('unresolved-outsider-receipt', desk, 25, { taskStatus: task('OFF-99', outsider, 20) }),
+  ])];
+  const expected = ledgerRows(legacy, { now: NOW });
+  assert.ok(!expected.some(row => row.handle === outsider.operator), 'the receipt alone does not identify its claimant');
+  assert.equal(expected.find(row => row.handle === 'sid').lent.tokens, 210000);
+  for (const fieldsPresent of [false, true]) {
+    const value = signedFixture();
+    if (fieldsPresent) value.messages[0].signed = false;
+    else {
+      delete value.messages[0].card;
+      delete value.messages[0].signed;
+    }
+    value.messages.push(post('new-operator-metadata', { ...sid, operator: 'new-owner' }, 5));
+    const threads = [...legacy, value];
+    assert.deepEqual(ledgerRows(threads, { now: NOW }), expected,
+      'unqualified posts in the new room must not supply identities for legacy receipts or token reports');
+    const compact = threads.map(item => ledgerThread(item.messages, { room: item.address, key: item.key, now: NOW }));
+    assert.deepEqual(ledgerRows(compact, { now: NOW }), expected);
+  }
+});
+
+test('compact ledger reads preserve signed card closes and DONE source links', () => {
+  const threads = [...fixtures(), signedFixture()];
+  const compact = threads.map(value => ledgerThread(value.messages, { room: value.address, key: value.key, now: NOW }));
+  assert.deepEqual(ledgerRows(compact, { now: NOW }), ledgerRows(threads, { now: NOW }));
+  const outsiderRow = ledgerRows(compact, { now: NOW }).find(row => row.handle === 'purplematter');
+  assert.equal(outsiderRow.lent.signedClosedCards, 1);
+  assert.equal(outsiderRow.lent.signedCardSources[0].id, 'runner-done');
+});
+
 test('equal-time reopened copies stay open regardless of thread order', () => {
   const threads = [
     thread('#ledger', [post('identity', sid, 10), post('done', desk, 9, { taskStatus: task('OFF-20', sid, 1) })]),
@@ -194,8 +362,9 @@ test('ledger reads only its existing source rooms, including old rooms, in one r
     { kind: 'topic', address: '#ledger', updatedAt: '2020-01-01T00:00:00Z' },
     { kind: 'topic', address: '#efficiency', updatedAt: '2020-01-01T00:00:00Z' },
     { kind: 'topic', address: '#officenoun-tasks' },
+    { kind: 'topic', address: '#loom-v2' },
   ];
-  const source = fixtures();
+  const source = [...fixtures(), signedFixture()];
   const request = async (path, options = {}) => {
     calls.push(path);
     assert.ok(!options.method || options.method === 'GET');
@@ -205,13 +374,13 @@ test('ledger reads only its existing source rooms, including old rooms, in one r
     assert.equal(url.searchParams.get('ledger'), '1');
     assert.equal(url.searchParams.has('person'), false);
     const rooms = url.searchParams.getAll('room');
-    assert.deepEqual([...rooms].sort(), ['#efficiency', '#ledger', '#officenoun-tasks']);
+    assert.deepEqual([...rooms].sort(), ['#efficiency', '#ledger', '#loom-v2', '#officenoun-tasks']);
     return Response.json({ ok: true, rooms: rooms.map(address => ({ ...source.find(value => value.address === address), state: 'read' })) });
   };
   const result = await readHearthLedger({ request, now: NOW });
   assert.equal(calls.length, 2);
   assert.equal(result.asOf, NOW);
-  assert.equal(result.readRooms, 3);
+  assert.equal(result.readRooms, 4);
   assert.deepEqual(result.rows, ledgerRows(source, { now: NOW }));
   assert.equal(result.incomplete, false);
   assert.deepEqual(result.unavailable, []);
