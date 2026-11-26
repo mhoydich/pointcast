@@ -87,6 +87,20 @@ test('restored scroll state and resizing update boundaries; mounting is idempote
   assert.equal(previous.getAttribute('aria-disabled'), 'true');
 });
 
+test('the phone introduction places a single native catalog link before the project rail', () => {
+  const component = readFileSync(new URL('../src/components/HomeProjectShowcase.astro', import.meta.url), 'utf8');
+  const { document, Node } = new JSDOM(component.slice(component.indexOf('<section'), component.indexOf('<script>'))).window;
+  const header = document.querySelector('.project-showcase__header');
+  const title = header.querySelector('h2 .project-showcase__phone-title');
+  assert.match(title.textContent, /^PointCast is an independent site/);
+  const links = header.querySelectorAll('a');
+  assert.equal(links.length, 1);
+  const [catalog] = links;
+  assert.equal(catalog.getAttribute('href'), '/latest/');
+  assert.equal(catalog.firstChild.textContent.trim(), 'Browse projects');
+  assert.ok(catalog.compareDocumentPosition(document.querySelector('[data-showcase-rail]')) & Node.DOCUMENT_POSITION_FOLLOWING);
+});
+
 test('curated visuals resolve to existing verified catalog routes and original local assets', () => {
   const component = readFileSync(new URL('../src/components/HomeProjectShowcase.astro', import.meta.url), 'utf8');
   const catalog = JSON.parse(readFileSync(new URL('../src/data/home-latest-projects.json', import.meta.url), 'utf8'));
