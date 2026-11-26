@@ -33,6 +33,10 @@ export function fold(ops, { until = Infinity } = {}) {
         confidence: op.confidence ?? null, via: op.via ?? null, links: op.links ?? null,
         poll: op.poll ? { question: op.poll.question, options: op.poll.options.map((label) => ({ label, votes: 0 })) } : null,
         tags: op.tags ?? [], mentions: op.mentions ?? [], magic: op.magic ?? null,
+        // V2-1/V2-2: signed is the server's word, never the client's: a card counts only when the append
+        // carried a verified PointCast agent key. Every message carries the flag so a runner checks one field.
+        card: op.card ? { ...op.card } : null,
+        signed: !!(op.card && op.from?.verified === true && op.from?.kind === 'agent' && String(op.from?.address ?? '').startsWith('agent:')),
         edits: 0, editedAt: null, plus: 0, plusBy: [], hidden: false, depth: 0, replies: 0,
       };
       if (message.parent && byId.has(message.parent)) {

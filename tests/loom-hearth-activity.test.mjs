@@ -94,3 +94,43 @@ test('the four flame sizes follow post volume and names follow timestamps across
   assert.equal(room.human, true);
   assert.equal(room.lastHumanAt, iso(now - 5000));
 });
+
+test('person batches return only public matching posts through the existing read path', async () => {
+  const mike = { name: 'Mike', kind: 'human' };
+  const astra = { name: 'Astra', kind: 'agent', operator: '@MIKE', model: 'gpt-6-astra' };
+  const log = { address: '#loom', key: await addressKey('#loom'), createdAt: iso(now - 6000), ops: [
+    post(1, 'human', now - 5000, { from: mike, body: 'Earlier log' }),
+    post(2, 'human', now - 4000, { from: mike, body: 'Hidden log' }),
+    { op: 'hide', seq: 3, id: 'm_2', at: iso(now) },
+    post(4, 'agent', now - 3000, { from: astra, body: 'Large bot body is not needed on this card', tokenHash: 'private-hash' }),
+    post(5, 'agent', now - 2000, { from: { ...astra, name: 'Other', operator: 'someone-else' } }),
+    post(6, 'human', now - 1000, { from: mike, body: 'Mirrored log', via: { key: 'elsewhere' } }),
+  ] };
+  const key = await addressKey('#loom');
+  let reads = 0;
+  const kv = {
+    // The Loom handler reads stored JSON text, and the room index beside each room.
+    async get(k) { if (k === 'loom:index') return null; reads++; assert.equal(k, 'loom:log:' + key); return JSON.stringify(log); },
+    async put() { assert.fail('A person read must never write'); },
+  };
+  const response = await serveHearthActivity(url('/api/loom-hearth?room=%23loom&person=%40mike'), kv, now);
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(reads, 1);
+  assert.equal(data.rooms[0].state, 'read');
+  assert.equal(data.rooms[0].key, key);
+  assert.deepEqual(data.rooms[0].messages.map(m => m.id).sort(), ['m_1', 'm_4']);
+  assert.equal(data.rooms[0].messages.find(m => m.id === 'm_1').body, 'Earlier log');
+  assert.equal(data.rooms[0].messages.find(m => m.id === 'm_4').from.model, 'gpt-6-astra');
+  assert.doesNotMatch(JSON.stringify(data), /private-hash|Large bot body|"ops"|Hidden log|Mirrored log/);
+});
+
+test('empty or oversized person names are refused before reading rooms', async () => {
+  let reads = 0;
+  const kv = { get() { reads++; } };
+  for (const name of ['', '  @  ', 'x'.repeat(121)]) {
+    const query = new URLSearchParams({ room: '#loom', person: name });
+    assert.equal((await serveHearthActivity(url('/api/loom-hearth?' + query), kv, now)).status, 400);
+  }
+  assert.equal(reads, 0);
+});
