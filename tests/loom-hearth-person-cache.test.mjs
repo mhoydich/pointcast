@@ -66,11 +66,13 @@ async function fixture(t) {
     stats.fetches++;
     const url = new URL(path, 'https://pointcast.xyz');
     if (url.pathname === '/api/loom') return Response.json({ ok: true, kvBound: true, logs });
+    // Concurrent batches may finish in either order; compare bodies by request order.
+    const bodyIndex = bodies.push(null) - 1;
     const pending = [];
     const response = await onRequestGet({ request: new Request(url, options), env: { PC_LOOM_KV: kv },
       waitUntil(task) { pending.push(task); } });
     await Promise.all(pending);
-    bodies.push(await response.clone().text());
+    bodies[bodyIndex] = await response.clone().text();
     return response;
   }
   return { request, cache, stats, logs, records, bodies, entries,

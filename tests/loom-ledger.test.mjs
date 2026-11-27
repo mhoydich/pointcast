@@ -186,10 +186,10 @@ test('hidden, withdrawn, echoed, collator, future and invalid-date evidence neve
   assert.deepEqual(ledgerRows([thread('#other-room', [post('not-efficiency', sid, 0, { body: 'Actual 900k tokens.' })])], { now: NOW }), []);
 });
 
-test('ledger reads only its existing source rooms, including old rooms, in one read-only batch', async () => {
+test('a 430-room directory reads all ledger sources without a warning in one read-only batch', async () => {
   const calls = [];
   const logs = [
-    { kind: 'topic', address: '#unrelated', updatedAt: at(0) },
+    ...Array.from({ length: 426 }, (_, i) => ({ kind: 'topic', address: '#unrelated-' + i, updatedAt: at(0) })),
     { kind: 'handle', address: '@sid' },
     { kind: 'topic', address: '#ledger', updatedAt: '2020-01-01T00:00:00Z' },
     { kind: 'topic', address: '#efficiency', updatedAt: '2020-01-01T00:00:00Z' },
@@ -209,6 +209,7 @@ test('ledger reads only its existing source rooms, including old rooms, in one r
     return Response.json({ ok: true, rooms: rooms.map(address => ({ ...source.find(value => value.address === address), state: 'read' })) });
   };
   const result = await readHearthLedger({ request, now: NOW });
+  assert.equal(logs.length, 430);
   assert.equal(calls.length, 2);
   assert.equal(result.asOf, NOW);
   assert.equal(result.readRooms, 3);
@@ -217,6 +218,25 @@ test('ledger reads only its existing source rooms, including old rooms, in one r
   assert.deepEqual(result.unavailable, []);
   assert.deepEqual(result.trimmed, []);
 });
+
+for (const gap of ['unavailable', 'trimmed']) {
+  test(`one ${gap} source room reports exactly one history gap`, async () => {
+    const request = async path => path === '/api/loom?compact=1'
+      ? Response.json({ ok: true, kvBound: true, logs: ['#ledger', '#efficiency', '#officenoun-tasks'].map(address => ({ kind: 'topic', address })) })
+      : Response.json({ ok: true, rooms: [
+        { address: '#efficiency', state: 'read', messages: [post('actual', sid, 1, { body: 'Actual 25k tokens.' })] },
+        { address: '#ledger', state: gap === 'unavailable' ? 'unavailable' : 'read', trimmed: gap === 'trimmed', messages: [] },
+        { address: '#officenoun-tasks', state: 'read', messages: [] },
+      ] });
+    const result = await readHearthLedger({ request, now: NOW });
+    assert.equal(result.incomplete, true);
+    assert.equal(result.readRooms, gap === 'unavailable' ? 2 : 3);
+    assert.deepEqual(result.unavailable, gap === 'unavailable' ? ['#ledger'] : []);
+    assert.deepEqual(result.trimmed, gap === 'trimmed' ? ['#ledger'] : []);
+    assert.equal(result.unavailable.length + result.trimmed.length, 1);
+    assert.equal(result.rows[0].lent.tokens, 25000);
+  });
+}
 
 test('trimmed and unavailable source rooms disclose partial history without discarding usable rows', async () => {
   const request = async path => path === '/api/loom?compact=1'

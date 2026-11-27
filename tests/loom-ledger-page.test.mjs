@@ -7,7 +7,7 @@ import { transform } from '@astrojs/compiler';
 import { experimental_AstroContainer } from 'astro/container';
 import ts from 'typescript';
 import { JSDOM } from 'jsdom';
-import { esc, personHref } from '../src/lib/loom/hearth.mjs';
+import { esc, personHref, historyWarning } from '../src/lib/loom/hearth.mjs';
 
 const require = createRequire(import.meta.url);
 const runtime = pathToFileURL(require.resolve('astro/runtime/server/index.js')).href;
@@ -67,7 +67,7 @@ async function page(t, { ledger = fixture(), reader } = {}) {
   t.after(() => dom.window.close());
   const calls = [];
   Object.assign(dom.window, {
-    esc, personHref,
+    esc, personHref, historyWarning,
     readHearthLedger: async (...args) => { calls.push(args); return reader ? reader() : ledger; },
   });
   dom.window.eval(script);
@@ -138,12 +138,22 @@ test('an empty ledger displays a plain empty state without contribution rows', a
 
 test('trimmed history warns about missing contributions and unavailable rooms expose retry', async t => {
   const trimmed = await page(t, { ledger: { ...fixture(), incomplete: true, trimmed: ['#efficiency'] } });
-  assert.match(trimmed.document.querySelector('#read-status').textContent, /history could not be read/);
-  assert.match(trimmed.document.querySelector('#read-status').textContent, /missing contributions/);
+  assert.equal(trimmed.document.querySelector('#read-status').textContent,
+    '1 room had trimmed history. This ledger may be missing contributions.');
   assert.equal(trimmed.document.querySelectorAll('#ledger-rows > li').length, 3);
   assert.equal(trimmed.document.querySelector('#retry').hidden, true, 'trimmed retained history cannot be retried into completeness');
   const unavailable = await page(t, { ledger: { ...fixture(), incomplete: true, unavailable: ['#ledger'] } });
+  assert.equal(unavailable.document.querySelector('#read-status').textContent,
+    '1 room could not be read. This ledger may be missing contributions.');
   assert.equal(unavailable.document.querySelector('#retry').hidden, false);
+});
+
+test('ledger warnings count failed and trimmed rooms separately', async t => {
+  const { document } = await page(t, { ledger: { ...fixture(), incomplete: true,
+    unavailable: ['#ledger', '#officenoun-tasks'], trimmed: ['#efficiency'] } });
+  assert.equal(document.querySelector('#read-status').textContent,
+    '2 rooms could not be read. 1 room had trimmed history. This ledger may be missing contributions.');
+  assert.equal(document.querySelector('#retry').hidden, false);
 });
 
 test('a failed ledger read exposes retry and a successful retry replaces the failure state', async t => {

@@ -144,7 +144,7 @@ test('person reader uses bounded Hearth batches and discloses failed or trimmed 
   assert.equal(card.posts[0].id, 'latest-person');
 });
 
-test('person reads include the seven-day boundary and unknown dates, and disclose skipped old rooms', async () => {
+test('person reads include the seven-day boundary and unknown dates without warning for quiet rooms', async () => {
   const since = NOW - 7 * HEARTH_DAY;
   const logs = [
     { kind: 'topic', address: '#old', updatedAt: new Date(since - 1).toISOString() },
@@ -163,12 +163,12 @@ test('person reads include the seven-day boundary and unknown dates, and disclos
   const result = await readHearthPerson('mike', { request, now: NOW });
   assert.deepEqual([...reads].sort(), ['#boundary', '#invalid-date', '#missing-date', '@recent'].sort());
   assert.equal(result.readRooms, 4);
-  assert.equal(result.incomplete, true);
+  assert.equal(result.incomplete, false);
   assert.deepEqual(result.unavailable, []);
   assert.deepEqual(result.trimmed, []);
 });
 
-test('an old-only directory performs no room reads and keeps partial-history disclosure', async () => {
+test('an old-only directory performs no room reads and has no history gaps', async () => {
   let requests = 0;
   const request = async path => {
     requests++;
@@ -180,7 +180,7 @@ test('an old-only directory performs no room reads and keeps partial-history dis
   const result = await readHearthPerson('mike', { request, now: NOW });
   assert.equal(requests, 1);
   assert.equal(result.readRooms, 0);
-  assert.equal(result.incomplete, true);
+  assert.equal(result.incomplete, false);
   assert.deepEqual(result.posts, []);
   assert.deepEqual(result.bots, []);
   assert.deepEqual(result.unavailable, []);
@@ -218,12 +218,47 @@ test('an unbound directory or an absent name cannot become an empty person card'
     ? Response.json({ ok: true, kvBound: true, logs: [{ address: '#loom', kind: 'topic' }] }) : new Response(null, { status: 503 }) }), /could not read/);
 });
 
-test('a full directory is labelled incomplete even when all retained rooms can be read', async () => {
-  const logs = Array.from({ length: 400 }, (_, index) => ({ address: '#room' + index, kind: 'topic' }));
-  const request = async path => path.includes('compact') ? Response.json({ ok: true, kvBound: true, logs })
-    : Response.json({ ok: true, rooms: new URL(path, 'https://pointcast.xyz').searchParams.getAll('room')
-      .map(address => ({ address, state: 'read', key: address.slice(1), messages: [], trimmed: false })) });
-  const result = await readHearthPerson('mike', { request, now: NOW });
-  assert.equal(result.readRooms, 400);
-  assert.equal(result.incomplete, true);
-});
+for (const activeRooms of [19, 430]) {
+  test(`a 430-room directory reads all ${activeRooms} active rooms without a history warning`, async () => {
+    const logs = Array.from({ length: 430 }, (_, index) => ({
+      address: '#room' + String(index).padStart(3, '0'), kind: 'topic',
+      // Put active rooms at the end so directory position cannot hide activity.
+      updatedAt: new Date(NOW - (index < 430 - activeRooms ? 8 : 0) * HEARTH_DAY).toISOString(),
+    }));
+    const batches = [];
+    const request = async path => {
+      if (path.includes('compact')) return Response.json({ ok: true, kvBound: true, logs });
+      const rooms = new URL(path, 'https://pointcast.xyz').searchParams.getAll('room');
+      batches.push(rooms);
+      return Response.json({ ok: true, rooms: rooms.map(address => ({ address, state: 'read', key: address.slice(1),
+        messages: address === '#room429' ? [post('beyond-cap', human)] : [], trimmed: false })) });
+    };
+    const result = await readHearthPerson('mike', { request, now: NOW });
+    assert.equal(result.readRooms, activeRooms);
+    assert.equal(result.incomplete, false);
+    assert.deepEqual(result.unavailable, []);
+    assert.deepEqual(result.trimmed, []);
+    assert.equal(result.posts[0].id, 'beyond-cap');
+    assert.equal(batches.length, activeRooms === 430 ? 54 : 3);
+    assert.ok(batches.every(batch => batch.length <= 8));
+    assert.equal(new Set(batches.flat()).size, activeRooms);
+  });
+}
+
+for (const gap of ['unavailable', 'trimmed']) {
+  test(`one ${gap} person room reports exactly one history gap`, async () => {
+    const request = async path => path.includes('compact')
+      ? Response.json({ ok: true, kvBound: true, logs: ['#good', '#gap'].map(address => ({ kind: 'topic', address })) })
+      : Response.json({ ok: true, rooms: [
+        { address: '#good', state: 'read', messages: [post('readable', human)] },
+        { address: '#gap', state: gap === 'unavailable' ? 'unavailable' : 'read', trimmed: gap === 'trimmed', messages: [] },
+      ] });
+    const result = await readHearthPerson('mike', { request, now: NOW });
+    assert.equal(result.incomplete, true);
+    assert.equal(result.readRooms, gap === 'unavailable' ? 1 : 2);
+    assert.deepEqual(result.unavailable, gap === 'unavailable' ? ['#gap'] : []);
+    assert.deepEqual(result.trimmed, gap === 'trimmed' ? ['#gap'] : []);
+    assert.equal(result.unavailable.length + result.trimmed.length, 1);
+    assert.equal(result.posts[0].id, 'readable');
+  });
+}
