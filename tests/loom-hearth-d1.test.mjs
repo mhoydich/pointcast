@@ -77,6 +77,7 @@ test('fresh posts through the D1 Pages handler light Hearth with the latest voic
     address: room, state: 'active', count: 3, size: 40, human: true,
     lastAt: latest.at, lastName: latest.from.name, lastKind: 'agent',
     lastHumanAt: person.at, humanName: person.from.name,
+    brief: { done: [], open: [] },
   });
   assert.equal(response.headers.get('cache-control'), 'public, max-age=30');
 

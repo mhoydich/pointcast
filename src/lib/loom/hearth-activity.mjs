@@ -1,4 +1,5 @@
 import { hearthActivity, HEARTH_BATCH } from './hearth-day.mjs';
+import { roomBrief } from './hearth-summary.mjs';
 import { parseAddress } from './address.mjs';
 import { handleLoom } from './service.mjs';
 import { personName, personThread } from './hearth-person.mjs';
@@ -60,7 +61,10 @@ export async function serveHearthActivity(request, source, now = Date.now(), { c
       if (person !== null) return personThread(messages, { name: person, room: address, key, trimmed: !!log.trimmedBefore, now });
       if (ledger) return ledgerThread(messages, { room: address, key, trimmed: !!log.trimmedBefore, now });
       const trimmedSince = log.trimmedBefore ? ops[0]?.at || 'unknown' : null;
-      return { address, ...hearthActivity(messages, { now, trimmedSince }) };
+      const activity = hearthActivity(messages, { now, trimmedSince });
+      // Lit rooms also say what was reported done and what is still open.
+      if (activity.state === 'active') activity.brief = roomBrief(messages, { log: { address, key }, now });
+      return { address, ...activity };
     } catch {
       return { address, state: 'unavailable' };
     }
