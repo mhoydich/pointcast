@@ -304,4 +304,8 @@ test('re-review: asks, asides and model tasks are never skipped as signatures; o
   assert.deepEqual(openText('MINE · Review Gemini 3. Then report.'), ['Review Gemini 3']);
   assert.deepEqual(openText('MINE · @astra · a1b2c3d · HUX-3D · Fix the runner.'), ['HUX-3D · Fix the runner']);
   assert.deepEqual(openText('MINE · @astra · m_3g4y4p0y58 · Fix the runner.'), ['Fix the runner']);
+  assert.deepEqual(openText('MINE Contact @shwa\nNo other work until we hear back'), ['Contact @shwa']);
+  assert.deepEqual(openText('MINE follow up with @mike\nFriday deadline'), ['follow up with @mike']);
+  assert.deepEqual(brief('DONE Added @mike · Invite remains pending https://pointcast.xyz/members').done.map(i => i.text), ['Added @mike']);
+  assert.deepEqual(openText('MINE · @astra · GPT-4O · HUX-3D · Upgrade the fallback.'), ['HUX-3D · Upgrade the fallback']);
 });

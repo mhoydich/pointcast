@@ -215,17 +215,31 @@ const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => p
 // someone, or a task about a model ("Upgrade Claude 4.5"), is never skipped.
 const MODEL = '(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)';
 const SIG_NAME = "[A-Z][\\w.'’-]*(?:\\s+[A-Z][\\w.'’-]*){0,3}";
-const SIG_TAIL = `(?:${MODEL}[- ]?)?\\d+(?:\\.\\d+)?(?:\\s+${MODEL})?|${MODEL}(?:[- ]?\\d+(?:\\.\\d+)?)?(?:\\s+${MODEL})?`;
-const BYLINE_PART = new RegExp(`^(?:(?:${SIG_NAME})\\s*)?\\(?@[\\w.-]+\\)?(?:,\\s*(?:${SIG_TAIL}))?$|^(?:${SIG_NAME}),\\s*(?:${SIG_TAIL})$`, 'i');
-// Card ids people use (HUX-3D, MR-002, LEND-2, V2-3) and PR numbers.
+// "Astra 6.2", "GPT-6.2 Astra", "Claude Opus": a model and/or version, nothing else.
+const MODEL_TAIL = new RegExp(`^(?:${MODEL}[- ]?)?\\d+(?:\\.\\d+)?(?:\\s+${MODEL})?$|^${MODEL}(?:[- ]?\\d+(?:\\.\\d+)?)?(?:\\s+${MODEL})?$`, 'i');
+const MODEL_WORD = new RegExp(`\\b${MODEL}\\b`, 'i');
+// "Name (@handle)" with the brackets, optionally ", Model"; "@handle, Model"; "Name, Model";
+// or a lone "@handle". "Contact @shwa" or "Added @mike" is a task, not a byline.
+const PAREN_BYLINE = new RegExp(`^${SIG_NAME}\\s*\\(@[\\w.-]+\\)(?:,\\s*(.+))?$`);
+const HANDLE_TAIL = /^\(?@[\w.-]+\)?,\s*(.+)$/;
+const NAME_TAIL = new RegExp(`^${SIG_NAME},\\s*(.+)$`);
+// Card ids people use (HUX-3D, MR-002, LEND-2, V2-3) and PR numbers; a model label is not one.
+const MODEL_LABEL = new RegExp(`^${MODEL}-?\\d[\\w.-]*$`, 'i');
 const CARD_ID = /^(?:[A-Z][A-Z0-9]{0,7}-[0-9][A-Z0-9]{0,5}|#\d{1,6})$/;
+const isCard = p => CARD_ID.test(p) && !MODEL_LABEL.test(p);
 const MACHINE_ID = /^(?:m_[a-z0-9]{6,}|[0-9a-f]{7,40})$/;
 function preamble(part) {
   const p = part.trim();
-  if (CARD_ID.test(p) || MACHINE_ID.test(p)) return true;
+  if (isCard(p) || MACHINE_ID.test(p) || MODEL_LABEL.test(p)) return true;
   if (/^[a-z0-9]+(?:[-_/][a-z0-9]+){2,}\.?$/.test(p)) return true;
   if (/[?]/.test(p)) return false;
-  return BYLINE_PART.test(p) && (/@/.test(p) || new RegExp(MODEL, 'i').test(p.split(',').pop()));
+  if (/^@[\w.-]+$/.test(p)) return true;
+  let m = p.match(PAREN_BYLINE);
+  if (m) return !m[1] || MODEL_TAIL.test(m[1].trim());
+  m = p.match(HANDLE_TAIL);
+  if (m) return MODEL_TAIL.test(m[1].trim());
+  m = p.match(NAME_TAIL);
+  return !!m && MODEL_TAIL.test(m[1].trim()) && MODEL_WORD.test(m[1]);
 }
 function tell(value, fallback, { open = false } = {}) {
   const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
@@ -248,7 +262,7 @@ function tell(value, fallback, { open = false } = {}) {
   const parts = [...first, ...rest];
   let at = 0;
   while (at < parts.length - 1 && preamble(parts[at])) {
-    if (!id && CARD_ID.test(parts[at].trim())) id = parts[at].trim();
+    if (!id && isCard(parts[at].trim())) id = parts[at].trim();
     at++;
   }
   const head = unwrap(parts[at] ?? '');
