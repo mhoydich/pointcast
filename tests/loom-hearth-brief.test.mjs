@@ -246,7 +246,14 @@ test('done needs proof: a DONE with no repo, site or chain link is listed as rep
   ];
   const brief = splitBrief(posts, { log, now: NOW });
   assert.deepEqual(brief.done.map(i => i.by), ['Astra', 'Shwa', 'Desk', 'X desk']);
-  assert.equal(brief.done[3].text, 'two-coin post is live on @officenoun');
+  assert.equal(brief.done[3].href, 'https://x.com/officenoun/status/1994000000000000001');
+  for (const body of ['DONE · Prototype complete in local session. The planned destination is "https://pointcast.xyz/sensory". No upload yet.',
+    'DONE · Prototype complete in local session. The planned destination is “https://pointcast.xyz/sensory”. No upload yet.']) {
+    const quoted = splitBrief([post('A', body, 1)], { log, now: NOW });
+    assert.deepEqual([quoted.done.length, quoted.reported.length], [0, 1], body);
+  }
+  const timed = roomBrief([post('A', 'MINE Publish the auction (Fri Nov 27, 3:56pm ET)', 1)], { log, now: NOW });
+  assert.deepEqual(timed.open.map(i => i.text), ['Publish the auction (Fri Nov 27, 3:56pm ET)'], 'a claim keeps its schedule');
   assert.equal(brief.done[0].href, 'https://github.com/mhoydich/pointcast/pull/1943');
   assert.deepEqual(brief.reported.map(i => i.by), ['antigravity', 'A', 'B', 'C']);
   assert.match(brief.reported[0].href, /^\/loom\?to=%23work#m/, 'a reported line links to its own post');

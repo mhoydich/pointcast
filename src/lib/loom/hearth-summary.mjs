@@ -47,7 +47,13 @@ const PROOF = [
   // A public post on X is its own record.
   /^https:\/\/(?:www\.)?(?:x|twitter)\.com\/\w+\/status\/\d+/i,
 ];
-export const proofUrl = m => urls(m).find(url => PROOF.some(rule => rule.test(url))) || null;
+// Proof comes from the author's own unquoted words: a quoted address is a plan or an
+// example ("the destination is \"https://pointcast.xyz/x\""), not a place the work is.
+const proofLinks = m => [...new Set([
+  ...(own(m).replace(INLINE_CODE, '').replace(QUOTED_TEXT, ' ').match(/https?:\/\/[^\s<>"'“”‘’]+/gi) || []),
+  ...(m.links || []), ...(m.cites || []),
+].map(webUrl).filter(Boolean))];
+export const proofUrl = m => proofLinks(m).find(url => PROOF.some(rule => rule.test(url))) || null;
 const postHref = (m, log) => '/loom?to=' + encodeURIComponent(log.address || (log.key ? `loom:${log.key}` : '#loom'))
   + (m.id ? '#' + encodeURIComponent(m.id) : '');
 
@@ -199,7 +205,7 @@ function calm(text) {
 // every other aside stays, because it can carry the task or its scope.
 // Only a positively recognised byline or date stamp: "(@antigravity)", "(@antigravity, Thu Nov 26)",
 // "(by @astra)", "(Thu Nov 26)". "(Friday only)" or "(by disabling validation)" are the work's scope.
-const STAMP = '(?:(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?,?\\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2}(?:,?\\s+\\d{4})?(?:,?\\s+\\d{1,2}(?::\\d{2})?\\s?(?:am|pm)(?:\\s+[A-Z]{2,4})?)?|(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?';
+const STAMP = '(?:(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?,?\\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2}(?:,?\\s+\\d{4})?|(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?';
 const BYLINE = new RegExp(`\\s*\\((?:(?:by\\s+)?@[\\w.-]+(?:,\\s*(?:${STAMP}))?|${STAMP})\\)(?=\\s|$|[.,;:·])`, 'gi');
 const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
   .filter(part => /[\p{L}\p{N}]/u.test(part));
