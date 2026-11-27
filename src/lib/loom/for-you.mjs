@@ -76,7 +76,8 @@ function isReceipt(body) {
   return RECEIPT_RE.test(parts[0] ?? '') || (parts.length > 1 && parts.filter((part) => RECEIPT_RE.test(part)).length > parts.length / 2);
 }
 
-function asksForGoAhead(message, phrases, owner, inbox) {
+// Shared with Hearth's room summary; callers supply the addressee and context.
+export function asksForGoAhead(message, phrases, owner, inbox) {
   if (isReceipt(message.body)) return false;
   const prose = requestProse(message.body, owner);
   if (phrases.some((re) => re.test(prose))) return true;
