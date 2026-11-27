@@ -58,16 +58,16 @@ test('ledger batch cache keeps reports and partial history for 60s without new r
   assert.equal(first.rows[0].lent.approximate, true);
   assert.deepEqual(first.trimmed, ['#officenoun-tasks']);
   assert.equal(first.incomplete, true);
-  assert.equal(f.stats.reads, 3);
+  assert.equal(f.stats.reads, LEDGER_ROOMS.length);
   assert.equal(f.stats.puts, 1);
   f.advance(59999);
   assert.deepEqual(await f.read(), first);
-  assert.equal(f.stats.reads, 3);
+  assert.equal(f.stats.reads, LEDGER_ROOMS.length);
   assert.equal(f.stats.hits, 1);
   assert.equal(f.bodies[0], f.bodies[1]);
   f.advance(60000);
   assert.deepEqual(await f.read(), first);
-  assert.equal(f.stats.reads, 6);
+  assert.equal(f.stats.reads, 2 * LEDGER_ROOMS.length);
   assert.equal(f.stats.puts, 2);
 });
 
@@ -105,7 +105,7 @@ test('unavailable ledger batches are never cached and recover on retry', async (
   const recovered = await f.read();
   assert.deepEqual(recovered.unavailable, []);
   assert.deepEqual(recovered.trimmed, ['#officenoun-tasks']);
-  assert.equal(f.stats.reads, 6);
+  assert.equal(f.stats.reads, 2 * LEDGER_ROOMS.length);
   assert.equal(f.stats.puts, 1);
 });
 
@@ -115,7 +115,7 @@ test('cache failures and runtimes without a cache still return ledger reports', 
   f.cache.put = async () => { throw new Error('cache offline'); };
   const first = await f.read();
   assert.deepEqual(await f.read(), first);
-  assert.equal(f.stats.reads, 6);
+  assert.equal(f.stats.reads, 2 * LEDGER_ROOMS.length);
   const response = await serveHearthActivity(new Request('https://pointcast.xyz/api/loom-hearth?ledger=1&room=%23efficiency'), f.kv, NOW);
   assert.equal(response.status, 200);
   assert.equal((await response.json()).rooms[0].messages[0].body, 'Actual ~140k tokens.');
