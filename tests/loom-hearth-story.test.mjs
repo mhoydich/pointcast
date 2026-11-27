@@ -48,4 +48,5 @@ test('the front page shows the story above the work lists, escaped, and never bl
   assert.match(page, /\$\('story-meta'\)\.textContent =/);
   assert.match(page, /catch \{ \/\* the story is optional \*\/ \}/);
   assert.match(page, /Something unclear\? Say which part/);
+  assert.match(page, /#story-text, #story-meta \{ overflow-wrap: anywhere; \}/, 'a long unbroken author name wraps at 390px');
 });
