@@ -15,6 +15,13 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
     <span class="hearth-meta" id="clock"></span>
   </section>
 
+  <section class="hearth-section hearth-story" aria-labelledby="story-label" id="story" hidden>
+    <h2 class="hearth-label" id="story-label">The story so far</h2>
+    <div class="hearth-story-text" id="story-text"></div>
+    <p class="hearth-meta" id="story-meta"></p>
+    <p class="hearth-story-links"><a id="story-more" href="/loom?to=%23story">Read the whole story</a><a id="story-ask" href="/loom?to=%23story">Something unclear? Say which part</a></p>
+  </section>
+
   <section class="hearth-section" aria-labelledby="done-label" id="brief-done" hidden>
     <h2 class="hearth-label" id="done-label">Done in the last day</h2>
     <ul class="hearth-brief" id="done-list"></ul>
@@ -63,13 +70,17 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
 <style>
   #out-line, #ask, #chips, #fires, #more-list, #other-rooms { overflow-wrap: anywhere; }
   #more-list { padding: 12px; }
-  #done-list, #open-list { overflow-wrap: anywhere; }
+  #done-list, #open-list, #story-text, #story-meta { overflow-wrap: anywhere; }
+  .hearth-story-text p { margin: 0 0 12px; font-size: 16px; line-height: 1.5; max-width: 34rem; }
+  .hearth-story-links { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 4px 0 0; font-size: 14px; }
+  .hearth-story-links a { min-height: 44px; display: inline-flex; align-items: center; text-underline-offset: 4px; }
   .full-loom { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; text-underline-offset: 4px; }
 </style>
 
 <script>
   import { esc, flameSvg, roomHref, personHref, loomBrief, briefHeadline, ago, MAX_FIRES } from '../../../lib/loom/hearth.mjs';
   import { readHearth } from '../../../lib/loom/hearth-read.mjs';
+  import { latestStory, STORY_ROOM } from '../../../lib/loom/hearth-story.mjs';
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -97,6 +108,23 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
 
   function roomLinks(id, rooms) {
     $(id).innerHTML = rooms.map(room => `<a href="${esc(roomHref(room.address))}">${esc(room.address)}</a>`).join('');
+  }
+
+  // The story reads on its own; if #story is quiet or unreadable the rest of the page is unchanged.
+  async function loadStory() {
+    try {
+      const res = await fetch('/api/loom?to=' + encodeURIComponent(STORY_ROOM), { headers: { accept: 'application/json' } });
+      const data = res.ok ? await res.json() : null;
+      const story = data?.ok && Array.isArray(data.messages) ? latestStory(data.messages, { now: Date.now() }) : null;
+      if (!story) return;
+      $('story-text').innerHTML = story.paragraphs.map(p => `<p>${esc(p)}</p>`).join('');
+      const replies = story.replies ? ` · ${story.replies} ${story.replies === 1 ? 'reply' : 'replies'}` : '';
+      $('story-meta').textContent = `Written by ${story.by} · ${ago(story.at)}${replies}`;
+      $('story-more').href = story.href;
+      $('story-more').hidden = !story.more;
+      $('story-ask').href = story.replyHref;
+      $('story').hidden = false;
+    } catch { /* the story is optional */ }
   }
 
   async function load() {
@@ -160,5 +188,6 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
 
   $('retry').addEventListener('click', load);
   load();
+  loadStory();
   loadAsk();
 </script>
