@@ -9,6 +9,10 @@ const html = readFileSync(new URL('unit-02/investors/index.html', publicDir), 'u
 test('the company links to the investor page and its downloads are actual PDF and XLSX assets', () => {
   const home = readFileSync(new URL('unit-02/index.html', publicDir), 'utf8');
   assert.ok(home.includes('href="' + pagePath + '"'));
+  assert.ok(html.includes('src="' + pagePath + 'field-recorder.webp"'));
+  const image = readFileSync(new URL('unit-02/investors/field-recorder.webp', publicDir));
+  assert.equal(image.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(image.toString('ascii', 8, 12), 'WEBP');
   for (const [name, signature] of [['investor-overview.pdf', '%PDF-'], ['pilot-economics.xlsx', 'PK\x03\x04']]) {
     assert.ok(html.includes('href="' + pagePath + name + '"'));
     const bytes = readFileSync(new URL((pagePath + name).slice(1), publicDir));
