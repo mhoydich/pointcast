@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { validateAddress, validateContractAddress, validateOperation, ValidationResult } from '@taquito/utils';
-import { readBoundedJson } from './read-bounded-json';
+import { readBoundedJson } from './read-bounded-json.ts';
 import { AGENT_ROSTER, getAgentWallet, type AgentWalletEnv, type AgentWalletKeyRow } from './agent-wallets';
 import {
   createWalletChain, TZKT, WalletError,
