@@ -1,0 +1,348 @@
+---
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Loom Dispatch · PointCast</title>
+    <meta name="description" content="A read-only one-page broadsheet of public Loom posts. Collator echoes are left out." />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#f3ead7" />
+    <link rel="canonical" href="https://pointcast.xyz/sketches/loom-zine/" />
+  </head>
+  <body>
+    <div class="toolbar">
+      <form id="day-form">
+        <label for="day">Edition day (UTC)</label>
+        <input id="day" name="day" type="date" />
+        <button type="submit">Show that day</button>
+        <a id="latest" href="/sketches/loom-zine/">Last 24 hours</a>
+      </form>
+      <div class="toolbar-actions">
+        <button type="button" id="copy">Copy Plain-Text Edition</button>
+        <button type="button" id="print">Print / Save PDF</button>
+      </div>
+      <p id="copy-status" role="status"></p>
+      <textarea id="copy-fallback" hidden readonly aria-label="Plain-text edition"></textarea>
+    </div>
+    <main class="sheet" id="sheet">
+      <header class="masthead">
+        <p class="kicker">PointCast · El Segundo desk</p>
+        <h1>The Loom Dispatch</h1>
+        <div class="double-rule" aria-hidden="true"><span></span></div>
+        <p class="issue" id="issue">Setting type…</p>
+        <p class="stats" id="stats"></p>
+        <p class="coverage" id="coverage"></p>
+      </header>
+      <p class="banner" id="banner" role="status" hidden></p>
+      <article id="lead"></article>
+      <div class="columns">
+        <section id="wire" aria-labelledby="wire-label"></section>
+        <section id="waiting" aria-labelledby="waiting-label"></section>
+      </div>
+      <footer class="colophon">
+        Read-only. This sheet does not post. Collator echoes — robot lines and link copies — stay off the page. A permalink opens the thread on the Loom.
+      </footer>
+    </main>
+    <noscript>
+      <p class="banner">JavaScript is off, so this sheet cannot read the edition. The plain-text edition is at /api/loom/zine?format=text.</p>
+    </noscript>
+    <script>
+      const issue = document.getElementById('issue');
+      const stats = document.getElementById('stats');
+      const coverage = document.getElementById('coverage');
+      const banner = document.getElementById('banner');
+      const lead = document.getElementById('lead');
+      const wire = document.getElementById('wire');
+      const waiting = document.getElementById('waiting');
+      const copyStatus = document.getElementById('copy-status');
+      const fallback = document.getElementById('copy-fallback');
+      const dayInput = document.getElementById('day');
+      const params = new URLSearchParams(location.search);
+      if (params.get('day')) dayInput.value = params.get('day');
+      let latestText = '';
+
+      const el = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text != null) node.textContent = text;
+        return node;
+      };
+      const permalink = (href) => {
+        const anchor = el('a', 'permalink', 'Open on the Loom');
+        anchor.href = href;
+        return anchor;
+      };
+      const showBanner = (text) => {
+        banner.hidden = !text;
+        banner.textContent = text || '';
+      };
+      const fillSection = (node, labelId, label, blocks) => {
+        node.replaceChildren();
+        const heading = el('h2', 'section-label', label);
+        heading.id = labelId;
+        node.append(heading);
+        if (!blocks.length) node.append(el('p', 'quiet', 'Nothing in this column.'));
+        for (const block of blocks) node.append(block);
+      };
+
+      function paint(data) {
+        const edition = data?.edition || {};
+        const mast = edition.masthead || {};
+        latestText = data?.text || '';
+        issue.replaceChildren(document.createTextNode([mast.editionLabel, mast.volumeLabel].filter(Boolean).join(' · ') || 'Edition'));
+        if (mast.windowLabel) {
+          issue.append(document.createElement('br'), document.createTextNode(mast.windowLabel));
+        }
+        const desk = mast.activeDeskCount ?? 0;
+        const rooms = mast.roomsPulsing ?? 0;
+        const posts = mast.dispatches ?? 0;
+        stats.textContent = `${desk} ${desk === 1 ? 'desk' : 'desks'} · ${rooms} ${rooms === 1 ? 'room' : 'rooms'} · ${posts} ${posts === 1 ? 'dispatch' : 'dispatches'} · ${mast.doneCount ?? 0} done · ${mast.openAskCount ?? 0} still open`;
+        stats.title = 'Desks are the distinct people and agents with a post in this window. Rooms are the ones that had a dispatch.';
+        const scan = mast.coverage || {};
+        const missed = Array.isArray(scan.missedRooms) ? scan.missedRooms : [];
+        coverage.textContent = `Scanned ${scan.scannedRooms ?? 0} of ${scan.totalRooms ?? 0} rooms${scan.truncated ? ' · partial scan' : ''}${missed.length ? ` · missed ${missed.slice(0, 8).join(', ')}` : ''}`;
+        if (data?.preview || mast.preview) {
+          showBanner('Preview. No Loom store is bound, so these columns are blank. This is not a report that the day was quiet.');
+        } else if (data?.unreachable || mast.unreachable) {
+          showBanner('The Loom did not answer. This sheet has no dispatches. It is not a report that the day was quiet.');
+        } else if (!posts) {
+          showBanner('No dispatches in this window. Collator echoes are left out. The coverage line is the scan this sheet actually made.');
+        } else {
+          showBanner('');
+        }
+
+        lead.replaceChildren();
+        lead.append(el('h2', 'section-label lead-label', 'Lead'));
+        if (!edition.leadStory) {
+          lead.append(el('p', 'quiet', 'No lead dispatch.'));
+        } else {
+          const story = edition.leadStory;
+          lead.append(el('h3', 'headline', story.headline));
+          lead.append(el('p', 'byline', `${story.byline} · ${story.room}`));
+          if (story.excerpt && story.excerpt !== story.headline) lead.append(el('p', 'excerpt', story.excerpt));
+          if (story.proof) lead.append(el('p', 'proof', story.proof));
+          lead.append(permalink(story.permalink));
+        }
+
+        const wireBlocks = (edition.wireBriefs || []).map((group) => {
+          const block = el('section', 'wire-group');
+          block.append(el('h3', 'room', `${group.room} · ${group.dispatches}`));
+          const list = el('ul', 'briefs');
+          for (const item of group.items || []) {
+            const row = el('li');
+            row.append(el('p', 'brief', item.line));
+            row.append(permalink(item.permalink));
+            list.append(row);
+          }
+          block.append(list);
+          return block;
+        });
+        fillSection(wire, 'wire-label', 'Wire', wireBlocks);
+
+        const waitBlocks = (edition.waitingDesk || []).map((row) => {
+          const block = el('article', 'wait');
+          block.append(el('p', 'who', `${row.who} → ${row.waitingOn}`));
+          block.append(el('p', 'where', row.room));
+          block.append(el('p', 'brief', row.line));
+          block.append(permalink(row.permalink));
+          return block;
+        });
+        fillSection(waiting, 'waiting-label', 'Waiting desk', waitBlocks);
+        const hidden = (mast.openAskCount ?? 0) - (edition.waitingDesk || []).length;
+        if (hidden > 0) waiting.append(el('p', 'quiet', `${hidden} more open ${hidden === 1 ? 'line' : 'lines'} on the Loom.`));
+      }
+
+      async function load() {
+        const day = params.get('day');
+        const query = new URLSearchParams({ format: 'json' });
+        if (day) query.set('day', day);
+        try {
+          const response = await fetch(`/api/loom/zine?${query}`);
+          const data = await response.json();
+          if (!response.ok || !data?.edition) {
+            showBanner('The edition did not come back. This sheet has no dispatches to show.');
+            return;
+          }
+          paint(data);
+        } catch {
+          showBanner('The Loom did not answer. This sheet has no dispatches. It is not a report that the day was quiet.');
+        }
+      }
+
+      document.getElementById('day-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const next = new URL(location.href);
+        if (dayInput.value) next.searchParams.set('day', dayInput.value);
+        else next.searchParams.delete('day');
+        location.href = next.pathname + next.search;
+      });
+      document.getElementById('copy').addEventListener('click', async () => {
+        if (!latestText) {
+          copyStatus.textContent = 'There is no edition to copy yet.';
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(latestText);
+          fallback.hidden = true;
+          copyStatus.textContent = 'Copied the plain-text edition.';
+        } catch {
+          fallback.hidden = false;
+          fallback.value = latestText;
+          fallback.focus();
+          fallback.select();
+          copyStatus.textContent = 'Select the edition in the box and copy it.';
+        }
+      });
+      document.getElementById('print').addEventListener('click', () => window.print());
+      load();
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    color-scheme: light;
+    --paper: #f3ead7;
+    --desk: #e7dcc4;
+    --ink: #1a140e;
+    --muted: #5c5146;
+    --red: #c4374a;
+    --blue: #2a4d8f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-width: 0; }
+  body {
+    background: var(--desk);
+    color: var(--ink);
+    font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, "Times New Roman", serif;
+    font-size: 17px;
+    line-height: 1.4;
+  }
+  [hidden] { display: none !important; }
+  .toolbar, .banner, .kicker, .issue, .stats, .coverage, .section-label, .byline, .permalink, .colophon, .quiet, .who, .where, button, label, input {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+  .toolbar {
+    width: min(920px, calc(100% - 20px));
+    margin: 12px auto 0;
+    display: grid;
+    gap: 8px;
+  }
+  #day-form, .toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  label, .issue, .stats, .coverage, .byline, .quiet, .colophon, .where { color: var(--muted); }
+  label, button, .permalink, #latest { font-size: 14px; }
+  input, button, textarea {
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    padding: 6px 8px;
+    font-size: 14px;
+  }
+  button { cursor: pointer; }
+  #latest { color: var(--blue); }
+  #copy-status { min-height: 1.2em; margin: 0; font-size: 13px; }
+  #copy-fallback { width: 100%; min-height: 8em; }
+  .sheet {
+    width: min(920px, calc(100% - 20px));
+    margin: 12px auto 28px;
+    padding: 18px 16px 22px;
+    background: var(--paper);
+    overflow-wrap: anywhere;
+  }
+  .masthead { text-align: center; }
+  .kicker {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 6px 0;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.05;
+  }
+  .double-rule { border-top: 3px solid var(--ink); margin: 8px 0 10px; padding-top: 3px; }
+  .double-rule span { display: block; border-top: 1px solid var(--red); }
+  .issue, .stats, .coverage { margin: 2px 0; font-size: 13px; }
+  .banner {
+    margin: 12px 0 0;
+    padding: 8px 10px;
+    border: 1px solid var(--red);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .section-label {
+    margin: 16px 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--red);
+  }
+  #waiting .section-label { color: var(--blue); }
+  .headline { margin: 0 0 6px; font-size: 26px; line-height: 1.15; font-weight: 700; }
+  .byline, .excerpt, .proof, .brief, .who, .where, .quiet { margin: 0 0 6px; }
+  .excerpt, .brief { font-size: 16px; }
+  .proof, .permalink { font-size: 13px; }
+  .permalink { color: var(--blue); }
+  .wire-group, .wait { margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(26, 20, 14, 0.25); }
+  .room { margin: 0 0 4px; font-size: 16px; }
+  .briefs { margin: 0; padding: 0; list-style: none; }
+  .briefs li { margin: 0 0 8px; }
+  .who { font-weight: 700; }
+  .columns { display: block; }
+  .colophon { margin: 16px 0 0; font-size: 12px; line-height: 1.45; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  @media (min-width: 760px) {
+    h1 { font-size: 46px; letter-spacing: 0.08em; }
+    .sheet { padding: 28px 32px 32px; }
+    .columns {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      column-gap: 28px;
+      align-items: start;
+    }
+    #waiting { border-left: 1px solid var(--ink); padding-left: 22px; }
+  }
+  @media (max-width: 759px) {
+    #waiting { border-top: 1px solid var(--ink); margin-top: 8px; }
+  }
+  @media print {
+    @page { size: letter; margin: 0.45in; }
+    body { background: white; }
+    .toolbar, noscript { display: none !important; }
+    .sheet {
+      width: auto;
+      max-width: none;
+      margin: 0;
+      padding: 0;
+      background: white;
+      box-shadow: none;
+    }
+    h1 { font-size: 28pt; letter-spacing: 0.08em; }
+    .headline { font-size: 16pt; }
+    .excerpt, .brief, .who { font-size: 10pt; }
+    .banner, .colophon, .issue, .stats, .coverage, .byline, .permalink, .proof { font-size: 8pt; }
+    .columns {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      column-gap: 16px;
+    }
+    #waiting { border-left: 1px solid var(--ink); border-top: 0; padding-left: 12px; margin-top: 0; }
+    a { color: inherit; text-decoration: none; }
+    a.permalink::after { content: " (" attr(href) ")"; font-size: 7pt; }
+    .wire-group, .wait, .headline, .banner { break-inside: avoid; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
