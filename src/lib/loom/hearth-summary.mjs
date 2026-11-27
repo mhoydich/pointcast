@@ -38,6 +38,16 @@ const urls = m => [...new Set([
   ...(own(m).replace(INLINE_CODE, '').match(/https?:\/\/[^\s<>"']+/gi) || []),
   ...(m.links || []), ...(m.cites || []),
 ].map(webUrl).filter(Boolean))];
+// Proof that reported work exists outside the author's own session: the PointCast repo,
+// the live site, or a chain explorer. A link to anywhere else is context, not proof.
+const PROOF = [
+  /^https:\/\/github\.com\/mhoydich\/pointcast\/(?:pull|commit|blob|tree|releases|issues)\//i,
+  /^https:\/\/(?:[\w-]+\.)*pointcast\.xyz(?:\/|$)/i,
+  /^https:\/\/(?:www\.)?(?:objkt\.com|tzkt\.io|better-call\.dev|tzstats\.com)\//i,
+  // A public post on X is its own record.
+  /^https:\/\/(?:www\.)?(?:x|twitter)\.com\/\w+\/status\/\d+/i,
+];
+export const proofUrl = m => urls(m).find(url => PROOF.some(rule => rule.test(url))) || null;
 const postHref = (m, log) => '/loom?to=' + encodeURIComponent(log.address || (log.key ? `loom:${log.key}` : '#loom'))
   + (m.id ? '#' + encodeURIComponent(m.id) : '');
 
@@ -189,7 +199,7 @@ function calm(text) {
 // every other aside stays, because it can carry the task or its scope.
 // Only a positively recognised byline or date stamp: "(@antigravity)", "(@antigravity, Thu Nov 26)",
 // "(by @astra)", "(Thu Nov 26)". "(Friday only)" or "(by disabling validation)" are the work's scope.
-const STAMP = '(?:(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?,?\\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2}(?:,?\\s+\\d{4})?|(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?';
+const STAMP = '(?:(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?,?\\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2}(?:,?\\s+\\d{4})?(?:,?\\s+\\d{1,2}(?::\\d{2})?\\s?(?:am|pm)(?:\\s+[A-Z]{2,4})?)?|(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?';
 const BYLINE = new RegExp(`\\s*\\((?:(?:by\\s+)?@[\\w.-]+(?:,\\s*(?:${STAMP}))?|${STAMP})\\)(?=\\s|$|[.,;:·])`, 'gi');
 const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
   .filter(part => /[\p{L}\p{N}]/u.test(part));
@@ -237,12 +247,23 @@ function work(recent, posts, log, { say = phrase, roomWide = true } = {}) {
 export function roomBrief(messages = [], { log = {}, now = Date.now(), limit = 12 } = {}) {
   const posts = messages.filter(m => m && !m.hidden && !m.withdrawn && !m.via && !isCollator(m.from) && time(m) <= now)
     .sort(newest);
-  const { shipped, open } = work(posts.filter(m => time(m) >= now - DAY), posts, log, { say: tell, roomWide: false });
+  const recent = posts.filter(m => time(m) >= now - DAY);
+  const { shipped, open } = work(recent, posts, log, { say: tell, roomWide: false });
+  // Done means a reader can open it: a PR, a commit, a live page or a chain record.
+  // A DONE with none of those is listed as reported, linked to the post itself.
+  const byPost = new Map(recent.filter(receipt).map(m => [m, proofUrl(m)]));
+  const receipts = [...byPost.entries()];
+  const done = [], reported = [];
+  shipped.forEach((item, i) => {
+    const [, proof] = receipts[i];
+    if (proof) done.push({ ...item, href: proof });
+    else reported.push({ ...item, href: postHref(receipts[i][0], log) });
+  });
   // Say how many posts the cap left out. They may repeat known work, so readers treat
   // the listed items as a floor rather than adding these in.
-  return { done: shipped.slice(0, limit), open: open.slice(0, limit),
-    ...(shipped.length > limit ? { doneMore: shipped.length - limit } : {}),
-    ...(open.length > limit ? { openMore: open.length - limit } : {}) };
+  const more = (key, list) => list.length > limit ? { [key]: list.length - limit } : {};
+  return { done: done.slice(0, limit), open: open.slice(0, limit), reported: reported.slice(0, limit),
+    ...more('doneMore', done), ...more('openMore', open), ...more('reportedMore', reported) };
 }
 
 /** Last day of direct posts, or the newest twenty when that window is empty.

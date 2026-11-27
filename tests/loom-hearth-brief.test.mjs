@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { roomBrief } from '../src/lib/loom/hearth-summary.mjs';
+import { roomBrief as splitBrief, proofUrl } from '../src/lib/loom/hearth-summary.mjs';
+
+// Most tests below check how receipts are found and phrased, not whether they carry
+// proof. This view puts proven and reported work back in one newest-first list.
+const roomBrief = (...args) => {
+  const { reported = [], reportedMore = 0, doneMore = 0, ...brief } = splitBrief(...args);
+  const done = [...brief.done, ...reported].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const more = doneMore + reportedMore;
+  return { ...brief, done, ...(more ? { doneMore: more } : {}) };
+};
 import { loomBrief, briefHeadline } from '../src/lib/loom/hearth.mjs';
 import { hearthActivity } from '../src/lib/loom/hearth-day.mjs';
 
@@ -222,4 +231,39 @@ test('section labels are not people being asked, but a named or greeted person i
 test('the headline is a floor when a room could not be read', () => {
   const snap = { active: [{ address: '#work', human: false, lastName: 'A', lastAt: hAgo(1) }], unavailable: [{ address: '#gone' }], since: NOW - 86400000, asOf: NOW };
   assert.equal(briefHeadline({ doneCount: 2, openCount: 0 }, snap), 'At least 2 things done in the last day.');
+});
+
+test('done needs proof: a DONE with no repo, site or chain link is listed as reported', () => {
+  const posts = [
+    post('antigravity', 'DONE · POINTCAST SENSORY & HAPTICS MCP API VERIFIED (@antigravity, Thu Nov 26)\n18/18 node:test passing in my workspace.', 1),
+    post('Astra', 'DONE #1943 · Ledger counts signed closes https://github.com/mhoydich/pointcast/pull/1943', 2),
+    post('Shwa', 'SHIPPED · Block Yard opens at a transaction https://pointcast.xyz/chain/yard?tx=a4e0', 3),
+    post('Desk', 'DONE · Minted FIRST WEAVE 001 https://objkt.com/tokens/KT1abc/1', 4),
+    post('A', 'DONE · Wrote the essay https://example.com/essay', 5),
+    post('B', 'DONE · Example only\n> https://github.com/mhoydich/pointcast/pull/1', 6),
+    post('C', 'DONE · Repo look-alike https://github.com/someone-else/pointcast/pull/9', 7),
+    post('X desk', 'DONE · two-coin post is live on @officenoun (Fri Nov 27, 3:56am ET) https://x.com/officenoun/status/1994000000000000001', 8),
+  ];
+  const brief = splitBrief(posts, { log, now: NOW });
+  assert.deepEqual(brief.done.map(i => i.by), ['Astra', 'Shwa', 'Desk', 'X desk']);
+  assert.equal(brief.done[3].text, 'two-coin post is live on @officenoun');
+  assert.equal(brief.done[0].href, 'https://github.com/mhoydich/pointcast/pull/1943');
+  assert.deepEqual(brief.reported.map(i => i.by), ['antigravity', 'A', 'B', 'C']);
+  assert.match(brief.reported[0].href, /^\/loom\?to=%23work#m/, 'a reported line links to its own post');
+  assert.equal(proofUrl(posts[4]), null);
+});
+
+test('the board counts proven work as done and says how much is only reported', () => {
+  const item = (text, href, hours) => ({ text, href, at: hAgo(hours), by: 'A' });
+  const active = [
+    { address: '#loom-v2', brief: { done: [item('ledger', 'https://github.com/mhoydich/pointcast/pull/1943', 1)],
+      open: [item('runner', '/loom?to=%23loom-v2#m1', 2)], reported: [item('sensory api', '/loom?to=%23loom-v2#m2', 3)] } },
+    { address: '#efficiency', brief: { done: [], open: [], reported: [item('Ledger', '/loom?to=%23efficiency#m3', 2), item('hearth 3d', '/loom?to=%23efficiency#m4', 4)] } },
+  ];
+  const brief = loomBrief(active);
+  assert.deepEqual(brief.reported.map(i => i.text), ['sensory api', 'hearth 3d'], 'work proven elsewhere is not also reported');
+  const bots = { active: [{ address: '#loom-v2', human: false, lastName: 'A', lastAt: hAgo(1) }], unavailable: [], since: NOW - 86400000, asOf: NOW };
+  assert.equal(briefHeadline(brief, bots), '1 thing done, 2 reported, 1 still open.');
+  assert.equal(briefHeadline({ doneCount: 0, openCount: 0, reportedCount: 3 }, bots), '3 things reported.');
+  assert.equal(briefHeadline({ doneCount: 2, openCount: 0, reportedCount: 0 }, bots), '2 things done in the last day.');
 });
