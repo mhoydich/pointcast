@@ -1,4 +1,4 @@
-import { readBoundedJson } from './read-bounded-json';
+import { readBoundedJson } from './read-bounded-json.ts';
 import {
   base64ToBytes,
   canonicalJson,
