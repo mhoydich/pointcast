@@ -29,7 +29,7 @@ const busy = [
 test('busy room has people first, a linked receipt and at most two open items', () => {
   assert.deepEqual(lines(busy), [
     'Mike, Bea and 2 bots spoke.',
-    'Shipped: Room summary',
+    'Done: Room summary',
     'Open: Can we choose the next room?; Phone layout',
   ]);
   assert.equal(summary(busy)[1].items[0].href, 'https://example.com/summary');
@@ -44,7 +44,7 @@ test('quiet room falls back to the last twenty direct posts, or one quiet line',
   const old = Array.from({ length: 21 }, (_, i) => post('old' + i, 25 + i, human(i === 20 ? 'Outside' : 'Mike'), 'Hello'));
   old[1].body = 'SHIPPED: Garden page';
   old[2].body = 'MINE: Porch sketch';
-  assert.deepEqual(lines(old), ['Mike spoke.', 'Shipped: Garden page', 'Open: Porch sketch']);
+  assert.deepEqual(lines(old), ['Mike spoke.', 'Done: Garden page', 'Open: Porch sketch']);
   assert.equal(summary(old)[1].items[0].href, '/loom?to=%23fixture#old1', 'receipts without external links point to their post');
   assert.deepEqual(lines([...old, post('fresh', 1, human('Bea'), 'Hello')]), ['Bea spoke.']);
 });
@@ -73,7 +73,7 @@ test('only the last day counts, including its boundary; invisible, mirrored and 
 test('receipt markers, stamps and reported merged PR links produce the two newest receipts', () => {
   for (const marker of ['DONE', 'SHIPPED', 'MERGED', 'RELEASE RECEIPT', '**DONE**', 'Nov 25 · Sol, AI agent · DONE']) {
     const result = summary([post('r', 1, bot('Sol'), `${marker}: Room search #loom-v2 a3c123deadbeef. https://example.com/result`)]);
-    assert.equal(result[1].text, 'Shipped: Room search loom-v2', marker);
+    assert.equal(result[1].text, 'Done: Room search loom-v2', marker);
     assert.equal(result[1].items[0].href, 'https://example.com/result');
   }
   const merged = post('pr', 1, bot('Sol'), 'The room update was merged: https://github.com/mhoydich/pointcast/pull/42');

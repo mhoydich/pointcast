@@ -170,3 +170,56 @@ test('re-review: prose quotes, exact claim matches, handle underscores and inlin
   assert.equal(loomBrief([{ address: '#work', brief }]).doneCount, 2);
   assert.deepEqual(roomBrief([post('A', '`DONE` is the word to start a receipt with.', 1)], { log, now: NOW }).done, []);
 });
+
+test('live lines read as sentences: shouting calmed, bylines dropped, a trailing card id leads', () => {
+  const lines = [
+    post('antigravity', 'DONE POINTCAST SENSORY & HAPTICS MCP API (pointcast.sensory.mcp/v1) VERIFIED (@antigravity, Thu Nov 26)', 1),
+    post('antigravity', 'DONE HUX-6 · BRING YOUR BOT TO THE LOOM + DAO ROOM CHARTER v0 (@antigravity, CC0)', 2),
+    post('Antigravity', 'DONE (draft for Purplematter; note: card is currently unsigned) · LEND-2\n\nTitle: Office Noun', 3),
+  ];
+  assert.deepEqual(roomBrief(lines, { log, now: NOW }).done.map(i => i.text), [
+    'PointCast sensory & haptics MCP API (pointcast.sensory.mcp/v1) verified',
+    'HUX-6 · Bring your bot to the Loom + DAO room charter v0 (@antigravity, CC0)',
+    'LEND-2 · draft for Purplematter; note: card is currently unsigned',
+  ]);
+});
+
+test('review fixtures: asides that carry the work stay, code and names keep their case, only card ids move', () => {
+  const said = body => roomBrief([post('A', body, 1)], { log, now: NOW }).done.map(i => i.text);
+  assert.deepEqual(said('DONE HUX-6 (repaired the unread-room count)'), ['HUX-6 (repaired the unread-room count)']);
+  assert.deepEqual(said('DONE (repaired the unread-room count)\nChecks passed.'), ['repaired the unread-room count']);
+  assert.deepEqual(said('DONE Disabled alerts (for staging only)'), ['Disabled alerts (for staging only)']);
+  assert.deepEqual(said('DONE FIXED REQUEST SIGNATURE FOR `getUser` IN `src/Model.js`'), ['Fixed request signature for getUser in src/Model.js']);
+  assert.deepEqual(said('DONE ROTATED API_TOKEN FOR POINTCAST AND THE LOOM'), ['Rotated API_TOKEN for PointCast and the Loom']);
+  assert.deepEqual(said('DONE IPHONE15 BUILD SIGNED AND SHIPPED TODAY'), ['IPHONE15 build signed and shipped today']);
+  assert.deepEqual(said('DONE Encoding verified · UTF8'), ['Encoding verified']);
+  assert.deepEqual(said('DONE Audit passed\nISO9001'), ['Audit passed']);
+  assert.deepEqual(said('DONE Audit passed. HTTP403'), ['Audit passed']);
+  assert.deepEqual(said('DONE Ledger card · #1943'), ['#1943 · Ledger card']);
+  assert.deepEqual(said('DONE #1950\nFixed unread-room count'), ['#1950 · Fixed unread-room count']);
+  assert.deepEqual(said('DONE Add wallet (Monero only)'), ['Add wallet (Monero only)']);
+  assert.deepEqual(said('DONE Fixed upload (by disabling validation)'), ['Fixed upload (by disabling validation)']);
+  assert.deepEqual(said('DONE Shipped the card (by @astra)'), ['Shipped the card']);
+  assert.deepEqual(said('DONE Shipped the card (Thu Nov 26)'), ['Shipped the card']);
+  assert.deepEqual(said('DONE Shipped the card (Thursday)'), ['Shipped the card']);
+  const open = body => roomBrief([post('A', body, 1)], { log, now: NOW }).open.map(i => i.text);
+  assert.deepEqual(open('MINE LEND-2\nCheck borrower ceiling'), ['LEND-2 · Check borrower ceiling']);
+  assert.deepEqual(open('MINE Add support shift (Friday only)'), ['Add support shift (Friday only)']);
+});
+
+test('section labels are not people being asked, but a named or greeted person is', () => {
+  const report = post('Desk', 'SOL 6.2 REPORT · relayed. Job: can a plain FA2 enforce the rules?\nAnswer: none of them.\nFlags: label them honour rules.', 1);
+  assert.deepEqual(roomBrief([report], { log, now: NOW }).open, []);
+  for (const body of ['Shwa: can you take the check page?', 'MIKE: can you approve the release?', 'SHWA: can you approve the release?',
+    'Hey MIKE, can you approve the release?', 'Job: can you approve the release?',
+    'GROK-01 · THE SWITCHBOARD GAME\nGrok Bot, can you take first turn?',
+    'Hey Job, can you approve the release?\nStatus: tests pass.\nNote: The patch only changes the footer.',
+    'Job, can you approve the release?\nStatus: tests pass.\nNote: The patch only changes the footer.']) {
+    assert.equal(roomBrief([post('Desk', body, 1)], { log, now: NOW }).open.length, 1, body);
+  }
+});
+
+test('the headline is a floor when a room could not be read', () => {
+  const snap = { active: [{ address: '#work', human: false, lastName: 'A', lastAt: hAgo(1) }], unavailable: [{ address: '#gone' }], since: NOW - 86400000, asOf: NOW };
+  assert.equal(briefHeadline({ doneCount: 2, openCount: 0 }, snap), 'At least 2 things done in the last day.');
+});
