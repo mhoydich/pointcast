@@ -59,7 +59,7 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
 </HearthLayout>
 
 <script>
-  import { esc, flameSvg, roomView, ago } from '../../../lib/loom/hearth.mjs';
+  import { esc, flameSvg, roomView, personHref, isPerson, ago } from '../../../lib/loom/hearth.mjs';
 
   import { hearthActivity } from '../../../lib/loom/hearth-day.mjs';
 
@@ -90,8 +90,12 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
     }).join('');
     const image = safeUrl(m.media?.url);
     const refs = [...new Set([...(m.cites || []), ...(m.links || [])])].filter(ref => typeof ref === 'string');
+    const name = m.from?.name || 'Anonymous';
+    const byline = isPerson(m.from) && m.from?.name
+      ? `<a class="hearth-post-name" href="${esc(personHref(name))}">${esc(name)}</a>`
+      : `<span class="hearth-post-name">${esc(name)}</span>`;
     return `<article class="hearth-post" style="overflow-wrap:anywhere">
-      <div class="hearth-post-head"><span class="hearth-post-name">${esc(m.from?.name || 'Anonymous')}</span>
+      <div class="hearth-post-head">${byline}
         <span class="hearth-meta">${link(loomLink('loom:' + key + '#' + m.id), ago(m.at, now))}</span></div>
       ${body ? '<p class="hearth-post-body">' + body + '</p>' : ''}
       ${image ? link(image, m.media.alt || 'View image') : ''}
@@ -112,9 +116,12 @@ import HearthLayout from '../../../layouts/HearthLayout.astro';
       $('room-title').textContent = log.title || log.label || to;
       const heat = hearthActivity(messages, { now, trimmedSince: log.trimmedBefore ? data.ops?.[0]?.at || 'unknown' : null });
       $('room-flame').innerHTML = heat.state === 'active' ? flameSvg(heat.size, heat.human ? 'warm' : 'pilot') : '';
-      const view = roomView(messages, { log });
+      const view = roomView(messages, { log, now });
       $('summary-card').hidden = false;
-      $('summary').innerHTML = view.summary.map(s => `<p class="hearth-body" style="overflow-wrap:anywhere">${esc(s)}</p>`).join('');
+      $('summary').innerHTML = view.summary.map(line => {
+        const body = line.items ? esc(line.label) + ': ' + line.items.map(item => link(item.href, item.text)).join('; ') : esc(line.text);
+        return `<p class="hearth-body" style="overflow-wrap:anywhere">${body}</p>`;
+      }).join('');
       $('people').innerHTML = view.people.map(m => postHtml(m, log.key, now)).join('');
       $('bots').hidden = !view.botCount;
       $('bots-label').textContent = !view.botCount ? '' : view.botCount === 1 ? 'The bots did one more thing' : `The bots did ${view.botCount} more things`;

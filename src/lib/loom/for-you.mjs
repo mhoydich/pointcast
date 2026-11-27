@@ -47,7 +47,59 @@ export const GO_AHEAD_PHRASES = [
 ];
 // A post that opens with a status receipt reports work; it is not an ask, even when it names the
 // "Needs your yes" pile in passing (OFF-45 relay rule). Explicit NEEDS <OWNER> lines are unaffected.
-export const RECEIPT_RE = /^\s*(?:WORKING|MINE|PARTIAL|DONE|REVIEW|CLOSED|CLEARED|SHIPPED|FYI)\b/i;
+export const RECEIPT_RE = /^\s*(?:WORKING|MINE|PARTIAL|FIXED|MINTED|DONE|SHIPPED|MERGED|REVIEW|PASS|HOLD|CLOSED|CLEARED|FYI|RELEASE\s+RECEIPT|LEAD\s+NOTE|(?:STATUS\s+|PROGRESS\s+)?UPDATE|STATUS|RECEIPT)\b/i;
+
+// A relay can include someone else's words or name the UI. Match the request
+// in the sender's own prose, leaving the original message intact for display.
+const MARKDOWN_QUOTE_OR_CODE = /```[\s\S]*?(?:```|(?![\s\S]))|~~~[\s\S]*?(?:~~~|(?![\s\S]))|^[ \t]*>[^\n]*|`[^`\n]*`/gm;
+const QUOTED_TEXT = /“[^”]*”|"[^"\n]*"|‘[^’\n]*’|(?<!\w)'[^'\n]+'(?!\w)/g;
+const EMPHASIZED_LABEL = /(\*{1,3}|_{1,3})(needs your yes)\1/gi;
+// Keep context on the same line: “Card:” can start a new line after a genuine ask.
+const LABEL_PREFIX = /\b(?:the|under|called|named|labelled|labeled|titled|says|mentions?|phrase|words|text|nothing|(?:items?|entr(?:y|ies)|rows?|cards?|requests?|nothing)[ \t]+in)[ \t]+needs your yes\b/gi;
+const LABEL_SUFFIX = /\bneeds your yes[ \t]+(?:(?:confirm|decision)[ \t]+)?(?:cards?|piles?|sections?|labels?|buttons?|tiles?|tabs?|feeds?|digests?|rss|atom)\b/gi;
+const PAIRED_PILE_TITLES = /\b(?:people|new arrivals)[ \t]*\/[ \t]*needs your yes\b|\bneeds your yes[ \t]*\/[ \t]*(?:people|new arrivals)\b/gi;
+function requestProse(body, owner) {
+  const namedYes = new RegExp(GO_AHEAD_PHRASES[0](escapeRe(owner)).source, 'gi');
+  const text = String(body ?? '').replace(namedYes, 'needs your yes').replace(EMPHASIZED_LABEL, '$2');
+  return text.replace(MARKDOWN_QUOTE_OR_CODE, '…').replace(QUOTED_TEXT, '…')
+    .replace(PAIRED_PILE_TITLES, '…').replace(LABEL_PREFIX, '…').replace(LABEL_SUFFIX, '…')
+    .replace(/\b(?:no longer|never|nobody|no one)\s+needs your yes\b/gi, '…');
+}
+
+// Status reports can carry a date/byline or Markdown heading before FIXED, etc.
+// A short introductory title also does not turn a report dominated by status lines into an ask.
+function isReceipt(body) {
+  const text = splitStamp(String(body ?? '').trim()).text;
+  const parts = text.split(/\n+|(?<=[.!?])\s+/).map((part) =>
+    splitStamp(part.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)?/, '').replace(/[*_]/g, '')).text.trim()
+  ).filter(Boolean);
+  return RECEIPT_RE.test(parts[0] ?? '') || (parts.length > 1 && parts.filter((part) => RECEIPT_RE.test(part)).length > parts.length / 2);
+}
+
+// Shared with Hearth's room summary; callers supply the addressee and context.
+export function asksForGoAhead(message, phrases, owner, inbox) {
+  if (isReceipt(message.body)) return false;
+  const prose = requestProse(message.body, owner);
+  if (phrases.some((re) => re.test(prose))) return true;
+  // Other natural requests must address this owner, not another desk or a quoted example.
+  const name = `${escapeRe(owner)}(?![A-Za-z0-9_]|[.-][A-Za-z0-9_])`;
+  const addressed = new RegExp(`^(?:(?:hi|hey|hello)\\s+)?@?${name}(?:\\s*[,;:—–-]\\s*|\\s+)`, 'i');
+  const trailingName = new RegExp(`[, ]+@?${name}[?.!]*$`, 'i');
+  const decision = /^(?:please\s+)?(?:approve|decide|choose|pick|confirm|sign off)\b|^yes\s*(?:or|\/)\s*no[?.!]?$/i;
+  const questionStart = /^(?:can|could|would|will|should|shall|may|do|does|is|are|which|what|when|where|who|how)\b/i;
+  for (const sentence of prose.split(/\n+|(?<=[.!?])\s+/).map((part) => part.trim())) {
+    if (addressed.test(sentence)) {
+      const request = sentence.replace(addressed, '');
+      if (/\?$/.test(request) || decision.test(request)) return true;
+    } else if (trailingName.test(sentence) || (inbox && !/@[A-Za-z0-9_.-]+/.test(sentence))) {
+      if (decision.test(sentence) || (questionStart.test(sentence) && /\?$/.test(sentence))) return true;
+    }
+  }
+  const question = requestProse(message.poll?.question ?? '', owner).trim();
+  const toOwner = addressed.test(question) || new RegExp(`(^|[^A-Za-z0-9_])@${name}`, 'i').test(question) ||
+    (inbox && !/@[A-Za-z0-9_.-]+/.test(question));
+  return message.kind === 'poll' && !!message.poll?.question && toOwner && /[A-Za-z0-9]/.test(question);
+}
 
 /** "@Mike", "mike", " MIKE " -> "mike". Same rule as the /loom page's handleOf. */
 export const normHandle = (s) => String(s ?? '').trim().replace(/^@+/, '').toLowerCase().replace(/[^a-z0-9_.-]/g, '');
@@ -180,8 +232,10 @@ export function buildPiles({ owner, threads = [], seenAt = null, now = new Date(
         if (at >= nowMs - WINDOW_MS && (inbox || (parent && isOwner(parent.from, me)) || mentionsOwner(m.body, me))) collatorCount += 1;
         continue;
       }
-      const explicitNeeds = needsRe && needsRe.test(firstLine(m.body)) && at >= nowMs - NEEDS_WINDOW_MS && !cleared(m) && (m.parent || m.depth >= 1 || m.from?.kind !== 'agent' || !relayClosed(m, goAhead.some((re) => re.test(m.body ?? ''))));
-      const relay = me && !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent' && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && !RECEIPT_RE.test(firstLine(m.body)) && goAhead.some((re) => re.test(m.body ?? '')) && !relayClosed(m);
+      const topLevelAgent = !m.parent && !(m.depth >= 1) && m.from?.kind === 'agent';
+      const asksForYes = me && topLevelAgent && at >= nowMs - NEEDS_WINDOW_MS && asksForGoAhead(m, goAhead, me, inbox);
+      const explicitNeeds = needsRe && needsRe.test(firstLine(m.body)) && at >= nowMs - NEEDS_WINDOW_MS && !cleared(m) && (!topLevelAgent || !relayClosed(m, asksForYes));
+      const relay = me && asksForYes && !isOwner(m.from, me) && at >= nowMs - FIRST_LOOK_MS && at <= nowMs && !relayClosed(m);
       if (!m.via && (explicitNeeds || relay)) {
         needsYes.push(item(thread, m)); continue;
       }
