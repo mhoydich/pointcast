@@ -28,8 +28,8 @@ test('a room fire counts only visible original posts in the trailing day', async
   const result = await serveHearthActivity(requestFor(['#warm', '@pilot', '#embers', '#trimmed', '#missing']), kv, now);
   const { rooms } = await result.json();
   assert.deepEqual(rooms, [
-    { address: '#warm', state: 'active', count: 2, human: true, lastAt: iso(now - 1000), size: 32, lastName: 'agent', lastKind: 'agent', humanName: 'human', lastHumanAt: iso(now - 1000), brief: { done: [], open: [] } },
-    { address: '@pilot', state: 'active', count: 1, human: false, lastAt: iso(now - 1000), size: 32, lastName: 'agent', lastKind: 'agent', humanName: null, lastHumanAt: null, brief: { done: [], open: [] } },
+    { address: '#warm', state: 'active', count: 2, human: true, lastAt: iso(now - 1000), size: 32, lastName: 'agent', lastKind: 'agent', humanName: 'human', lastHumanAt: iso(now - 1000), brief: { done: [], open: [], reported: [] } },
+    { address: '@pilot', state: 'active', count: 1, human: false, lastAt: iso(now - 1000), size: 32, lastName: 'agent', lastKind: 'agent', humanName: null, lastHumanAt: null, brief: { done: [], open: [], reported: [] } },
     { address: '#embers', state: 'quiet' }, { address: '#trimmed', state: 'unavailable' },
     { address: '#missing', state: 'unavailable' },
   ]);

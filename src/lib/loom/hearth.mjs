@@ -67,7 +67,7 @@ export function whileYouWereOut({ active, unavailable, since, asOf }, seenAt = n
 /** One board-wide brief from the lit rooms: newest reported work first, then
  * what is still open. The same link or the same words in two rooms count once.
  */
-export function loomBrief(active = [], { done: doneLimit = 5, open: openLimit = 3 } = {}) {
+export function loomBrief(active = [], { done: doneLimit = 5, open: openLimit = 3, reported: reportedLimit = 3 } = {}) {
   const gather = kind => {
     const seen = new Set();
     return active.flatMap(room => (room.brief?.[kind] || []).map(item => ({ ...item, room: room.address })))
@@ -81,24 +81,34 @@ export function loomBrief(active = [], { done: doneLimit = 5, open: openLimit = 
       });
   };
   const done = gather('done'), open = gather('open');
+  // The same work reported in one room and proven in another counts once, as done.
+  const known = new Set(done.flatMap(item => [item.href, item.text.toLowerCase()]));
+  const reported = gather('reported').filter(item => !known.has(item.text.toLowerCase()));
   // A room that left posts out makes the counts a floor: the omitted posts may repeat known work.
-  const cut = active.some(room => room.brief?.doneMore > 0 || room.brief?.openMore > 0);
-  return { done: done.slice(0, doneLimit), open: open.slice(0, openLimit),
-    doneCount: done.length, openCount: open.length, atLeast: cut };
+  const cut = active.some(room => room.brief?.doneMore > 0 || room.brief?.openMore > 0 || room.brief?.reportedMore > 0);
+  return { done: done.slice(0, doneLimit), open: open.slice(0, openLimit), reported: reported.slice(0, reportedLimit),
+    doneCount: done.length, openCount: open.length, reportedCount: reported.length, atLeast: cut };
 }
 
 /** The headline counts work, not posts. Falls back to the recap when no room reported any. */
 export function briefHeadline(brief, snapshot, seenAt = null) {
-  const { doneCount: done, openCount: open } = brief;
-  if (!done && !open) return whileYouWereOut(snapshot, seenAt);
+  const { doneCount: done, openCount: open, reportedCount: reported = 0 } = brief;
+  if (!done && !open && !reported) return whileYouWereOut(snapshot, seenAt);
   const things = n => `${n} ${n === 1 ? 'thing' : 'things'}`;
   const person = snapshot.active.find(room => room.human);
   const lead = person ? `${person.humanName || 'Someone'} spoke in ${person.address}. ` : '';
   // Rooms left out or unread make every count a floor.
   const floor = brief.atLeast || (snapshot.unavailable?.length > 0);
   const least = floor ? (lead ? 'at least ' : 'At least ') : '';
-  if (done && open) return `${lead}${least}${things(done)} done, ${open} still open.`;
-  return done ? `${lead}${least}${things(done)} done in the last day.` : `${lead}${least}${things(open)} still open.`;
+  if (done && !open && !reported) return `${lead}${least}${things(done)} done in the last day.`;
+  if (!done && open && !reported) return `${lead}${least}${things(open)} still open.`;
+  // "4 things done, 2 reported, 1 still open." The first count carries the noun.
+  const parts = [];
+  if (done) parts.push(`${done} done`);
+  if (reported) parts.push(`${reported} reported`);
+  if (open) parts.push(`${open} still open`);
+  parts[0] = parts[0].replace(/^(\d+)/, n => things(Number(n)));
+  return `${lead}${least}${parts.join(', ')}.`;
 }
 
 /** Read direct posts here. The classic room keeps the complete mirrored and system log. */
