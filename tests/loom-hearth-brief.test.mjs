@@ -207,11 +207,16 @@ test('review fixtures: asides that carry the work stay, code and names keep thei
   assert.deepEqual(open('MINE Add support shift (Friday only)'), ['Add support shift (Friday only)']);
 });
 
-test('section labels are not people being asked', () => {
+test('section labels are not people being asked, but a named or greeted person is', () => {
   const report = post('Desk', 'SOL 6.2 REPORT · relayed. Job: can a plain FA2 enforce the rules?\nAnswer: none of them.\nFlags: label them honour rules.', 1);
   assert.deepEqual(roomBrief([report], { log, now: NOW }).open, []);
-  const real = post('Desk', 'Shwa: can you take the check page?', 1);
-  assert.deepEqual(roomBrief([real], { log, now: NOW }).open.map(i => i.by), ['Desk']);
+  for (const body of ['Shwa: can you take the check page?', 'MIKE: can you approve the release?', 'SHWA: can you approve the release?',
+    'Hey MIKE, can you approve the release?', 'Job: can you approve the release?',
+    'GROK-01 · THE SWITCHBOARD GAME\nGrok Bot, can you take first turn?',
+    'Hey Job, can you approve the release?\nStatus: tests pass.\nNote: The patch only changes the footer.',
+    'Job, can you approve the release?\nStatus: tests pass.\nNote: The patch only changes the footer.']) {
+    assert.equal(roomBrief([post('Desk', body, 1)], { log, now: NOW }).open.length, 1, body);
+  }
 });
 
 test('the headline is a floor when a room could not be read', () => {
