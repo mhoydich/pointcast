@@ -120,7 +120,7 @@ export function totals(tape, extra = []) {
   const lines = [...tape.items, ...extra.filter(Boolean)];
   const cents = (ls) => ls.reduce((sum, l) => sum + Math.round(Number(l.price) * 100) * l.qty, 0);
   const listed = lines.filter((l) => l.kind === 'shop');
-  const made = lines.filter((l) => l.kind !== 'shop');
+  const made = lines.filter((l) => l.kind !== 'shop' && l.kind !== 'yours'); // the town's lines, not yours
   return {
     madeCount: made.length,
     madeSubtotal: (cents(made) / 100).toFixed(2),
@@ -177,13 +177,15 @@ const groupHex = (hex) => (String(hex).match(/.{1,8}/g) || []).join(' ');
 
 const kindWord = { cc0: 'CC0', shop: 'SHOP', loom: 'LOOM', github: 'GITHUB', chess: 'CHESS', yours: 'YOURS' };
 
+const sameAsBadge = (l) => !!l.badge && l.badge.toUpperCase().includes(kindWord[l.kind]);
+
 function lineHtml(l, i) {
   const label = l.sourceUrl
     ? `<a class="ft-label" href="${esc(l.sourceUrl)}" rel="noopener">${esc(l.label)}</a>`
     : `<span class="ft-label">${esc(l.label)}</span>`;
   const sub = [
     l.badge ? `<b class="ft-badge">${esc(l.badge)}</b>` : '',
-    `<span>${kindWord[l.kind]}</span>`,
+    sameAsBadge(l) ? '' : `<span>${kindWord[l.kind]}</span>`,
     l.verifiedAt ? `<span>checked <time datetime="${esc(l.verifiedAt)}">${esc(clock(l.verifiedAt))}</time></span>` : '<span>stays in this browser</span>',
     l.sha256 ? `<span class="ft-linehash" title="${esc(l.sha256)}">#${esc(l.sha256.slice(0, 8))}</span>` : '',
   ]
@@ -298,7 +300,7 @@ export function keepsakeSvg(tape, { digest, yours = null, tornAt = new Date().to
       const weight = l.kind === 'yours' ? 700 : 400;
       push(fit(`${l.qty} ${parts[0]}`, l.price, COLS), { weight });
       for (const part of parts.slice(1)) push(`  ${part}`, { weight });
-      if (badges) push(`  ${[l.badge, kindWord[l.kind]].filter(Boolean).join(' · ')}`.slice(0, COLS), { dim: true, size: 20, lh: 26 });
+      if (badges) push(`  ${l.badge || kindWord[l.kind]}`.slice(0, COLS), { dim: true, size: 20, lh: 26 });
     }
     if (lines.length > shown.length) push(`  + ${lines.length - shown.length} more on the page`, { dim: true, size: 20, lh: 26 });
     push('-'.repeat(COLS), { dim: true });

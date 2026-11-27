@@ -63,6 +63,8 @@ test('your honest line needs words, no source, and is capped', () => {
   assert.match(l.label, /^MADE TODAY: /);
   assert.ok(l.label.length <= 'MADE TODAY: '.length + 48);
   assert.match(yoursLine('didnt', 'a TV').label, /^DIDN'T BUY: a TV$/);
+  const tape = normalizeTape(fallback);
+  assert.equal(totals(tape, [l]).madeCount, totals(tape).madeCount, 'your line is printed but not counted as the town’s');
 });
 
 test('the barcode is a real SHA-256 of the printed lines', async () => {
