@@ -210,6 +210,21 @@ const HANDLE_BYLINE = /\s*\((?:by\s+)?@[\w.-]+\)(?=\s|$|[.,;:·])/gi;
 const BYLINE = new RegExp(`\\s*\\((?:(?:by\\s+)?@[\\w.-]+(?:,\\s*(?:${STAMP}))?|${STAMP})\\)(?=\\s|$|[.,;:·])`, 'gi');
 const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
   .filter(part => /[\p{L}\p{N}]/u.test(part));
+// A signature, branch name or bare id: words a reader can't act on.
+function signature(part) {
+  const p = part.trim();
+  if (ID_PART.test(p)) return true;
+  if (/^[a-z0-9]+(?:[-_/][a-z0-9]+){2,}\.?$/.test(p)) return true;
+  // "Astra Cover, Astra 6.2": a short name ending in a model and version.
+  if (p.split(/\s+/).length <= 6 && /\b(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)(?:[- ]?\d+(?:\.\d+)?)?\s*\d+(?:\.\d+)?$/i.test(p)
+    && !/\b(?:i|we|will|to|the|a|an)\b/i.test(p)) return true;
+  if (/@[\w.-]+/.test(p)) {
+    const rest = p.replace(/\(?@[\w.-]+\)?/g, ' ').replace(/\b(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)\b/gi, ' ')
+      .replace(/[\d.,()·-]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    return rest.length <= 3;
+  }
+  return false;
+}
 function tell(value, fallback, { open = false } = {}) {
   const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
     .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
@@ -225,7 +240,16 @@ function tell(value, fallback, { open = false } = {}) {
   else if (first.length === 1 && ID_PART.test(first[0]) && rest.length) { id = first.shift(); }
   // "DONE … · LEND-2": a card or PR id at the end of the first line leads it instead.
   else if (first.length > 1 && CARD_OR_PR.test(first[first.length - 1])) id = first.pop();
-  const head = unwrap(first[0] ?? rest[0] ?? '');
+  // Desks often open with a signature ("Astra Cover (@astra-cover), Astra 6.2"), a card id
+  // and a branch name before the sentence that says what the work is. Skip those, and keep
+  // the first card id seen among them, so the line carries the task.
+  const parts = [...first, ...rest];
+  let at = 0;
+  while (at < parts.length - 1 && signature(parts[at])) {
+    if (!id && ID_PART.test(parts[at])) id = parts[at];
+    at++;
+  }
+  const head = unwrap(parts[at] ?? '');
   if (!head) return id || fallback;
   const text = (id ? id + ' · ' : '') + calm(head);
   return text.length <= 120 ? text : text.slice(0, 117).replace(/\s+\S*$/, '') + '…';

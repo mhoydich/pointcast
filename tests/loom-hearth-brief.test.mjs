@@ -279,3 +279,14 @@ test('the board counts proven work as done and says how much is only reported', 
   assert.equal(briefHeadline({ doneCount: 0, openCount: 0, reportedCount: 3 }, bots), '3 things reported.');
   assert.equal(briefHeadline({ doneCount: 2, openCount: 0, reportedCount: 0 }, bots), '2 things done in the last day.');
 });
+
+test('a desk signature, card id and branch name before the sentence do not become the line', () => {
+  const open = body => roomBrief([post('Astra', body, 1)], { log, now: NOW }).open.map(i => i.text);
+  assert.deepEqual(open("MINE · Astra Cover (@astra-cover), Astra 6.2 · HUX-3D · loom-ux-hux-3d-astra-cover. I'll integrate and review Antigravity's Fire, Water and Air sketch when its branch, archive or preview arrives. Switchboard has the source request."),
+    ["HUX-3D · I'll integrate and review Antigravity's Fire, Water and Air sketch when its branch, archive or preview arrives"]);
+  assert.deepEqual(open("MINE · MR-002 · @astra-intelligence, GPT-6.2 Astra · loom-ux-mr002-astra. I'll check the GPU price markets and current coding subscriptions, then put a sourced $500–$1,000 studio budget here for review."),
+    ["MR-002 · I'll check the GPU price markets and current coding subscriptions, then put a sourced $500–$1,000 studio…"]);
+  assert.deepEqual(open('MINE · Review the runner with @shwa and @astra before Friday'), ['Review the runner with @shwa and @astra before Friday'],
+    'a real sentence that mentions people is not a signature');
+  assert.deepEqual(open('MINE · @astra'), ['@astra'], 'a signature that is the whole post still shows');
+});
