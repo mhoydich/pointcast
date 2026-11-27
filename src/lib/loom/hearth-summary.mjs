@@ -210,22 +210,114 @@ const HANDLE_BYLINE = /\s*\((?:by\s+)?@[\w.-]+\)(?=\s|$|[.,;:·])/gi;
 const BYLINE = new RegExp(`\\s*\\((?:(?:by\\s+)?@[\\w.-]+(?:,\\s*(?:${STAMP}))?|${STAMP})\\)(?=\\s|$|[.,;:·])`, 'gi');
 const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
   .filter(part => /[\p{L}\p{N}]/u.test(part));
-function tell(value, fallback, { open = false } = {}) {
+// Preamble a reader can't act on: a whole desk byline, a branch slug, a message id or a
+// commit hash. Only positively structured bylines count; a phrase that merely mentions
+// someone, or a task about a model ("Upgrade Claude 4.5"), is never skipped.
+// Card ids people use (HUX-3D, MR-002, LEND-2, V2-3) and PR numbers.
+const CARD_ID = /^(?:[A-Z][A-Z0-9]{0,7}-[0-9][A-Z0-9]{0,5}|#\d{1,6})$/;
+const MACHINE_ID = /^(?:m_[a-z0-9]{6,}|[0-9a-f]{7,40})$/;
+// A model label (GPT-4O, Claude-3) is preamble, never the card.
+const MODEL_LABEL = /^(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)-?\d[\w.-]*$/i;
+// A branch name: four or more lowercase hyphenated segments ending with the sender's handle or
+// its first word ("loom-ux-mr002-astra" from @astra-intelligence). It is skipped only right after
+// other preamble, so a hyphenated subject that opens the line ("cover-to-cover") always stays.
+const BRANCH = /^[a-z0-9]+(?:-[a-z0-9]+){3,}\.?$/;
+const words = text => String(text || '').toLowerCase().replace(/[^\p{L}\p{N}.]+/gu, ' ').split(/\s+/)
+  .map(w => w.replace(/^\.+|\.+$/g, '')).filter(Boolean);
+const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The sender's own signature, as a whole segment and in one of two shapes:
+ * "Name (@handle)[, Model]" or "@handle[, Model]", where Name and Model are one to four
+ * capitalised words drawn from the sender's own name, handle or model. So
+ * "Astra Cover (@astra-cover), Astra 6.2" and "@astra-intelligence, GPT-6.2 Astra" are
+ * signatures; "Cover @astra-cover", "(@astra-cover: cover Loom)" or "Contact @astra-cover"
+ * are not. */
+function signature(segment, from = {}) {
+  const address = String(from.address || '').toLowerCase();
+  if (!/^@[\w.-]+$/.test(address)) return false;
+  const own = new Set(words(`${from.name} ${from.address} ${from.model}`.replace(/[-_]+/g, ' ')));
+  // A name or model label has to be anchored on the sender: it opens with the sender's own
+  // first name or handle ("Astra Cover", "Astra 6.2" from Astra 6.2 or @astra-cover), or it is
+  // the sender's model as written ("GPT-6.2 Astra" for gpt-6.2-astra). Capitalised role words
+  // alone ("Cover Loom") are a task, not a name.
+  const anchors = new Set([words(from.name)[0], words(address.replace(/^@/, '').replace(/[-_.]+/g, ' '))[0]].filter(Boolean));
+  const model = words(String(from.model || '').replace(/[-_]+/g, ' '));
+  const label = text => {
+    if (text === undefined) return true;
+    const list = words(text.replace(/-/g, ' '));
+    const sameSet = (a, b) => a.length === b.length && a.every(w => b.includes(w));
+    return list.length >= 1 && list.length <= 4 && list.every(w => own.has(w))
+      && text.trim().split(/[\s-]+/).every(token => /^[\p{Lu}\p{N}]/u.test(token))
+      && (anchors.has(list[0]) || (model.length > 0 && sameSet(list, model)));
+  };
+  const handle = escapeRe(address);
+  const shape = new RegExp(`^(?:([\\p{L}\\p{N}. -]{1,40}?)\\s*\\((?:by\\s+)?${handle}\\)|${handle})(?:,\\s*([\\p{L}\\p{N}. -]{1,40}))?$`, 'iu');
+  const match = segment.trim().replace(/[.;:]+$/, '').match(shape);
+  return Boolean(match) && label(match[1]) && label(match[2]);
+}
+/** Preamble a reader can't act on, recognised only with positive evidence: a card id, a
+ * message id, a commit hash, a model label, the sender's own structured signature, or the
+ * sender's branch name right after other preamble. */
+function preamble(part, from = {}, { after = false } = {}) {
+  const p = part.trim();
+  // A model label (GPT-4O, Claude-3) can be the task's subject; it is only skipped as part of
+  // a signature, when the segment filter in tell() drops it.
+  if (MODEL_LABEL.test(p)) return false;
+  if (CARD_ID.test(p) || MACHINE_ID.test(p)) return true;
+  if (signature(p, from)) return true;
+  if (after && BRANCH.test(p)) {
+    // Branches here end with their author ("loom-ux-mr002-astra", "loom-ux-hux-3d-astra-cover");
+    // a slug that only contains a handle word ("cover-to-cover-only") is a subject.
+    const handle = String(from.address || '').replace(/^@/, '').toLowerCase();
+    const slug = p.toLowerCase().replace(/\.$/, '');
+    const first = handle.split(/[-_.]+/)[0];
+    return Boolean(handle) && (slug.endsWith('-' + handle) || (first.length > 2 && slug.endsWith('-' + first)));
+  }
+  return false;
+}
+function tell(value, fallback, { open = false, from = {} } = {}) {
+  // The sender's own signature is found on the raw text, segment by segment, before any
+  // byline is cleaned away. Then bylines and date stamps go (on an open claim or ask a date
+  // is its deadline, so only a handle byline goes) before the text is cut into sentences,
+  // so "(Fri. Nov 27)" or "HUX-3D (@astra-cover)" never splits or hides a card.
   const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
     .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
-    // On an open claim or ask a date is its deadline; only a handle byline goes.
-    .split('\n').map(line => line.replace(open ? HANDLE_BYLINE : BYLINE, '')).map(splitParts).filter(parts => parts.length);
+    .split('\n').map(line => {
+      const segments = line.split(/\s+[·|]\s+/);
+      // A model label right after the sender's signature belongs to it ("@astra · GPT-4O").
+      const kept = segments.filter((segment, i) => !signature(segment, from)
+        && !(i > 0 && MODEL_LABEL.test(segment.trim()) && signature(segments[i - 1], from)));
+      // A signature that is the whole line still shows.
+      return (kept.some(segment => /[\p{L}\p{N}]/u.test(segment)) ? kept : segments).join(' · ');
+    })
+    .map(line => line.replace(open ? HANDLE_BYLINE : BYLINE, '')).map(splitParts).filter(parts => parts.length);
   if (!lines.length) return fallback;
   const first = lines[0], rest = lines.slice(1).flat();
   // A first line that is only an aside reads without its brackets.
   const unwrap = part => part.replace(/^\((.*)\)$/, '$1');
   let id = '';
-  if (first.length > 1 && ID_PART.test(first[0])) id = first.shift();
+  // A message id, commit hash or model label is never the card; the loop below skips it.
+  const leads = part => ID_PART.test(part) && !MACHINE_ID.test(part) && !MODEL_LABEL.test(part);
+  if (first.length > 1 && leads(first[0])) id = first.shift();
   // "MINE LEND-2\nCheck borrower ceiling": an id alone on the first line leads the next line.
-  else if (first.length === 1 && ID_PART.test(first[0]) && rest.length) { id = first.shift(); }
+  else if (first.length === 1 && leads(first[0]) && rest.length) { id = first.shift(); }
   // "DONE … · LEND-2": a card or PR id at the end of the first line leads it instead.
   else if (first.length > 1 && CARD_OR_PR.test(first[first.length - 1])) id = first.pop();
-  const head = unwrap(first[0] ?? rest[0] ?? '');
+  const parts = [...first, ...rest];
+  let at = 0;
+  // Skip only what is clearly preamble. One card id may lead the line; a second code-shaped
+  // token stops the skipping and is shown, because when it is ambiguous showing more is
+  // better than dropping it.
+  while (at < parts.length - 1 && preamble(parts[at], from, { after: at > 0 || Boolean(id) })) {
+    const token = parts[at].trim();
+    if (CARD_ID.test(token) && !MODEL_LABEL.test(token)) {
+      if (id) break;
+      id = token;
+    }
+    at++;
+  }
+  let head = unwrap(parts[at] ?? '');
+  // A model named on its own is the subject of what follows ("Claude-3 · Can we retire it?").
+  if (MODEL_LABEL.test(head) && parts[at + 1]) head = head + ' · ' + parts[at + 1];
   if (!head) return id || fallback;
   const text = (id ? id + ' · ' : '') + calm(head);
   return text.length <= 120 ? text : text.slice(0, 117).replace(/\s+\S*$/, '') + '…';
@@ -236,14 +328,14 @@ const who = m => String(m.from?.name || 'Someone').replace(/\s+/g, ' ').trim().s
 function work(recent, posts, log, { say = phrase, roomWide = true } = {}) {
   const item = (m, text, href) => ({ text, href, at: m.at, by: who(m) });
   const shipped = recent.filter(receipt).map(m => item(m,
-    say(content(m).replace(SHIPPED, ''), 'Work completed'), urls(m)[0] || postHref(m, log)));
+    say(content(m).replace(SHIPPED, ''), 'Work completed', { from: m.from || {} }), urls(m)[0] || postHref(m, log)));
   const closed = closedClaims(posts), children = childIndex(posts);
   const open = recent.filter(m => {
     if (MINE.test(status(m))) return !closed.has(m.id);
     const owners = askOwners(m).filter(owner => roomWide || owner);
     return owners.length && !askClosed(m, owners, children);
   }).map(m => item(m,
-    say(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting', { open: true }), postHref(m, log)));
+    say(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting', { open: true, from: m.from || {} }), postHref(m, log)));
   return { shipped, open };
 }
 
