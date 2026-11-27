@@ -354,6 +354,7 @@ test('sixth review: a signature is anchored on the sender; a model can be the su
   assert.deepEqual(open('NEEDS mike · Cover Loom (by @astra-cover) · I will be offline tomorrow.'), ['Cover Loom']);
   assert.deepEqual(open('NEEDS mike · Claude-3 · Can we retire this model?'), ['Claude-3 · Can we retire this model?']);
   assert.deepEqual(open('MINE · GPT-4O · Benchmark latency against the current model.'), ['GPT-4O · Benchmark latency against the current model']);
+  assert.deepEqual(open('NEEDS mike · HUX-3D · cover-to-cover-only. Choose the scope today.'), ['HUX-3D · cover-to-cover-only']);
   // The live signature shapes still go.
   assert.deepEqual(open('MINE · Astra Cover (@astra-cover), Astra 6.2 · Fix the check page.'), ['Fix the check page']);
 });

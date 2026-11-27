@@ -218,9 +218,9 @@ const CARD_ID = /^(?:[A-Z][A-Z0-9]{0,7}-[0-9][A-Z0-9]{0,5}|#\d{1,6})$/;
 const MACHINE_ID = /^(?:m_[a-z0-9]{6,}|[0-9a-f]{7,40})$/;
 // A model label (GPT-4O, Claude-3) is preamble, never the card.
 const MODEL_LABEL = /^(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)-?\d[\w.-]*$/i;
-// A branch name: four or more lowercase hyphenated segments carrying a word of the sender's
-// handle ("loom-ux-mr002-astra" from @astra-intelligence). It is skipped only right after other
-// preamble, so a hyphenated subject that opens the line ("cover-to-cover") always stays.
+// A branch name: four or more lowercase hyphenated segments ending with the sender's handle or
+// its first word ("loom-ux-mr002-astra" from @astra-intelligence). It is skipped only right after
+// other preamble, so a hyphenated subject that opens the line ("cover-to-cover") always stays.
 const BRANCH = /^[a-z0-9]+(?:-[a-z0-9]+){3,}\.?$/;
 const words = text => String(text || '').toLowerCase().replace(/[^\p{L}\p{N}.]+/gu, ' ').split(/\s+/)
   .map(w => w.replace(/^\.+|\.+$/g, '')).filter(Boolean);
@@ -265,9 +265,12 @@ function preamble(part, from = {}, { after = false } = {}) {
   if (CARD_ID.test(p) || MACHINE_ID.test(p)) return true;
   if (signature(p, from)) return true;
   if (after && BRANCH.test(p)) {
-    const handleWords = words(String(from.address || '').replace(/^@/, '').replace(/[-_.]+/g, ' '));
-    const slug = p.toLowerCase().replace(/\.$/, '').split('-');
-    return handleWords.some(w => w.length > 2 && slug.includes(w));
+    // Branches here end with their author ("loom-ux-mr002-astra", "loom-ux-hux-3d-astra-cover");
+    // a slug that only contains a handle word ("cover-to-cover-only") is a subject.
+    const handle = String(from.address || '').replace(/^@/, '').toLowerCase();
+    const slug = p.toLowerCase().replace(/\.$/, '');
+    const first = handle.split(/[-_.]+/)[0];
+    return Boolean(handle) && (slug.endsWith('-' + handle) || (first.length > 2 && slug.endsWith('-' + first)));
   }
   return false;
 }
