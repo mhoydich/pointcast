@@ -63,6 +63,10 @@ function receipt(m) {
     && !/\b(?:not|never|isn't|wasn't|hasn't|when|once|if|until|after|will|should)\b/i.test(sentence));
 }
 
+// "Job:", "Answer:", "Flags:" open a section; they are not someone being asked.
+const LABELS = new Set(['job', 'task', 'answer', 'question', 'flags', 'flag', 'recommendation', 'applied', 'note', 'notes', 'status',
+  'next', 'why', 'how', 'what', 'goal', 'result', 'results', 'summary', 'update', 'title', 'description', 'done', 'open', 'fix',
+  'plan', 'scope', 'target', 'budget', 'source', 'sources', 'context', 'ask', 'risk', 'risks', 'tests', 'files', 'verdict', 'evidence']);
 function askOwners(m) {
   const body = String(m.body || m.poll?.question || '');
   // Stamps and emphasis are display syntax; "NEEDS MIKE" reads the same with or without them.
@@ -73,7 +77,8 @@ function askOwners(m) {
   // requests. Quoted examples, UI labels and status receipts stay excluded.
   const candidates = new Set([
     ...[...body.matchAll(/@([A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*)/g)].map(m => normHandle(m[1])),
-    ...[...body.matchAll(/(?:^|\n|[.!?]\s+)(?:(?:hi|hey|hello)\s+)?([A-Za-z][\w.-]*)\s*[,;:—–-]/gi)].map(m => normHandle(m[1])),
+    ...[...body.matchAll(/(?:^|\n|[.!?]\s+)(?:(?:hi|hey|hello)\s+)?([A-Za-z][\w.-]*)\s*[,;:—–-]/gi)].map(m => m[1])
+      .filter(word => !LABELS.has(word.toLowerCase()) && !/^[A-Z]{3,}$/.test(word)).map(normHandle),
     ...[...body.matchAll(/\bneeds\s+([A-Za-z][\w.-]*)(?:['’]s)?\s+yes\b/gi)].map(m => normHandle(m[1])),
     ...[...body.matchAll(/,\s+([A-Za-z][\w-]*)[?.!]*(?:$|\n)/g)].map(m => normHandle(m[1])),
   ]);
@@ -146,14 +151,39 @@ function closedClaims(posts) {
 }
 
 /** A fuller line for the front page: a leading card or PR id keeps the sentence after it. */
+const ID_PART = /^#?[A-Za-z]{0,8}-?\d[\w-]{0,8}$/;
+// Known acronyms and words with digits (HUX-6, CC0) keep their case.
+const ACRONYMS = new Set(['AI', 'API', 'MCP', 'DAO', 'NFT', 'PR', 'UES', 'URL', 'HTML', 'CSS', 'JSON', 'KV', 'ID', 'XTZ', 'ETH', 'USD', 'OK', 'QA', 'UX', 'UI', 'CEO', 'COO', 'X']);
+const KEEP_CASE = { test: word => /\p{N}/u.test(word) || ACRONYMS.has(word.replace(/[^\p{L}\p{N}]/gu, '')) };
+/** A shouted line reads as a sentence; acronyms and ids stay as written. */
+function calm(text) {
+  const letters = text.match(/\p{L}/gu) || [];
+  if (letters.length < 12 || letters.filter(ch => ch === ch.toUpperCase() && ch !== ch.toLowerCase()).length / letters.length < 0.7) return text;
+  let first = true;
+  return text.replace(/\S+/g, word => {
+    const out = KEEP_CASE.test(word.replace(/^[(\[]/, '')) ? word : word.toLowerCase();
+    if (first && /\p{L}/u.test(out)) {
+      first = false;
+      return out.replace(/\p{Ll}/u, ch => ch.toUpperCase());
+    }
+    return out;
+  });
+}
 function tell(value, fallback) {
-  const parts = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
-    .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
-    .split(/\n|\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
+  const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
+    .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '');
+  const split = text => text.split(/\n|\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
     .filter(part => /[\p{L}\p{N}]/u.test(part));
+  // An aside in brackets is not the headline, unless it is all the post says.
+  const parts = split(lines.replace(/\s*\([^()\n]*\)/g, ' ')).length ? split(lines.replace(/\s*\([^()\n]*\)/g, ' ')) : split(lines.replace(/[()]/g, ''));
   if (!parts.length) return fallback;
-  const id = /^#?[A-Za-z]{0,8}-?\d[\w-]{0,8}$/.test(parts[0]) && parts[1] ? parts.shift() : '';
-  const text = (id ? id + ' · ' : '') + parts[0];
+  let id = ID_PART.test(parts[0]) && parts[1] ? parts.shift() : '';
+  // "DONE … · LEND-2": a card id at the end of the first line leads the line instead.
+  if (!id && parts[1] && ID_PART.test(parts[1]) && /^[A-Z#]/.test(parts[1])) {
+    id = parts[1];
+    parts.splice(1, 1);
+  }
+  const text = (id ? id + ' · ' : '') + calm(parts[0]);
   return text.length <= 120 ? text : text.slice(0, 117).replace(/\s+\S*$/, '') + '…';
 }
 const who = m => String(m.from?.name || 'Someone').replace(/\s+/g, ' ').trim().slice(0, 48) || 'Someone';
@@ -210,7 +240,7 @@ export function roomSummary(messages = [], { log = {}, now = Date.now() } = {}) 
   const found = work(recent, posts, log);
   const shipped = found.shipped.slice(0, 2).map(({ text, href }) => ({ text, href }));
   const open = found.open.slice(0, 2).map(({ text, href }) => ({ text, href }));
-  for (const [kind, label, items] of [['shipped', 'Shipped', shipped], ['open', 'Open', open]]) {
+  for (const [kind, label, items] of [['shipped', 'Done', shipped], ['open', 'Open', open]]) {
     if (items.length) lines.push({ kind, label, items, text: `${label}: ${items.map(item => item.text).join('; ')}` });
   }
   return lines.length ? lines : [{ kind: 'quiet', text: 'Quiet in the last day.' }];

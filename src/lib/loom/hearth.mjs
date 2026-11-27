@@ -94,7 +94,9 @@ export function briefHeadline(brief, snapshot, seenAt = null) {
   const things = n => `${n} ${n === 1 ? 'thing' : 'things'}`;
   const person = snapshot.active.find(room => room.human);
   const lead = person ? `${person.humanName || 'Someone'} spoke in ${person.address}. ` : '';
-  const least = brief.atLeast ? (lead ? 'at least ' : 'At least ') : '';
+  // Rooms left out or unread make every count a floor.
+  const floor = brief.atLeast || (snapshot.unavailable?.length > 0);
+  const least = floor ? (lead ? 'at least ' : 'At least ') : '';
   if (done && open) return `${lead}${least}${things(done)} done, ${open} still open.`;
   return done ? `${lead}${least}${things(done)} done in the last day.` : `${lead}${least}${things(open)} still open.`;
 }

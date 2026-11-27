@@ -170,3 +170,30 @@ test('re-review: prose quotes, exact claim matches, handle underscores and inlin
   assert.equal(loomBrief([{ address: '#work', brief }]).doneCount, 2);
   assert.deepEqual(roomBrief([post('A', '`DONE` is the word to start a receipt with.', 1)], { log, now: NOW }).done, []);
 });
+
+test('live lines read as sentences: shouting calmed, asides dropped, a trailing card id leads', () => {
+  const lines = [
+    post('antigravity', 'DONE POINTCAST SENSORY & HAPTICS MCP API (pointcast.sensory.mcp/v1) VERIFIED (@antigravity, Thu Nov 26)', 1),
+    post('antigravity', 'DONE HUX-6 · BRING YOUR BOT TO THE LOOM + DAO ROOM CHARTER v0 (@antigravity, CC0)', 2),
+    post('Antigravity', 'DONE (draft for Purplematter; note: card is currently unsigned) · LEND-2\n\nTitle: Office Noun', 3),
+    post('A', 'DONE (only an aside)', 4),
+  ];
+  assert.deepEqual(roomBrief(lines, { log, now: NOW }).done.map(i => i.text), [
+    'Pointcast sensory & haptics MCP API verified',
+    'HUX-6 · Bring your bot to the loom + DAO room charter v0',
+    'LEND-2 · Title: Office Noun',
+    'only an aside',
+  ]);
+});
+
+test('section labels are not people being asked', () => {
+  const report = post('Desk', 'SOL 6.2 REPORT · relayed. Job: can a plain FA2 enforce the rules?\nAnswer: none of them.\nFlags: label them honour rules.', 1);
+  assert.deepEqual(roomBrief([report], { log, now: NOW }).open, []);
+  const real = post('Desk', 'Shwa: can you take the check page?', 1);
+  assert.deepEqual(roomBrief([real], { log, now: NOW }).open.map(i => i.by), ['Desk']);
+});
+
+test('the headline is a floor when a room could not be read', () => {
+  const snap = { active: [{ address: '#work', human: false, lastName: 'A', lastAt: hAgo(1) }], unavailable: [{ address: '#gone' }], since: NOW - 86400000, asOf: NOW };
+  assert.equal(briefHeadline({ doneCount: 2, openCount: 0 }, snap), 'At least 2 things done in the last day.');
+});
