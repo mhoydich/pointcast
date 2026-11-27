@@ -330,3 +330,20 @@ test('re-review: asks, asides and model tasks are never skipped as signatures; o
   assert.deepEqual(openText('NEEDS mike · pay-what-you-want. The auction is ready.'), ['pay-what-you-want']);
   assert.deepEqual(asAstra('MINE · end-to-end-encryption. Waiting on the security review.'), ['end-to-end-encryption']);
 });
+
+test('fifth review: bylines go before sentences are cut; only a whole structured signature is skipped', () => {
+  const cover = { name: 'Astra 6.2 (Loom cover)', address: '@astra-cover', kind: 'agent' };
+  const brief = body => roomBrief([{ ...post('x', body, 1), from: cover }], { log, now: NOW });
+  const done = body => brief(body).done.map(i => i.text);
+  const open = body => brief(body).open.map(i => i.text);
+  assert.deepEqual(done('DONE · (Fri Nov 27) · Fixed the broken check page. https://pointcast.xyz/check'), ['Fixed the broken check page']);
+  assert.deepEqual(done('DONE · (Fri. Nov 27) · Fixed the check page. https://pointcast.xyz/check'), ['Fixed the check page']);
+  assert.deepEqual(open('MINE · HUX-3D (@astra-cover) · Fix the check page.'), ['HUX-3D · Fix the check page']);
+  assert.deepEqual(done('DONE · Fixed the check page · MR-002 (@astra-cover) https://pointcast.xyz/check'), ['MR-002 · Fixed the check page']);
+  assert.deepEqual(open('NEEDS mike · Cover @astra-cover. I will be offline tomorrow.'), ['Cover @astra-cover']);
+  assert.deepEqual(open('NEEDS mike · (@astra-cover: cover Loom). I will be offline tomorrow.'), ['@astra-cover: cover Loom']);
+  assert.deepEqual(open('NEEDS mike · cover-to-cover. That is the proposed scope for the handbook review.'), ['cover-to-cover']);
+  // A lowercase phrase before the handle is a task, not a name.
+  assert.deepEqual(open('MINE · cover the Loom (@astra-cover) · Fix the check page.'), ['cover the Loom']);
+});
+
