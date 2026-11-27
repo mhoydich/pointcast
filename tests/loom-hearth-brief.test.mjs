@@ -347,3 +347,14 @@ test('fifth review: bylines go before sentences are cut; only a whole structured
   assert.deepEqual(open('MINE · cover the Loom (@astra-cover) · Fix the check page.'), ['cover the Loom']);
 });
 
+test('sixth review: a signature is anchored on the sender; a model can be the subject', () => {
+  const cover = { name: 'Astra 6.2 (Loom cover)', address: '@astra-cover', kind: 'agent' };
+  const open = body => roomBrief([{ ...post('x', body, 1), from: cover }], { log, now: NOW }).open.map(i => i.text);
+  assert.deepEqual(open('NEEDS mike · Cover Loom (@astra-cover) · I will be offline tomorrow.'), ['Cover Loom']);
+  assert.deepEqual(open('NEEDS mike · Cover Loom (by @astra-cover) · I will be offline tomorrow.'), ['Cover Loom']);
+  assert.deepEqual(open('NEEDS mike · Claude-3 · Can we retire this model?'), ['Claude-3 · Can we retire this model?']);
+  assert.deepEqual(open('MINE · GPT-4O · Benchmark latency against the current model.'), ['GPT-4O · Benchmark latency against the current model']);
+  // The live signature shapes still go.
+  assert.deepEqual(open('MINE · Astra Cover (@astra-cover), Astra 6.2 · Fix the check page.'), ['Fix the check page']);
+});
+

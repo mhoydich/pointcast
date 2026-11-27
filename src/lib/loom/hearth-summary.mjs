@@ -234,12 +234,20 @@ const escapeRe = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function signature(segment, from = {}) {
   const address = String(from.address || '').toLowerCase();
   if (!/^@[\w.-]+$/.test(address)) return false;
-  const own = new Set(words(`${from.name} ${from.address} ${from.model}`));
+  const own = new Set(words(`${from.name} ${from.address} ${from.model}`.replace(/[-_]+/g, ' ')));
+  // A name or model label has to be anchored on the sender: it opens with the sender's own
+  // first name or handle ("Astra Cover", "Astra 6.2" from Astra 6.2 or @astra-cover), or it is
+  // the sender's model as written ("GPT-6.2 Astra" for gpt-6.2-astra). Capitalised role words
+  // alone ("Cover Loom") are a task, not a name.
+  const anchors = new Set([words(from.name)[0], words(address.replace(/^@/, '').replace(/[-_.]+/g, ' '))[0]].filter(Boolean));
+  const model = words(String(from.model || '').replace(/[-_]+/g, ' '));
   const label = text => {
     if (text === undefined) return true;
-    const list = words(text);
+    const list = words(text.replace(/-/g, ' '));
+    const sameSet = (a, b) => a.length === b.length && a.every(w => b.includes(w));
     return list.length >= 1 && list.length <= 4 && list.every(w => own.has(w))
-      && text.trim().split(/[\s-]+/).every(token => /^[\p{Lu}\p{N}]/u.test(token));
+      && text.trim().split(/[\s-]+/).every(token => /^[\p{Lu}\p{N}]/u.test(token))
+      && (anchors.has(list[0]) || (model.length > 0 && sameSet(list, model)));
   };
   const handle = escapeRe(address);
   const shape = new RegExp(`^(?:([\\p{L}\\p{N}. -]{1,40}?)\\s*\\((?:by\\s+)?${handle}\\)|${handle})(?:,\\s*([\\p{L}\\p{N}. -]{1,40}))?$`, 'iu');
@@ -251,7 +259,10 @@ function signature(segment, from = {}) {
  * sender's branch name right after other preamble. */
 function preamble(part, from = {}, { after = false } = {}) {
   const p = part.trim();
-  if (CARD_ID.test(p) || MACHINE_ID.test(p) || MODEL_LABEL.test(p)) return true;
+  // A model label (GPT-4O, Claude-3) can be the task's subject; it is only skipped as part of
+  // a signature, when the segment filter in tell() drops it.
+  if (MODEL_LABEL.test(p)) return false;
+  if (CARD_ID.test(p) || MACHINE_ID.test(p)) return true;
   if (signature(p, from)) return true;
   if (after && BRANCH.test(p)) {
     const handleWords = words(String(from.address || '').replace(/^@/, '').replace(/[-_.]+/g, ' '));
@@ -269,7 +280,9 @@ function tell(value, fallback, { open = false, from = {} } = {}) {
     .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
     .split('\n').map(line => {
       const segments = line.split(/\s+[·|]\s+/);
-      const kept = segments.filter(segment => !signature(segment, from));
+      // A model label right after the sender's signature belongs to it ("@astra · GPT-4O").
+      const kept = segments.filter((segment, i) => !signature(segment, from)
+        && !(i > 0 && MODEL_LABEL.test(segment.trim()) && signature(segments[i - 1], from)));
       // A signature that is the whole line still shows.
       return (kept.some(segment => /[\p{L}\p{N}]/u.test(segment)) ? kept : segments).join(' · ');
     })
@@ -299,7 +312,9 @@ function tell(value, fallback, { open = false, from = {} } = {}) {
     }
     at++;
   }
-  const head = unwrap(parts[at] ?? '');
+  let head = unwrap(parts[at] ?? '');
+  // A model named on its own is the subject of what follows ("Claude-3 · Can we retire it?").
+  if (MODEL_LABEL.test(head) && parts[at + 1]) head = head + ' · ' + parts[at + 1];
   if (!head) return id || fallback;
   const text = (id ? id + ' · ' : '') + calm(head);
   return text.length <= 120 ? text : text.slice(0, 117).replace(/\s+\S*$/, '') + '…';
