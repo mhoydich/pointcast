@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { addressKey } from '../src/lib/loom/address.mjs';
+import { handleLoom } from '../src/lib/loom/service.mjs';
 import {
   CACHE_CONTROL, DEFAULT_LIMIT, EMPTY_STAMP, MAX_LIMIT, TITLE_MAX,
   buildLoomAtom, buildLoomJsonFeed, buildLoomRss, escapeXml, handleLoomFeed, loomFeedEtag, loomFeedEtagMatches, stripIllegalXml,
@@ -29,6 +30,31 @@ function assertXml(xml) {
   const parsed = spawnSync('python3', ['-c', 'import sys, xml.etree.ElementTree as ET; ET.fromstring(sys.stdin.read())'], { input: xml, encoding: 'utf8' });
   assert.equal(parsed.status, 0, parsed.stderr);
   assert.equal(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/.test(xml), false);
+}
+
+/** XML-decode the first item description, then parse it as HTML the way an RSS reader does. */
+function rssItemText(xml) {
+  const parsed = spawnSync('python3', ['-c', [
+    'import sys, xml.etree.ElementTree as ET',
+    'from html.parser import HTMLParser',
+    'class T(HTMLParser):',
+    '    def __init__(self):',
+    '        super().__init__(convert_charrefs=True)',
+    '        self.parts = []',
+    '        self.tags = []',
+    '    def handle_data(self, data):',
+    '        self.parts.append(data)',
+    '    def handle_starttag(self, tag, attrs):',
+    '        self.tags.append(tag)',
+    '        if tag == "br": self.parts.append("\\n")',
+    'root = ET.fromstring(sys.stdin.read())',
+    'descs = list(root.iter("description"))',
+    'p = T(); p.feed(descs[-1].text or ""); p.close()',
+    'sys.stdout.write(",".join(t for t in p.tags if t != "br") + "\\n" + "".join(p.parts))',
+  ].join('\n')], { input: xml, encoding: 'utf8' });
+  assert.equal(parsed.status, 0, parsed.stderr);
+  const [tags, ...rest] = parsed.stdout.split('\n');
+  return { tags, text: rest.join('\n') };
 }
 
 function sampleOps() {
@@ -139,14 +165,21 @@ test('untrusted posts cannot break XML', () => {
   const tag = 'say "hi" & <x>';
   const message = { id: 'm_nasty1', at: AT, kind: 'note', from: { name: 'A <b>', operator: 'Ops & Co', kind: 'agent' }, body: nasty, tags: [tag, '#ok'], parent: 'm_parent' };
   const log = { address: '#t', key: 'ab'.repeat(12), title: 'A & B <log>', seq: 2, updatedAt: AT };
-  for (const xml of [buildLoomRss(log, [message]), buildLoomAtom(log, [message])]) {
+  const rss = buildLoomRss(log, [message]);
+  const atom = buildLoomAtom(log, [message]);
+  for (const xml of [rss, atom]) {
     assertXml(xml);
     assert.doesNotMatch(xml, /<script>/);
-    assert.match(xml, /Tom &amp; Jerry&apos;s &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;before/);
     assert.match(xml, /A &lt;b&gt; \(operator: Ops &amp; Co\)/);
     assert.match(xml, /say &quot;hi&quot; &amp; &lt;x&gt;/);
     assert.equal(xml.includes('\u0000') || xml.includes('\u0007'), false);
   }
+  // RSS descriptions are HTML after the XML parse, so the plain text is escaped twice.
+  assert.match(rss, /Tom &amp;amp; Jerry&amp;apos;s &amp;lt;script&amp;gt;alert\(&amp;quot;x&amp;quot;\)&amp;lt;\/script&amp;gt;before/);
+  const decoded = rssItemText(rss);
+  assert.equal(decoded.tags, '');
+  assert.equal(decoded.text, 'Tom & Jerry\'s <script>alert("x")</script>before');
+  assert.match(atom, /Tom &amp; Jerry&apos;s &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt;before/);
   const json = JSON.parse(buildLoomJsonFeed(log, [message]));
   assert.equal(json.items[0].content_text, 'Tom & Jerry\'s <script>alert("x")</script>before');
   assert.equal(json.items[0].authors[0].name, 'A <b> (operator: Ops & Co)');
@@ -275,9 +308,10 @@ test('unbound, missing, and broken KV return a valid empty feed', async () => {
   assert.equal(unbound.headers.get('content-type'), 'application/rss+xml; charset=utf-8');
   const unboundXml = await unbound.text();
   assertXml(unboundXml);
-  assert.match(unboundXml, /<title>#loom · the Loom<\/title>/);
+  // #loom with no store is the reader's seed. Those posts are Collator notes, so the feed has a channel and no items.
+  assert.match(unboundXml, /<title>The Loom — start here · the Loom<\/title>/);
   assert.doesNotMatch(unboundXml, /<item>/);
-  assert.match(unboundXml, new RegExp(`<lastBuildDate>${new Date(EMPTY_STAMP).toUTCString()}</lastBuildDate>`));
+  assert.match(unboundXml, /<lastBuildDate>Tue, 20 Oct 2026 16:00:00 GMT<\/lastBuildDate>/);
   const again = await (await handleLoomFeed(new Request(FEED), {})).text();
   assert.equal(again, unboundXml);
 
@@ -315,14 +349,52 @@ test('a reply address reads that log and nowhere else', async () => {
   assert.deepEqual(kv.calls.filter((call) => call[0] === 'get').map((call) => call[1]), [`loom:log:${key}`]);
 });
 
+test('Collator echoes are dropped unless include_collator=1', async () => {
+  const ops = [
+    { seq: 1, op: 'append', id: 'm_human1', at: AT, kind: 'note', from: { name: 'Ana', kind: 'human' }, body: 'real post', tags: [] },
+    { seq: 2, op: 'append', id: 'm_robot1', at: AT2, kind: 'note', from: { name: 'Collator', kind: 'robot', address: '@collator' }, body: 'Also threaded elsewhere — #other.', tags: [] },
+    { seq: 3, op: 'append', id: 'm_link01', at: AT2, kind: 'link', from: { name: 'Ana', kind: 'human' }, body: 'echo copy', tags: [], via: { address: '#other' } },
+    { seq: 4, op: 'append', id: 'm_named1', at: AT2, kind: 'note', from: { name: 'Someone', kind: 'human', address: '@collator' }, body: 'collator address', tags: [] },
+  ];
+  const { kv } = await storedLog('#courts', { ops, seq: ops.length });
+  const plain = JSON.parse(await (await get('?to=%23courts&format=json', kv)).text());
+  assert.deepEqual(plain.items.map((item) => item.title), ['real post']);
+  const kept = JSON.parse(await (await get('?to=%23courts&format=json&include_collator=1', kv)).text());
+  assert.deepEqual(kept.items.map((item) => item.title), [
+    'collator address',
+    'echo copy',
+    'Also threaded elsewhere — #other.',
+    'real post',
+  ]);
+  assert.equal(kv.calls.some((call) => call[0] === 'put'), false);
+});
+
+test('the feed shows the same posts handleLoom returns, minus Collator echoes', async () => {
+  const { key, kv } = await storedLog('#courts');
+  const direct = await handleLoom(new Request(`https://pointcast.xyz/api/loom?to=${encodeURIComponent('#courts')}`), { kv });
+  assert.equal(direct.status, 200);
+  const data = await direct.json();
+  assert.equal(data.ok, true);
+  assert.equal(data.log.key, key);
+  const feed = JSON.parse(await (await get('?to=%23courts&format=json', kv)).text());
+  const visible = data.messages.filter((message) => message.from?.kind !== 'robot' && message.from?.address !== '@collator' && message.kind !== 'link');
+  visible.sort((a, b) => b.seq - a.seq);
+  assert.deepEqual(feed.items.map((item) => item.id), visible.map((message) => `loom:${key}#${message.id}`));
+  assert.equal(feed.items.length, 2);
+  assert.equal(kv.calls.some((call) => call[0] === 'put'), false);
+  const lib = readFileSync(new URL('../src/lib/loom/loom-feed.mjs', import.meta.url), 'utf8');
+  assert.match(lib, /const internal = \(query, kv\) => handleLoom\(new Request\(`\$\{API\}\$\{query\}`\), \{ kv \}\)/);
+  assert.doesNotMatch(lib, /kv\.get\s*\(/);
+});
+
 test('the route file is a read-only adapter and does not touch the write path', () => {
   const route = readFileSync(new URL('../functions/api/loom/feed.ts', import.meta.url), 'utf8');
   const lib = readFileSync(new URL('../src/lib/loom/loom-feed.mjs', import.meta.url), 'utf8');
-  for (const src of [route, lib]) {
-    assert.doesNotMatch(src, /\.put\s*\(/);
-    assert.doesNotMatch(src, /from ['"].*(service|atomic|hearth)[^'"]*['"]/);
-  }
+  for (const src of [route, lib]) assert.doesNotMatch(src, /\.put\s*\(/);
+  assert.doesNotMatch(lib, /from ['"].*(atomic|hearth)[^'"]*['"]/);
+  assert.match(lib, /from '\.\/service\.mjs'/);
   assert.match(route, /handleLoomFeed/);
+  assert.match(route, /complements GET \/api\/loom\?to=<address>&format=rss/);
   assert.match(route, /env\.PC_LOOM_KV \?\? env\.VISITS \?\? null/);
   assert.match(route, /export const onRequest/);
 });

@@ -5,13 +5,23 @@
  * (RSS readers, Atom readers, JSON Feed clients, outside bots) ask for a
  * #topic, an @handle, or any other Loom address and get a standards feed.
  * Nothing here writes: no kv.put, no append, no index update. A missing
- * binding or a missing log is an empty, valid feed.
+ * log, a 404, or a failed read is a valid empty feed.
  *
- * Message shape matches the Loom log: `loom:log:<addressKey>` holds the append
- * ops, folded so edits apply and hidden posts drop out.
+ * Reads use the same internal GET as the topic, bot, and for-you doors:
+ * handleLoom(new Request(api + query), { kv }). There is no second storage
+ * path, so a later change inside that reader (including the D1 cutover)
+ * shows up here without this file learning a new key layout.
+ *
+ * Collator echoes are left out unless include_collator=1. An echo is a
+ * message whose sender is a robot, whose address is @collator, or whose
+ * kind is link.
  */
 import { AddressError, SITE, addressKey, parseAddress } from './address.mjs';
-import { fold } from './fold.mjs';
+import { handleLoom } from './service.mjs';
+
+const API = 'https://pointcast.xyz/api/loom';
+/** Same call the topic, bot, and for-you doors use. GET with `to` does not write. */
+const internal = (query, kv) => handleLoom(new Request(`${API}${query}`), { kv });
 
 export const FEED_FORMATS = Object.freeze(['rss', 'atom', 'json']);
 export const DEFAULT_ADDRESS = '#loom';
@@ -64,11 +74,21 @@ export function stripIllegalXml(value) {
   return out;
 }
 
+const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+
 /** Escape text for an XML element or attribute. Strips illegal characters first, then escapes. */
 export function escapeXml(value) {
-  return stripIllegalXml(value).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;',
-  }[c]));
+  return stripIllegalXml(value).replace(/[&<>"']/g, (c) => XML_ESCAPES[c]);
+}
+
+/**
+ * RSS item descriptions are HTML after the XML parse (RSS advisory).
+ * Escape the plain Loom text as HTML, turn newlines into <br>, then XML-encode
+ * that HTML. A reader then shows `<address>` and `&` as text, not as markup.
+ */
+function rssDescription(value) {
+  const html = escapeXml(value).replace(/\r\n?/g, '\n').replace(/\n/g, '<br>');
+  return escapeXml(html);
 }
 
 const cleanLine = (value) => stripIllegalXml(value).replace(/\s+/g, ' ').trim();
@@ -213,7 +233,7 @@ export function buildLoomRss(log, messages = [], { limit = DEFAULT_LIMIT } = {})
     item.published ? `      <pubDate>${escapeXml(new Date(item.published).toUTCString())}</pubDate>` : '',
     `      <dc:creator>${escapeXml(item.author)}</dc:creator>`,
     ...item.categories.map((term) => `      <category>${escapeXml(term)}</category>`),
-    `      <description>${escapeXml(item.content)}</description>`,
+    `      <description>${rssDescription(item.content)}</description>`,
     item.parentId ? `      <thr:in-reply-to ref="${escapeXml(item.parentId)}" href="${escapeXml(item.parentUrl)}"/>` : '',
     '    </item>'].filter(Boolean).join('\n')).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -313,20 +333,6 @@ function parseLimit(url) {
   return Math.min(n, MAX_LIMIT);
 }
 
-/** One KV read. Any failure, including an unbound namespace, is "no log". Never writes. */
-async function readStoredLog(kv, key) {
-  if (!kv || typeof kv.get !== 'function') return null;
-  try {
-    const raw = await kv.get(`loom:log:${key}`);
-    if (raw == null || raw === '') return null;
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
 function describeAddress(parsed) {
   if (parsed.kind === 'reply') {
     return { address: parsed.address, key: parsed.logKey, kind: 'reply', label: parsed.label };
@@ -334,29 +340,47 @@ function describeAddress(parsed) {
   return { address: parsed.address, kind: parsed.kind, label: parsed.label };
 }
 
-async function resolveLog(kv, parsed) {
-  const described = describeAddress(parsed);
-  const key = described.key || await addressKey(described.address);
-  const stored = await readStoredLog(kv, key);
-  if (!stored) {
-    return { address: described.address, key, kind: described.kind, label: described.label, title: null, createdAt: null, updatedAt: null, seq: 0, ops: [] };
-  }
-  const ops = Array.isArray(stored.ops) ? stored.ops : [];
+function emptyLog(described, key) {
   return {
-    address: typeof stored.address === 'string' && stored.address ? stored.address : described.address,
-    key: /^[0-9a-f]{24}$/.test(stored.key) ? stored.key : key,
-    kind: stored.kind || described.kind,
-    label: stored.label || described.label,
-    title: stored.title ?? null,
-    createdAt: stored.createdAt ?? null,
-    updatedAt: typeof stored.updatedAt === 'string' ? stored.updatedAt : null,
-    seq: Number.isFinite(Number(stored.seq)) ? Number(stored.seq) : ops.length,
-    ops,
+    address: described.address, key, kind: described.kind, label: described.label,
+    title: null, createdAt: null, updatedAt: null, seq: 0, messages: [],
   };
 }
 
-function newestMessages(log, limit) {
-  return fold(log.ops).messages
+/** One internal GET. A 404 or a thrown read becomes an empty feed. */
+async function resolveLog(kv, parsed) {
+  const described = describeAddress(parsed);
+  const key = described.key || await addressKey(described.address);
+  const to = parsed.kind === 'reply' ? parsed.address : described.address;
+  try {
+    const response = await internal(`?to=${encodeURIComponent(to)}`, kv);
+    if (!response?.ok) return emptyLog(described, key);
+    const data = await response.json();
+    const log = data?.log && typeof data.log === 'object' ? data.log : {};
+    return {
+      address: typeof log.address === 'string' && log.address ? log.address : described.address,
+      key: /^[0-9a-f]{24}$/.test(log.key) ? log.key : key,
+      kind: log.kind || described.kind,
+      label: log.label || described.label,
+      title: log.title ?? null,
+      createdAt: log.createdAt ?? null,
+      updatedAt: typeof log.updatedAt === 'string' ? log.updatedAt : null,
+      seq: Number.isFinite(Number(data.seq)) ? Number(data.seq) : 0,
+      messages: Array.isArray(data.messages) ? data.messages : [],
+    };
+  } catch {
+    return emptyLog(described, key);
+  }
+}
+
+/** Collator echoes: robot senders, the @collator address, and link copies. */
+function collatorEcho(message) {
+  return message?.from?.kind === 'robot' || message?.from?.address === '@collator' || message?.kind === 'link';
+}
+
+function newestMessages(messages, limit, includeCollator) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) => message && !message.hidden && (includeCollator || !collatorEcho(message)))
     .slice()
     .sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0) || String(b.at ?? '').localeCompare(String(a.at ?? '')))
     .slice(0, limit);
@@ -383,6 +407,7 @@ export async function handleLoomFeed(request, { kv = null } = {}) {
   if (!FEED_FORMATS.includes(format)) return fail('format_invalid', 400, { formats: [...FEED_FORMATS] });
   const limit = parseLimit(url);
   if (limit == null) return fail('limit_invalid', 400, { limit: `1-${MAX_LIMIT}`, max: MAX_LIMIT });
+  const includeCollator = url.searchParams.get('include_collator') === '1';
 
   let parsed;
   try {
@@ -393,7 +418,7 @@ export async function handleLoomFeed(request, { kv = null } = {}) {
   }
 
   const log = await resolveLog(kv, parsed);
-  const body = BUILDERS[format](log, newestMessages(log, limit), { limit });
+  const body = BUILDERS[format](log, newestMessages(log.messages, limit, includeCollator), { limit });
   const etag = loomFeedEtag(log, format);
   const status = loomFeedEtagMatches(request.headers.get('If-None-Match'), etag) ? 304 : 200;
   return new Response(status === 304 || method === 'HEAD' ? null : body, {
