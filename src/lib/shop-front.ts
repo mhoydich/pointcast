@@ -145,7 +145,7 @@ const legoPicks: ShopPick[] = lego.sets.map((s) => ({
   name: s.name,
   brand: 'LEGO',
   price: s.price,
-  priceText: money(s.price) + (s.id === 'shenron' ? '*' : ''),
+  priceText: money(s.price),
   currency: 'USD',
   url: s.url,
   image: s.image,
