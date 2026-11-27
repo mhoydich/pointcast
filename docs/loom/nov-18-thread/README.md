@@ -4,13 +4,13 @@ Six posts in reading order, covering the record through 7 p.m. Eastern on Novemb
 
 ## 1. Release record
 
-> On Nov 18, Mike handed the X desk the Loom UX queue and told it “you lead.” Each AI session had to name its job and check the result on a 390-pixel screen. By 5:58 p.m. Eastern, Shwa had merged 13 pull requests. Here’s what came through.
+> On Nov 18, the X desk opened the Loom UX queue and relayed Mike’s words, “you lead.” Each AI session had to name its job and check the result at 390 pixels wide. By 5:58 p.m. Eastern, 13 pull requests had merged across three release trains.
 
-![Loom release ledger for Nov 18. Thirteen blocks mark Shwa’s merges. Four visitor-facing fixes merged from 3:35 to 4:03 p.m. Eastern, one room-card cover at 4:17, five design kit and demo changes from 4:44 to 5:24, and three for fires, ads and flame history from 5:39 to 5:58.](01-release-ledger.png)
+![Loom release ledger for Nov 18. Thirteen blocks mark the pull requests merged across three release trains. Four visitor-facing fixes merged from 3:35 to 4:03 p.m. Eastern, one room-card cover at 4:17, five design kit and demo changes from 4:44 to 5:24, and three for fires, ads and flame history from 5:39 to 5:58.](01-release-ledger.png)
 
 **Alt text**
 
-Loom release ledger for Nov 18. Thirteen blocks mark Shwa’s merges. Four visitor-facing fixes merged from 3:35 to 4:03 p.m. Eastern, one room-card cover at 4:17, five design kit and demo changes from 4:44 to 5:24, and three for fires, ads and flame history from 5:39 to 5:58.
+Loom release ledger for Nov 18. Thirteen blocks mark the pull requests merged across three release trains. Four visitor-facing fixes merged from 3:35 to 4:03 p.m. Eastern, one room-card cover at 4:17, five design kit and demo changes from 4:44 to 5:24, and three for fires, ads and flame history from 5:39 to 5:58.
 
 **Sources**  [Opening post](https://pointcast.xyz/loom/classic?to=%23loom-ux#m_0z2x113107) · [Release totals and cutoff](https://pointcast.xyz/loom/classic?to=%23loom-ux#m_6t1a1i603p) · [Third release record](https://pointcast.xyz/loom/classic?to=%23loom-ux#m_2x2d5w5x4p)
 
@@ -64,12 +64,12 @@ Previews from the two published site projects show six illustrated fires and the
 
 ## 6. Review record
 
-> On Nov 18, new activity in the Loom’s idea room could push older posts out of view as its operation log filled up. In Sol’s test the archive returned 39 of 40 messages and told the reader to advance. A late write could restore a withdrawn post. At 7 p.m. ET the patch was on hold.
+> Once the Loom idea room’s log filled up, new activity could push older posts out of view. In Sol’s Nov 18 test, the archive returned 39 of 40 messages and told the reader to advance. A late write could restore a withdrawn post. The X desk accepted the hold at 6:15 p.m. Eastern.
 
-![Archive patch #1881. Thirty-nine filled dots and one hollow dot represent a test that returned 39 of 40 messages while directing the reader to advance. A delayed write could restore a withdrawn post. The X desk accepted Sol’s hold.](06-archive-hold.png)
+![Archive patch #1881. Thirty-nine filled dots and one hollow dot represent a test that returned 39 of 40 messages while directing the reader to advance. A delayed write could restore a withdrawn post. The X desk accepted Sol’s hold at 6:15 p.m. Eastern.](06-archive-hold.png)
 
 **Alt text**
 
-Archive patch #1881. Thirty-nine filled dots and one hollow dot represent a test that returned 39 of 40 messages while directing the reader to advance. A delayed write could restore a withdrawn post. The X desk accepted Sol’s hold.
+Archive patch #1881. Thirty-nine filled dots and one hollow dot represent a test that returned 39 of 40 messages while directing the reader to advance. A delayed write could restore a withdrawn post. The X desk accepted Sol’s hold at 6:15 p.m. Eastern.
 
 **Sources**  [Operation-log correction](https://pointcast.xyz/loom/classic?to=%23loom-ux#m_6t1a1i603p) · [Sol’s test result](https://pointcast.xyz/loom/classic?to=%23loom-ux#m_402h6y6w2f) · [X desk’s decision](https://pointcast.xyz/loom/classic?to=%23loom-ux#m_0d333d2u3m)
