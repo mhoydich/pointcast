@@ -210,20 +210,22 @@ const HANDLE_BYLINE = /\s*\((?:by\s+)?@[\w.-]+\)(?=\s|$|[.,;:·])/gi;
 const BYLINE = new RegExp(`\\s*\\((?:(?:by\\s+)?@[\\w.-]+(?:,\\s*(?:${STAMP}))?|${STAMP})\\)(?=\\s|$|[.,;:·])`, 'gi');
 const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
   .filter(part => /[\p{L}\p{N}]/u.test(part));
-// A signature, branch name or bare id: words a reader can't act on.
-function signature(part) {
+// Preamble a reader can't act on: a whole desk byline, a branch slug, a message id or a
+// commit hash. Only positively structured bylines count; a phrase that merely mentions
+// someone, or a task about a model ("Upgrade Claude 4.5"), is never skipped.
+const MODEL = '(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)';
+const SIG_NAME = "[A-Z][\\w.'’-]*(?:\\s+[A-Z][\\w.'’-]*){0,3}";
+const SIG_TAIL = `(?:${MODEL}[- ]?)?\\d+(?:\\.\\d+)?(?:\\s+${MODEL})?|${MODEL}(?:[- ]?\\d+(?:\\.\\d+)?)?(?:\\s+${MODEL})?`;
+const BYLINE_PART = new RegExp(`^(?:(?:${SIG_NAME})\\s*)?\\(?@[\\w.-]+\\)?(?:,\\s*(?:${SIG_TAIL}))?$|^(?:${SIG_NAME}),\\s*(?:${SIG_TAIL})$`, 'i');
+// Card ids people use (HUX-3D, MR-002, LEND-2, V2-3) and PR numbers.
+const CARD_ID = /^(?:[A-Z][A-Z0-9]{0,7}-[0-9][A-Z0-9]{0,5}|#\d{1,6})$/;
+const MACHINE_ID = /^(?:m_[a-z0-9]{6,}|[0-9a-f]{7,40})$/;
+function preamble(part) {
   const p = part.trim();
-  if (ID_PART.test(p)) return true;
+  if (CARD_ID.test(p) || MACHINE_ID.test(p)) return true;
   if (/^[a-z0-9]+(?:[-_/][a-z0-9]+){2,}\.?$/.test(p)) return true;
-  // "Astra Cover, Astra 6.2": a short name ending in a model and version.
-  if (p.split(/\s+/).length <= 6 && /\b(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)(?:[- ]?\d+(?:\.\d+)?)?\s*\d+(?:\.\d+)?$/i.test(p)
-    && !/\b(?:i|we|will|to|the|a|an)\b/i.test(p)) return true;
-  if (/@[\w.-]+/.test(p)) {
-    const rest = p.replace(/\(?@[\w.-]+\)?/g, ' ').replace(/\b(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)\b/gi, ' ')
-      .replace(/[\d.,()·-]+/g, ' ').trim().split(/\s+/).filter(Boolean);
-    return rest.length <= 3;
-  }
-  return false;
+  if (/[?]/.test(p)) return false;
+  return BYLINE_PART.test(p) && (/@/.test(p) || new RegExp(MODEL, 'i').test(p.split(',').pop()));
 }
 function tell(value, fallback, { open = false } = {}) {
   const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
@@ -245,8 +247,8 @@ function tell(value, fallback, { open = false } = {}) {
   // the first card id seen among them, so the line carries the task.
   const parts = [...first, ...rest];
   let at = 0;
-  while (at < parts.length - 1 && signature(parts[at])) {
-    if (!id && ID_PART.test(parts[at])) id = parts[at];
+  while (at < parts.length - 1 && preamble(parts[at])) {
+    if (!id && CARD_ID.test(parts[at].trim())) id = parts[at].trim();
     at++;
   }
   const head = unwrap(parts[at] ?? '');

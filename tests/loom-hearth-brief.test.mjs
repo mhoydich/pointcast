@@ -290,3 +290,18 @@ test('a desk signature, card id and branch name before the sentence do not becom
     'a real sentence that mentions people is not a signature');
   assert.deepEqual(open('MINE · @astra'), ['@astra'], 'a signature that is the whole post still shows');
 });
+
+test('re-review: asks, asides and model tasks are never skipped as signatures; only card ids are kept', () => {
+  const brief = body => roomBrief([post('Astra', body, 1)], { log, now: NOW });
+  const openText = body => brief(body).open.map(i => i.text);
+  assert.deepEqual(openText('@mike, can you review? The preview is ready.'), ['@mike, can you review?']);
+  for (const ask of ['MIKE: ask @Shwa?', 'Shwa: ask @Mike?', 'Job: ask @Mike?']) {
+    assert.deepEqual(openText(`${ask} It is blocking launch.`), [ask], ask);
+  }
+  assert.deepEqual(openText('MINE · (Ask @mike first). Preview attached.'), ['Ask @mike first']);
+  assert.deepEqual(brief("DONE · Fixed @shwa's blocker. Tests pass. https://pointcast.xyz/loom").done.map(i => i.text), ["Fixed @shwa's blocker"]);
+  assert.deepEqual(openText('MINE · Upgrade Claude 4.5. Keep current defaults.'), ['Upgrade Claude 4.5']);
+  assert.deepEqual(openText('MINE · Review Gemini 3. Then report.'), ['Review Gemini 3']);
+  assert.deepEqual(openText('MINE · @astra · a1b2c3d · HUX-3D · Fix the runner.'), ['HUX-3D · Fix the runner']);
+  assert.deepEqual(openText('MINE · @astra · m_3g4y4p0y58 · Fix the runner.'), ['Fix the runner']);
+});
