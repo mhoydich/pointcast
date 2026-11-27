@@ -32,6 +32,7 @@ export const SITE = 'https://pointcast.xyz';
 export const LAUNCHED_ON = '2026-09-29';
 /** Where on-site links send people. Flip to SHOP_ORIGIN once the custom domain is attached to the Pages project. */
 export const SHOP_FRONT_PATH = '/shop/front';
+export const SHOP_FRONT_URL = `${SITE}${SHOP_FRONT_PATH}`;
 
 // Optional guides that ship in their own PRs; the glob is empty until the file exists.
 const modularFiles = import.meta.glob('../data/modular-carry.json', { eager: true, import: 'default' });
@@ -398,8 +399,9 @@ export function shopFrontJson() {
   return {
     schema: 'pointcast.shop-front/v1',
     version: SHOP_FRONT_VERSION,
-    url: `${SHOP_ORIGIN}/`,
-    mirror: `${SITE}/shop/front`,
+    url: SHOP_FRONT_URL,
+    // Keep the previous fallback field for existing v1 clients.
+    mirror: SHOP_FRONT_URL,
     launchedOn: LAUNCHED_ON,
     publisher: 'PointCast, El Segundo, California',
     affiliateLinks: false,

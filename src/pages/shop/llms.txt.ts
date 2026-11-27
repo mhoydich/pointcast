@@ -1,11 +1,11 @@
 import type { APIRoute } from 'astro';
-import { SHOP_GUIDES, SHOP_PICKS, SHOP_POLICY, SHOP_ENDPOINTS, SHOP_ORIGIN, SITE, LAUNCHED_ON } from '../../lib/shop-front';
+import { SHOP_GUIDES, SHOP_PICKS, SHOP_POLICY, SHOP_ENDPOINTS, SHOP_FRONT_URL, SITE, LAUNCHED_ON } from '../../lib/shop-front';
 
 export const GET: APIRoute = () => {
   const lines = [
     '# PointCast Shop',
     '',
-    `> The shopping desk of PointCast, a local broadcast from El Segundo, California. Buying guides, desk reviews, a paddle register and every priced pick in one list. Opened ${LAUNCHED_ON}. Home: ${SHOP_ORIGIN}/ (mirror: ${SITE}/shop/front).`,
+    `> The shopping desk of PointCast, a local broadcast from El Segundo, California. Buying guides, desk reviews, a paddle register and every priced pick in one list. Opened ${LAUNCHED_ON}. Home: ${SHOP_FRONT_URL}.`,
     '',
     '## Rules',
     ...SHOP_POLICY.map((r) => `- ${r}`),
