@@ -254,6 +254,11 @@ test('done needs proof: a DONE with no repo, site or chain link is listed as rep
   }
   const timed = roomBrief([post('A', 'MINE Publish the auction (Fri Nov 27, 3:56pm ET)', 1)], { log, now: NOW });
   assert.deepEqual(timed.open.map(i => i.text), ['Publish the auction (Fri Nov 27, 3:56pm ET)'], 'a claim keeps its schedule');
+  for (const stamp of ['(Nov 27)', '(Friday)', '(Thu Nov 26)']) {
+    assert.deepEqual(roomBrief([post('A', `MINE Publish the auction ${stamp}`, 1)], { log, now: NOW }).open.map(i => i.text),
+      [`Publish the auction ${stamp}`], stamp);
+  }
+  assert.deepEqual(roomBrief([post('A', 'MINE Publish the auction (@astra)', 1)], { log, now: NOW }).open.map(i => i.text), ['Publish the auction']);
   assert.equal(brief.done[0].href, 'https://github.com/mhoydich/pointcast/pull/1943');
   assert.deepEqual(brief.reported.map(i => i.by), ['antigravity', 'A', 'B', 'C']);
   assert.match(brief.reported[0].href, /^\/loom\?to=%23work#m/, 'a reported line links to its own post');

@@ -206,13 +206,15 @@ function calm(text) {
 // Only a positively recognised byline or date stamp: "(@antigravity)", "(@antigravity, Thu Nov 26)",
 // "(by @astra)", "(Thu Nov 26)". "(Friday only)" or "(by disabling validation)" are the work's scope.
 const STAMP = '(?:(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?,?\\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2}(?:,?\\s+\\d{4})?|(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?';
+const HANDLE_BYLINE = /\s*\((?:by\s+)?@[\w.-]+\)(?=\s|$|[.,;:·])/gi;
 const BYLINE = new RegExp(`\\s*\\((?:(?:by\\s+)?@[\\w.-]+(?:,\\s*(?:${STAMP}))?|${STAMP})\\)(?=\\s|$|[.,;:·])`, 'gi');
 const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
   .filter(part => /[\p{L}\p{N}]/u.test(part));
-function tell(value, fallback) {
+function tell(value, fallback, { open = false } = {}) {
   const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
     .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
-    .split('\n').map(line => line.replace(BYLINE, '')).map(splitParts).filter(parts => parts.length);
+    // On an open claim or ask a date is its deadline; only a handle byline goes.
+    .split('\n').map(line => line.replace(open ? HANDLE_BYLINE : BYLINE, '')).map(splitParts).filter(parts => parts.length);
   if (!lines.length) return fallback;
   const first = lines[0], rest = lines.slice(1).flat();
   // A first line that is only an aside reads without its brackets.
@@ -241,7 +243,7 @@ function work(recent, posts, log, { say = phrase, roomWide = true } = {}) {
     const owners = askOwners(m).filter(owner => roomWide || owner);
     return owners.length && !askClosed(m, owners, children);
   }).map(m => item(m,
-    say(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting'), postHref(m, log)));
+    say(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting', { open: true }), postHref(m, log)));
   return { shipped, open };
 }
 
