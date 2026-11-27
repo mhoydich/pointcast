@@ -75,10 +75,13 @@ function askOwners(m) {
   if (explicit && normHandle(explicit[1]) !== 'your' && !/^NEEDS\s+@?[\w.-]+['’]s\s+yes\b/i.test(plain)) return [normHandle(explicit[1])];
   // The shared classifier still decides whether these candidates are actual
   // requests. Quoted examples, UI labels and status receipts stay excluded.
+  // A post laid out in labelled sections ("Job:", "Answer:", "Flags:") uses them as headings,
+  // not as people. One "Job: can you…?" on its own is still a person being asked.
+  const sectioned = (body.match(/^[ \t]*[A-Za-z]+:/gm) || []).filter(label => LABELS.has(label.trim().slice(0, -1).toLowerCase())).length >= 2;
   const candidates = new Set([
     ...[...body.matchAll(/@([A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*)/g)].map(m => normHandle(m[1])),
     ...[...body.matchAll(/(?:^|\n|[.!?]\s+)(?:(?:hi|hey|hello)\s+)?([A-Za-z][\w.-]*)\s*[,;:—–-]/gi)].map(m => m[1])
-      .filter(word => !LABELS.has(word.toLowerCase()) && !/^[A-Z]{3,}$/.test(word)).map(normHandle),
+      .filter(word => !(sectioned && LABELS.has(word.toLowerCase()))).map(normHandle),
     ...[...body.matchAll(/\bneeds\s+([A-Za-z][\w.-]*)(?:['’]s)?\s+yes\b/gi)].map(m => normHandle(m[1])),
     ...[...body.matchAll(/,\s+([A-Za-z][\w-]*)[?.!]*(?:$|\n)/g)].map(m => normHandle(m[1])),
   ]);
@@ -152,38 +155,56 @@ function closedClaims(posts) {
 
 /** A fuller line for the front page: a leading card or PR id keeps the sentence after it. */
 const ID_PART = /^#?[A-Za-z]{0,8}-?\d[\w-]{0,8}$/;
-// Known acronyms and words with digits (HUX-6, CC0) keep their case.
-const ACRONYMS = new Set(['AI', 'API', 'MCP', 'DAO', 'NFT', 'PR', 'UES', 'URL', 'HTML', 'CSS', 'JSON', 'KV', 'ID', 'XTZ', 'ETH', 'USD', 'OK', 'QA', 'UX', 'UI', 'CEO', 'COO', 'X']);
-const KEEP_CASE = { test: word => /\p{N}/u.test(word) || ACRONYMS.has(word.replace(/[^\p{L}\p{N}]/gu, '')) };
-/** A shouted line reads as a sentence; acronyms and ids stay as written. */
+// Only real card ids (LEND-2, HUX-6, V2-3) or PR numbers (#1914) move to the front of a line.
+const CARD_OR_PR = /^(?:[A-Z][A-Z0-9]{0,7}-[0-9]{1,4}[a-z]?|#\d{1,6})$/;
+const ACRONYMS = new Set(['AI', 'API', 'MCP', 'DAO', 'DAOS', 'NFT', 'PR', 'UES', 'URL', 'HTML', 'CSS', 'JSON', 'KV', 'ID', 'XTZ', 'ETH', 'USD',
+  'OK', 'QA', 'UX', 'UI', 'CEO', 'COO', 'X', 'FA2', 'CC0', 'SDK', 'CLI', 'PDF', 'PNG', 'SVG', 'DM', 'ET', 'PT', 'UTC']);
+const PROPER = new Map([['pointcast', 'PointCast'], ['loom', 'Loom'], ['hearth', 'Hearth'], ['tezos', 'Tezos'], ['noun', 'Noun'], ['nouns', 'Nouns'],
+  ['claude', 'Claude'], ['codex', 'Codex'], ['shwa', 'Shwa'], ['astra', 'Astra'], ['sol', 'Sol'], ['mike', 'Mike'], ['grok', 'Grok']]);
+// A word keeps its case if it was not shouted (any lowercase), carries a digit or code
+// punctuation (API_TOKEN, src/Model.js, HUX-6, CC0), or is a known acronym.
+const keepsCase = word => /\p{Ll}/u.test(word) || /\p{N}/u.test(word) || /\w[_/.]\w/u.test(word)
+  || ACRONYMS.has(word.replace(/[^\p{L}\p{N}]/gu, ''));
+/** A shouted line reads as a sentence; names, acronyms, ids and code stay as written. */
 function calm(text) {
-  const letters = text.match(/\p{L}/gu) || [];
+  // Judge the shouting on prose words only; code, ids and names do not count either way.
+  const letters = text.split(/\s+/).filter(word => !(/\p{N}/u.test(word) || /\w[_/.]\w/u.test(word))).join(' ').match(/\p{L}/gu) || [];
   if (letters.length < 12 || letters.filter(ch => ch === ch.toUpperCase() && ch !== ch.toLowerCase()).length / letters.length < 0.7) return text;
   let first = true;
   return text.replace(/\S+/g, word => {
-    const out = KEEP_CASE.test(word.replace(/^[(\[]/, '')) ? word : word.toLowerCase();
+    if (keepsCase(word)) {
+      if (/\p{L}/u.test(word)) first = false;
+      return word;
+    }
+    let out = word.toLowerCase().replace(/[\p{L}]+/gu, w => PROPER.get(w) || w);
     if (first && /\p{L}/u.test(out)) {
       first = false;
-      return out.replace(/\p{Ll}/u, ch => ch.toUpperCase());
+      out = out.replace(/^(\P{L}*)(\p{Ll})/u, (_, lead, ch) => lead + ch.toUpperCase());
     }
     return out;
   });
 }
+// A bracketed byline or date stamp ("(@antigravity, Thu Nov 26)") is not part of the work;
+// every other aside stays, because it can carry the task or its scope.
+const WEEKDAY = '(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\\.?(?:\\s[^()]*)?';
+const BYLINE = new RegExp(`\\s*\\((?:@[\\w.-]+(?:,\\s*${WEEKDAY})?|by\\s[^()]*|${WEEKDAY})\\)`, 'gi');
+const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
+  .filter(part => /[\p{L}\p{N}]/u.test(part));
 function tell(value, fallback) {
   const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
-    .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '');
-  const split = text => text.split(/\n|\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
-    .filter(part => /[\p{L}\p{N}]/u.test(part));
-  // An aside in brackets is not the headline, unless it is all the post says.
-  const parts = split(lines.replace(/\s*\([^()\n]*\)/g, ' ')).length ? split(lines.replace(/\s*\([^()\n]*\)/g, ' ')) : split(lines.replace(/[()]/g, ''));
-  if (!parts.length) return fallback;
-  let id = ID_PART.test(parts[0]) && parts[1] ? parts.shift() : '';
-  // "DONE … · LEND-2": a card id at the end of the first line leads the line instead.
-  if (!id && parts[1] && ID_PART.test(parts[1]) && /^[A-Z#]/.test(parts[1])) {
-    id = parts[1];
-    parts.splice(1, 1);
-  }
-  const text = (id ? id + ' · ' : '') + calm(parts[0]);
+    .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
+    .split('\n').map(line => line.replace(BYLINE, '')).map(splitParts).filter(parts => parts.length);
+  if (!lines.length) return fallback;
+  const first = lines[0], rest = lines.slice(1).flat();
+  // A first line that is only an aside reads without its brackets.
+  const unwrap = part => part.replace(/^\((.*)\)$/, '$1');
+  let id = '';
+  if (first.length > 1 && ID_PART.test(first[0])) id = first.shift();
+  // "DONE … · LEND-2": a card or PR id at the end of the first line leads it instead.
+  else if (first.length > 1 && CARD_OR_PR.test(first[first.length - 1])) id = first.pop();
+  const head = unwrap(first[0] ?? rest[0] ?? '');
+  if (!head) return id || fallback;
+  const text = (id ? id + ' · ' : '') + calm(head);
   return text.length <= 120 ? text : text.slice(0, 117).replace(/\s+\S*$/, '') + '…';
 }
 const who = m => String(m.from?.name || 'Someone').replace(/\s+/g, ' ').trim().slice(0, 48) || 'Someone';

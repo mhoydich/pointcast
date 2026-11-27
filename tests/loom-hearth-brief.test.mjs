@@ -171,19 +171,31 @@ test('re-review: prose quotes, exact claim matches, handle underscores and inlin
   assert.deepEqual(roomBrief([post('A', '`DONE` is the word to start a receipt with.', 1)], { log, now: NOW }).done, []);
 });
 
-test('live lines read as sentences: shouting calmed, asides dropped, a trailing card id leads', () => {
+test('live lines read as sentences: shouting calmed, bylines dropped, a trailing card id leads', () => {
   const lines = [
     post('antigravity', 'DONE POINTCAST SENSORY & HAPTICS MCP API (pointcast.sensory.mcp/v1) VERIFIED (@antigravity, Thu Nov 26)', 1),
     post('antigravity', 'DONE HUX-6 · BRING YOUR BOT TO THE LOOM + DAO ROOM CHARTER v0 (@antigravity, CC0)', 2),
     post('Antigravity', 'DONE (draft for Purplematter; note: card is currently unsigned) · LEND-2\n\nTitle: Office Noun', 3),
-    post('A', 'DONE (only an aside)', 4),
   ];
   assert.deepEqual(roomBrief(lines, { log, now: NOW }).done.map(i => i.text), [
-    'Pointcast sensory & haptics MCP API verified',
-    'HUX-6 · Bring your bot to the loom + DAO room charter v0',
-    'LEND-2 · Title: Office Noun',
-    'only an aside',
+    'PointCast sensory & haptics MCP API (pointcast.sensory.mcp/v1) verified',
+    'HUX-6 · Bring your bot to the Loom + DAO room charter v0 (@antigravity, CC0)',
+    'LEND-2 · draft for Purplematter; note: card is currently unsigned',
   ]);
+});
+
+test('review fixtures: asides that carry the work stay, code and names keep their case, only card ids move', () => {
+  const said = body => roomBrief([post('A', body, 1)], { log, now: NOW }).done.map(i => i.text);
+  assert.deepEqual(said('DONE HUX-6 (repaired the unread-room count)'), ['HUX-6 (repaired the unread-room count)']);
+  assert.deepEqual(said('DONE (repaired the unread-room count)\nChecks passed.'), ['repaired the unread-room count']);
+  assert.deepEqual(said('DONE Disabled alerts (for staging only)'), ['Disabled alerts (for staging only)']);
+  assert.deepEqual(said('DONE FIXED REQUEST SIGNATURE FOR `getUser` IN `src/Model.js`'), ['Fixed request signature for getUser in src/Model.js']);
+  assert.deepEqual(said('DONE ROTATED API_TOKEN FOR POINTCAST AND THE LOOM'), ['Rotated API_TOKEN for PointCast and the Loom']);
+  assert.deepEqual(said('DONE IPHONE15 BUILD SIGNED AND SHIPPED TODAY'), ['IPHONE15 build signed and shipped today']);
+  assert.deepEqual(said('DONE Encoding verified · UTF8'), ['Encoding verified']);
+  assert.deepEqual(said('DONE Audit passed\nISO9001'), ['Audit passed']);
+  assert.deepEqual(said('DONE Audit passed. HTTP403'), ['Audit passed']);
+  assert.deepEqual(said('DONE Ledger card · #1943'), ['#1943 · Ledger card']);
 });
 
 test('section labels are not people being asked', () => {
