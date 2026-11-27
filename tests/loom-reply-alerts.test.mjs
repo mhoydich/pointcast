@@ -183,6 +183,51 @@ test('since drops anything at or before the cursor, and limit defaults to 25 and
   assert.equal(filtered.total, 59);
 });
 
+test('Collator echoes and link copies are not alerts', () => {
+  const result = collectReplyAlerts({
+    handle: 'mike',
+    logs: [thread('#loom-v2', ROOM, [
+      message({ id: 'm_parent01', seq: 1, at: T0, from: mike, body: 'start' }),
+      message({ id: 'm_robot001', seq: 2, at: T1, from: { name: 'Collator', kind: 'robot', address: '@collator' }, parent: 'm_parent01', body: 'Also threaded elsewhere — @mike (via #workshop).' }),
+      message({ id: 'm_robot002', seq: 3, at: T1, from: { name: 'House', kind: 'robot' }, body: '@mike ping' }),
+      message({ id: 'm_link0001', seq: 4, at: T2, from: ada, kind: 'link', body: '@mike echoed into the inbox', mentions: ['@mike'] }),
+      message({ id: 'm_note0001', seq: 5, at: T2, from: bea, body: '@mike this one is real' }),
+    ])],
+  });
+  assert.deepEqual(result.alerts.map((alert) => alert.id), ['m_note0001']);
+  assert.equal(result.alerts[0].reason, 'mention');
+});
+
+test('quoted lines and code spans do not count as @mentions', () => {
+  const result = collectReplyAlerts({
+    handle: 'mike',
+    logs: [thread('#loom-v2', ROOM, [
+      message({ id: 'm_quote001', seq: 1, at: T0, from: ada, body: '> @mike said this earlier', mentions: ['@mike'] }),
+      message({ id: 'm_gt000001', seq: 2, at: T0, from: ada, body: '&gt; @mike said this earlier', mentions: ['@mike'] }),
+      message({ id: 'm_fence001', seq: 3, at: T1, from: ada, body: '```\n@mike inside the fence\n```', mentions: ['@mike'] }),
+      message({ id: 'm_code0001', seq: 4, at: T1, from: bea, body: 'see `@mike` in the snippet', mentions: ['@mike'] }),
+      message({ id: 'm_real0001', seq: 5, at: T2, from: bea, body: 'hey @mike, the quote above is not you' }),
+    ])],
+  });
+  assert.deepEqual(result.alerts.map((alert) => alert.id), ['m_real0001']);
+});
+
+test("from.operator matches a reply to an agent's post and does not self-reply", () => {
+  const parent = message({
+    id: 'm_fable001', seq: 1, at: T0,
+    from: { name: "Fable (Mike's agent, cloud)", kind: 'agent', operator: 'Mike' },
+    body: 'the plan',
+  });
+  const other = message({ id: 'm_reply001', seq: 2, at: T2, from: bea, parent: 'm_fable001', body: 'on it' });
+  const own = message({
+    id: 'm_selfop01', seq: 3, at: T2,
+    from: { name: 'Switchboard', kind: 'agent', operator: 'mike' },
+    parent: 'm_fable001', body: '@mike I answered it', mentions: ['@mike'],
+  });
+  const result = collectReplyAlerts({ handle: 'mike', logs: [thread('#loom-v2', ROOM, [parent, other, own])] });
+  assert.deepEqual(result.alerts.map((alert) => [alert.id, alert.reason]), [['m_reply001', 'reply']]);
+});
+
 test('the text digest is one concise line per alert', () => {
   const result = collectReplyAlerts({
     handle: 'mike',
@@ -348,31 +393,68 @@ test('a missing for is 400, and an unbound or corrupt KV still answers 200', asy
       { key: badKey, address: '#bad-room', kind: 'topic', updatedAt: T1 },
       { key: 'not-a-key', address: '#skip', updatedAt: T2 },
     ],
-    'loom:rooms': { not: 'a list' },
+    'loom:rooms': [],
     [`loom:log:${badKey}`]: '{oops',
     [`loom:log:${goodKey}`]: {
       address: '#good-room', key: goodKey,
-      messages: [message({ id: 'm_good0001', at: T2, from: ada, body: '@mike from the good room', mentions: ['@mike'] })],
+      ops: [{ op: 'append', id: 'm_good0001', seq: 1, at: T2, from: ada, kind: 'note', body: '@mike from the good room', mentions: ['@mike'] }],
     },
   });
   const mixed = await readLoomAlerts(indexed, { handle: 'mike' });
   assert.equal(mixed.kvBound, true);
   assert.deepEqual(mixed.alerts.map((alert) => alert.id), ['m_good0001']);
   assert.equal(indexed.calls.put, 0);
+});
 
-  const objects = {
-    async get(key) {
-      if (key === 'loom:index' || key === 'loom:rooms') return [];
-      if (key === `loom:log:${inboxKey}`) {
-        return { address: '@mike', key: inboxKey, messages: [message({ id: 'm_objask01', at: T2, from: bea, kind: 'ask', body: 'from an object value' })] };
-      }
-      return null;
-    },
-    async put() { throw new Error('read-only'); },
+test('reads go through handleLoom or a reader function, never loom:log keys', async () => {
+  assert.doesNotMatch(libSource, /loom:log:/);
+  assert.doesNotMatch(libSource, /kv\.get\s*\(/);
+  assert.match(libSource, /typeof source === 'function'/);
+  assert.match(libSource, /handleLoom\(request, \{ kv: source \}\)/);
+
+  const calls = [];
+  const rooms = Array.from({ length: ALERT_LOG_CAP + 6 }, (_, i) => ({
+    address: `#room-${i}`,
+    key: `${i.toString(16).padStart(2, '0')}`.repeat(12).slice(0, 24),
+    kind: 'topic',
+    updatedAt: new Date(Date.parse(T0) + i * 86_400_000).toISOString(),
+  }));
+  const source = async (request) => {
+    const url = new URL(request.url);
+    calls.push(`${url.pathname}${url.search}`);
+    const to = url.searchParams.get('to');
+    if (!to) return Response.json({ ok: true, kvBound: true, logs: rooms });
+    if (to === '@mike') {
+      return Response.json({
+        ok: true, kvBound: true, exists: true,
+        log: { address: '@mike', key: INBOX, label: '@mike' },
+        ops: [{ op: 'append', id: 'm_inboxask', seq: 1, at: T2, from: ada, kind: 'ask', body: 'Open?', mentions: [] }],
+      });
+    }
+    if (to === '#room-0') {
+      return Response.json({
+        ok: true, kvBound: true, exists: true,
+        log: { address: '#room-0', key: rooms[0].key },
+        ops: [{ op: 'append', id: 'm_oldcap01', seq: 1, at: T2, from: ada, kind: 'note', body: '@mike from the room the cap skipped', mentions: ['@mike'] }],
+      });
+    }
+    return Response.json({ ok: true, kvBound: true, exists: false, log: { address: to, key: 'ab'.repeat(12) }, ops: [] });
   };
-  const fromObject = await readLoomAlerts(objects, { handle: '@mike' });
-  assert.equal(fromObject.alerts[0].id, 'm_objask01');
-  assert.equal(fromObject.alerts[0].reason, 'inbox');
+  const result = await readLoomAlerts(source, { handle: 'mike' });
+  assert.equal(result.scannedRooms, ALERT_LOG_CAP);
+  assert.equal(result.totalRooms, ALERT_LOG_CAP + 6);
+  assert.equal(result.missedRooms, 6);
+  assert.equal(result.truncated, true);
+  assert.deepEqual(result.alerts.map((alert) => alert.id), ['m_inboxask']);
+  assert.ok(calls.some((url) => url.includes('compact=1')));
+  assert.ok(calls.some((url) => url.includes('to=%40mike')));
+  assert.ok(!calls.some((url) => url.includes('to=%23room-0')));
+  assert.match(formatReplyAlertsText(result), /note: scanned 24 of 30 rooms, missed 6\n$/);
+
+  const broken = await readLoomAlerts(async () => { throw new Error('reader down'); }, { handle: 'mike' });
+  assert.equal(broken.kvBound, true);
+  assert.deepEqual(broken.alerts, []);
+  assert.equal(broken.truncated, false);
 });
 
 test('directory reads stay inside the log cap and prefer PC_LOOM_KV', async () => {
@@ -403,11 +485,18 @@ test('directory reads stay inside the log cap and prefer PC_LOOM_KV', async () =
   const body = await res.json();
   assert.equal(res.status, 200);
   assert.deepEqual(body.alerts.map((alert) => alert.id), ['m_capinbox']);
+  assert.equal(body.scannedRooms, ALERT_LOG_CAP);
   assert.equal(body.scanned.directoryCap, ALERT_LOG_CAP);
-  assert.equal(body.scanned.directory, ALERT_LOG_CAP);
-  assert.equal(kv.calls.get, ALERT_LOG_CAP + 3);
+  assert.ok(body.totalRooms > ALERT_LOG_CAP);
+  assert.equal(body.missedRooms, body.totalRooms - body.scannedRooms);
+  assert.equal(body.truncated, true);
   assert.equal(kv.calls.put, 0);
   assert.equal(visits.calls.get, 0);
+  const cappedText = await onRequestGet({
+    request: new Request('https://pointcast.xyz/api/loom/alerts?for=mike&format=text'),
+    env: { PC_LOOM_KV: kv, VISITS: visits },
+  });
+  assert.match(await cappedText.text(), new RegExp(`note: scanned ${body.scannedRooms} of ${body.totalRooms} rooms, missed ${body.missedRooms}`));
 
   const fallback = await onRequestGet({
     request: new Request('https://pointcast.xyz/api/loom/alerts?for=mike'),
@@ -416,8 +505,10 @@ test('directory reads stay inside the log cap and prefer PC_LOOM_KV', async () =
   assert.equal((await fallback.json()).alerts[0].id, 'm_capinbox');
 });
 
-test('the alert reader never writes', () => {
+test('the alert reader never writes and does not read loom:log keys itself', () => {
   assert.doesNotMatch(libSource, /\.put\s*\(/);
   assert.doesNotMatch(apiSource, /\.put\s*\(/);
+  assert.doesNotMatch(libSource, /loom:log:/);
   assert.match(apiSource, /PC_LOOM_KV \?\? env\.VISITS/);
+  assert.match(libSource, /handleLoom\(request, \{ kv: source \}\)/);
 });

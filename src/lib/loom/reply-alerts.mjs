@@ -1,24 +1,26 @@
 /**
  * Loom reply alerts — a read-only, low-token wakeup for one handle.
  *
- * Given logs the caller already has, or a KV binding, collect three kinds of
- * alert and nothing else:
- *   reply    a message whose parent was written by the handle
- *   mention  a direct @handle in `mentions` or in the body
+ * Given logs the caller already has, collect three kinds of alert:
+ *   reply    a message whose parent was written by the handle (name, @address, or operator)
+ *   mention  a direct @handle in the prose (not in a quote or a code span)
  *   inbox    an open ask or card sitting in the handle's own inbox (@handle)
  *
- * Storage, read the same way as src/lib/loom/service.mjs (`readJson` there):
- *   loom:log:<key>   { address, key, label, updatedAt, ops[] }
- *   loom:index       recent logs, newest first
- *   loom:rooms       topic and inbox directory
- * This module only calls kv.get. It never puts, never appends, and a missing,
- * unbound, or corrupt value becomes an empty list instead of an error.
+ * This is not For You (`GET /api/loom?for=NAME`, `/loom/for/NAME`). For You
+ * builds three piles — people, NEEDS your yes, arrivals — plus activity.replies
+ * inside a multi-day window. Alerts is the short machine wakeup: JSON or one
+ * line per alert (`format=text`), a `since` cursor, and an ETag/304. Collator
+ * echoes are left out. It does not call buildPiles.
  *
- * The directory read is capped (ALERT_LOG_CAP) so one poll stays inside a
- * Workers subrequest budget: two directory gets, the inbox, then at most
- * ALERT_LOG_CAP logs, six at a time.
+ * Reads go through handleLoom, the same way the Hearth server readers do:
+ * a source function is the D1 reader (atomicReader after the storage cutover);
+ * a KV binding is read with internal GETs. This module does not touch storage keys.
+ * The directory scan is capped at ALERT_LOG_CAP rooms. The inbox is always
+ * read. scannedRooms, totalRooms, missedRooms, and truncated say what the cap
+ * left out. Nothing here writes.
  */
-import { SITE, addressKey, extractAddresses, parseAddress } from './address.mjs';
+import { handleLoom } from './service.mjs';
+import { SITE, extractAddresses, parseAddress } from './address.mjs';
 import { normHandle } from './for-you.mjs';
 import { fold } from './fold.mjs';
 
@@ -26,9 +28,12 @@ export const DEFAULT_LIMIT = 25;
 export const MAX_LIMIT = 100;
 export const ALERT_LOG_CAP = 24;
 export const ALERT_READ_CONCURRENCY = 6;
+const API = 'https://pointcast.xyz/api/loom';
 const HANDLE = /^[a-z0-9][a-z0-9_.-]{0,31}$/;
-const LOG_KEY = /^[0-9a-f]{24}$/;
 const CLOSER = /^\s*(?:CLEARED|DONE|CLOSED|SHIPPED)\b/i;
+const FENCED_CODE = /```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)/g;
+const INLINE_CODE = /`[^`\n]*`/g;
+const QUOTED_LINE = /^[ \t]*(?:>|&gt;)[^\n]*(?:\n|$)/gm;
 const RANK = { reply: 3, inbox: 2, mention: 1 };
 
 const HEADERS = {
@@ -62,21 +67,39 @@ const clip = (value, n) => {
   return text.length > n ? `${text.slice(0, n - 1)}…` : text;
 };
 
+/** Name, @address, or operator. Operator is case-insensitive via normHandle. */
 function sameHandle(from, handle) {
   if (!from || !handle) return false;
-  return normHandle(from.name) === handle || normHandle(from.address) === handle;
+  return normHandle(from.name) === handle || normHandle(from.address) === handle || normHandle(from.operator) === handle;
+}
+
+/** Collator housekeeping and ripple copies. A real note that @mentions someone stays. */
+function collatorEcho(message) {
+  const from = message?.from;
+  if (from?.kind === 'robot') return true;
+  if (String(from?.address ?? '').trim().toLowerCase() === '@collator') return true;
+  return message?.kind === 'link';
+}
+
+/** Prose only: drop fenced code, inline code, and lines that start with `>`. */
+function mentionProse(body) {
+  return String(body ?? '').replace(FENCED_CODE, ' ').replace(INLINE_CODE, ' ').replace(QUOTED_LINE, ' ');
 }
 
 function mentionsHandle(message, handle) {
   if (!handle) return false;
+  const prose = mentionProse(message.body);
+  if (extractAddresses(prose).mentions.some((item) => normHandle(item) === handle)) return true;
+  // An explicit mentions[] entry still counts when the body never wrote the
+  // handle. A handle that appears only inside a quote or a code span does not.
   const listed = Array.isArray(message.mentions) ? message.mentions : [];
-  if (listed.some((item) => normHandle(item) === handle)) return true;
-  const found = extractAddresses(message.body).mentions;
-  return found.some((item) => normHandle(item) === handle);
+  if (!listed.some((item) => normHandle(item) === handle)) return false;
+  const inRaw = extractAddresses(message.body).mentions.some((item) => normHandle(item) === handle);
+  return !inRaw;
 }
 
 function needsHandle(message, handle) {
-  const line = String(message.body ?? '').split('\n').find((part) => part.trim()) ?? '';
+  const line = mentionProse(message.body).split('\n').find((part) => part.trim()) ?? '';
   const match = line.match(/^\s*NEEDS\s+@?([A-Za-z0-9][A-Za-z0-9_.-]{0,31})\b/i);
   return !!(match && normHandle(match[1]) === handle);
 }
@@ -217,7 +240,7 @@ export function collectReplyAlerts({ handle, logs = [], since = null, limit = DE
     }
     const inbox = thread.inbox || isInboxAddress(thread.address, owner);
     for (const message of messages) {
-      if (!owner || sameHandle(message.from, owner)) continue;
+      if (!owner || collatorEcho(message) || sameHandle(message.from, owner)) continue;
       const at = timeOf(message.at);
       if (cursor != null && !(at != null && at > cursor)) continue;
       const parent = message.parent ? byId.get(message.parent) : null;
@@ -253,49 +276,82 @@ export function collectReplyAlerts({ handle, logs = [], since = null, limit = DE
 export function formatReplyAlertsText(result) {
   const who = result?.for || '@';
   const alerts = Array.isArray(result?.alerts) ? result.alerts : [];
-  if (!alerts.length) return `loom alerts ${who}: 0\n`;
+  const note = result?.truncated
+    ? `note: scanned ${result.scannedRooms} of ${result.totalRooms} rooms, missed ${result.missedRooms}\n`
+    : '';
+  if (!alerts.length) return `loom alerts ${who}: 0\n${note}`;
   const lines = alerts.map((alert) => {
     const name = clip(alert.from?.name || 'someone', 24);
     const where = alert.address || alert.label || '';
     const kind = alert.kind ? ` ${alert.kind}` : '';
     return `${alert.reason} ${name} ${where}${kind} ${clip(alert.excerpt, 64)} ${alert.replyAddress} ${alert.permalink}`;
   });
-  return `loom alerts ${who}: ${alerts.length}\n${lines.join('\n')}\n`;
+  return `loom alerts ${who}: ${alerts.length}\n${lines.join('\n')}\n${note}`;
 }
 
-async function readJson(kv, key, fallback) {
-  if (!kv || typeof kv.get !== 'function') return fallback;
+function roomCoverage({ scannedRooms = 0, totalRooms = 0, logs = 0 } = {}, kvBound = false) {
+  const missedRooms = Math.max(0, totalRooms - scannedRooms);
+  return {
+    kvBound,
+    scannedRooms,
+    totalRooms,
+    missedRooms,
+    truncated: missedRooms > 0,
+    scanned: { logs, directory: scannedRooms, directoryCap: ALERT_LOG_CAP, totalRooms, missedRooms },
+  };
+}
+
+/**
+ * Hearth's read slot: a function is the authoritative reader (the atomic D1
+ * reader after cutover). A KV binding is read by handleLoom's own GET.
+ * There is no second storage path and no direct key read.
+ */
+function loomRead(source) {
+  if (typeof source === 'function') return source;
+  return (request) => handleLoom(request, { kv: source });
+}
+
+async function loomGet(read, query) {
   try {
-    const raw = await kv.get(key);
-    if (raw == null || raw === '') return fallback;
-    const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return value == null ? fallback : value;
+    const response = await read(new Request(`${API}${query}`));
+    if (!response?.ok) return null;
+    return await response.json();
   } catch {
-    return fallback;
+    return null;
   }
 }
 
-function pickDirectory(index, rooms, inboxKey, sinceMs) {
-  const byKey = new Map();
-  for (const list of [index, rooms]) {
-    if (!Array.isArray(list)) continue;
-    for (const entry of list) {
-      if (!entry || typeof entry !== 'object') continue;
-      const key = typeof entry.key === 'string' ? entry.key : '';
-      if (!LOG_KEY.test(key) || key === inboxKey) continue;
-      const prev = byKey.get(key);
-      if (!prev || String(entry.updatedAt ?? '') > String(prev.updatedAt ?? '')) byKey.set(key, entry);
-    }
+function pickRooms(entries, inboxAddress, sinceMs) {
+  const byAddress = new Map();
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry || typeof entry !== 'object') continue;
+    const address = typeof entry.address === 'string' ? entry.address : '';
+    if (!address || address === inboxAddress) continue;
+    const prev = byAddress.get(address);
+    if (!prev || String(entry.updatedAt ?? '') > String(prev.updatedAt ?? '')) byAddress.set(address, entry);
   }
-  let entries = [...byKey.values()];
+  let rooms = [...byAddress.values()];
   if (sinceMs != null) {
-    entries = entries.filter((entry) => {
+    rooms = rooms.filter((entry) => {
       const updated = timeOf(entry.updatedAt);
       return updated == null || updated > sinceMs;
     });
   }
-  entries.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
-  return entries.slice(0, ALERT_LOG_CAP);
+  rooms.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  return rooms;
+}
+
+function viewToLog(view, address, { inbox = false } = {}) {
+  if (!view || view.ok === false) return null;
+  const log = view.log && typeof view.log === 'object' ? view.log : {};
+  if (!Array.isArray(view.ops) && !Array.isArray(view.messages)) return null;
+  return {
+    address: typeof log.address === 'string' && log.address ? log.address : address,
+    key: typeof log.key === 'string' ? log.key : '',
+    label: typeof log.label === 'string' ? log.label : null,
+    ...(inbox ? { inbox: true } : {}),
+    ...(Array.isArray(view.ops) ? { ops: view.ops } : { messages: view.messages }),
+  };
 }
 
 async function readInOrder(items, read) {
@@ -314,38 +370,30 @@ async function readInOrder(items, read) {
 }
 
 /**
- * Read the handle's inbox plus the newest directory logs. Unbound KV and
- * unreadable values yield an empty alert list with kvBound false or a
- * shorter scan — never a throw, never a write.
+ * Read the handle's inbox plus the newest directory rooms through handleLoom.
+ * `source` is a reader function or a KV binding. Unbound or unreadable storage
+ * yields an empty alert list — never a throw, never a write.
+ * At most ALERT_LOG_CAP directory rooms are opened. scannedRooms / totalRooms /
+ * missedRooms / truncated report the cap.
  */
-export async function readLoomAlerts(kv, { handle, since = null, limit = DEFAULT_LIMIT } = {}) {
+export async function readLoomAlerts(source, { handle, since = null, limit = DEFAULT_LIMIT } = {}) {
   const owner = normalizeLoomHandle(handle);
   const empty = collectReplyAlerts({ handle: owner, logs: [], since, limit });
-  if (!owner || !kv || typeof kv.get !== 'function') {
-    return { ...empty, kvBound: false, scanned: { logs: 0, directory: 0, directoryCap: ALERT_LOG_CAP } };
-  }
+  const usable = typeof source === 'function' || (source && typeof source.get === 'function');
+  if (!owner || !usable) return { ...empty, ...roomCoverage({}, false) };
+  const read = loomRead(source);
   const inboxAddress = `@${owner}`;
-  let inboxKey = '';
-  try { inboxKey = await addressKey(inboxAddress); } catch { inboxKey = ''; }
   const sinceMs = empty.since ? timeOf(empty.since) : null;
-  const [index, rooms] = await Promise.all([
-    readJson(kv, 'loom:index', []),
-    readJson(kv, 'loom:rooms', []),
-  ]);
-  const directory = pickDirectory(index, rooms, inboxKey, sinceMs);
+  const directory = await loomGet(read, '?compact=1');
+  const rooms = pickRooms(directory?.logs, inboxAddress, sinceMs);
+  const picked = rooms.slice(0, ALERT_LOG_CAP);
   const logs = [];
-  if (inboxKey) {
-    const inbox = await readJson(kv, `loom:log:${inboxKey}`, null);
-    if (inbox && typeof inbox === 'object' && !Array.isArray(inbox)) {
-      logs.push({ ...inbox, key: inbox.key || inboxKey, address: inbox.address || inboxAddress, inbox: true });
-    }
-  }
-  const loaded = await readInOrder(directory, (entry) => readJson(kv, `loom:log:${entry.key}`, null));
-  for (const log of loaded) {
-    if (log && typeof log === 'object' && !Array.isArray(log)) logs.push(log);
-  }
+  const inbox = viewToLog(await loomGet(read, `?to=${encodeURIComponent(inboxAddress)}`), inboxAddress, { inbox: true });
+  if (inbox) logs.push(inbox);
+  const loaded = await readInOrder(picked, (entry) => loomGet(read, `?to=${encodeURIComponent(entry.address)}`).then((view) => viewToLog(view, entry.address)));
+  for (const log of loaded) if (log) logs.push(log);
   const result = collectReplyAlerts({ handle: owner, logs, since, limit });
-  return { ...result, kvBound: true, scanned: { logs: logs.length, directory: directory.length, directoryCap: ALERT_LOG_CAP } };
+  return { ...result, ...roomCoverage({ scannedRooms: picked.length, totalRooms: rooms.length, logs: logs.length }, true) };
 }
 
 async function etagOf(body) {
@@ -378,10 +426,12 @@ function json(body, status, extra = {}) {
 
 /**
  * GET /api/loom/alerts?for=<handle>&since=<iso>&limit=<n>&format=json|text
- * `handle` is an alias for `for`. Missing both is 400. Unbound KV is an
+ * `handle` is an alias for `for`. Missing both is 400. Unbound storage is an
  * empty 200. If-None-Match against the body ETag is 304.
+ * `source` is the Hearth reader slot (a function, or a KV passed to handleLoom).
+ * `kv` is the same slot when the caller has not wrapped it yet.
  */
-export async function handleLoomAlerts(request, { kv = null } = {}) {
+export async function handleLoomAlerts(request, { kv = null, source = null } = {}) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return json({ ok: false, error: 'method_not_allowed' }, 405, { Allow: 'GET, HEAD' });
@@ -399,7 +449,7 @@ export async function handleLoomAlerts(request, { kv = null } = {}) {
   const format = url.searchParams.get('format') || 'json';
   if (format !== 'json' && format !== 'text') return json({ ok: false, error: 'format_invalid' }, 400);
   const limit = clampLimit(url.searchParams.has('limit') ? url.searchParams.get('limit') : DEFAULT_LIMIT);
-  const result = await readLoomAlerts(kv, { handle: owner, since: sinceRaw || null, limit });
+  const result = await readLoomAlerts(source ?? kv, { handle: owner, since: sinceRaw || null, limit });
   const body = format === 'text' ? formatReplyAlertsText(result) : JSON.stringify(result);
   const etag = await etagOf(body);
   const headers = {
