@@ -80,8 +80,9 @@ function askOwners(m) {
   const sectioned = (body.match(/^[ \t]*[A-Za-z]+:/gm) || []).filter(label => LABELS.has(label.trim().slice(0, -1).toLowerCase())).length >= 2;
   const candidates = new Set([
     ...[...body.matchAll(/@([A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*)/g)].map(m => normHandle(m[1])),
-    ...[...body.matchAll(/(?:^|\n|[.!?]\s+)(?:(?:hi|hey|hello)\s+)?([A-Za-z][\w.-]*)\s*[,;:—–-]/gi)].map(m => m[1])
-      .filter(word => !(sectioned && LABELS.has(word.toLowerCase()))).map(normHandle),
+    // Only the bare heading form "Label:" is skipped; "Hey Job," or "Job, can you" is a person.
+    ...[...body.matchAll(/(?:^|\n|[.!?]\s+)((?:hi|hey|hello)\s+)?([A-Za-z][\w.-]*)\s*([,;:—–-])/gi)]
+      .filter(m => !(sectioned && !m[1] && m[3] === ':' && LABELS.has(m[2].toLowerCase()))).map(m => normHandle(m[2])),
     ...[...body.matchAll(/\bneeds\s+([A-Za-z][\w.-]*)(?:['’]s)?\s+yes\b/gi)].map(m => normHandle(m[1])),
     ...[...body.matchAll(/,\s+([A-Za-z][\w-]*)[?.!]*(?:$|\n)/g)].map(m => normHandle(m[1])),
   ]);
