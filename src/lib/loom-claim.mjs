@@ -5,13 +5,19 @@
 
 import { createPublicKey, verify as verifyEd25519 } from 'node:crypto';
 import { b58checkDecode, b58checkEncode, blake2b } from '../../public/chain/sdk/pointcast-chain.js';
+import { handleLoom } from './loom/service.mjs';
 
 export const CLAIM_FLAG = 'LOOM_CLAIM_ENABLED';
 export const CLAIM_SITE = 'pointcast.xyz/claim';
 export const CLAIM_HONESTY = 'Art notes. No cash value. Never priced.';
+export const CLAIM_BOUND = 'A matching signature shows the public key controls that address. It does not tie an X account to the wallet.';
+export const CLAIM_TTL_MS = 15 * 60 * 1000;
 export const TEZ_PROMPT = 'is this you?';
 export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const TZKT_ORIGIN = 'https://api.tzkt.io';
+export const WALLET_BOOK_TO = '#wallet-book';
+
+const LOOM_API = 'https://pointcast.xyz/api/loom';
 
 const CODE_RE = /^NM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
 const NOTE_RE = /^[A-Za-z0-9:_-]{1,80}$/;
@@ -210,11 +216,12 @@ export function challengeMessage(fields) {
     `issued ${fields.issuedAt}`,
     `expires ${fields.expiresAt}`,
     'Read-only check. It does not move an art note and it does not submit a transaction.',
+    CLAIM_BOUND,
   );
   return lines.join('\n');
 }
 
-export function createSignChallenge({ address, noteId, code, now = new Date(), ttlMs = 600_000, nonce, bytes } = {}) {
+export function createSignChallenge({ address, noteId, code, now = new Date(), ttlMs = CLAIM_TTL_MS, nonce, bytes } = {}) {
   const account = assertPublicAddress(address);
   if (!account.startsWith('tz1')) throw new ClaimError('ed25519-only');
   const claimCode = code ? assertClaimCode(code) : createClaimCode(bytes);
@@ -417,4 +424,112 @@ export async function readHolderNotes(address, { fetchImpl = fetch, contracts = 
     }
   }
   return { readOnly: true, address: account, notes };
+}
+
+/** In-memory claim bindings. Not the Loom log. Optional stand-in when no store is injected. */
+export function memoryClaimStore() {
+  const map = new Map();
+  return {
+    async get(code) {
+      return map.get(code) ?? null;
+    },
+    async set(code, record) {
+      map.set(code, { ...record });
+    },
+  };
+}
+
+export function issueBinding(challenge, { handle = null } = {}) {
+  rejectSecrets(challenge);
+  const handleText = handle == null || handle === '' ? null : String(handle).trim().slice(0, 80);
+  if (handleText && !/^[A-Za-z0-9_.@:-]{1,80}$/.test(handleText)) throw new ClaimError('bad-handle');
+  return {
+    code: challenge.code,
+    nonce: challenge.nonce,
+    address: challenge.address,
+    handle: handleText,
+    noteId: challenge.noteId ?? null,
+    issuedAt: challenge.issuedAt,
+    expiresAt: challenge.expiresAt,
+  };
+}
+
+export function matchBinding(binding, challenge, now = new Date()) {
+  if (!binding) throw new ClaimError('code-unknown');
+  const expiresAt = assertIso(binding.expiresAt);
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) throw new ClaimError('bad-time');
+  if (now.getTime() >= Date.parse(expiresAt)) throw new ClaimError('expired');
+  if (binding.code !== challenge?.code) throw new ClaimError('mismatch');
+  if (binding.nonce !== challenge?.nonce) throw new ClaimError('mismatch');
+  if (binding.address !== challenge?.address) throw new ClaimError('mismatch');
+  if ((binding.noteId ?? null) !== (challenge?.noteId ?? null)) throw new ClaimError('mismatch');
+  if (expiresAt !== challenge?.expiresAt) throw new ClaimError('mismatch');
+  return binding;
+}
+
+/** Sliding window. One clock, separate buckets for an IP and a handle. */
+export function createSlidingLimiter({ windowMs = 60_000, max = 30, now = () => Date.now() } = {}) {
+  const buckets = new Map();
+  return function limit({ ip, handle }) {
+    const keys = [`ip:${String(ip || 'anon').slice(0, 80)}`];
+    if (handle) keys.push(`handle:${String(handle).slice(0, 80)}`);
+    const at = now();
+    const cutoff = at - windowMs;
+    const open = [];
+    for (const key of keys) {
+      const hits = (buckets.get(key) || []).filter((stamp) => stamp > cutoff);
+      if (hits.length >= max) {
+        buckets.set(key, hits);
+        return { allowed: false, retryAfter: Math.max(1, Math.ceil((hits[0] + windowMs - at) / 1000)) };
+      }
+      open.push([key, hits]);
+    }
+    for (const [key, hits] of open) {
+      hits.push(at);
+      buckets.set(key, hits);
+    }
+    return { allowed: true, retryAfter: Math.max(1, Math.ceil(windowMs / 1000)) };
+  };
+}
+
+export const claimLimiter = createSlidingLimiter();
+
+export function clientIp(request) {
+  const direct = request?.headers?.get?.('cf-connecting-ip');
+  if (direct) return direct.slice(0, 80);
+  const forwarded = request?.headers?.get?.('x-forwarded-for') || '';
+  const first = forwarded.split(',')[0].trim();
+  return (first || 'anon').slice(0, 80);
+}
+
+/**
+ * Read posted #wallet-book records through handleLoom.
+ * Same shape as the Loom route readers: an internal GET, then the kv
+ * namespace is handed to handleLoom. This module does not open log keys.
+ */
+export async function readWalletBooks({ kv = null, readLoom = handleLoom, to = WALLET_BOOK_TO } = {}) {
+  let res;
+  try {
+    res = await readLoom(new Request(`${LOOM_API}?to=${encodeURIComponent(to)}`), { kv });
+  } catch {
+    return { ok: false, via: 'handleLoom', records: [] };
+  }
+  let data = null;
+  try {
+    data = res && typeof res.json === 'function' ? await res.json() : null;
+  } catch {
+    data = null;
+  }
+  if (!data?.ok) return { ok: false, via: 'handleLoom', records: [] };
+  const records = [];
+  for (const message of Array.isArray(data.messages) ? data.messages : []) {
+    if (!message || message.hidden || typeof message.body !== 'string') continue;
+    if (!message.body.includes('#wallet-book v1')) continue;
+    try {
+      records.push({ ...parseWalletBook(message.body), id: message.id ?? null, at: message.at ?? null });
+    } catch {
+      /* a nearby post that is not a clean record */
+    }
+  }
+  return { ok: true, via: 'handleLoom', to, records };
 }
