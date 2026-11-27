@@ -213,35 +213,35 @@ const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => p
 // Preamble a reader can't act on: a whole desk byline, a branch slug, a message id or a
 // commit hash. Only positively structured bylines count; a phrase that merely mentions
 // someone, or a task about a model ("Upgrade Claude 4.5"), is never skipped.
-const MODEL = '(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)';
-const SIG_NAME = "[A-Z][\\w.'’-]*(?:\\s+[A-Z][\\w.'’-]*){0,3}";
-// "Astra 6.2", "GPT-6.2 Astra", "Claude Opus": a model and/or version, nothing else.
-const MODEL_TAIL = new RegExp(`^(?:${MODEL}[- ]?)?\\d+(?:\\.\\d+)?(?:\\s+${MODEL})?$|^${MODEL}(?:[- ]?\\d+(?:\\.\\d+)?)?(?:\\s+${MODEL})?$`, 'i');
-const MODEL_WORD = new RegExp(`\\b${MODEL}\\b`, 'i');
-// "Name (@handle)" with the brackets, optionally ", Model"; "@handle, Model"; "Name, Model";
-// or a lone "@handle". "Contact @shwa" or "Added @mike" is a task, not a byline.
-const PAREN_BYLINE = new RegExp(`^${SIG_NAME}\\s*\\(@[\\w.-]+\\)(?:,\\s*(.+))?$`);
-const HANDLE_TAIL = /^\(?@[\w.-]+\)?,\s*(.+)$/;
-const NAME_TAIL = new RegExp(`^${SIG_NAME},\\s*(.+)$`);
-// Card ids people use (HUX-3D, MR-002, LEND-2, V2-3) and PR numbers; a model label is not one.
-const MODEL_LABEL = new RegExp(`^${MODEL}-?\\d[\\w.-]*$`, 'i');
+// Card ids people use (HUX-3D, MR-002, LEND-2, V2-3) and PR numbers.
 const CARD_ID = /^(?:[A-Z][A-Z0-9]{0,7}-[0-9][A-Z0-9]{0,5}|#\d{1,6})$/;
-const isCard = p => CARD_ID.test(p) && !MODEL_LABEL.test(p);
 const MACHINE_ID = /^(?:m_[a-z0-9]{6,}|[0-9a-f]{7,40})$/;
-function preamble(part) {
+// A branch name: four or more lowercase hyphenated segments, no slash ("loom-ux-mr002-astra").
+// "go/no-go" and "yes-or-no" are decisions, not branches.
+const BRANCH = /^[a-z0-9]+(?:-[a-z0-9]+){3,}\.?$/;
+const words = text => String(text || '').toLowerCase().replace(/[^\p{L}\p{N}.]+/gu, ' ').split(/\s+/)
+  .map(w => w.replace(/^\.+|\.+$/g, '')).filter(Boolean);
+/** Preamble a reader can't act on. A signature is recognised only against the post's own
+ * sender: its handle, or words that all come from the sender's name, handle or model. So
+ * "Astra Cover (@astra-cover), Astra 6.2" from @astra-cover is skipped, while "Approve PR,
+ * Codex" or "Contact @shwa" from anyone stays. */
+function preamble(part, from = {}) {
   const p = part.trim();
-  if (isCard(p) || MACHINE_ID.test(p) || MODEL_LABEL.test(p)) return true;
-  if (/^[a-z0-9]+(?:[-_/][a-z0-9]+){2,}\.?$/.test(p)) return true;
+  if (CARD_ID.test(p) || MACHINE_ID.test(p) || BRANCH.test(p)) return true;
   if (/[?]/.test(p)) return false;
-  if (/^@[\w.-]+$/.test(p)) return true;
-  let m = p.match(PAREN_BYLINE);
-  if (m) return !m[1] || MODEL_TAIL.test(m[1].trim());
-  m = p.match(HANDLE_TAIL);
-  if (m) return MODEL_TAIL.test(m[1].trim());
-  m = p.match(NAME_TAIL);
-  return !!m && MODEL_TAIL.test(m[1].trim()) && MODEL_WORD.test(m[1]);
+  const address = String(from.address || '').toLowerCase();
+  const handles = p.match(/@[\w.-]+/g) || [];
+  if (handles.length && address && handles.every(h => h.toLowerCase() === address)) {
+    // The sender's own handle, with nothing else but their own name or model beside it.
+    const own = new Set(words(`${from.name} ${from.address} ${from.model}`));
+    return words(p.replace(/@[\w.-]+/g, ' ')).every(w => own.has(w));
+  }
+  if (handles.length) return false;
+  const own = new Set(words(`${from.name} ${from.address} ${from.model}`));
+  const mine = words(p);
+  return mine.length >= 2 && mine.every(w => own.has(w));
 }
-function tell(value, fallback, { open = false } = {}) {
+function tell(value, fallback, { open = false, from = {} } = {}) {
   const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
     .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
     // On an open claim or ask a date is its deadline; only a handle byline goes.
@@ -261,8 +261,9 @@ function tell(value, fallback, { open = false } = {}) {
   // the first card id seen among them, so the line carries the task.
   const parts = [...first, ...rest];
   let at = 0;
-  while (at < parts.length - 1 && preamble(parts[at])) {
-    if (!id && isCard(parts[at].trim())) id = parts[at].trim();
+  // The card id nearest the sentence wins; an earlier code (RTX-4090) is not the card.
+  while (at < parts.length - 1 && preamble(parts[at], from)) {
+    if (CARD_ID.test(parts[at].trim())) id = parts[at].trim();
     at++;
   }
   const head = unwrap(parts[at] ?? '');
@@ -276,14 +277,14 @@ const who = m => String(m.from?.name || 'Someone').replace(/\s+/g, ' ').trim().s
 function work(recent, posts, log, { say = phrase, roomWide = true } = {}) {
   const item = (m, text, href) => ({ text, href, at: m.at, by: who(m) });
   const shipped = recent.filter(receipt).map(m => item(m,
-    say(content(m).replace(SHIPPED, ''), 'Work completed'), urls(m)[0] || postHref(m, log)));
+    say(content(m).replace(SHIPPED, ''), 'Work completed', { from: m.from || {} }), urls(m)[0] || postHref(m, log)));
   const closed = closedClaims(posts), children = childIndex(posts);
   const open = recent.filter(m => {
     if (MINE.test(status(m))) return !closed.has(m.id);
     const owners = askOwners(m).filter(owner => roomWide || owner);
     return owners.length && !askClosed(m, owners, children);
   }).map(m => item(m,
-    say(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting', { open: true }), postHref(m, log)));
+    say(content(m).replace(MINE, '').replace(/^NEEDS\s+@?[\w.-]+\s*/i, ''), 'A decision is waiting', { open: true, from: m.from || {} }), postHref(m, log)));
   return { shipped, open };
 }
 

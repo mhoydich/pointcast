@@ -281,19 +281,25 @@ test('the board counts proven work as done and says how much is only reported', 
 });
 
 test('a desk signature, card id and branch name before the sentence do not become the line', () => {
-  const open = body => roomBrief([post('Astra', body, 1)], { log, now: NOW }).open.map(i => i.text);
-  assert.deepEqual(open("MINE · Astra Cover (@astra-cover), Astra 6.2 · HUX-3D · loom-ux-hux-3d-astra-cover. I'll integrate and review Antigravity's Fire, Water and Air sketch when its branch, archive or preview arrives. Switchboard has the source request."),
+  const as = (from, body) => roomBrief([{ ...post('x', body, 1), from: { kind: 'agent', ...from } }], { log, now: NOW }).open.map(i => i.text);
+  assert.deepEqual(as({ name: 'Astra 6.2 (Loom cover)', address: '@astra-cover' },
+    "MINE · Astra Cover (@astra-cover), Astra 6.2 · HUX-3D · loom-ux-hux-3d-astra-cover. I'll integrate and review Antigravity's Fire, Water and Air sketch when its branch, archive or preview arrives. Switchboard has the source request."),
     ["HUX-3D · I'll integrate and review Antigravity's Fire, Water and Air sketch when its branch, archive or preview arrives"]);
-  assert.deepEqual(open("MINE · MR-002 · @astra-intelligence, GPT-6.2 Astra · loom-ux-mr002-astra. I'll check the GPU price markets and current coding subscriptions, then put a sourced $500–$1,000 studio budget here for review."),
+  assert.deepEqual(as({ name: 'Astra 6.2 (Loom intelligence)', address: '@astra-intelligence', model: 'gpt-6.2-astra' },
+    "MINE · MR-002 · @astra-intelligence, GPT-6.2 Astra · loom-ux-mr002-astra. I'll check the GPU price markets and current coding subscriptions, then put a sourced $500–$1,000 studio budget here for review."),
     ["MR-002 · I'll check the GPU price markets and current coding subscriptions, then put a sourced $500–$1,000 studio…"]);
+  const open = body => roomBrief([post('Astra', body, 1)], { log, now: NOW }).open.map(i => i.text);
   assert.deepEqual(open('MINE · Review the runner with @shwa and @astra before Friday'), ['Review the runner with @shwa and @astra before Friday'],
     'a real sentence that mentions people is not a signature');
   assert.deepEqual(open('MINE · @astra'), ['@astra'], 'a signature that is the whole post still shows');
+  assert.deepEqual(as({ name: 'Astra 6.2 (Loom cover)', address: '@astra-cover' }, 'MINE · Contact @astra-cover. Then wait.'), ['Contact @astra-cover'],
+    "the sender's handle inside a task is not a byline");
 });
 
 test('re-review: asks, asides and model tasks are never skipped as signatures; only card ids are kept', () => {
   const brief = body => roomBrief([post('Astra', body, 1)], { log, now: NOW });
   const openText = body => brief(body).open.map(i => i.text);
+  const asAstra = body => roomBrief([{ ...post('x', body, 1), from: { name: 'Astra', kind: 'agent', address: '@astra' } }], { log, now: NOW }).open.map(i => i.text);
   assert.deepEqual(openText('@mike, can you review? The preview is ready.'), ['@mike, can you review?']);
   for (const ask of ['MIKE: ask @Shwa?', 'Shwa: ask @Mike?', 'Job: ask @Mike?']) {
     assert.deepEqual(openText(`${ask} It is blocking launch.`), [ask], ask);
@@ -302,10 +308,17 @@ test('re-review: asks, asides and model tasks are never skipped as signatures; o
   assert.deepEqual(brief("DONE · Fixed @shwa's blocker. Tests pass. https://pointcast.xyz/loom").done.map(i => i.text), ["Fixed @shwa's blocker"]);
   assert.deepEqual(openText('MINE · Upgrade Claude 4.5. Keep current defaults.'), ['Upgrade Claude 4.5']);
   assert.deepEqual(openText('MINE · Review Gemini 3. Then report.'), ['Review Gemini 3']);
-  assert.deepEqual(openText('MINE · @astra · a1b2c3d · HUX-3D · Fix the runner.'), ['HUX-3D · Fix the runner']);
-  assert.deepEqual(openText('MINE · @astra · m_3g4y4p0y58 · Fix the runner.'), ['Fix the runner']);
+  assert.deepEqual(asAstra('MINE · @astra · a1b2c3d · HUX-3D · Fix the runner.'), ['HUX-3D · Fix the runner']);
+  assert.deepEqual(asAstra('MINE · @astra · m_3g4y4p0y58 · Fix the runner.'), ['Fix the runner']);
   assert.deepEqual(openText('MINE Contact @shwa\nNo other work until we hear back'), ['Contact @shwa']);
   assert.deepEqual(openText('MINE follow up with @mike\nFriday deadline'), ['follow up with @mike']);
   assert.deepEqual(brief('DONE Added @mike · Invite remains pending https://pointcast.xyz/members').done.map(i => i.text), ['Added @mike']);
-  assert.deepEqual(openText('MINE · @astra · GPT-4O · HUX-3D · Upgrade the fallback.'), ['HUX-3D · Upgrade the fallback']);
+  assert.deepEqual(asAstra('MINE · @astra · GPT-4O · HUX-3D · Upgrade the fallback.'), ['HUX-3D · Upgrade the fallback']);
+  // Third review.
+  const fromCodex = body => roomBrief([{ ...post('x', body, 1), from: { name: 'Codex', kind: 'agent' } }], { log, now: NOW }).open.map(i => i.text);
+  assert.deepEqual(fromCodex('NEEDS mike · Approve PR, Codex.\nCI passed.'), ['Approve PR, Codex']);
+  assert.deepEqual(openText('NEEDS mike · Confirm Friday, Astra.\nThe room is booked.'), ['Confirm Friday, Astra']);
+  assert.deepEqual(openText('NEEDS mike · go/no-go. The launch is waiting.'), ['go/no-go']);
+  assert.deepEqual(openText('NEEDS mike · yes-or-no. The release is ready.'), ['yes-or-no']);
+  assert.deepEqual(asAstra('MINE · @astra · RTX-4090 · MR-002 · Check current GPU pricing.'), ['MR-002 · Check current GPU pricing']);
 });
