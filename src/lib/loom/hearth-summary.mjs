@@ -216,36 +216,46 @@ const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => p
 // Card ids people use (HUX-3D, MR-002, LEND-2, V2-3) and PR numbers.
 const CARD_ID = /^(?:[A-Z][A-Z0-9]{0,7}-[0-9][A-Z0-9]{0,5}|#\d{1,6})$/;
 const MACHINE_ID = /^(?:m_[a-z0-9]{6,}|[0-9a-f]{7,40})$/;
-// A branch name: four or more lowercase hyphenated segments, no slash ("loom-ux-mr002-astra").
-// "go/no-go" and "yes-or-no" are decisions, not branches.
-const BRANCH = /^[a-z0-9]+(?:-[a-z0-9]+){3,}\.?$/;
+// A model label (GPT-4O, Claude-3) is preamble, never the card.
+const MODEL_LABEL = /^(?:gpt|claude|sol|astra|opus|sonnet|haiku|codex|fable|grok|gemini)-?\d[\w.-]*$/i;
+// A branch-shaped slug; it is only skipped when it carries the sender's own handle.
+const BRANCH = /^[a-z0-9]+(?:-[a-z0-9]+){2,}\.?$/;
 const words = text => String(text || '').toLowerCase().replace(/[^\p{L}\p{N}.]+/gu, ' ').split(/\s+/)
   .map(w => w.replace(/^\.+|\.+$/g, '')).filter(Boolean);
-/** Preamble a reader can't act on. A signature is recognised only against the post's own
- * sender: its handle, or words that all come from the sender's name, handle or model. So
- * "Astra Cover (@astra-cover), Astra 6.2" from @astra-cover is skipped, while "Approve PR,
- * Codex" or "Contact @shwa" from anyone stays. */
+/** Preamble a reader can't act on, recognised only with positive evidence:
+ * - a card id, a message id or a commit hash;
+ * - the sender's own signature: a part holding the sender's handle, whose other words all
+ *   come from the sender's name, handle or model ("Astra Cover (@astra-cover), Astra 6.2"
+ *   from @astra-cover). Words alone never count, so "Cover Loom" stays;
+ * - a branch name built from the sender's own handle ("loom-ux-mr002-astra" from
+ *   @astra-intelligence). Other hyphenated phrases ("pay-what-you-want") stay.
+ */
 function preamble(part, from = {}) {
   const p = part.trim();
-  if (CARD_ID.test(p) || MACHINE_ID.test(p) || BRANCH.test(p)) return true;
+  if (CARD_ID.test(p) || MACHINE_ID.test(p) || MODEL_LABEL.test(p)) return true;
   if (/[?]/.test(p)) return false;
   const address = String(from.address || '').toLowerCase();
-  const handles = p.match(/@[\w.-]+/g) || [];
-  if (handles.length && address && handles.every(h => h.toLowerCase() === address)) {
-    // The sender's own handle, with nothing else but their own name or model beside it.
-    const own = new Set(words(`${from.name} ${from.address} ${from.model}`));
-    return words(p.replace(/@[\w.-]+/g, ' ')).every(w => own.has(w));
-  }
-  if (handles.length) return false;
+  if (!address) return false;
   const own = new Set(words(`${from.name} ${from.address} ${from.model}`));
-  const mine = words(p);
-  return mine.length >= 2 && mine.every(w => own.has(w));
+  const handles = p.match(/@[\w.-]+/g) || [];
+  if (handles.length) {
+    return handles.every(h => h.toLowerCase() === address)
+      && words(p.replace(/@[\w.-]+/g, ' ')).every(w => own.has(w));
+  }
+  if (BRANCH.test(p)) {
+    const handleWords = words(address);
+    return handleWords.length > 0 && handleWords.some(w => w.length > 2 && p.toLowerCase().split(/[-.]/).includes(w));
+  }
+  return false;
 }
 function tell(value, fallback, { open = false, from = {} } = {}) {
   const lines = String(value).replace(/\[([^\]]+)\]\(https?:\/\/[^\s]+\)/g, '$1')
     .replace(/https?:\/\/[^\s<>"']+/gi, '').replace(/[*`]/g, '').replace(/^\s*[·:—–-]+\s*/, '')
     // On an open claim or ask a date is its deadline; only a handle byline goes.
-    .split('\n').map(line => line.replace(open ? HANDLE_BYLINE : BYLINE, '')).map(splitParts).filter(parts => parts.length);
+    .split('\n').map(splitParts).filter(parts => parts.length);
+  // Bylines are removed from the line that is shown, after the sender's own signature
+  // has been recognised with its handle still in place.
+  const strip = text => text.replace(open ? HANDLE_BYLINE : BYLINE, '').trim();
   if (!lines.length) return fallback;
   const first = lines[0], rest = lines.slice(1).flat();
   // A first line that is only an aside reads without its brackets.
@@ -261,12 +271,18 @@ function tell(value, fallback, { open = false, from = {} } = {}) {
   // the first card id seen among them, so the line carries the task.
   const parts = [...first, ...rest];
   let at = 0;
-  // The card id nearest the sentence wins; an earlier code (RTX-4090) is not the card.
+  // Skip only what is clearly preamble. One card id may lead the line; a second code-shaped
+  // token stops the skipping and is shown, because when it is ambiguous showing more is
+  // better than dropping it.
   while (at < parts.length - 1 && preamble(parts[at], from)) {
-    if (CARD_ID.test(parts[at].trim())) id = parts[at].trim();
+    const token = parts[at].trim();
+    if (CARD_ID.test(token) && !MODEL_LABEL.test(token)) {
+      if (id) break;
+      id = token;
+    }
     at++;
   }
-  const head = unwrap(parts[at] ?? '');
+  const head = unwrap(strip(parts[at] ?? ''));
   if (!head) return id || fallback;
   const text = (id ? id + ' · ' : '') + calm(head);
   return text.length <= 120 ? text : text.slice(0, 117).replace(/\s+\S*$/, '') + '…';

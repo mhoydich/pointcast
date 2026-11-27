@@ -320,5 +320,13 @@ test('re-review: asks, asides and model tasks are never skipped as signatures; o
   assert.deepEqual(openText('NEEDS mike · Confirm Friday, Astra.\nThe room is booked.'), ['Confirm Friday, Astra']);
   assert.deepEqual(openText('NEEDS mike · go/no-go. The launch is waiting.'), ['go/no-go']);
   assert.deepEqual(openText('NEEDS mike · yes-or-no. The release is ready.'), ['yes-or-no']);
-  assert.deepEqual(asAstra('MINE · @astra · RTX-4090 · MR-002 · Check current GPU pricing.'), ['MR-002 · Check current GPU pricing']);
+  // Ambiguous codes are shown rather than dropped.
+  assert.deepEqual(asAstra('MINE · @astra · RTX-4090 · MR-002 · Check current GPU pricing.'), ['RTX-4090 · MR-002']);
+  assert.deepEqual(asAstra('MINE · MR-002 · RTX-4090 · Check current GPU pricing.'), ['MR-002 · RTX-4090']);
+  // Fourth review: words from the sender's name, or hyphenated subjects, are not preamble.
+  const asCover = body => roomBrief([{ ...post('x', body, 1), from: { name: 'Astra 6.2 (Loom cover)', address: '@astra-cover', kind: 'agent' } }], { log, now: NOW }).open.map(i => i.text);
+  assert.deepEqual(asCover('NEEDS mike · Cover Loom. I will be offline tomorrow.'), ['Cover Loom']);
+  assert.deepEqual(asCover('NEEDS mike · (Cover Loom). I will be offline tomorrow.'), ['Cover Loom']);
+  assert.deepEqual(openText('NEEDS mike · pay-what-you-want. The auction is ready.'), ['pay-what-you-want']);
+  assert.deepEqual(asAstra('MINE · end-to-end-encryption. Waiting on the security review.'), ['end-to-end-encryption']);
 });
