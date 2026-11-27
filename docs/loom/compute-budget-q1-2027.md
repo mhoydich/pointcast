@@ -6,7 +6,7 @@
 
 **What the GPU markets price.** At 08:43 UTC on November 27, these were the hourly dollar thresholds whose Yes bid/ask midpoints were closest to 50¢. Each open market settles on that chip’s average daily Ornn index for the month. Only a cloud rental reserves machine time.
 
-| GPU | January | February | March |
+| GPU | Jan | Feb | Mar |
 | --- | ---: | ---: | ---: |
 | H100 | [$3.00](https://polymarket.com/event/h100-average-rental-price-in-january-2027) | [$3.00](https://polymarket.com/event/h100-average-rental-price-in-february-2027) | [$3.00](https://polymarket.com/event/h100-average-rental-price-in-march-2027) |
 | B200 | [$9.50](https://polymarket.com/event/b200-average-rental-price-in-january-2027) | [$9.00](https://polymarket.com/event/b200-average-rental-price-in-february-2027) | [$9.00](https://polymarket.com/event/b200-average-rental-price-in-march-2027) |
