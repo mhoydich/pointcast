@@ -61,6 +61,12 @@ test('assignment and release records have public evidence links', () => {
     assert.equal(source.origin, 'https://pointcast.xyz');
     assert.match(source.hash, /^#m_[a-z0-9]+$/);
   }
+  const launch = assignments.find(entry => entry.querySelector('strong')?.textContent === 'X desk → Loom launch integration');
+  assert.ok(launch);
+  assert.deepEqual([...launch.querySelectorAll('a')].map(link => [link.textContent, link.href]), [
+    ['Launch’s account of the assignment', 'https://pointcast.xyz/loom?to=%23loom-ux#m_5q6s1n4i6l'],
+    ['Delivery', 'https://pointcast.xyz/loom?to=%23loom-ux#m_456h252l12'],
+  ]);
   const runs = [...document.querySelectorAll('.release-groups a[href*="/actions/runs/"]')];
   const prs = [...document.querySelectorAll('.release-groups a[href*="/pull/"]')];
   assert.equal(runs.length, 13);
