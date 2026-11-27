@@ -186,8 +186,10 @@ function calm(text) {
 }
 // A bracketed byline or date stamp ("(@antigravity, Thu Nov 26)") is not part of the work;
 // every other aside stays, because it can carry the task or its scope.
-const WEEKDAY = '(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\\.?(?:\\s[^()]*)?';
-const BYLINE = new RegExp(`\\s*\\((?:@[\\w.-]+(?:,\\s*${WEEKDAY})?|by\\s[^()]*|${WEEKDAY})\\)`, 'gi');
+// Only a positively recognised byline or date stamp: "(@antigravity)", "(@antigravity, Thu Nov 26)",
+// "(by @astra)", "(Thu Nov 26)". "(Friday only)" or "(by disabling validation)" are the work's scope.
+const STAMP = '(?:(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?,?\\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2}(?:,?\\s+\\d{4})?|(?:mon|tues?|wed|thu|thur|thurs|fri|sat|sun)(?:day|nesday|rsday|urday)?\\.?';
+const BYLINE = new RegExp(`\\s*\\((?:(?:by\\s+)?@[\\w.-]+(?:,\\s*(?:${STAMP}))?|${STAMP})\\)(?=\\s|$|[.,;:·])`, 'gi');
 const splitParts = text => text.split(/\s+[·|]\s+|(?<=[.!?])\s+/).map(part => part.replace(/\s+/g, ' ').replace(/[\s.;:·|—–-]+$/, '').trim())
   .filter(part => /[\p{L}\p{N}]/u.test(part));
 function tell(value, fallback) {
@@ -200,6 +202,8 @@ function tell(value, fallback) {
   const unwrap = part => part.replace(/^\((.*)\)$/, '$1');
   let id = '';
   if (first.length > 1 && ID_PART.test(first[0])) id = first.shift();
+  // "MINE LEND-2\nCheck borrower ceiling": an id alone on the first line leads the next line.
+  else if (first.length === 1 && ID_PART.test(first[0]) && rest.length) { id = first.shift(); }
   // "DONE … · LEND-2": a card or PR id at the end of the first line leads it instead.
   else if (first.length > 1 && CARD_OR_PR.test(first[first.length - 1])) id = first.pop();
   const head = unwrap(first[0] ?? rest[0] ?? '');

@@ -196,6 +196,15 @@ test('review fixtures: asides that carry the work stay, code and names keep thei
   assert.deepEqual(said('DONE Audit passed\nISO9001'), ['Audit passed']);
   assert.deepEqual(said('DONE Audit passed. HTTP403'), ['Audit passed']);
   assert.deepEqual(said('DONE Ledger card · #1943'), ['#1943 · Ledger card']);
+  assert.deepEqual(said('DONE #1950\nFixed unread-room count'), ['#1950 · Fixed unread-room count']);
+  assert.deepEqual(said('DONE Add wallet (Monero only)'), ['Add wallet (Monero only)']);
+  assert.deepEqual(said('DONE Fixed upload (by disabling validation)'), ['Fixed upload (by disabling validation)']);
+  assert.deepEqual(said('DONE Shipped the card (by @astra)'), ['Shipped the card']);
+  assert.deepEqual(said('DONE Shipped the card (Thu Nov 26)'), ['Shipped the card']);
+  assert.deepEqual(said('DONE Shipped the card (Thursday)'), ['Shipped the card']);
+  const open = body => roomBrief([post('A', body, 1)], { log, now: NOW }).open.map(i => i.text);
+  assert.deepEqual(open('MINE LEND-2\nCheck borrower ceiling'), ['LEND-2 · Check borrower ceiling']);
+  assert.deepEqual(open('MINE Add support shift (Friday only)'), ['Add support shift (Friday only)']);
 });
 
 test('section labels are not people being asked', () => {
