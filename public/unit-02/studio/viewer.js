@@ -66,7 +66,7 @@
   async function start() {
     const gl=canvas.getContext('webgl2',{alpha:true,antialias:true,premultipliedAlpha:false});
     if(!gl)throw Error('This 3D view needs WebGL 2. Open the file in Safari, Chrome, Edge, or Firefox with hardware acceleration enabled.');
-    const response = await fetch('./station.glb.gz');
+    const response = await fetch('/unit-02/studio/station.glb.gz');
     if (!response.ok) throw new Error('The model could not be loaded. Reload to try again.');
     const payload = new Uint8Array(await response.arrayBuffer());
     const isGzip = payload[0] === 0x1f && payload[1] === 0x8b;

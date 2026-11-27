@@ -14,6 +14,7 @@ test('the four newest visible notes retain their public Loom message IDs', () =>
     post('not valid'), post('blank', { body: '  ' }),
   ];
   assert.deepEqual(recentNotes(snapshot(messages)).map(message => message.id), ['m_d','m_c','m_b','m_a']);
+  assert.deepEqual(recentNotes(snapshot([post('late', { seq: 4 }), post('early', { seq: 3 })])).map(m => m.id), ['m_late', 'm_early']);
   assert.deepEqual(recentNotes(snapshot([])), []);
   assert.throws(() => recentNotes({ ok: true, log: { address: '#officenoun' }, messages }));
 });
@@ -27,5 +28,16 @@ test('shipped model decompresses to a self-contained GLB and retains the named s
   assert.ok(scene.buffers.every(buffer => !buffer.uri));
   for (const name of ['Near shell', 'Roof', 'Running gear']) {
     assert.ok(scene.nodes.some(node => node.name === name), name);
+  }
+});
+
+test('company and studio assets resolve at both the directory and the slashless PointCast entry', () => {
+  for (const route of ['unit-02', 'unit-02/studio']) {
+    const html = readFileSync(new URL('../public/' + route + '/index.html', import.meta.url), 'utf8');
+    const sources = Array.from(html.matchAll(/(?:src|href)="([^"]+)"/g), match => match[1]);
+    for (const link of sources.filter(href => !href.startsWith('#'))) {
+      const absolute = new URL(link, 'https://pointcast.xyz/' + route + '/').href;
+      assert.equal(new URL(link, 'https://pointcast.xyz/' + route).href, absolute, link);
+    }
   }
 });

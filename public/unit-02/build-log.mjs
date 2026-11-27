@@ -5,10 +5,15 @@ export function recentNotes(data) {
   if (!data?.ok || data.log?.address !== room || !Array.isArray(data.messages)) {
     throw new Error('Unexpected Loom response');
   }
-  return data.messages.filter(message =>
+  const visible = data.messages.filter(message =>
     message && !message.withdrawn && !message.withdrawnAt && !message.hidden &&
     typeof message.body === 'string' && message.body.trim() && /^m_[a-zA-Z0-9]+$/.test(message.id)
-  ).slice(-4).reverse();
+  );
+  if (visible.every(message => Number.isSafeInteger(message.seq))) {
+    return visible.sort((a, b) => b.seq - a.seq).slice(0, 4);
+  }
+  // A legacy message may lack its sequence. The fold order breaks timestamp ties.
+  return visible.reverse().sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0)).slice(0, 4);
 }
 
 function noteItem(message) {
