@@ -373,13 +373,17 @@ test('Drum Compendium gets one coherent PointCast house series across every rout
   assert.match(desk, /One compendium\./);
 
   const pagesDir = new URL('src/pages/', root);
+  const frame = await readFile(new URL('src/components/TenDoorsFrame.astro', root), 'utf8');
+  assert.match(frame, /import BlockLayout from '\.\.\/layouts\/BlockLayout\.astro'/);
+  assert.doesNotMatch(frame, /\bhideAds\b/, 'Ten Doors keeps the layout ad rail');
   const drumPages = (await readdir(pagesDir))
     .filter((name) => /^drum.*\.astro$/.test(name));
   assert.ok(drumPages.length >= 100, `expected the full drum compendium, found ${drumPages.length} routes`);
 
   for (const name of drumPages) {
     const source = await readFile(new URL(name, pagesDir), 'utf8');
-    const inheritsSharedRail = /import (?:Base|Block|Drum|Sparrow)Layout from '\.\.\/layouts\//.test(source);
+    const inheritsSharedRail = /import (?:Base|Block|Drum|Sparrow)Layout from '\.\.\/layouts\//.test(source)
+      || /import TenDoorsFrame from '\.\.\/components\/TenDoorsFrame\.astro'/.test(source);
     const rendersRailDirectly = /import OpenAdRail/.test(source) && /<OpenAdRail\s*\/>/.test(source);
     assert.ok(inheritsSharedRail || rendersRailDirectly, `${name} does not render the shared ad rail`);
   }

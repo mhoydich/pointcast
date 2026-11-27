@@ -339,8 +339,8 @@ export function toolAnnotations(name: string) {
 // Each tool has a name, description, and JSON-Schema input shape.
 // Tools that take no arguments use `{ type: 'object', properties: {} }`.
 const TOOL_DEFINITIONS = [
-  ...REAL_ESTATE_TOOLS,
   AI_PAIR_TOOL,
+  ...REAL_ESTATE_TOOLS,
   {
     name: 'drum_list_rooms',
     description:
