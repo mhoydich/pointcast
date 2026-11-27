@@ -7,7 +7,8 @@ export const ENDPOINT = 'https://pointcast.xyz/api/loom';
 // No registered desk pci_ IDs are bound in this branch. The pcr_ identity roster
 // is a different namespace; agent-cabinet.ts explicitly calls pci "unbound".
 // Never substitute a test ID, display name or pcr_ ID. See docs/runner.md.
-export const DEFAULT_TRUST = Object.freeze([]);
+// The PointCast issuing desk (docs/loom-desk.md): public id, registered Nov 26, 2026 on Mike's iMac.
+export const DEFAULT_TRUST = Object.freeze(['pci_c158fba156fb46429fdc7251f5b47706']);
 const AGENT_ID = /^pci_[a-f0-9]{32}$/;
 const CARD_ID = /^[A-Z][A-Z0-9]{0,7}-[0-9]{1,4}[a-z]?$/;
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
@@ -67,7 +68,7 @@ function options(argv) {
   if (!/^#[a-z0-9][a-z0-9-]{0,39}$/.test(room)) fail('--room must be a topic such as #loom-v2 (quote the #), at most 40 letters, digits or hyphens.');
   const trust = values.trust === undefined ? DEFAULT_TRUST : values.trust.split(',').map(id => id.trim());
   if (trust.some(id => !AGENT_ID.test(id))) fail('--trust needs comma-separated registered pci_ agent IDs, not names or keys.');
-  if (!trust.length) fail('No trusted desks configured. This repo has no bound desk pci_ IDs; supply their public IDs with --trust.');
+  if (!trust.length) fail('No trusted desks configured. Supply registered public pci_ IDs with --trust.');
   const result = { command, id, room, trust: new Set(trust), post: values.post === true };
   if (command === 'list') return result;
   const name = line(values.as, '--as', 40);

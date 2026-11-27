@@ -86,11 +86,16 @@ test('list shows the five card fields and fetches the requested room', async () 
   assert.equal(r.posts.length, 0);
 });
 
-test('the empty default trust list refuses work without inventing a desk identity', async () => {
+test('the default trust list is only the registered issuing desk', async () => {
+  const { DEFAULT_TRUST } = await import('../scripts/loom-runner.mjs');
+  assert.deepEqual([...DEFAULT_TRUST], ['pci_c158fba156fb46429fdc7251f5b47706']);
+  // A card signed by any other key is still refused when no --trust is given.
   const r = await invoke(['list']);
-  assert.equal(r.code, 1);
-  assert.match(r.err + r.out, /no trusted desks|no bound.*pci_|supply.*--trust/i);
-  assert.equal(r.requests.length, 0);
+  assert.equal(r.code, 0, r.err);
+  assert.ok(!r.out.includes(CARD.id), 'a card from another signer is not listed under the default');
+  const empty = await invoke(['list', '--trust', '']);
+  assert.equal(empty.code, 1);
+  assert.match(empty.err + empty.out, /no trusted desks|supply.*--trust|pci_/i);
 });
 
 test('duplicate trusted card ids are hidden and refused as ambiguous', async () => {
