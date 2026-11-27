@@ -3,9 +3,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { onRequest } from '../functions/api/loom/root.ts';
 import {
+  COMMITMENT,
+  DELIMITER_CONFIRMED,
   DELIMITER_NOTE,
   LEAF_DELIMITER,
   LEAF_FIELDS,
+  PUBLISHABLE_REASON,
   RECIPE,
   SPEC,
   buildMerkle,
@@ -18,6 +21,8 @@ import {
   hashLeaf,
   inclusionProof,
   keysFromAgentsManifest,
+  leafFromLoomMessage,
+  leavesFromLoomRead,
   leafPreimage,
   loomRootNote,
   merkleNode,
@@ -176,6 +181,37 @@ test('desk signatures verify against an agents.json sig key and reject tamper an
   assert.equal(keysFromAgentsManifest({ residents: { public_key: desk.publicKey, public_key_alg: 'ed25519' } }).size, 0);
 });
 
+test('a Loom read maps to timestamp leaves and does not commit the body', async () => {
+  const address = '#loom-v2';
+  const first = { id: 'm_one', at: '2026-11-27T15:00:00.000Z', kind: 'note', body: 'the words', from: { name: 'Ada' } };
+  const edited = { ...first, body: 'different words', editedAt: '2026-11-27T18:00:00.000Z', kind: 'claim' };
+  const leaf = leafFromLoomMessage(first, address);
+  assert.deepEqual(leaf, leafFromLoomMessage(edited, address));
+  assert.equal(leaf.kind, 'timestamp');
+  assert.equal(leaf.address, address);
+  assert.equal(leaf.id, 'm_one');
+  assert.equal(Buffer.from(await hashLeaf(leaf)).toString('hex'), Buffer.from(await hashLeaf({ ...leaf, body: 'the words' })).toString('hex'));
+  assert.notEqual(leafFromLoomMessage(first, '#other').address, leaf.address);
+
+  const read = leavesFromLoomRead({
+    address,
+    day: DAY,
+    messages: [
+      first,
+      { id: 'm_two', at: '2026-11-27T16:00:00Z', kind: 'question', body: 'when' },
+      { id: 'm_old', at: '2026-11-26T23:00:00.000Z', kind: 'note', body: 'yesterday' },
+      { id: 'm_hidden', at: '2026-11-27T17:00:00.000Z', hidden: true, body: 'gone' },
+      { id: '', at: '2026-11-27T17:00:00.000Z' },
+    ],
+  });
+  assert.equal(read.leaves.length, 2);
+  assert.equal(read.skipped, 3);
+  assert.deepEqual(read.leaves.map((item) => item.id), ['m_one', 'm_two']);
+  const again = leavesFromLoomRead({ address, day: DAY, messages: [read.leaves[1], { ...first, body: 'rewritten' }] });
+  assert.equal((await merkleRoot(read.leaves)).root, (await merkleRoot(again.leaves)).root);
+  assert.throws(() => leafFromLoomMessage({ id: 'm_x' }, ''), /leaf_address/);
+});
+
 test('@officenoun status ids share one canonical leaf and root with the day', async () => {
   const at = '2026-11-27T02:48:00.000Z';
   const id = '2121795205557051582';
@@ -212,6 +248,8 @@ test('the #loom-root note is a summary and does not write', () => {
   assert.match(note, /verified: yes/);
   assert.match(note, /sig: c2ln/);
   assert.match(note, /not appended/);
+  assert.match(note, /Does not commit the message body/);
+  assert.match(note, /Do not announce this root as v0 root #1/);
   const card = loomRootNote({ day: DAY, root: 'aa'.repeat(32), leafCount: 0, verification: { verified: false } });
   assert.equal(card.to, '#loom-root');
   assert.equal(card.writes, false);
@@ -240,6 +278,12 @@ test('GET /api/loom/root reports the empty root when KV is missing, empty, or co
   assert.equal(unboundBody.verification.verified, false);
   assert.equal(unboundBody.verification.reason, 'no desk signature');
   assert.equal(unboundBody.proof, null);
+  assert.equal(unboundBody.publishable, false);
+  assert.equal(DELIMITER_CONFIRMED, false);
+  assert.equal(unboundBody.commitment, COMMITMENT);
+  assert.match(unboundBody.commitment, /does not commit the message body/i);
+  assert.equal(unboundBody.publishableReason, PUBLISHABLE_REASON);
+  assert.equal(unboundBody.recipe.publishable, false);
   assert.equal(unbound.headers.get('cache-control'), 'no-store');
 
   const missingKv = memoryKv();

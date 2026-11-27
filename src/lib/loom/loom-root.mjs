@@ -24,8 +24,43 @@
  * art desk confirms the exact v0 delimiter. Swap LEAF_DELIMITER, and only
  * that byte, to align this preimage with root #1. Do not reorder the fields.
  * A field that itself contains the delimiter is rejected so the split stays
- * unambiguous. Extra properties on a leaf (a signature, a handle) are not
- * hashed.
+ * unambiguous. Extra properties on a leaf (a signature, a handle, a body) are
+ * not hashed.
+ *
+ * What a leaf commits
+ * -------------------
+ * A leaf commits version, day, at, kind, id, and address. It does not commit
+ * the message body, a later edit, the sender, or any content hash. The root
+ * proves that id was recorded at that time on that address. It does not prove
+ * what the message said. A body hash is not a seventh field: the field order
+ * stays these six names so a confirmed v0 delimiter can still align with
+ * root #1. Until that byte is confirmed, DELIMITER_CONFIRMED is false and a
+ * root from this recipe is not for publication as root #1.
+ *
+ * Mapping a Loom read onto leaves
+ * -------------------------------
+ * An outsider reproduces a root from one public log as follows.
+ *
+ *   1. GET /api/loom?to=<address> and take messages[] (the folded public read).
+ *   2. For each message, leafFromLoomMessage(message, address) sets:
+ *        version  "1"
+ *        day      UTC day of message.at
+ *        at       Date.parse(message.at) rendered with toISOString()
+ *        kind     "timestamp"  (the message's note/question/claim kind is not hashed)
+ *        id       message.id
+ *        address  the log address passed as `to`, not loom:<key>#<id>
+ *   3. Skip a message with no id, no parseable at, hidden: true, or a day
+ *      other than the day being rooted. leavesFromLoomRead does those skips.
+ *   4. Hash the set with merkleRoot. Input order does not matter. The same id
+ *      on two log addresses is two leaves. An edit does not move the leaf:
+ *      body and editedAt are not hashed, and at stays the append time.
+ *   5. The day's network root is that set unioned across every log in the
+ *      snapshot, plus any @officenoun x-status leaves for the same UTC day.
+ *      This module does not choose the log set and does not write
+ *      loom:root:<YYYY-MM-DD>. GET /api/loom/root only hashes the leaves
+ *      already stored there. The root changes when the set changes. It is a
+ *      timestamp of a set only after a desk signs deskPayload for that exact
+ *      root and leaf count. The reader does not take that snapshot.
  *
  * Domain tags, also fixed in this recipe:
  *   leaf preimage starts with 0x00
@@ -82,6 +117,13 @@ export const OFFICENOUN_STATUS_ORIGIN = 'https://x.com/officenoun/status/';
 
 export const DELIMITER_NOTE = 'LEAF_DELIMITER is ASCII 0x1f until the Nouns Money art desk confirms the v0 root #1 delimiter. Field order stays version, day, at, kind, id, address. Swap that one byte to align the leaf preimage with root #1.';
 
+/** False until the art desk confirms LEAF_DELIMITER. Roots are readable and not for publication as v0 root #1. */
+export const DELIMITER_CONFIRMED = false;
+
+export const COMMITMENT = 'A leaf commits version, day, at, kind, id, and address. It does not commit the message body, a later edit, the sender, or any content hash. The root proves that id was recorded at that time on that address. It does not prove what the message said.';
+
+export const PUBLISHABLE_REASON = 'Delimiter 0x1f is provisional. Do not announce this root as v0 root #1, and do not treat a desk signature over it as final, until the Nouns Money art desk confirms LEAF_DELIMITER.';
+
 export const RECIPE = Object.freeze({
   hash: 'SHA-256',
   spec: SPEC,
@@ -94,6 +136,10 @@ export const RECIPE = Object.freeze({
   oddNode: 'promoted unchanged',
   order: 'unique leaves sorted by leaf hash',
   empty: 'SHA-256(utf8("pointcast.loom-root/v1\\nempty\\n"))',
+  commitment: COMMITMENT,
+  publishable: DELIMITER_CONFIRMED,
+  publishableReason: PUBLISHABLE_REASON,
+  mapping: 'leafFromLoomMessage(message, logAddress) from GET /api/loom?to=<address> messages[]',
 });
 
 const encoder = new TextEncoder();
@@ -358,6 +404,47 @@ export function parseOfficenounStatusId(input) {
   throw new Error('x_status_id');
 }
 
+/**
+ * One folded Loom message on a public log, as returned in messages[] by
+ * GET /api/loom?to=<address>. The message body is ignored on purpose.
+ */
+export function leafFromLoomMessage(message, address) {
+  if (!message || typeof message !== 'object') throw new Error('leaf_required');
+  if (message.hidden === true) throw new Error('leaf_hidden');
+  const logAddress = String(address ?? '').trim();
+  if (!logAddress) throw new Error('leaf_address');
+  return canonicalLeafFields({
+    version: LEAF_VERSION,
+    at: message.at,
+    kind: 'timestamp',
+    id: message.id,
+    address: logAddress,
+  });
+}
+
+/**
+ * Map a public Loom read to the leaves for one UTC day.
+ * `messages` is the folded messages[] array. Hidden, undated, and other-day
+ * messages are counted in `skipped` and left out of the set.
+ */
+export function leavesFromLoomRead({ address, messages, day } = {}) {
+  const leaves = [];
+  let skipped = 0;
+  for (const message of Array.isArray(messages) ? messages : []) {
+    try {
+      const leaf = leafFromLoomMessage(message, address);
+      if (day && leaf.day !== day) {
+        skipped += 1;
+        continue;
+      }
+      leaves.push(leaf);
+    } catch {
+      skipped += 1;
+    }
+  }
+  return { address: address == null ? null : String(address), day: day ?? null, leaves, skipped };
+}
+
 /** Canonical @officenoun X status leaf. `at` is required so the leaf has a UTC day. */
 export function officenounStatusLeaf(statusId, { at } = {}) {
   const id = parseOfficenounStatusId(statusId);
@@ -496,6 +583,8 @@ export function formatLoomRootNote(summary = {}) {
     `Leaf preimage is SHA-256 of 0x00, then ${LEAF_FIELDS.join(', ')}, separated by 0x${LEAF_DELIMITER.toString(16)}.`,
     DELIMITER_NOTE,
     'An inclusion proof checks one leaf against this root.',
+    'Commits id, time, and address. Does not commit the message body.',
+    PUBLISHABLE_REASON,
     'Summary only. This note is not appended to the Loom.',
   );
   return lines.join('\n');
@@ -632,6 +721,9 @@ async function serveFromRecord({ state, record, day, leafQuery, statusId, keys }
     kv: state,
     skipped,
     recipe: RECIPE,
+    commitment: COMMITMENT,
+    publishable: DELIMITER_CONFIRMED,
+    publishableReason: PUBLISHABLE_REASON,
     verification,
     proof,
     note: formatLoomRootNote({ day, root: tree.root, leafCount: tree.leafCount, verification }),
