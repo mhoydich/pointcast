@@ -102,3 +102,12 @@ Not holders. Not followers.
 - The Loom room `#office-kit` is mirrored nightly once the mirror lands.
 
 CC0. Copy it, fork it, run your own office.
+
+## First shelf (Nov 27 2026)
+
+Twelve storefronts in three styles, made as a test of the kit, all free,
+25 editions, by Office Noun, under `/office-kit/pieces/`:
+Art Deco (The Office Sunburst, Floor 13, One Night Only, Office Line),
+Mid-Century (9:00 AM, In Balance, California Office Park, After Hours),
+Modern Quiet (One Quiet Noun, Three on a Long Desk, Reading by the Window,
+Beside the Plant). Generators in `scripts/office-kit/styles/`.
