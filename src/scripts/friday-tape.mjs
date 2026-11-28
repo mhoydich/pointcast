@@ -1,13 +1,6 @@
 // /friday-tape page script. Reads Shwa's live feed when it exists, otherwise keeps
 // the checked snapshot already printed in the HTML. No storage, no beacons, no wallet connect.
-import {
-  normalizeTape,
-  canonicalText,
-  sha256Hex,
-  receiptHtml,
-  keepsakeSvg,
-  yoursLine,
-} from '../lib/friday-tape-ui.mjs';
+import { verifyTape, personalFingerprint, receiptHtml, keepsakeSvg, yoursLine } from '../lib/friday-tape-ui.mjs';
 
 const reduced = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -36,17 +29,24 @@ export async function mountFridayTape(root, { fallback, feedUrl = '/friday-tape.
   const keep = root.querySelector('[data-ft-keep]');
   const live = root.querySelector('[data-ft-live]');
   const status = root.querySelector('[data-ft-source]');
-  const snapshot = normalizeTape(fallback);
-  if (!paper || !snapshot || root.dataset.ftMounted) return;
+  if (!paper || root.dataset.ftMounted) return;
   root.dataset.ftMounted = '1';
+  const snapshot = await verifyTape(fallback);
+  if (!snapshot.ok) return; // the server-printed snapshot stays; never print an unverified receipt
 
-  const state = { tape: snapshot, source: 'snapshot', yours: null, torn: false, digest: '', urls: [] };
+  const state = { check: snapshot, source: 'snapshot', yours: null, personal: '', torn: false, urls: [] };
   const say = (msg) => { if (live) live.textContent = msg; };
 
   async function paint({ animate = false } = {}) {
-    state.digest = await sha256Hex(canonicalText(state.tape, state.yours ? [state.yours] : []));
-    paper.innerHTML = receiptHtml(state.tape, { digest: state.digest, source: state.source, yours: state.yours, torn: state.torn });
-    paper.dataset.digest = state.digest;
+    state.personal = state.yours ? await personalFingerprint(state.check.digest, state.yours) : '';
+    paper.innerHTML = receiptHtml(state.check.tape, {
+      digest: state.check.digest,
+      source: state.source,
+      yours: state.yours,
+      personalDigest: state.personal,
+      torn: state.torn,
+    });
+    paper.dataset.digest = state.check.digest;
     if (animate && !reduced()) {
       paper.classList.remove('is-printing');
       void paper.offsetWidth;
@@ -54,26 +54,26 @@ export async function mountFridayTape(root, { fallback, feedUrl = '/friday-tape.
     }
   }
 
-  // Live feed: only replaces the snapshot when it parses as RECEIPTLINE v1 with at least one sourced line.
+  // Shwa's feed replaces the snapshot only when its dayDigestSha256 and barcodeBits recompute
+  // from its own canonical envelope. Anything else keeps the checked snapshot.
+  let feedNote = 'Printing from a dated snapshot. Shwa’s feed at /friday-tape.json isn’t reachable yet.';
   try {
     const res = await fetch(feedUrl, { cache: 'no-store', headers: { accept: 'application/json' } });
     const type = res.headers.get('content-type') || '';
     if (res.ok && type.includes('json')) {
-      const tape = normalizeTape(await res.json());
-      if (tape) {
-        state.tape = tape;
+      const check = await verifyTape(await res.json());
+      if (check.ok) {
+        state.check = check;
         state.source = 'live';
+        feedNote = `Printing Shwa’s feed at /friday-tape.json. Its fingerprint ${check.digest.slice(0, 8)}… recomputes here.`;
+      } else {
+        feedNote = 'Shwa’s feed at /friday-tape.json didn’t pass its fingerprint check, so this is the checked snapshot.';
       }
     }
   } catch {
     /* stay on the snapshot */
   }
-  if (status) {
-    status.textContent =
-      state.source === 'live'
-        ? 'Printing from the live feed at /friday-tape.json.'
-        : 'Printing from a dated snapshot. Shwa’s live feed at /friday-tape.json is not up yet.';
-  }
+  if (status) status.textContent = feedNote;
   await paint({ animate: true });
 
   form?.addEventListener('submit', async (event) => {
@@ -89,7 +89,7 @@ export async function mountFridayTape(root, { fallback, feedUrl = '/friday-tape.
     state.torn = false;
     if (keep) keep.hidden = true;
     await paint({ animate: true });
-    say(`Printed your line: ${line.label}. The barcode now covers it too.`);
+    say(`Printed your line: ${line.label}. This is now your personal copy; the original fingerprint is unchanged.`);
     paper.querySelector('.ft-line--yours')?.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
   });
 
@@ -110,14 +110,15 @@ export async function mountFridayTape(root, { fallback, feedUrl = '/friday-tape.
     if (!keep) return;
     state.urls.forEach((u) => URL.revokeObjectURL(u));
     state.urls = [];
-    const svg = keepsakeSvg(state.tape, { digest: state.digest, yours: state.yours, tornAt: new Date().toISOString() });
+    const { tape, digest } = state.check;
+    const svg = keepsakeSvg(tape, { digest, yours: state.yours, personalDigest: state.personal, tornAt: new Date().toISOString() });
     const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
     const svgUrl = URL.createObjectURL(svgBlob);
     state.urls.push(svgUrl);
     const png = await svgToPng(svg);
     const pngUrl = png ? URL.createObjectURL(png) : '';
     if (pngUrl) state.urls.push(pngUrl);
-    const stamp = `pointcast-anti-receipt-${state.tape.date}-${state.digest.slice(0, 8)}`;
+    const stamp = `pointcast-anti-receipt-${tape.date}-${(state.personal || digest).slice(0, 8)}${state.yours ? '-personal' : ''}`;
 
     const img = keep.querySelector('img');
     if (img) img.src = pngUrl || svgUrl;

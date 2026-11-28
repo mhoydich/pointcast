@@ -14,11 +14,11 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import '../styles/friday-tape.css';
 import fallback from '../data/friday-tape-ui-fallback.json';
-import { normalizeTape, canonicalText, sha256Hex, receiptHtml } from '../lib/friday-tape-ui.mjs';
+import { verifyTape, receiptHtml } from '../lib/friday-tape-ui.mjs';
 
-const tape = normalizeTape(fallback);
-if (!tape) throw new Error('friday-tape fallback snapshot does not parse as RECEIPTLINE v1');
-const digest = await sha256Hex(canonicalText(tape));
+// Fail closed at build time: the snapshot must recompute to its own published fingerprint.
+const { ok, tape, digest, reason } = await verifyTape(fallback);
+if (!ok) throw new Error(`friday-tape fallback snapshot failed its fingerprint check (${reason})`);
 const printed = receiptHtml(tape, { digest, source: 'snapshot' });
 
 const title = 'The Black Friday anti-receipt · PointCast';
@@ -76,7 +76,8 @@ const jsonLd = {
 
     <footer class="ft-notes">
       <p data-ft-source>Printing from a dated snapshot checked at its sources.</p>
-      <p>The bars are the SHA-256 of the printed lines: first <code>date|YYYY-MM-DD</code>, then one line per item as <code>qty|label|price|currency|kind|sourceUrl</code>, joined by newlines. Recompute it and you get the hex under the bars.</p>
+      <p>The bars are the receipt fingerprint: the SHA-256 of its canonical RECEIPTLINE v1 JSON (keys sorted, no spaces) over <code>version, date, station, items, subtotalCC0, realShopLinks</code>, the same rule as Shwa’s feed. The page prints the feed only when that hash recomputes here; otherwise it prints the checked snapshot.</p>
+      <p>Adding your line makes a personal copy with its own hash. The original fingerprint stays as published.</p>
       <p>Each item links to where it was checked. The LEGO set is a real shelf item at its announced price, listed and not bought. The shop is at <a href="/shop/">/shop/</a>.</p>
       <p>No tracking on this page, no wallet needed, nothing stored. Receipt UI by Duet (Claude); the live feed comes from Shwa in <a href="https://pointcast.xyz/loom?to=%23friday-tape">#friday-tape</a>.</p>
       <p class="ft-sr" aria-live="polite" data-ft-live></p>

@@ -3,7 +3,9 @@
 // Reads Shwa's RECEIPTLINE v1 shape (#friday-tape on the Loom, Nov 27 2026):
 //   { version: 1, date, station, items: [{ qty, label, price, currency, kind, sourceUrl, verifiedAt }],
 //     subtotalCC0, realShopLinks, dayDigestSha256, barcodeBits }
-// Optional per-line extras the receipt prints when present: badge, sha256.
+// Optional per-line extra the receipt prints when present: badge (display only, not in the fingerprint).
+// Fingerprint: SHA-256 of the canonical JSON envelope, the same rule as Shwa's composer, so the
+// receipt only prints a feed whose dayDigestSha256 and barcodeBits it can recompute.
 
 export const KINDS = ['cc0', 'shop', 'loom', 'github', 'chess', 'yours'];
 export const STORE_TZ = 'America/Los_Angeles';
@@ -13,73 +15,70 @@ const clean = (v, max = 80) =>
     .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, max);
+    .slice(0, max)
+    .trim();
 
+// Feed values are validated, never rewritten: what the receipt prints is exactly what was hashed.
+const isText = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max && v.trim() === v && !/[\u0000-\u001f\u007f]/.test(v);
 const isIso = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v) && !Number.isNaN(Date.parse(v));
 const isDay = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T12:00:00Z`));
+const isMoney = (v) => typeof v === 'string' && /^(?:0|[1-9]\d{0,7})\.\d{2}$/.test(v);
+const isHex64 = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
 
-function money(v) {
-  if (typeof v !== 'string' && typeof v !== 'number') return null;
-  const s = String(v).trim();
-  if (!/^\d{1,7}(\.\d{1,2})?$/.test(s)) return null;
-  return Number(s).toFixed(2);
-}
-
-function httpsUrl(v) {
+function exactHttps(v) {
+  if (typeof v !== 'string') return false;
   try {
-    const u = new URL(String(v ?? ''));
-    return u.protocol === 'https:' ? u.href : null;
+    const u = new URL(v);
+    return u.protocol === 'https:' && u.href === v && !u.username && !u.password;
   } catch {
-    return null;
+    return false;
   }
 }
 
 /** One ReceiptLine, or null when it can't be printed honestly (no source, no date, bad price). */
 export function normalizeLine(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const qty = Number.isInteger(raw.qty) && raw.qty > 0 && raw.qty < 1000 ? raw.qty : null;
-  const label = clean(raw.label);
-  const price = money(raw.price);
-  const kind = KINDS.includes(raw.kind) ? raw.kind : null;
+  const { qty, label, price, kind, sourceUrl, verifiedAt } = raw;
   const currency = raw.currency == null ? 'USD' : raw.currency;
-  if (!qty || !label || price === null || !kind || currency !== 'USD') return null;
+  if (!Number.isSafeInteger(qty) || qty < 1 || qty > 999) return null;
+  if (!isText(label, 160) || !isMoney(price) || !KINDS.includes(kind) || currency !== 'USD') return null;
   const yours = kind === 'yours';
-  const sourceUrl = httpsUrl(raw.sourceUrl);
-  const verifiedAt = isIso(raw.verifiedAt) ? new Date(raw.verifiedAt).toISOString() : null;
-  if (!yours && (!sourceUrl || !verifiedAt)) return null;
+  if (!yours && (!exactHttps(sourceUrl) || !isIso(verifiedAt))) return null;
   return {
     qty,
     label,
     price,
     currency: 'USD',
     kind,
-    sourceUrl: sourceUrl || '',
-    verifiedAt: verifiedAt || '',
+    sourceUrl: yours ? '' : sourceUrl,
+    verifiedAt: yours ? '' : verifiedAt,
     badge: clean(raw.badge, 32),
-    sha256: /^[0-9a-f]{64}$/.test(String(raw.sha256 ?? '')) ? raw.sha256 : '',
   };
 }
 
-/** A whole tape, or null. `dropped` counts feed lines left off for lack of a source, date or price. */
+/** A whole tape for printing, or null. `dropped` counts feed lines left off for lack of a source, date or price. */
 export function normalizeTape(raw) {
   if (!raw || typeof raw !== 'object' || raw.version !== 1 || !isDay(raw.date) || !Array.isArray(raw.items)) return null;
+  if (!isText(raw.station, 80)) return null;
   const items = [];
   let dropped = 0;
-  for (const line of raw.items.slice(0, 40)) {
+  for (const line of raw.items.slice(0, 32)) {
     const ok = normalizeLine(line);
     if (ok && ok.kind !== 'yours') items.push(ok);
     else dropped += 1;
   }
+  dropped += Math.max(0, raw.items.length - 32);
   if (!items.length) return null;
-  const realShopLinks = (Array.isArray(raw.realShopLinks) ? raw.realShopLinks : []).map(httpsUrl).filter(Boolean).slice(0, 6);
+  const realShopLinks = Array.isArray(raw.realShopLinks) && raw.realShopLinks.every(exactHttps) ? raw.realShopLinks.slice(0, 6) : [];
   return {
     version: 1,
     date: raw.date,
-    station: clean(raw.station, 40) || 'PointCast',
+    station: raw.station,
     items,
     realShopLinks,
-    dayDigestSha256: /^[0-9a-f]{64}$/.test(String(raw.dayDigestSha256 ?? '')) ? raw.dayDigestSha256 : '',
-    checkedAt: isIso(raw.checkedAt) ? new Date(raw.checkedAt).toISOString() : latest(items),
+    dayDigestSha256: isHex64(raw.dayDigestSha256) ? raw.dayDigestSha256 : '',
+    barcodeBits: typeof raw.barcodeBits === 'string' && /^[01]{256}$/.test(raw.barcodeBits) ? raw.barcodeBits : '',
+    checkedAt: isIso(raw.checkedAt) ? raw.checkedAt : latest(items),
     dropped,
   };
 }
@@ -91,18 +90,42 @@ export function yoursLine(mode, text) {
   const words = clean(text, 48);
   if (!words) return null;
   const lead = mode === 'made' ? 'MADE TODAY:' : "DIDN'T BUY:";
-  return normalizeLine({ qty: 1, label: `${lead} ${words}`, price: '0.00', currency: 'USD', kind: 'yours', badge: 'YOURS' });
+  return normalizeLine({ qty: 1, label: `${lead} ${words}`, price: '0.00', currency: 'USD', kind: 'yours', badge: 'PERSONAL COPY' });
 }
 
 /**
- * The exact text the barcode hashes. First line `date|YYYY-MM-DD`, then one line per printed item:
- * `qty|label|price|currency|kind|sourceUrl`, joined with "\n". Anyone can recompute it.
+ * RECEIPTLINE v1 canonical JSON, the same rule as Shwa's composer (PR #1976): object keys sorted
+ * by code unit, no whitespace, arrays in printed order. Display-only fields (badge, checkedAt) are not in it.
  */
-export function canonicalText(tape, extra = []) {
-  const rows = [...tape.items, ...extra.filter(Boolean)].map((l) =>
-    [l.qty, l.label, l.price, l.currency, l.kind, l.sourceUrl].join('|'),
-  );
-  return [`date|${tape.date}`, ...rows].join('\n');
+export function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** The exact envelope the receipt fingerprint covers, taken from the raw feed as published. */
+export function receiptEnvelope(raw) {
+  return {
+    version: raw.version,
+    date: raw.date,
+    station: raw.station,
+    items: raw.items.map(({ qty, label, price, currency, kind, sourceUrl, verifiedAt }) => ({
+      qty,
+      label,
+      price,
+      currency,
+      kind,
+      sourceUrl,
+      verifiedAt,
+    })),
+    subtotalCC0: raw.subtotalCC0,
+    realShopLinks: raw.realShopLinks,
+  };
 }
 
 export async function sha256Hex(text) {
@@ -115,6 +138,30 @@ export const bitsFromHex = (hex) =>
     .split('')
     .map((c) => parseInt(c, 16).toString(2).padStart(4, '0'))
     .join('');
+
+export const fingerprint = (raw) => sha256Hex(canonicalJson(receiptEnvelope(raw)));
+
+/**
+ * Check a receipt before printing it. It must parse, every line must print as published, and its
+ * dayDigestSha256 and barcodeBits must equal the SHA-256 of its canonical envelope.
+ * Returns { ok, tape, digest, reason }. A receipt that fails is never printed.
+ */
+export async function verifyTape(raw) {
+  const tape = normalizeTape(raw);
+  if (!tape) return { ok: false, tape: null, digest: '', reason: 'shape' };
+  if (tape.dropped) return { ok: false, tape, digest: '', reason: 'lines' };
+  if (!isText(raw.subtotalCC0, 12) || !Array.isArray(raw.realShopLinks)) return { ok: false, tape, digest: '', reason: 'shape' };
+  const digest = await fingerprint(raw);
+  if (raw.dayDigestSha256 !== digest) return { ok: false, tape, digest, reason: 'digest' };
+  if (raw.barcodeBits !== bitsFromHex(digest)) return { ok: false, tape, digest, reason: 'bits' };
+  return { ok: true, tape, digest, reason: '' };
+}
+
+/** Your copy gets its own hash, over the original fingerprint plus your line. The original stays as published. */
+export function personalFingerprint(digest, yours) {
+  const { qty, label, price, currency, kind } = yours;
+  return sha256Hex(canonicalJson({ dayDigestSha256: digest, personalLine: { qty, label, price, currency, kind } }));
+}
 
 export function totals(tape, extra = []) {
   const lines = [...tape.items, ...extra.filter(Boolean)];
@@ -187,36 +234,36 @@ function lineHtml(l, i) {
     l.badge ? `<b class="ft-badge">${esc(l.badge)}</b>` : '',
     sameAsBadge(l) ? '' : `<span>${kindWord[l.kind]}</span>`,
     l.verifiedAt ? `<span>checked <time datetime="${esc(l.verifiedAt)}">${esc(clock(l.verifiedAt))}</time></span>` : '<span>stays in this browser</span>',
-    l.sha256 ? `<span class="ft-linehash" title="${esc(l.sha256)}">#${esc(l.sha256.slice(0, 8))}</span>` : '',
   ]
     .filter(Boolean)
     .join('<span aria-hidden="true"> · </span>');
   return `<li class="ft-line ft-line--${esc(l.kind)}" style="--i:${i}"><span class="ft-qty">${l.qty}</span>${label}<span class="ft-price">${esc(l.price)}</span><span class="ft-sub">${sub}</span></li>`;
 }
 
-/** Everything printed on the paper. The page script repaints it with the same function. */
-export function receiptHtml(tape, { digest = '', source = 'snapshot', yours = null, torn = false } = {}) {
+/**
+ * Everything printed on the paper. The page script repaints it with the same function.
+ * `digest` is the verified receipt fingerprint; `personalDigest` is set only when you added a line.
+ */
+export function receiptHtml(tape, { digest = '', source = 'snapshot', yours = null, personalDigest = '', torn = false } = {}) {
   const extra = yours ? [yours] : [];
   const t = totals(tape, extra);
   const printedFrom =
     source === 'live'
-      ? `<span>LIVE /friday-tape.json</span>`
+      ? `<span>FEED /friday-tape.json</span>`
       : `<span>SNAPSHOT ${esc(clock(tape.checkedAt))}</span>`;
-  const dropped = tape.dropped
-    ? `<p class="ft-note">${tape.dropped} feed line${tape.dropped === 1 ? '' : 's'} left off: no source, date or price.</p>`
-    : '';
   const lines = [...tape.items, ...extra].map(lineHtml).join('');
   const shop = tape.realShopLinks.length
     ? `<p class="ft-shop">Real shelf: ${tape.realShopLinks
         .map((u) => `<a href="${esc(u)}" rel="noopener">${esc(u.replace(/^https:\/\//, '').replace(/\/$/, ''))}</a>`)
         .join(' · ')}</p>`
     : '';
-  const feedDigest =
-    tape.dayDigestSha256 && tape.dayDigestSha256 !== digest
-      ? `<p class="ft-note">Feed digest ${esc(tape.dayDigestSha256.slice(0, 16))}… (Shwa's own hash of the day)</p>`
-      : '';
+  const bits = tape.barcodeBits || bitsFromHex(digest);
+  const personal = yours && personalDigest
+    ? `<p class="ft-personal">PERSONAL COPY · YOUR LINE ADDED<br>SHA-256 <code>${esc(groupHex(personalDigest))}</code></p>`
+    : '';
   return `
 <header class="ft-head">
+  ${yours ? '<p class="ft-stamp">PERSONAL COPY</p>' : ''}
   <p class="ft-store">POINTCAST GENERAL</p>
   <p>${esc(tape.station.toUpperCase())}</p>
   <p>BLACK FRIDAY · <time datetime="${esc(tape.date)}">${esc(longDate(tape.date))}</time></p>
@@ -226,7 +273,6 @@ export function receiptHtml(tape, { digest = '', source = 'snapshot', yours = nu
 </header>
 <p class="ft-cols" aria-hidden="true"><span>QTY</span><span>ITEM</span><span>PRICE</span></p>
 <ol class="ft-lines">${lines}</ol>
-${dropped}
 <dl class="ft-totals">
   <div><dt>MADE TODAY, CC0 + FREE (${t.madeCount})</dt><dd>${t.madeSubtotal}</dd></div>
   ${t.listedCount ? `<div><dt>LISTED, NOT BOUGHT (${t.listedCount})</dt><dd>${t.listedSubtotal}</dd></div>` : ''}
@@ -235,10 +281,10 @@ ${dropped}
 </dl>
 ${shop}
 <figure class="ft-code">
-  ${digest ? barcodeSvg(bitsFromHex(digest), { label: `SHA-256 ${digest}` }) : ''}
-  <figcaption>SHA-256 OF THE LINES ABOVE<br><code>${esc(groupHex(digest))}</code></figcaption>
+  ${digest ? barcodeSvg(bits, { label: `Receipt fingerprint SHA-256 ${digest}` }) : ''}
+  <figcaption>${yours ? 'ORIGINAL ' : ''}RECEIPT FINGERPRINT · SHA-256<br><code>${esc(groupHex(digest))}</code></figcaption>
 </figure>
-${feedDigest}
+${personal}
 <p class="ft-thanks">THANK YOU FOR NOT SHOPPING<br>CC0 · KEEP THE RECEIPT</p>
 <div class="ft-perf${torn ? ' is-torn' : ''}">
   <button type="button" class="ft-tear" data-ft-tear aria-describedby="ft-tear-hint">${torn ? '✂ TORN · TEAR AGAIN' : '✂ TEAR RECEIPT'}</button>
@@ -273,7 +319,7 @@ function wrap(text, width, maxRows) {
 }
 
 /** The torn-off keepsake: 1080×1350 (4:5), sized for an X post or a phone screenshot. */
-export function keepsakeSvg(tape, { digest, yours = null, tornAt = new Date().toISOString() } = {}) {
+export function keepsakeSvg(tape, { digest, yours = null, personalDigest = '', tornAt = new Date().toISOString() } = {}) {
   const W = 1080;
   const H = 1350;
   const COLS = 36;
@@ -286,6 +332,7 @@ export function keepsakeSvg(tape, { digest, yours = null, tornAt = new Date().to
   const build = (badges, maxItems) => {
     const rows = [];
     const push = (text, opts = {}) => rows.push({ text, ...opts });
+    if (yours) push('PERSONAL COPY', { center: true, size: 22, weight: 700, lh: 30 });
     push('POINTCAST GENERAL', { center: true, size: 32, weight: 700 });
     push(tape.station.toUpperCase(), { center: true });
     push(`BLACK FRIDAY · ${longDate(tape.date)}`, { center: true });
@@ -311,7 +358,8 @@ export function keepsakeSvg(tape, { digest, yours = null, tornAt = new Date().to
     return rows;
   };
   const rowsHeight = (rows) => rows.reduce((h, r) => h + (r.gapBefore || 0) + (r.lh || Math.max(LH, (r.size || FS) + 8)) + (r.gapAfter || 0), 0);
-  const FIXED = 140 + 6 + 154 + 62 + 70; // paper top + first baseline, bars, digest rows, footer, bottom pad
+  const extraFoot = yours ? 34 : 0; // the personal-copy hash line
+  const FIXED = 140 + 6 + 154 + 62 + 70 + extraFoot; // paper top + first baseline, bars, digest rows, footer, bottom pad
   let rows = build(true, lines.length);
   if (rowsHeight(rows) + FIXED > H - 60) rows = build(false, lines.length);
   for (let n = lines.length - 1; rowsHeight(rows) + FIXED > H - 60 && n > 1; n -= 1) rows = build(false, n);
@@ -333,13 +381,13 @@ export function keepsakeSvg(tape, { digest, yours = null, tornAt = new Date().to
     .join('');
 
   const barsY = y + 6;
-  const bars = barcodeSvg(bitsFromHex(digest), { height: 53, gap: 10 })
+  const bars = barcodeSvg(tape.barcodeBits || bitsFromHex(digest), { height: 53, gap: 10 })
     .replace('<svg class="ft-bars"', `<svg x="${textX}" y="${barsY}" width="${paperW - 104}" height="116"`);
   const hexY = barsY + 116 + 38;
   const hex = groupHex(digest).split(' ');
   const hexRows = [hex.slice(0, 4).join(' '), hex.slice(4).join(' ')];
   const footY = hexY + 30 + 32;
-  const bottom = Math.min(H - 40, footY + 34 + 36);
+  const bottom = Math.min(H - 40, footY + 34 + extraFoot + 36);
 
   const teeth = 20;
   const tooth = paperW / (teeth * 2);
@@ -369,8 +417,9 @@ ${text}
 <g fill="#1d1b18">${bars}</g>
 <text x="${centerX}" y="${hexY}" font-size="22" text-anchor="middle">${esc(hexRows[0])}</text>
 <text x="${centerX}" y="${hexY + 32}" font-size="22" text-anchor="middle">${esc(hexRows[1])}</text>
-<text x="${centerX}" y="${footY}" font-size="21" text-anchor="middle" fill-opacity="0.72">SHA-256 OF THE LINES ON THIS RECEIPT</text>
-<text x="${centerX}" y="${footY + 34}" font-size="21" text-anchor="middle" fill-opacity="0.72">TORN ${esc(clock(tornAt))} · POINTCAST.XYZ/FRIDAY-TAPE</text>
+<text x="${centerX}" y="${footY}" font-size="21" text-anchor="middle" fill-opacity="0.72">${yours ? 'ORIGINAL ' : ''}RECEIPT FINGERPRINT · SHA-256</text>
+${yours && personalDigest ? `<text x="${centerX}" y="${footY + 34}" font-size="21" text-anchor="middle" font-weight="700">PERSONAL COPY ${esc(groupHex(personalDigest.slice(0, 16)))}…</text>` : ''}
+<text x="${centerX}" y="${footY + 34 + extraFoot}" font-size="21" text-anchor="middle" fill-opacity="0.72">TORN ${esc(clock(tornAt))} · POINTCAST.XYZ/FRIDAY-TAPE</text>
 </g>
 </svg>`;
 }
