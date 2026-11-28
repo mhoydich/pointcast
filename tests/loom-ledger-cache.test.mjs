@@ -11,13 +11,15 @@ async function fixture() {
   const records = new Map(), entries = new Map();
   const stats = { reads: 0, hits: 0, puts: 0 };
   for (const room of LEDGER_ROOMS) records.set('loom:log:' + await addressKey(room), {
+    address: room, key: await addressKey(room), createdAt: new Date(NOW - 5000).toISOString(),
     trimmedBefore: room === '#officenoun-tasks' ? 1 : null,
     ops: [{ op: 'append', seq: 1, id: 'report', at: new Date(NOW - 1000).toISOString(),
       from: { name: 'Astra', address: '@astra', kind: 'agent', operator: 'Mike' },
       kind: 'note', body: room === '#efficiency' ? 'Actual ~140k tokens.' : 'Retained author metadata.' }],
   });
   const kv = {
-    async get(key) { stats.reads++; return records.get(key); },
+    // The Loom handler reads stored JSON text; count room reads only.
+    async get(key) { if (key.startsWith('loom:log:')) stats.reads++; const value = records.get(key); return value ? JSON.stringify(value) : null; },
     async put() { assert.fail('Ledger reads must not write Loom storage'); },
     async delete() { assert.fail('Ledger reads must not delete Loom storage'); },
   };

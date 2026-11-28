@@ -11,6 +11,9 @@ const entry = new URL('../functions/api/loom-hearth.ts', import.meta.url);
 const source = (await readFile(entry, 'utf8')).replace(
   "'../../src/lib/loom/hearth-activity.mjs'",
   JSON.stringify(new URL('../src/lib/loom/hearth-activity.mjs', import.meta.url).href),
+).replace(
+  "'../../src/lib/loom/atomic.mjs'",
+  JSON.stringify(new URL('../src/lib/loom/atomic.mjs', import.meta.url).href),
 );
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
@@ -53,12 +56,14 @@ async function fixture(t) {
   logs.push({ kind: 'topic', address: '#old', updatedAt: new Date(NOW - 8 * HEARTH_DAY).toISOString() });
   const records = new Map();
   for (const log of logs) records.set('loom:log:' + await addressKey(log.address), {
+    address: log.address, key: await addressKey(log.address), createdAt: new Date(NOW - 5000).toISOString(),
     trimmedBefore: log.address === '#room09' ? 1 : undefined,
     ops: ['Mike', 'Sam'].map((name, i) => ({ op: 'append', seq: i + 1, id: `m_${name}_${log.address}`,
       at: new Date(NOW - 1000).toISOString(), from: { name, kind: 'human' }, kind: 'note', body: `${name}'s full post` })),
   });
   const kv = {
-    async get(key) { stats.roomReads++; return records.get(key); },
+    // The Loom handler reads stored JSON text; count room reads only.
+    async get(key) { if (key.startsWith('loom:log:')) stats.roomReads++; const value = records.get(key); return value ? JSON.stringify(value) : null; },
     async put() { assert.fail('Person reads must not write Loom storage'); },
   };
   const bodies = [];

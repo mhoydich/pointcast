@@ -106,11 +106,14 @@ async function loadLogByKey(kv, key) {
   return null;
 }
 async function saveLog(kv, log) {
+  delete log.seed;
+  // Atomic stores preserve trimmed history and enforce their byte ceiling
+  // before the legacy count-only trim can discard any operations.
+  if (kv.saveLog) return kv.saveLog(log);
   if (log.ops.length > MAX_OPS) {
     log.trimmedBefore = log.ops[log.ops.length - MAX_OPS].seq;
     log.ops = log.ops.slice(-MAX_OPS);
   }
-  delete log.seed;
   await writeJson(kv, `loom:log:${log.key}`, log);
 }
 function pushOp(log, op, now) {

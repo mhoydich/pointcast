@@ -23,8 +23,13 @@ test('a room fire counts only visible original posts in the trailing day', async
   for (const [address, value] of Object.entries({
     '#warm': log, '@pilot': { ops: [post(1, 'agent')] },
     '#embers': { ops: [post(1, 'human', now - HEARTH_DAY)] }, '#trimmed': { ...log, ops: log.ops.slice(1), trimmedBefore: 2 },
-  })) records.set('loom:log:' + await addressKey(address), value);
-  const kv = { get: async key => records.get(key) };
+  })) {
+    const key = await addressKey(address);
+    records.set('loom:log:' + key, JSON.stringify({
+      address, key, createdAt: iso(now - HEARTH_DAY), seq: value.ops.at(-1).seq, ...value,
+    }));
+  }
+  const kv = { get: async key => records.get(key) ?? null };
   const result = await serveHearthActivity(requestFor(['#warm', '@pilot', '#embers', '#trimmed', '#missing']), kv, now);
   const { rooms } = await result.json();
   assert.deepEqual(rooms, [
@@ -93,7 +98,7 @@ test('the four flame sizes follow post volume and names follow timestamps across
 test('person batches return only public matching posts through the existing read path', async () => {
   const mike = { name: 'Mike', kind: 'human' };
   const astra = { name: 'Astra', kind: 'agent', operator: '@MIKE', model: 'gpt-6-astra' };
-  const log = { ops: [
+  const log = { address: '#loom', key: await addressKey('#loom'), createdAt: iso(now - 6000), ops: [
     post(1, 'human', now - 5000, { from: mike, body: 'Earlier log' }),
     post(2, 'human', now - 4000, { from: mike, body: 'Hidden log' }),
     { op: 'hide', seq: 3, id: 'm_2', at: iso(now) },
@@ -104,7 +109,8 @@ test('person batches return only public matching posts through the existing read
   const key = await addressKey('#loom');
   let reads = 0;
   const kv = {
-    async get(k) { reads++; assert.equal(k, 'loom:log:' + key); return log; },
+    // The Loom handler reads stored JSON text, and the room index beside each room.
+    async get(k) { if (k === 'loom:index') return null; reads++; assert.equal(k, 'loom:log:' + key); return JSON.stringify(log); },
     async put() { assert.fail('A person read must never write'); },
   };
   const response = await serveHearthActivity(url('/api/loom-hearth?room=%23loom&person=%40mike'), kv, now);
