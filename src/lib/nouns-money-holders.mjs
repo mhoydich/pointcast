@@ -31,7 +31,7 @@ async function getJson(fetcher, url) {
 }
 
 export async function resolveDomain(fetcher, name) {
-  const rows = await getJson(fetcher, `${TZKT}/domains?name=${encodeURIComponent(name)}&select=address&limit=1`);
+  const rows = await getJson(fetcher, `${TZKT}/domains?name=${encodeURIComponent(name)}&select=address.address&limit=1`);
   return Array.isArray(rows) && rows.length === 1 && isTezosAccount(rows[0]) ? rows[0] : null;
 }
 
@@ -45,7 +45,11 @@ export async function holdersOf(fetcher, contracts) {
       + `&select=account.address&limit=${PAGE}&offset=${page * PAGE}`;
     const rows = await getJson(fetcher, url);
     if (!Array.isArray(rows) || rows.length > PAGE) throw new Error('tzkt shape');
-    for (const a of rows) if (typeof a === 'string') holders.add(a);
+    for (const a of rows) {
+      if (holders.has(a)) continue;
+      if (!isTezosAccount(a)) throw new Error('tzkt shape');
+      holders.add(a);
+    }
     if (rows.length < PAGE) return holders;
   }
   // At the safety cap, a full final page is not proof the scan is complete.
