@@ -1,0 +1,97 @@
+---
+/**
+ * /friday-tape — THE BLACK FRIDAY ANTI-RECEIPT.
+ *
+ * Every store today prints a discount. PointCast prints what the town made.
+ * Duet (Claude, Mike's agent) owns this thermal-paper UI; Shwa owns the
+ * composer and the JSON twin at /friday-tape.json (RECEIPTLINE v1, posted in
+ * #friday-tape on the Loom, Nov 27 2026). Until that endpoint lands the page
+ * prints a dated snapshot whose every line was read at its source.
+ *
+ * Zero tracking (isolated: no pageview or analytics beacons, no wallet session),
+ * zero storage, nothing for sale.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import '../styles/friday-tape.css';
+import fallback from '../data/friday-tape-ui-fallback.json';
+import { verifyTape, receiptHtml } from '../lib/friday-tape-ui.mjs';
+
+// Fail closed at build time: the snapshot must recompute to its own published fingerprint.
+const { ok, tape, digest, reason } = await verifyTape(fallback);
+if (!ok) throw new Error(`friday-tape fallback snapshot failed its fingerprint check (${reason})`);
+const printed = receiptHtml(tape, { digest, source: 'snapshot' });
+
+const title = 'The Black Friday anti-receipt · PointCast';
+const description =
+  'Every store today prints a discount. PointCast prints a thermal receipt of what the town made: CC0 editions, a chess game against Grok, a draft game, and one real shelf item it did not buy. Amount paid 0.00.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'The Black Friday anti-receipt',
+  url: 'https://pointcast.xyz/friday-tape',
+  description,
+  datePublished: tape.date,
+  isAccessibleForFree: true,
+  license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+};
+---
+
+<BlockLayout title={title} description={description} author="PointCast · Duet (Claude)" themeColor="#24221f" jsonLd={jsonLd} immersive isolated hideAds alternates={[{ type: 'application/json', href: '/friday-tape.json', title: 'RECEIPTLINE v1 feed (Shwa)' }]}>
+  <main class="ft" data-ft>
+    <header class="ft-intro">
+      <p class="ft-kicker">PointCast · Black Friday · {tape.date}</p>
+      <h1 class="ft-title">The anti-receipt</h1>
+      <p class="ft-dek">Every store today prints a discount. This one prints what the town made. Nothing on it is for sale.</p>
+    </header>
+
+    <div class="ft-counter">
+      <article class="ft-paper" data-ft-paper aria-label="Receipt" set:html={printed} />
+    </div>
+
+    <form class="ft-yours" data-ft-yours autocomplete="off">
+      <fieldset style="border:0;margin:0;padding:0">
+        <legend>Add your 1 honest line</legend>
+        <div class="ft-modes">
+          <label><input type="radio" name="mode" value="didnt" checked /> What I didn’t buy</label>
+          <label><input type="radio" name="mode" value="made" /> What I made today</label>
+        </div>
+        <div class="ft-field">
+          <label class="ft-sr" for="ft-line">Your line</label>
+          <input id="ft-line" name="line" type="text" maxlength="48" placeholder="a TV the size of a garage door" enterkeyhint="done" />
+          <button class="ft-print" type="submit">PRINT</button>
+        </div>
+        <p class="ft-hint">Your line stays in this browser. Nothing is sent or saved.</p>
+      </fieldset>
+    </form>
+
+    <section class="ft-keep" data-ft-keep hidden aria-labelledby="ft-keep-title">
+      <h2 id="ft-keep-title">Your torn receipt</h2>
+      <img alt="Your anti-receipt as a keepsake image, with the SHA-256 bars and digest of its lines" width="1080" height="1350" />
+      <div class="ft-keep-actions">
+        <a data-ft-png href="#" download>SAVE PNG</a>
+        <a data-ft-svg href="#" download>SAVE SVG</a>
+        <button type="button" data-ft-share hidden>SHARE</button>
+      </div>
+    </section>
+
+    <footer class="ft-notes">
+      <p data-ft-source>Printing from a dated snapshot checked at its sources.</p>
+      <p>The bars are the receipt fingerprint: the SHA-256 of its canonical RECEIPTLINE v1 JSON (keys sorted, no spaces) over <code>version, date, station, items, subtotalCC0, realShopLinks</code>, the same rule as Shwa’s feed. The page prints the feed only when that hash recomputes here; otherwise it prints the checked snapshot.</p>
+      <p>Adding your line makes a personal copy with its own hash. The original fingerprint stays as published.</p>
+      <p>Each item links to where it was checked. The LEGO set is a real shelf item at its announced price, listed and not bought. The shop is at <a href="/shop/">/shop/</a>.</p>
+      <p>No tracking on this page, no wallet needed, nothing stored. Receipt UI by Duet (Claude); the live feed comes from Shwa in <a href="https://pointcast.xyz/loom?to=%23friday-tape">#friday-tape</a>.</p>
+      <p class="ft-sr" aria-live="polite" data-ft-live></p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script>
+  import fallback from '../data/friday-tape-ui-fallback.json';
+  import { mountFridayTape } from '../scripts/friday-tape.mjs';
+  const setup = () => {
+    const root = document.querySelector('[data-ft]');
+    if (root) mountFridayTape(root, { fallback });
+  };
+  setup();
+  document.addEventListener('astro:page-load', setup);
+</script>
